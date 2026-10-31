@@ -489,3 +489,151 @@ export function PlanPage({
     </section>
   )
 }
+
+
+export function AdminPanel({ programs }) {
+  const [users,setUsers] = useState([])
+  const [selected,setSelected] = useState(null)
+  const [maxes,setMaxes] = useState(null)
+  const [sessions,setSessions] = useState([])
+  const [message,setMessage] = useState('')
+
+  const loadUsers = async () => {
+    const {data,error} = await supabase.rpc('admin_user_overview')
+    if (error) {
+      setMessage(error.message)
+      return
+    }
+    setUsers(data || [])
+  }
+
+  useEffect(() => { loadUsers() },[])
+
+  const openUser = async user => {
+    setSelected(user)
+    setMessage('')
+    const [{data:tm},{data:rows}] = await Promise.all([
+      supabase.from('training_maxes').select('*').eq('user_id',user.user_id).maybeSingle(),
+      supabase.from('training_sessions').select('*').eq('user_id',user.user_id).order('session_date',{ascending:false}).limit(20),
+    ])
+    setMaxes(tm || null)
+    setSessions(rows || [])
+  }
+
+  const saveProgram = async (programId,week) => {
+    if (!selected) return
+    const {error} = await supabase.rpc('admin_set_user_program',{
+      target_user:selected.user_id,
+      new_program:programId,
+      new_week:Number(week || 1),
+    })
+    if (error) {
+      setMessage(error.message)
+      return
+    }
+    setMessage('User program updated.')
+    await loadUsers()
+    setSelected(v => v ? {...v,active_program:programId,current_week:Number(week || 1)} : v)
+  }
+
+  const fmtDate = value => value ? new Date(value).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}) : 'Never'
+
+  if (!selected) {
+    const totalWorkouts = users.reduce((sum,u) => sum + Number(u.workout_count || 0),0)
+    return (
+      <section className="page-section">
+        <section className="summary-grid">
+          <div><span>Users</span><strong>{users.length}</strong></div>
+          <div><span>Completed workouts</span><strong>{totalWorkouts}</strong></div>
+        </section>
+
+        <section className="simple-card">
+          <div className="section-heading"><div><span className="card-label">ADMIN</span><h3>WorkoutBoard users</h3></div></div>
+          <div className="admin-user-list">
+            {users.map(user => (
+              <button className="admin-user-row" key={user.user_id} onClick={() => openUser(user)}>
+                <div>
+                  <strong>{user.display_name || 'Unnamed user'}</strong>
+                  <span>{user.email}</span>
+                </div>
+                <div>
+                  <strong>{user.workout_count || 0} workouts</strong>
+                  <span>{fmtDate(user.last_workout)}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+          {!users.length && <div className="empty-state">No users returned.</div>}
+        </section>
+        {message && <div className="status-message">{message}</div>}
+      </section>
+    )
+  }
+
+  return (
+    <section className="page-section">
+      <button className="secondary-action" onClick={() => { setSelected(null); setMaxes(null); setSessions([]) }}>← All users</button>
+
+      <section className="profile-card">
+        <span className="card-label">USER</span>
+        <h2>{selected.display_name || 'Unnamed user'}</h2>
+        <p>{selected.email}</p>
+        <div className="admin-meta">
+          <span>{selected.workout_count || 0} workouts</span>
+          <span>{Number(selected.total_volume || 0).toLocaleString()} lb tracked volume</span>
+          <span>Last: {fmtDate(selected.last_workout)}</span>
+        </div>
+      </section>
+
+      <section className="simple-card">
+        <div className="section-heading"><div><span className="card-label">PROGRAM</span><h3>Manage current program</h3></div></div>
+        <div className="builder-two">
+          <label className="admin-field">Program
+            <select id="admin-program" defaultValue={selected.active_program || 'andy-hybrid-12'}>
+              {Object.entries(programs).map(([id,p]) => <option value={id} key={id}>{p.name}</option>)}
+            </select>
+          </label>
+          <label className="admin-field">Week
+            <input id="admin-week" type="number" min="1" max="12" defaultValue={selected.current_week || 1} />
+          </label>
+        </div>
+        <button className="wide-button" onClick={() => {
+          const programId = document.getElementById('admin-program').value
+          const week = document.getElementById('admin-week').value
+          saveProgram(programId,week)
+        }}>Save program/week</button>
+      </section>
+
+      <section className="simple-card">
+        <div className="section-heading"><div><span className="card-label">TRAINING MAXES</span><h3>Current numbers</h3></div></div>
+        <div className="admin-max-grid">
+          <div><span>Squat</span><strong>{maxes?.squat ?? '—'}</strong></div>
+          <div><span>Bench</span><strong>{maxes?.bench ?? '—'}</strong></div>
+          <div><span>Deadlift</span><strong>{maxes?.deadlift ?? '—'}</strong></div>
+          <div><span>Press</span><strong>{maxes?.press ?? '—'}</strong></div>
+        </div>
+      </section>
+
+      <section className="simple-card">
+        <div className="section-heading"><div><span className="card-label">RECENT HISTORY</span><h3>Training sessions</h3></div></div>
+        <div className="admin-session-list">
+          {sessions.map(row => (
+            <div className="library-row" key={row.id}>
+              <div>
+                <strong>{row.title}</strong>
+                <span>{fmtDate(row.session_date)}{row.program ? ' · ' + row.program : ''}</span>
+              </div>
+              <div className="admin-session-volume">
+                <strong>{Number(row.total_volume || 0).toLocaleString()} lb</strong>
+                <span>{row.estimated_1rm ? 'e1RM ' + Math.round(row.estimated_1rm) : ''}</span>
+              </div>
+            </div>
+          ))}
+          {!sessions.length && <div className="empty-state">No completed sessions yet.</div>}
+        </div>
+      </section>
+
+      {message && <div className="status-message">{message}</div>}
+    </section>
+  )
+}
