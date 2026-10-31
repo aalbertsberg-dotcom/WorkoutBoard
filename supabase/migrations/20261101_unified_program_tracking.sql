@@ -117,3 +117,7 @@ end;
 $$;
 
 grant execute on function public.complete_program_tracking(uuid) to authenticated;
+
+
+-- Refresh Supabase/PostgREST schema cache after creating the table/functions.
+NOTIFY pgrst, 'reload schema';
