@@ -226,8 +226,11 @@ export function PlanPage({
   jumpToWorkout,
 }) {
   const [ready,setReady] = useState(null)
+  const [trackingReady,setTrackingReady] = useState(true)
   const [planned,setPlanned] = useState([])
   const [library,setLibrary] = useState([])
+  const [tracking,setTracking] = useState([])
+  const [sessions,setSessions] = useState([])
   const [showAdd,setShowAdd] = useState(false)
   const [showSubmit,setShowSubmit] = useState(false)
   const [submitMode,setSubmitMode] = useState('build')
@@ -238,7 +241,7 @@ export function PlanPage({
   const [message,setMessage] = useState('')
   const [category,setCategory] = useState('All')
   const [search,setSearch] = useState('')
-  const [previewId,setPreviewId] = useState('squatober')
+  const [previewKey,setPreviewKey] = useState('archive:squatober')
   const [previewWeek,setPreviewWeek] = useState(1)
   const [previewDay,setPreviewDay] = useState(0)
   const [scheduleDate,setScheduleDate] = useState(isoDate(new Date()))
@@ -248,38 +251,143 @@ export function PlanPage({
     try { return JSON.parse(localStorage.getItem('wb-program-favorites') || '[]') } catch { return [] }
   })
 
-  const days = useMemo(() => weekDays(),[])
-  const start = isoDate(days[0])
-  const end = isoDate(days[6])
-  const categories = useMemo(() => ['All','Favorites',...Array.from(new Set(allArchivePrograms.map(p=>p.category))).sort()],[])
-  const preview = archiveProgramById[previewId] || allArchivePrograms[0]
+  const classicMeta = {
+    'andy-hybrid-12':{category:'Strength + Conditioning',difficulty:'Intermediate'},
+    'andy-531-original-6':{category:'Strength',difficulty:'Intermediate'},
+    'new-531-leader-anchor-11':{category:'Strength',difficulty:'Intermediate'},
+    'andy-bbb-jokers-11':{category:'Strength',difficulty:'Intermediate'},
+    'powerbuilding-8':{category:'Powerbuilding',difficulty:'Intermediate'},
+    'strength-power-6':{category:'Strength + Power',difficulty:'Intermediate'},
+    'reset-4':{category:'General',difficulty:'Beginner'},
+  }
+
+  const classicCatalog = useMemo(() => programOrder.map(id => {
+    const p=programs[id]
+    const meta=classicMeta[id] || {category:'Strength',difficulty:'Intermediate'}
+    return {
+      key:'classic:'+id,
+      id,
+      kind:'classic',
+      name:p.name,
+      shortName:p.shortName,
+      description:p.description,
+      category:meta.category,
+      difficulty:meta.difficulty,
+      weeksCount:p.weeksCount,
+      daysPerWeek:lifts.length,
+      source:'WorkoutBoard built-in',
+      dbName:p.dbName,
+      getWeek:(targetWeek)=>lifts.map(liftName=>{
+        const main=(p.main?.[targetWeek]||[]).map(set => set.pct != null ? `${set.pct}% × ${set.reps}` : `× ${set.reps}`)
+        const secondary=p.secondary?.[targetWeek] || p.secondaryByLift?.[liftName]
+        const exercises=[
+          {name:liftName,prescription:main.length?main.join(', '):'Main work',note:p.rules?.[targetWeek]||''},
+        ]
+        if(secondary) exercises.push({name:secondary.label||'Supplemental',prescription:secondary.title||'Supplemental work',note:secondary.pct!=null?`${secondary.pct}% target`:''})
+        ;(p.assistance?.[liftName]||[]).forEach(name=>exercises.push({name,prescription:'Log as performed',note:''}))
+        const conditioning=p.conditioning?.(targetWeek,liftName)
+        if(conditioning && conditioning!=='None') exercises.push({name:'Conditioning',prescription:conditioning,note:''})
+        return {title:liftName+' Day',exercises}
+      })
+    }
+  }),[programs,programOrder,lifts])
+
+  const archiveCatalog = useMemo(() => allArchivePrograms.map(p => ({
+    ...p,
+    key:'archive:'+p.id,
+    kind:'archive',
+  })),[])
+
+  const allPrograms = useMemo(() => [...classicCatalog,...archiveCatalog],[classicCatalog,archiveCatalog])
+  const programByKey = useMemo(() => Object.fromEntries(allPrograms.map(p=>[p.key,p])),[allPrograms])
+  const preview = programByKey[previewKey] || allPrograms[0]
   const previewDays = preview?.getWeek ? preview.getWeek(previewWeek) : [{
     title:'Source program session',
     exercises:[{name:'Source program',prescription:'Use the original source prescription for this session',note:preview?.source || ''}]
   }]
 
-  const filteredPrograms = useMemo(() => {
-    const q=search.trim().toLowerCase()
-    return allArchivePrograms.filter(p => {
-      const categoryOk = category === 'All' || (category === 'Favorites' ? favorites.includes(p.id) : p.category === category)
-      const searchOk = !q || [p.name,p.category,p.description,p.source].some(v=>String(v||'').toLowerCase().includes(q))
-      return categoryOk && searchOk
-    })
-  },[category,search,favorites])
+  const days = useMemo(() => weekDays(),[])
+  const start = isoDate(days[0])
+  const end = isoDate(days[6])
 
   const load = async () => {
     if (!session?.user) return
-    const [{data:plannedRows,error:plannedError},{data:libraryRows,error:libraryError}] = await Promise.all([
+    const [plannedResult,libraryResult,trackingResult,sessionResult] = await Promise.all([
       supabase.from('planned_workouts').select('*').eq('user_id',session.user.id).gte('scheduled_date',start).lte('scheduled_date',end).order('scheduled_date'),
       supabase.from('program_library').select('*').order('created_at',{ascending:false}),
+      supabase.from('user_program_tracking').select('*').eq('user_id',session.user.id).order('updated_at',{ascending:false}),
+      supabase.from('training_sessions').select('id,program,workout,completed_at').eq('user_id',session.user.id).not('completed_at','is',null).order('completed_at',{ascending:false}).limit(1000),
     ])
-    if (plannedError || libraryError) { setReady(false); return }
+
+    if (plannedResult.error || libraryResult.error) {
+      setReady(false)
+      return
+    }
+
     setReady(true)
-    setPlanned(plannedRows || [])
-    setLibrary(libraryRows || [])
+    setPlanned(plannedResult.data || [])
+    setLibrary(libraryResult.data || [])
+    setSessions(sessionResult.data || [])
+
+    if (trackingResult.error) {
+      setTrackingReady(false)
+      setTracking([])
+    } else {
+      setTrackingReady(true)
+      setTracking(trackingResult.data || [])
+    }
   }
 
   useEffect(() => { load() },[session?.user?.id])
+
+  const matchingSessions = track => {
+    const p=programByKey[track.program_key]
+    if(!p)return []
+    return sessions.filter(row => {
+      if(new Date(row.completed_at).getTime() < new Date(track.started_at).getTime()) return false
+      if(row.workout?.tracking_program_key === track.program_key) return true
+      if(p.kind==='classic') return row.program === p.dbName
+      return row.program === p.name
+    })
+  }
+
+  const expectedSessions = track => {
+    const p=programByKey[track.program_key]
+    return p ? Number(p.weeksCount||0)*Number(p.daysPerWeek||0) : 0
+  }
+
+  useEffect(() => {
+    if(!trackingReady || !tracking.length || !sessions.length)return
+    const autoComplete=async()=>{
+      let changed=false
+      for(const track of tracking.filter(t=>t.status==='tracking')){
+        const expected=expectedSessions(track)
+        if(expected>0 && matchingSessions(track).length>=expected){
+          const {error}=await supabase.rpc('complete_program_tracking',{target_tracking_id:track.id})
+          if(!error) changed=true
+        }
+      }
+      if(changed) await load()
+    }
+    autoComplete()
+  },[trackingReady,tracking.length,sessions.length])
+
+  const tracked = tracking.filter(t=>t.status==='tracking')
+  const completed = tracking.filter(t=>t.status==='completed')
+  const trackedKeys = new Set(tracked.map(t=>t.program_key))
+  const completedKeys = new Set(completed.map(t=>t.program_key))
+
+  const categories = useMemo(() => ['All','Favorites',...Array.from(new Set(allPrograms.map(p=>p.category))).sort()],[allPrograms])
+
+  const availablePrograms = useMemo(() => {
+    const q=search.trim().toLowerCase()
+    return allPrograms.filter(p => {
+      if(trackedKeys.has(p.key) || completedKeys.has(p.key)) return false
+      const categoryOk = category === 'All' || (category === 'Favorites' ? favorites.includes(p.key) : p.category === category)
+      const searchOk = !q || [p.name,p.category,p.description,p.source].some(v=>String(v||'').toLowerCase().includes(q))
+      return categoryOk && searchOk
+    })
+  },[allPrograms,category,search,favorites,tracking])
 
   const addWorkout = async e => {
     e.preventDefault()
@@ -303,51 +411,106 @@ export function PlanPage({
     await load()
   }
 
-  const toggleFavorite = async id => {
-    const next=favorites.includes(id) ? favorites.filter(x=>x!==id) : [...favorites,id]
+  const toggleFavorite = async key => {
+    const next=favorites.includes(key) ? favorites.filter(x=>x!==key) : [...favorites,key]
     setFavorites(next)
     localStorage.setItem('wb-program-favorites',JSON.stringify(next))
-    if (session?.user) {
+    if(session?.user){
       const {error}=await supabase.from('profiles').update({favorite_programs:next,updated_at:new Date().toISOString()}).eq('id',session.user.id)
-      if (error && !String(error.message).includes('favorite_programs')) setMessage(error.message)
+      if(error && !String(error.message).includes('favorite_programs')) setMessage(error.message)
     }
   }
 
-  const openPreview = id => {
-    setPreviewId(id); setPreviewWeek(1); setPreviewDay(0)
+  const openPreview = key => {
+    setPreviewKey(key)
+    setPreviewWeek(1)
+    setPreviewDay(0)
   }
 
-  const scheduleArchive = async () => {
-    if (!session?.user || !preview) return
-    const payload=makePlannedFromArchive(preview,previewWeek,previewDay,scheduleDate)
+  const startTracking = async p => {
+    if(!session?.user || !p)return
+    const {error}=await supabase.rpc('start_program_tracking',{
+      target_program_key:p.key,
+      target_program_name:p.name,
+      target_program_kind:p.kind,
+    })
+    if(error){
+      setTrackingReady(false)
+      setMessage('Run the unified-program-tracking migration first: '+error.message)
+      return
+    }
+    if(p.kind==='classic') await chooseProgram(p.id)
+    setMessage(p.name+' is now in Tracked Programs.')
+    await load()
+  }
+
+  const markComplete = async track => {
+    const {error}=await supabase.rpc('complete_program_tracking',{target_tracking_id:track.id})
+    if(error){setMessage(error.message);return}
+    setMessage(track.program_name+' moved to Completed Programs.')
+    await load()
+  }
+
+  const scheduleProgramWorkout = async () => {
+    if(!session?.user || !preview)return
+    const chosen=previewDays[Math.max(0,Math.min(previewDays.length-1,previewDay))]
+    let payload
+    if(preview.kind==='archive'){
+      payload=makePlannedFromArchive(preview,previewWeek,previewDay,scheduleDate)
+      payload.workout={...payload.workout,tracking_program_key:preview.key}
+    } else {
+      payload={
+        scheduled_date:scheduleDate,
+        title:chosen.title,
+        source_program_name:preview.name,
+        source_week:previewWeek,
+        source_day:chosen.title,
+        workout:{
+          version:2,type:'flexible',tracking_program_key:preview.key,source:preview.source,
+          notes:'',exercises:(chosen.exercises||[]).map((item,i)=>({...item,id:`e${i+1}`,result:'',done:false})),
+          sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',
+        },
+        status:'planned',
+      }
+    }
     const {error}=await supabase.from('planned_workouts').insert({...payload,user_id:session.user.id})
-    if (error) { setMessage(error.message); return }
-    setMessage(`${preview.name} · ${payload.title} added to ${scheduleDate}. Tap Today when you are ready to train.`)
+    if(error){setMessage(error.message);return}
+    setMessage(`${preview.name} · ${payload.title} added to ${scheduleDate}.`)
     await load()
   }
 
   const submitPlan = async e => {
     e.preventDefault()
-    const sourceUrl = submitMode === 'link' ? submission.source_url.trim() : null
-    const name = submission.name.trim() || (submitMode === 'link' ? 'Linked program' : 'Custom program')
-    const {error} = await supabase.from('program_library').insert({
-      owner_user_id:session.user.id,
-      name,
-      description:submission.description.trim() || null,
-      source_type:submitMode === 'link' ? 'url' : 'manual',
-      source_url:sourceUrl || null,
-      visibility:submission.visibility,
-      status:'draft',
+    const sourceUrl=submitMode==='link'?submission.source_url.trim():null
+    const name=submission.name.trim()||(submitMode==='link'?'Linked program':'Custom program')
+    const {error}=await supabase.from('program_library').insert({
+      owner_user_id:session.user.id,name,description:submission.description.trim()||null,
+      source_type:submitMode==='link'?'url':'manual',source_url:sourceUrl||null,
+      visibility:submission.visibility,status:'draft',
       plan:{submission_mode:submitMode,notes:submission.description.trim()},
     })
-    if (error) { setMessage(error.message); return }
+    if(error){setMessage(error.message);return}
     setShowSubmit(false)
     setSubmission({name:'',description:'',source_url:'',visibility:'private'})
-    setMessage(submitMode === 'link' ? 'Link saved as a draft. Automatic web import will be added when a GitHub-compatible backend is connected.' : 'Workout plan draft saved.')
+    setMessage(submitMode==='link'?'Link saved as a draft.':'Workout plan draft saved.')
     await load()
   }
 
-  if (ready === false) {
+  const ProgramCard=({p,statusAction,statusLabel})=><article className={'archive-card '+(previewKey===p.key?'selected':'')}>
+    <div className="archive-card-head">
+      <span className="program-length">{p.weeksCount} weeks · {p.daysPerWeek} day{p.daysPerWeek===1?'':'s'}/wk</span>
+      <button className={'favorite-button '+(favorites.includes(p.key)?'active':'')} onClick={()=>toggleFavorite(p.key)} title="Favorite">{favorites.includes(p.key)?'★':'☆'}</button>
+    </div>
+    <h3>{p.name}</h3>
+    <p>{p.description}</p>
+    <div className="program-meta"><span>{p.category}</span><span>{p.difficulty}</span></div>
+    <div className="program-card-actions">
+      <button className="wide-button" onClick={()=>openPreview(p.key)}>Preview</button>
+      {statusAction&&<button className="primary-action compact" onClick={statusAction}>{statusLabel}</button>}
+    </div>
+  </article>
+
+  if(ready===false){
     return <section className="page-section"><div className="setup-needed">
       <span className="card-label">PLATFORM UPDATE NEEDED</span><h2>Flexible planning is ready</h2>
       <p>Run the platform-foundation SQL migration once, then refresh.</p>
@@ -356,37 +519,68 @@ export function PlanPage({
 
   return <section className="page-section">
     <section className="program-summary">
-      <span className="card-label">THIS WEEK</span>
-      <h2>Train what fits the week</h2>
-      <p>Schedule a source program, your normal program, or a one-off workout. Completed history stays separate and safe.</p>
+      <span className="card-label">PROGRAMS</span>
+      <h2>Everything in one place</h2>
+      <p>Track a program, preview any week/day, schedule workouts, and keep completed program runs without losing them.</p>
     </section>
 
-    <section className="active-program-card">
-      <div><span className="card-label">LEGACY 4-LIFT PROGRAM</span><h3>{programs[activeProgram].name}</h3><p>This is still available for the classic Squat / Bench / Deadlift / Press runner.</p></div>
-      <select value={activeProgram} onChange={e => chooseProgram(e.target.value)}>
-        {programOrder.map(id => <option value={id} key={id}>{programs[id].name}</option>)}
-      </select>
-    </section>
+    {!trackingReady&&<div className="setup-needed">
+      <span className="card-label">ONE DATABASE UPDATE NEEDED</span>
+      <h3>Enable Tracked + Completed Programs</h3>
+      <p>Run <strong>20261101_unified_program_tracking.sql</strong> in Supabase. The rest of Plan still works now.</p>
+    </div>}
 
-    <div className="weekly-plan">
-      {days.map(calendarDay => {
+    {tracked.length>0&&<section className="program-state-section">
+      <div className="section-heading"><div><span className="card-label">TRACKED PROGRAMS</span><h3>Currently training</h3></div></div>
+      <div className="archive-grid">{tracked.map(track=>{
+        const p=programByKey[track.program_key]
+        if(!p)return null
+        const done=matchingSessions(track).length
+        const expected=expectedSessions(track)
+        return <article className="archive-card tracked-program-card" key={track.id}>
+          <div className="archive-card-head"><span className="program-length">Run {track.run_number} · started {new Date(track.started_at).toLocaleDateString()}</span><span className="tracking-badge">TRACKING</span></div>
+          <h3>{p.name}</h3>
+          <p>{done} of {expected || '—'} expected workouts completed.</p>
+          <div className="program-progress-track"><div style={{width:expected?Math.min(100,done/expected*100):0+'%'}} /></div>
+          <div className="program-card-actions">
+            <button className="wide-button" onClick={()=>openPreview(p.key)}>Preview / schedule</button>
+            <button className="secondary-action" onClick={()=>markComplete(track)}>Mark complete</button>
+          </div>
+        </article>
+      })}</div>
+    </section>}
+
+    {completed.length>0&&<details className="completed-programs" open>
+      <summary><span><b>Completed Programs</b><small>{completed.length} completed run{completed.length===1?'':'s'}</small></span></summary>
+      <div className="archive-grid">{completed.map(track=>{
+        const p=programByKey[track.program_key]
+        if(!p)return null
+        return <article className="archive-card completed-program-card" key={track.id}>
+          <div className="archive-card-head"><span className="program-length">Run {track.run_number}</span><span className="completed-badge">COMPLETED</span></div>
+          <h3>{p.name}</h3>
+          <p>{track.completed_at?'Completed '+new Date(track.completed_at).toLocaleDateString():p.description}</p>
+          <div className="program-card-actions">
+            <button className="wide-button" onClick={()=>openPreview(p.key)}>Preview</button>
+            <button className="primary-action compact" onClick={()=>startTracking(p)}>Track again</button>
+          </div>
+        </article>
+      })}</div>
+    </details>}
+
+    <section className="simple-card weekly-schedule-card">
+      <div className="section-heading"><div><span className="card-label">THIS WEEK</span><h3>Scheduled workouts</h3></div></div>
+      <div className="weekly-plan">{days.map(calendarDay=>{
         const date=isoDate(calendarDay)
         const rows=planned.filter(item=>item.scheduled_date===date)
         return <article className="day-plan" key={date}>
-          <div className="day-plan-head">
-            <div><strong>{calendarDay.toLocaleDateString(undefined,{weekday:'short'})}</strong><span>{calendarDay.toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span></div>
-            {date===isoDate(new Date())&&<b>Today</b>}
-          </div>
-          {rows.map(row=><div className="planned-item" key={row.id}>
-            <div><strong>{row.title}</strong><span>{row.source_program_name || row.workout?.scheme || 'Workout'} · {row.status}</span></div>
-            <button onClick={()=>removePlanned(row.id)}>×</button>
-          </div>)}
-          {!rows.length&&<span className="rest-label">Open / rest / add workout</span>}
+          <div className="day-plan-head"><div><strong>{calendarDay.toLocaleDateString(undefined,{weekday:'short'})}</strong><span>{calendarDay.toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span></div>{date===isoDate(new Date())&&<b>Today</b>}</div>
+          {rows.map(row=><div className="planned-item" key={row.id}><div><strong>{row.title}</strong><span>{row.source_program_name||row.workout?.scheme||'Workout'} · {row.status}</span></div><button onClick={()=>removePlanned(row.id)}>×</button></div>)}
+          {!rows.length&&<span className="rest-label">Open / rest</span>}
         </article>
-      })}
-    </div>
+      })}</div>
+      <button className="primary-action" onClick={()=>setShowAdd(v=>!v)}>{showAdd?'Close':'+ Add one-off workout'}</button>
+    </section>
 
-    <button className="primary-action" onClick={()=>setShowAdd(v=>!v)}>{showAdd?'Close':'+ Add one-off workout'}</button>
     {showAdd&&<form className="builder-card" onSubmit={addWorkout}>
       <h3>Quick workout</h3>
       <label>Date<input type="date" value={form.scheduled_date} onChange={e=>setForm(v=>({...v,scheduled_date:e.target.value}))}/></label>
@@ -400,11 +594,8 @@ export function PlanPage({
     </form>}
 
     <section className="library-toolbar simple-card">
-      <div className="section-heading">
-        <div><span className="card-label">PROGRAM LIBRARY</span><h3>Your archive, organized</h3></div>
-        <button className="mini-action" onClick={()=>setShowSubmit(v=>!v)}>Add your own</button>
-      </div>
-      <input className="text-input" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search programs…" />
+      <div className="section-heading"><div><span className="card-label">ALL PROGRAMS</span><h3>Program library</h3></div><button className="mini-action" onClick={()=>setShowSubmit(v=>!v)}>Add your own</button></div>
+      <input className="text-input" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search all programs…"/>
       <div className="category-chips">{categories.map(c=><button key={c} className={category===c?'active':''} onClick={()=>setCategory(c)}>{c}</button>)}</div>
     </section>
 
@@ -420,22 +611,14 @@ export function PlanPage({
     {message&&<div className="status-message">{message}</div>}
 
     <div className="archive-grid">
-      {filteredPrograms.map(p=><article className={'archive-card '+(previewId===p.id?'selected':'')} key={p.id}>
-        <div className="archive-card-head">
-          <span className="program-length">{p.weeksCount} weeks · {p.daysPerWeek} day{p.daysPerWeek===1?'':'s'}/wk</span>
-          <button className={'favorite-button '+(favorites.includes(p.id)?'active':'')} onClick={()=>toggleFavorite(p.id)} title="Favorite">{favorites.includes(p.id)?'★':'☆'}</button>
-        </div>
-        <h3>{p.name}</h3><p>{p.description}</p>
-        <div className="program-meta"><span>{p.category}</span><span>{p.difficulty}</span></div>
-        <button className="wide-button" onClick={()=>openPreview(p.id)}>Preview / schedule</button>
-      </article>)}
-      {!filteredPrograms.length&&<div className="empty-state">No programs match this filter.</div>}
+      {availablePrograms.map(p=><ProgramCard key={p.key} p={p} statusAction={trackingReady?()=>startTracking(p):null} statusLabel="Track program"/>)}
+      {!availablePrograms.length&&<div className="empty-state">No untracked programs match this filter.</div>}
     </div>
 
     {preview&&<section className="program-preview-card">
       <div className="preview-head">
         <div><span className="card-label">PROGRAM PREVIEW</span><h2>{preview.name}</h2><p>{preview.description}</p></div>
-        <button className={'favorite-button large '+(favorites.includes(preview.id)?'active':'')} onClick={()=>toggleFavorite(preview.id)}>{favorites.includes(preview.id)?'★':'☆'}</button>
+        <button className={'favorite-button large '+(favorites.includes(preview.key)?'active':'')} onClick={()=>toggleFavorite(preview.key)}>{favorites.includes(preview.key)?'★':'☆'}</button>
       </div>
       <div className="preview-facts">
         <div><span>Category</span><strong>{preview.category}</strong></div>
@@ -448,40 +631,18 @@ export function PlanPage({
         <label>Week<select value={previewWeek} onChange={e=>{setPreviewWeek(Number(e.target.value));setPreviewDay(0)}}>{Array.from({length:preview.weeksCount},(_,i)=>i+1).map(n=><option key={n} value={n}>Week {n}</option>)}</select></label>
         <label>Workout<select value={previewDay} onChange={e=>setPreviewDay(Number(e.target.value))}>{previewDays.map((d,i)=><option key={i} value={i}>{d.title}</option>)}</select></label>
       </div>
-      <div className="sample-workout">
-        <h3>{previewDays[previewDay]?.title}</h3>
-        {previewDays[previewDay]?.exercises?.map((x,i)=><div className="sample-exercise" key={i}><strong>{x.name}</strong><span>{x.prescription}</span>{x.note&&<small>{x.note}</small>}</div>)}
+      <div className="sample-workout"><h3>{previewDays[previewDay]?.title}</h3>{previewDays[previewDay]?.exercises?.map((x,i)=><div className="sample-exercise" key={i}><strong>{x.name}</strong><span>{x.prescription}</span>{x.note&&<small>{x.note}</small>}</div>)}</div>
+      <div className="program-preview-actions">
+        <div className="schedule-row"><input type="date" value={scheduleDate} onChange={e=>setScheduleDate(e.target.value)}/><button className="primary-action" onClick={scheduleProgramWorkout}>Add this workout</button></div>
+        {trackingReady&&!trackedKeys.has(preview.key)&&<button className="wide-button" onClick={()=>startTracking(preview)}>{completedKeys.has(preview.key)?'Track this program again':'Track this program'}</button>}
       </div>
-      <div className="schedule-row">
-        <input type="date" value={scheduleDate} onChange={e=>setScheduleDate(e.target.value)} />
-        <button className="primary-action" onClick={scheduleArchive}>Add this workout</button>
-      </div>
-      {!preview.getWeek&&<p className="helper-text">This source is cataloged but not fully transcribed yet. Scheduling it creates an editable source-session card so you can still use it without losing the source.</p>}
+      {!preview.getWeek&&<p className="helper-text">This program is cataloged from your archive but not fully transcribed yet. Its preview keeps the original source visible rather than inventing prescriptions.</p>}
     </section>}
-
-    <div className="program-picker">
-      {programOrder.map(id=>{const p=programs[id],selected=id===activeProgram;return <article className={'program-card '+(selected?'selected':'')} key={id}>
-        <div><span className="program-length">{p.weeksCount} weeks</span><h3>{p.name}</h3><p>{p.description}</p></div>
-        <button onClick={()=>chooseProgram(id)}>{selected?'Current 4-lift program':'Use 4-lift program'}</button>
-      </article>})}
-    </div>
 
     {library.filter(item=>item.owner_user_id===session.user.id).length>0&&<section className="simple-card">
       <div className="section-heading"><div><span className="card-label">YOUR SUBMISSIONS</span><h3>Drafts & links</h3></div></div>
       {library.filter(item=>item.owner_user_id===session.user.id).map(item=><div className="library-row" key={item.id}><div><strong>{item.name}</strong><span>{item.source_type==='url'?'Link · '+item.status:'Build · '+item.status}</span></div><span>{item.visibility}</span></div>)}
     </section>}
-
-    <section className="simple-card">
-      <div className="section-heading"><div><span className="card-label">CURRENT 4-LIFT PROGRAM</span><h3>{programs[activeProgram].shortName}</h3></div></div>
-      <div className="week-list">
-        {Array.from({length:programs[activeProgram].weeksCount},(_,i)=>i+1).map(number=>{
-          const count=completedByWeek[number]?.size||0
-          return <button className={'week-card '+(number===week?'current':'')} key={number} onClick={()=>jumpToWorkout(activeProgram,number,lifts.find(x=>!completedByWeek[number]?.has(x))||'Squat')}>
-            <div><strong>Week {number}</strong><span>{programs[activeProgram].phases[number]}</span></div><div className="week-progress">{count}/4</div>
-          </button>
-        })}
-      </div>
-    </section>
   </section>
 }
 
