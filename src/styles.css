@@ -1093,3 +1093,32 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   color:#fff;
   font-weight:800;
 }
+
+.auth-help {
+  margin-top:10px;
+  color:#94a3b8;
+  font-size:11px;
+  line-height:1.35;
+  text-align:center;
+}
+.admin-password-row {
+  display:grid;
+  grid-template-columns:1fr 90px;
+  gap:8px;
+}
+.admin-password-row input {
+  min-width:0;
+  min-height:44px;
+  border:1px solid #3a4964;
+  border-radius:10px;
+  background:#0b1220;
+  color:#fff;
+  padding:0 10px;
+}
+.admin-password-row button {
+  border:1px solid #7c3aed;
+  border-radius:10px;
+  background:#4c1d95;
+  color:#fff;
+  font-weight:900;
+}
