@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './supabase'
+import { PlatformProgress, PlanPage } from './platform'
 
 const lifts = ['Squat', 'Bench', 'Deadlift', 'Press']
 const repeatSets = (count, pct, reps, pctLabel) =>
@@ -669,6 +670,44 @@ function App() {
     }
 
     await saveSharedResult(payload)
+
+    // Platform v2 dual-write. If the new tables are not deployed yet, legacy saving still succeeds.
+    const workoutMetrics = metricsForWorkout(payload,workoutProgramId,week,lift)
+    const {data:durableSession} = await supabase.from('training_sessions').upsert({
+      legacy_log_id:data.id,
+      user_id:session.user.id,
+      shared_session_id:sharedWorkoutActive && activeSession ? activeSession.id : null,
+      title:lift + ' Day',
+      program:workoutProgram.dbName,
+      week,
+      primary_lift:lift,
+      session_date:new Date().toISOString().slice(0,10),
+      workout:payload,
+      total_volume:Math.round(workoutMetrics.volume),
+      estimated_1rm:workoutMetrics.estimated1rm || null,
+      bodyweight:Number(payload.bodyweight || 0) || null,
+      started_at:data.created_at || now,
+      completed_at:complete ? now : null,
+      updated_at:now,
+    },{onConflict:'legacy_log_id'}).select().maybeSingle()
+
+    if (complete && durableSession && profile?.community_opt_in) {
+      await supabase.from('community_activity').upsert({
+        user_id:session.user.id,
+        training_session_id:durableSession.id,
+        display_name:profile?.community_display_name || profile?.display_name || session.user.email?.split('@')[0] || 'Member',
+        activity_date:new Date().toISOString().slice(0,10),
+        title:lift + ' Day',
+        summary:{
+          lift,
+          program:workoutProgram.name,
+          volume:Math.round(workoutMetrics.volume),
+          estimated_1rm:workoutMetrics.estimated1rm || null,
+          bodyweight:profile?.community_share_bodyweight ? (Number(payload.bodyweight || 0) || null) : null
+        }
+      },{onConflict:'training_session_id'})
+    }
+
     setLog(payload)
     setHistory(rows => [data,...rows.filter(row => row.id !== data.id && !(row.program === workoutProgram.dbName && row.week === week && row.lift === lift))])
     setSaveState('Saved')
@@ -908,7 +947,7 @@ function App() {
         <header className="app-header">
           <div>
             <div className="eyebrow">WORKOUTBOARD</div>
-            <h1>{activeTab === 'today' ? 'Today' : activeTab === 'together' ? 'Together' : activeTab === 'progress' ? 'Progress' : activeTab[0].toUpperCase() + activeTab.slice(1)}</h1>
+            <h1>{activeTab === 'today' ? 'Today' : activeTab === 'together' ? 'Together' : activeTab === 'progress' ? 'Progress' : activeTab === 'program' ? 'Plan' : activeTab[0].toUpperCase() + activeTab.slice(1)}</h1>
           </div>
           <div className="mini-user">{displayName}</div>
         </header>
@@ -1118,106 +1157,29 @@ function App() {
             )}
           </section>
         ) : activeTab === 'progress' ? (
-          <section className="page-section">
-            <section className="summary-grid">
-              <div><span>Workouts</span><strong>{progress.completed.length}</strong></div>
-              <div><span>7-day volume</span><strong>{formatWeight(progress.volume7)} lb</strong></div>
-              <div><span>30-day volume</span><strong>{formatWeight(progress.volume30)} lb</strong></div>
-              <div><span>Bodyweight</span><strong>{progress.latestBodyweight ? progress.latestBodyweight + ' lb' : '—'}</strong></div>
-            </section>
-
-            <section className="simple-card">
-              <div className="section-heading"><div><span className="card-label">STRENGTH PROGRESS</span><h3>Estimated 1RM</h3></div></div>
-              <div className="strength-list">
-                {lifts.map(name => {
-                  const stat = progress.strength[name]
-                  return (
-                    <div className="strength-row" key={name}>
-                      <div><strong>{name}</strong><span>{stat?.bestSet ? 'Best set ' + stat.bestSet.weight + ' × ' + stat.bestSet.reps : 'No completed data yet'}</span></div>
-                      <div className="strength-number">
-                        <strong>{stat ? formatWeight(stat.latest) + ' lb' : '—'}</strong>
-                        {stat && <span className={stat.delta >= 0 ? 'positive' : 'negative'}>{stat.delta >= 0 ? '+' : ''}{formatWeight(stat.delta)} since first log</span>}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </section>
-
-            <section className="simple-card">
-              <div className="section-heading"><div><span className="card-label">VOLUME TREND</span><h3>Last 8 weeks</h3></div></div>
-              <div className="volume-chart">
-                {progress.weekly.map(item => (
-                  <div className="volume-bar-row" key={item.label}>
-                    <span>{item.label}</span>
-                    <div className="bar-track"><div className="bar-fill" style={{width:(item.volume / maxWeeklyVolume * 100) + '%'}} /></div>
-                    <strong>{formatWeight(item.volume)}</strong>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="simple-card">
-              <div className="section-heading"><div><span className="card-label">RECENT WORKOUTS</span><h3>Volume by day</h3></div></div>
-              <div className="history-list">
-                {progress.completed.slice(-12).reverse().map(row => {
-                  const programId = dbNameToProgram[row.program] || 'andy-hybrid-12'
-                  const date = new Date(row.completed_at).toLocaleDateString(undefined,{month:'short',day:'numeric'})
-                  return (
-                    <article className="progress-workout" key={row.id}>
-                      <div><strong>{date} · {row.lift}</strong><span>{programs[programId].shortName} · Week {row.week}</span></div>
-                      <div><strong>{formatWeight(row._metrics.volume)} lb</strong><span>{row._metrics.estimated1rm ? 'e1RM ' + formatWeight(row._metrics.estimated1rm) : ''}</span></div>
-                    </article>
-                  )
-                })}
-                {!progress.completed.length && <div className="empty-state">Your progress summary fills in as you finish workouts.</div>}
-              </div>
-              <p className="helper-text progress-note">Tracked volume includes main work, programmed weighted backoff sets, and assistance you enter as weight × reps × sets.</p>
-            </section>
-          </section>
+          <PlatformProgress
+            session={session}
+            profile={profile}
+            setProfile={setProfile}
+            progress={progress}
+            lifts={lifts}
+            formatWeight={formatWeight}
+            programs={programs}
+            dbNameToProgram={dbNameToProgram}
+          />
         ) : activeTab === 'program' ? (
-          <section className="page-section">
-            <div className="program-summary">
-              <span className="card-label">PROGRAM LIBRARY</span>
-              <h2>Choose your program</h2>
-              <p>These are the four programs built from your workout archive.</p>
-            </div>
-
-            <div className="program-picker">
-              {programOrder.map(id => {
-                const p = programs[id]
-                const selected = id === activeProgram
-                return (
-                  <article className={'program-card ' + (selected ? 'selected' : '')} key={id}>
-                    <div>
-                      <span className="program-length">{p.weeksCount} weeks</span>
-                      <h3>{p.name}</h3>
-                      <p>{p.description}</p>
-                    </div>
-                    <button onClick={() => chooseProgram(id)}>{selected ? 'Current program' : 'Use this program'}</button>
-                  </article>
-                )
-              })}
-            </div>
-
-            <div className="program-summary compact">
-              <span className="card-label">{personalProgram.shortName}</span>
-              <h2>Week progress</h2>
-            </div>
-
-            <div className="week-list">
-              {Array.from({length:personalProgram.weeksCount},(_,i) => i+1).map(number => {
-                const count = completedByWeek[number]?.size || 0
-                return (
-                  <button className={'week-card ' + (number === week && !sharedWorkoutActive ? 'current' : '')} key={number}
-                    onClick={() => jumpToWorkout(activeProgram,number,lifts.find(x => !completedByWeek[number]?.has(x)) || 'Squat')}>
-                    <div><strong>Week {number}</strong><span>{personalProgram.phases[number]}</span></div>
-                    <div className="week-progress">{count}/4</div>
-                  </button>
-                )
-              })}
-            </div>
-          </section>
+          <PlanPage
+            session={session}
+            profile={profile}
+            programs={programs}
+            programOrder={programOrder}
+            activeProgram={activeProgram}
+            chooseProgram={chooseProgram}
+            completedByWeek={completedByWeek}
+            week={week}
+            lifts={lifts}
+            jumpToWorkout={jumpToWorkout}
+          />
         ) : (
           <section className="page-section">
             <section className="profile-card">
@@ -1246,7 +1208,7 @@ function App() {
 
             <section className="simple-card">
               <div className="section-heading"><div><span className="card-label">CURRENT PROGRAM</span><h3>{personalProgram.name}</h3></div></div>
-              <button className="wide-button" onClick={() => setActiveTab('program')}>Change program</button>
+              <button className="wide-button" onClick={() => setActiveTab('program')}>Plan & programs</button>
             </section>
 
             <section className="simple-card">
@@ -1267,7 +1229,7 @@ function App() {
         <button className={activeTab === 'today' ? 'active' : ''} onClick={() => setActiveTab('today')}><b>●</b><span>Today</span></button>
         <button className={activeTab === 'together' ? 'active' : ''} onClick={() => setActiveTab('together')}><b>⇄</b><span>Together</span></button>
         <button className={activeTab === 'progress' ? 'active' : ''} onClick={() => setActiveTab('progress')}><b>↗</b><span>Progress</span></button>
-        <button className={activeTab === 'program' ? 'active' : ''} onClick={() => setActiveTab('program')}><b>▦</b><span>Program</span></button>
+        <button className={activeTab === 'program' ? 'active' : ''} onClick={() => setActiveTab('program')}><b>▦</b><span>Plan</span></button>
         <button className={activeTab === 'me' ? 'active' : ''} onClick={() => setActiveTab('me')}><b>☺</b><span>Me</span></button>
       </nav>
     </>
