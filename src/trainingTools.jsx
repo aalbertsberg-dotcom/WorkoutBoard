@@ -39,6 +39,7 @@ export function TrainingTimer() {
   const baseElapsed=useRef(0)
   const wakeRef=useRef(null)
   const endBeeped=useRef(false)
+  const transitionRef=useRef('')
 
   const requestWake=async()=>{
     if(!keepAwake||!('wakeLock' in navigator)||document.visibilityState!=='visible')return
@@ -93,6 +94,20 @@ export function TrainingTimer() {
       beep()
     }
   },[elapsed,running,target])
+
+  useEffect(()=>{
+    if(!running)return
+    let key=''
+    if(mode==='EMOM') key='emom-'+Math.floor(elapsed/60)
+    if(mode==='Intervals'){
+      const cycle=workSeconds+breakSeconds
+      const idx=Math.floor(elapsed/cycle)
+      const inCycle=elapsed-idx*cycle
+      key='interval-'+idx+'-'+(inCycle<workSeconds?'work':'rest')
+    }
+    if(key && transitionRef.current && key!==transitionRef.current) beep()
+    if(key) transitionRef.current=key
+  },[elapsed,running,mode,workSeconds,breakSeconds])
 
   const start=()=>{
     if(running)return
@@ -324,7 +339,15 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
         <input type="date" value={newGoal.target_date} onChange={e=>setNewGoal(v=>({...v,target_date:e.target.value}))}/>
         <button className="primary-action">Add goal</button>
       </form>
-      <div className="goal-list">{goals.map(g=><div key={g.id}><div><strong>{g.label}</strong><span>{g.target_value!=null?`${g.target_value} ${g.unit||''}`:g.goal_type}{g.target_date?` · target ${new Date(g.target_date+'T12:00:00').toLocaleDateString()}`:''}</span></div><button onClick={()=>completeGoal(g.id)}>Complete</button></div>)}</div>
+      <div className="goal-list">{goals.map(g=>{
+        const match=prs.find(p=>String(g.label||'').toLowerCase().includes(String(p.name||'').toLowerCase()))
+        const current=match?.e1rm||null
+        const pct=g.target_value&&current?Math.min(100,Math.round(current/Number(g.target_value)*100)):null
+        return <div className="goal-row" key={g.id}>
+          <div className="goal-main"><strong>{g.label}</strong><span>{g.target_value!=null?`${g.target_value} ${g.unit||''}`:g.goal_type}{g.target_date?` · target ${new Date(g.target_date+'T12:00:00').toLocaleDateString()}`:''}</span>{pct!=null&&<div className="goal-progress"><div style={{width:pct+'%'}}/><small>{pct}% · current e1RM {formatWeight(current)} lb</small></div>}</div>
+          <button onClick={()=>completeGoal(g.id)}>Complete</button>
+        </div>
+      })}</div>
     </section>}
 
     {tab==='Measurements'&&<section className="simple-card">
