@@ -384,6 +384,17 @@ export function PlanPage({
         <p>Mix your program, Tracey-style 3×10, 5×5, or one-off workouts without changing your long-term history.</p>
       </section>
 
+      <section className="active-program-card">
+        <div>
+          <span className="card-label">ACTIVE PROGRAM</span>
+          <h3>{programs[activeProgram].name}</h3>
+          <p>Changing this affects what is suggested next. Completed workout history is never deleted.</p>
+        </div>
+        <select value={activeProgram} onChange={e => chooseProgram(e.target.value)}>
+          {programOrder.map(id => <option value={id} key={id}>{programs[id].name}</option>)}
+        </select>
+      </section>
+
       <div className="weekly-plan">
         {days.map(day => {
           const date = isoDate(day)
