@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './supabase'
 import { allArchivePrograms, archiveProgramById, makePlannedFromArchive } from './archivePrograms'
+import { ProgressToolbox, WorkoutTemplates } from './trainingTools'
 
 function startOfWeek(date = new Date()) {
   const d = new Date(date)
@@ -195,6 +196,13 @@ export function PlatformProgress({
         {!recentCombined.length&&<div className="empty-state">Your progress summary fills in as you finish workouts.</div>}</div>
         <p className="helper-text progress-note">Tracked volume includes four-lift work plus flexible/archive exercise results entered as weight × reps × sets.</p>
       </section>
+
+      <ProgressToolbox
+        session={session}
+        legacyHistory={progress.completed}
+        flexSessions={flexSessions}
+        formatWeight={formatWeight}
+      />
     </>:<>
       {ready===false?<div className="setup-needed"><span className="card-label">PLATFORM UPDATE NEEDED</span><h2>Community is ready in the app</h2><p>Run the platform-foundation SQL migration once to enable it.</p></div>:<>
         <section className="community-control">
@@ -645,7 +653,9 @@ export function PlanPage({
       {!preview.getWeek&&<p className="helper-text">This program is cataloged from your archive but not fully transcribed yet. Its preview keeps the original source visible rather than inventing prescriptions.</p>}
     </section>}
 
-    {library.filter(item=>item.owner_user_id===session.user.id).length>0&&<section className="simple-card">
+    <WorkoutTemplates session={session} />
+
+        {library.filter(item=>item.owner_user_id===session.user.id).length>0&&<section className="simple-card">
       <div className="section-heading"><div><span className="card-label">YOUR SUBMISSIONS</span><h3>Drafts & links</h3></div></div>
       {library.filter(item=>item.owner_user_id===session.user.id).map(item=><div className="library-row" key={item.id}><div><strong>{item.name}</strong><span>{item.source_type==='url'?'Link · '+item.status:'Build · '+item.status}</span></div><span>{item.visibility}</span></div>)}
     </section>}
