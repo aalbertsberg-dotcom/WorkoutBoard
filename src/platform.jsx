@@ -227,6 +227,7 @@ export function PlanPage({
 }) {
   const [ready,setReady] = useState(null)
   const [trackingReady,setTrackingReady] = useState(true)
+  const [trackingError,setTrackingError] = useState('')
   const [planned,setPlanned] = useState([])
   const [library,setLibrary] = useState([])
   const [tracking,setTracking] = useState([])
@@ -334,9 +335,11 @@ export function PlanPage({
 
     if (trackingResult.error) {
       setTrackingReady(false)
+      setTrackingError(trackingResult.error.message || 'Program tracking API unavailable')
       setTracking([])
     } else {
       setTrackingReady(true)
+      setTrackingError('')
       setTracking(trackingResult.data || [])
     }
   }
@@ -530,7 +533,7 @@ export function PlanPage({
     {!trackingReady&&<div className="setup-needed">
       <span className="card-label">ONE DATABASE UPDATE NEEDED</span>
       <h3>Enable Tracked + Completed Programs</h3>
-      <p>Run <strong>20261101_unified_program_tracking.sql</strong> in Supabase. The rest of Plan still works now.</p>
+      <p>{trackingError || 'Run 20261101_unified_program_tracking.sql in Supabase. The rest of Plan still works now.'}</p>
     </div>}
 
     {tracked.length>0&&<section className="program-state-section">
