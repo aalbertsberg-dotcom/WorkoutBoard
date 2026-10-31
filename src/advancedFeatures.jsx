@@ -33,7 +33,15 @@ function download(name,content,type='application/json'){
 function sourceKey(name){return String(name||'').trim().toLowerCase()}
 
 export function WorkoutCoach({session,lift,log,history=[],tm,plan}) {
-  const [rest,setRest]=useState(()=>Number(localStorage.getItem('wb-rest-'+sourceKey(lift))||((lift==='Squat'||lift==='Deadlift')?180:120)))
+  const programRest=Number(plan?.rest?.main||150)
+  const overrideKey='wb-rest-override-'+String(plan?.programId||'program')+'-'+sourceKey(lift)
+  const [rest,setRest]=useState(()=>Number(localStorage.getItem(overrideKey)||programRest))
+  const [hasOverride,setHasOverride]=useState(()=>Boolean(localStorage.getItem(overrideKey)))
+  useEffect(()=>{
+    const saved=localStorage.getItem(overrideKey)
+    setHasOverride(Boolean(saved))
+    setRest(saved?Number(saved):programRest)
+  },[overrideKey,programRest])
   const rows=useMemo(()=>history.filter(r=>r.completed_at&&r.lift===lift).sort((a,b)=>String(b.completed_at).localeCompare(String(a.completed_at))),[history,lift])
   const past=useMemo(()=>{
     let bestWeight=0,bestE=0,maxRepsByWeight={}
@@ -63,8 +71,13 @@ export function WorkoutCoach({session,lift,log,history=[],tm,plan}) {
   const workWeight=Number((log?.main||[]).find(s=>Number(s.weight))?.weight||tm||0)
   const warmups=workWeight?[{p:40,r:5},{p:50,r:5},{p:60,r:3},{p:70,r:1}].map(x=>({...x,w:round5(workWeight*x.p/100)})):[]
   const saveRest=async value=>{
-    const seconds=Number(value);setRest(seconds);localStorage.setItem('wb-rest-'+sourceKey(lift),String(seconds))
-    if(session?.user)await supabase.from('exercise_timer_presets').upsert({user_id:session.user.id,exercise:lift,seconds,updated_at:new Date().toISOString()},{onConflict:'user_id,exercise'})
+    const seconds=Number(value);setRest(seconds);setHasOverride(true);localStorage.setItem(overrideKey,String(seconds))
+    if(session?.user)await supabase.from('exercise_timer_presets').upsert({user_id:session.user.id,exercise:String(plan?.programId||'program')+':'+lift,seconds,updated_at:new Date().toISOString()},{onConflict:'user_id,exercise'})
+  }
+  const resetRest=()=>{
+    localStorage.removeItem(overrideKey)
+    setHasOverride(false)
+    setRest(programRest)
   }
   return <section className="coach-card">
     <div className="section-heading"><div><span className="card-label">WORKOUT COACH</span><h3>{lift} guidance</h3></div>{(current.weightPR||current.e1rmPR||current.repPR)&&<span className="pr-live">PR!</span>}</div>
@@ -72,7 +85,7 @@ export function WorkoutCoach({session,lift,log,history=[],tm,plan}) {
       <div><span>Last top set</span><strong>{past.last?`${past.last.weight} × ${past.last.actualReps}`:'—'}</strong></div>
       <div><span>Suggested next load</span><strong>{suggested?suggested+' lb':'—'}</strong></div>
       <div><span>Today best</span><strong>{current.best?`${current.best.w} × ${current.best.r}`:'—'}</strong></div>
-      <div><span>Rest after set</span><select value={rest} onChange={e=>saveRest(e.target.value)}>{[60,90,120,180,240,300].map(s=><option value={s} key={s}>{s<120?s+' sec':s/60+' min'}</option>)}</select></div>
+      <div className="coach-rest-control"><span>Rest after set · Program {programRest<120?programRest+' sec':programRest/60+' min'}</span><select value={rest} onChange={e=>saveRest(e.target.value)}>{[60,75,90,120,150,180,240,300].map(s=><option value={s} key={s}>{s<120?s+' sec':s/60+' min'}</option>)}</select>{hasOverride&&<button type="button" onClick={resetRest}>Use program</button>}</div>
     </div>
     {warmups.length>0&&<div className="warmup-line"><b>Warm-up:</b>{warmups.map(x=><span key={x.p}>{x.w}×{x.r}</span>)}</div>}
     <div className="pr-flags">
