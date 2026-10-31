@@ -272,7 +272,7 @@ export function ShareImportPanel({session}) {
       await supabase.from('workout_templates').insert({user_id:session.user.id,name:data.title,workout:data.payload?.workout||{}})
       setMessage('Shared template imported.')
     }else{
-      await supabase.from('program_library').insert({owner_user_id:session.user.id,name:data.title,description:'Imported by share code',source_type:'shared',visibility:'private',status:'draft',plan:data.payload})
+      await supabase.from('program_library').insert({owner_user_id:session.user.id,name:data.title,description:'Imported by share code',source_type:'manual',visibility:'private',status:'draft',plan:data.payload})
       setMessage('Shared program imported as a draft.')
     }
   }
