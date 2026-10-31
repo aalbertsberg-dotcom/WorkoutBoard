@@ -1018,3 +1018,13 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   .primary-nav button { min-height:46px; font-size:10px; gap:3px; }
   .account-chip { padding:6px 8px; }
 }
+
+.forgot-button {
+  width:100%;
+  margin-top:10px;
+  min-height:40px;
+  border:0;
+  background:transparent;
+  color:#93c5fd;
+  font-weight:800;
+}
