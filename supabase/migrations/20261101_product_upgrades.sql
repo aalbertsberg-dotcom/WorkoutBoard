@@ -168,6 +168,13 @@ $$;
 grant execute on function public.admin_update_training_session(uuid,uuid,text,numeric,numeric) to authenticated;
 
 
+
+-- Shared Together session quality-of-life fields.
+alter table public.shared_sessions
+  add column if not exists timer_started_at timestamptz,
+  add column if not exists timer_elapsed_seconds integer not null default 0,
+  add column if not exists session_note text;
+
 -- Included here so this single upgrade script enables the complete Admin panel.
 create extension if not exists pgcrypto;
 
