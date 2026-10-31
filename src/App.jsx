@@ -289,6 +289,82 @@ const programs = {
   }
 }
 
+const programRestRules = {
+  'andy-hybrid-12': {
+    main:180,
+    secondary:(week,secondary)=>{
+      const title=String(secondary?.title||'')
+      if(/BBB/i.test(title)) return 90
+      if(/TM TEST|100%|test/i.test(title)) return 240
+      return 120
+    },
+    assistance:75,
+    conditioning:60,
+  },
+  'andy-531-original-6': {
+    main:180,
+    secondary:(week,secondary)=>/JOKER/i.test(String(secondary?.title||''))?180:120,
+    assistance:(name)=>/Joker/i.test(name)?180:75,
+    conditioning:60,
+  },
+  'new-531-leader-anchor-11': {
+    main:(week)=>week===11?240:180,
+    secondary:(week,secondary)=>{
+      const title=String(secondary?.title||'')
+      if(/TM TEST|training max/i.test(title)) return 240
+      if(/WIDOWMAKER|1x20/i.test(title)) return 180
+      if(/DELOAD|light/i.test(title)) return 60
+      return 120
+    },
+    assistance:75,
+    conditioning:60,
+  },
+  'andy-bbb-jokers-11': {
+    main:(week)=>week===11?240:180,
+    secondary:(week,secondary)=>{
+      const title=String(secondary?.title||'')
+      if(/BBB/i.test(title)) return 90
+      if(/JOKER|max-effort|MAX TEST|Training max/i.test(title)) return 180
+      if(/DELOAD|Assistance only/i.test(title)) return 60
+      return 120
+    },
+    assistance:75,
+    conditioning:60,
+  },
+  'powerbuilding-8': {
+    main:(week)=>week===8?180:(week>=5?180:150),
+    secondary:120,
+    assistance:(name)=>/RDL|Front Squat|Strict Press|Incline DB|Bulgarian/i.test(name)?120:75,
+    conditioning:60,
+  },
+  'strength-power-6': {
+    main:(week)=>week===6?180:150,
+    secondary:120,
+    assistance:(name)=>/RDL|Incline DB|Row/i.test(name)?90:75,
+    conditioning:60,
+  },
+  'reset-4': {
+    main:(week)=>week===4?90:150,
+    secondary:90,
+    assistance:75,
+    conditioning:60,
+  },
+}
+
+function resolveRestValue(value,week,secondary,name) {
+  return typeof value === 'function' ? value(week,secondary,name) : Number(value || 0)
+}
+
+function getProgramRest(programId,week,lift,secondary) {
+  const rule=programRestRules[programId] || programRestRules['reset-4']
+  return {
+    main:resolveRestValue(rule.main,week,secondary,lift) || 150,
+    secondary:resolveRestValue(rule.secondary,week,secondary,lift) || 90,
+    assistance:(name)=>resolveRestValue(rule.assistance,week,secondary,name) || 75,
+    conditioning:resolveRestValue(rule.conditioning,week,secondary,lift) || 60,
+  }
+}
+
 const programOrder = ['andy-hybrid-12','andy-531-original-6','new-531-leader-anchor-11','andy-bbb-jokers-11','powerbuilding-8','strength-power-6','reset-4']
 const dbNameToProgram = Object.fromEntries(Object.entries(programs).map(([id,p]) => [p.dbName,id]))
 const defaultTms = { Squat:'', Bench:'', Deadlift:'', Press:'' }
@@ -303,13 +379,16 @@ function targetWeight(tm, pct, basis) {
 
 function getProgramWeek(programId, week, lift) {
   const program = programs[programId] || programs['andy-hybrid-12']
+  const secondary=program.secondary?.[week] || program.secondaryByLift?.[lift] || null
   return {
+    programId,
     phase:program.phases[week],
     main:program.main[week] || [],
-    secondary:program.secondary?.[week] || program.secondaryByLift?.[lift] || null,
+    secondary,
     assistance:program.assistance[lift] || [],
     conditioning:program.conditioning(week,lift),
     rule:program.rules?.[week] || '',
+    rest:getProgramRest(programId,week,lift,secondary),
   }
 }
 
@@ -1345,7 +1424,7 @@ function App() {
 
             <section className="exercise-card">
               <div className="exercise-title">
-                <div><span>MAIN LIFT</span><h2>{lift}</h2></div>
+                <div><span>MAIN LIFT</span><h2>{lift}</h2><small className="program-rest-label">Program rest: {plan.rest.main < 120 ? plan.rest.main+' sec' : plan.rest.main/60+' min'}</small></div>
                 {previousWorkout && <small>Tap “Last” to reuse your previous set.</small>}
               </div>
               <div className="column-head"><span>SET / TARGET</span><span>WEIGHT</span><span>REPS</span><span>DONE</span></div>
@@ -1365,7 +1444,7 @@ function App() {
                     <input className="reps-input" type="number" inputMode="numeric" value={set.actualReps}
                       onFocus={e => e.currentTarget.select()}
                       onChange={e => updateMain(i,'actualReps',e.target.value === '' ? '' : Number(e.target.value))} />
-                    <button type="button" className={'check ' + (set.done ? 'checked' : '')} onClick={() => { const next=!set.done; updateMain(i,'done',next); if(next) { const saved=Number(localStorage.getItem('wb-rest-'+String(lift).toLowerCase())||((lift==='Squat'||lift==='Deadlift')?180:120)); window.dispatchEvent(new CustomEvent('workoutboard:rest-timer',{detail:{seconds:saved}})) } }}>✓</button>
+                    <button type="button" className={'check ' + (set.done ? 'checked' : '')} onClick={() => { const next=!set.done; updateMain(i,'done',next); if(next) { const override=Number(localStorage.getItem('wb-rest-override-'+plan.programId+'-'+String(lift).toLowerCase())||0); const seconds=override||plan.rest.main; window.dispatchEvent(new CustomEvent('workoutboard:rest-timer',{detail:{seconds}})) } }}>✓</button>
                   </div>
                 )
               })}
@@ -1374,7 +1453,7 @@ function App() {
             {secondary && (
               <section className="simple-card">
                 <div className="section-heading">
-                  <div><span className="card-label">{secondary.label}</span><h3>{secondary.title}</h3></div>
+                  <div><span className="card-label">{secondary.label}</span><h3>{secondary.title}</h3><small className="program-rest-label">Program rest: {plan.rest.secondary < 120 ? plan.rest.secondary+' sec' : plan.rest.secondary/60+' min'}</small></div>
                   <div className="supplemental-head-right">
                     {secondaryTarget && <strong className="target-pill">{secondaryTarget} lb</strong>}
                     {log.backoffSets?.length>0&&<span className="set-count-pill">{log.backoffSets.filter(x=>x.done).length}/{log.backoffSets.length} done</span>}
@@ -1395,7 +1474,7 @@ function App() {
                       const next=!set.done
                       setSaveState('Unsaved')
                       setLog(v=>({...v,complete:false,backoffSets:v.backoffSets.map((x,idx)=>idx===i?{...x,done:next}:x)}))
-                      if(next){const seconds=Number(localStorage.getItem('wb-rest-'+String(lift).toLowerCase())||((lift==='Squat'||lift==='Deadlift')?180:120));window.dispatchEvent(new CustomEvent('workoutboard:rest-timer',{detail:{seconds}}))}
+                      if(next){const seconds=plan.rest.secondary;window.dispatchEvent(new CustomEvent('workoutboard:rest-timer',{detail:{seconds}}))}
                     }}>
                     <strong>Set {i+1}</strong>
                     <span>{set.reps?set.reps+' reps':'Done?'}</span>
@@ -1413,7 +1492,7 @@ function App() {
               {log.assistance.map((item,i) => (
                 <div className="assist assist-with-progress" key={item.name}>
                   <div className="assist-title-row">
-                    <span>{item.name}</span>
+                    <span>{item.name}<small className="assistance-rest-label"> · {plan.rest.assistance(item.name) < 120 ? plan.rest.assistance(item.name)+' sec' : plan.rest.assistance(item.name)/60+' min'} rest</small></span>
                     {item.setProgress?.length>0&&<b>{item.setProgress.filter(x=>x.done).length}/{item.setProgress.length}</b>}
                   </div>
                   <input placeholder="weight × reps × sets" value={item.result}
@@ -1427,7 +1506,7 @@ function App() {
                         const next=!set.done
                         setSaveState('Unsaved')
                         setLog(v=>({...v,complete:false,assistance:v.assistance.map((x,idx)=>idx===i?{...x,setProgress:x.setProgress.map((sp,k)=>k===j?{...sp,done:next}:sp)}:x)}))
-                        if(next)window.dispatchEvent(new CustomEvent('workoutboard:rest-timer',{detail:{seconds:90}}))
+                        if(next)window.dispatchEvent(new CustomEvent('workoutboard:rest-timer',{detail:{seconds:plan.rest.assistance(item.name)}}))
                       }}>
                       <strong>Set {j+1}</strong><span>{set.reps?set.reps+' reps':'Done?'}</span><b>{set.done?'✓':'○'}</b>
                     </button>)}
