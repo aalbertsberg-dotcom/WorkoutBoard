@@ -105,7 +105,7 @@ function AuthScreen() {
       const { error } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { display_name: name.trim() || email.split('@')[0] } }
+        options: { emailRedirectTo: window.location.origin, data: { display_name: name.trim() || email.split('@')[0] } }
       })
       setMessage(error ? error.message : 'Account created. If Supabase asks for email confirmation, check your inbox, then sign in.')
     } else {
