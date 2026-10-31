@@ -182,10 +182,7 @@ export function ExportDataButton({userId}) {
       supabase.from('training_sessions').select('*').eq('user_id',userId).order('session_date'),
       supabase.from('planned_workouts').select('*').eq('user_id',userId).order('scheduled_date'),
     ])
-    const payload={exported_at:new Date().toISOString(),profile:profile.data,training_maxes:tms.data,workout_logs:logs.data||[],training_sessions:sessions.data||[],planned_workouts:planned.data||[]}
     const stamp=new Date().toISOString().slice(0,10)
-    download(`WorkoutBoard-${stamp}.json`,JSON.stringify(payload,null,2))
-
     const esc=value=>`"${String(value??'').replace(/"/g,'""')}"`
     const headers=['date','title','program','week','primary_lift','total_volume','estimated_1rm','bodyweight','completed_at']
     const rows=(sessions.data||[]).map(row=>[
