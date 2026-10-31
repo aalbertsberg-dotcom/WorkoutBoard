@@ -835,3 +835,84 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   .builder-two { grid-template-columns:1fr; }
   .community-control { align-items:flex-start; }
 }
+
+
+/* Persistent program selector + admin */
+.active-program-card {
+  display:grid;
+  gap:10px;
+  border:1px solid #65a30d;
+  border-radius:14px;
+  background:#111a2c;
+  padding:13px;
+}
+.active-program-card h3 { margin:3px 0; font-size:17px; }
+.active-program-card p { margin:0; color:#94a3b8; font-size:12px; line-height:1.35; }
+.active-program-card select {
+  width:100%;
+  min-height:46px;
+  border:1px solid #65a30d;
+  border-radius:11px;
+  background:#0b1220;
+  color:#fff;
+  padding:0 10px;
+  font-weight:900;
+}
+
+.admin-entry { border-color:#7c3aed; }
+.admin-button {
+  background:#4c1d95;
+  border-color:#7c3aed;
+}
+.admin-user-list { display:grid; gap:7px; }
+.admin-user-row {
+  width:100%;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  border:1px solid #26344f;
+  border-radius:11px;
+  background:#0f1727;
+  color:#fff;
+  padding:10px;
+  text-align:left;
+}
+.admin-user-row > div { display:grid; gap:2px; min-width:0; }
+.admin-user-row > div:last-child { text-align:right; }
+.admin-user-row strong { font-size:12px; }
+.admin-user-row span { color:#94a3b8; font-size:10px; overflow:hidden; text-overflow:ellipsis; }
+.admin-meta { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+.admin-meta span {
+  border-radius:999px;
+  background:#172033;
+  color:#cbd5e1;
+  padding:5px 8px;
+  font-size:10px;
+}
+.admin-field { display:grid; gap:5px; color:#94a3b8; font-size:11px; font-weight:800; }
+.admin-field input,
+.admin-field select {
+  width:100%;
+  min-height:44px;
+  border:1px solid #3a4964;
+  border-radius:10px;
+  background:#0b1220;
+  color:#fff;
+  padding:0 10px;
+}
+.admin-max-grid {
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  gap:8px;
+}
+.admin-max-grid > div {
+  border:1px solid #26344f;
+  border-radius:10px;
+  background:#0f1727;
+  padding:10px;
+}
+.admin-max-grid span { display:block; color:#94a3b8; font-size:10px; }
+.admin-max-grid strong { display:block; margin-top:3px; font-size:16px; }
+.admin-session-volume { text-align:right; display:grid; gap:2px; }
+.admin-session-volume span { color:#94a3b8; font-size:10px; }
