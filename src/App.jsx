@@ -1272,11 +1272,6 @@ function App() {
               <details className="change-workout">
                 <summary>Change workout</summary>
                 <div className="selectors">
-                  <label className="program-select"><span>Program</span>
-                    <select value={activeProgram} onChange={e => chooseProgram(e.target.value)}>
-                      {programOrder.map(id => <option key={id} value={id}>{programs[id].name}</option>)}
-                    </select>
-                  </label>
                   <label><span>Week</span>
                     <select value={week} onChange={e => changeWeek(Number(e.target.value))}>
                       {Array.from({length:personalProgram.weeksCount},(_,i) => i+1).map(w => <option key={w} value={w}>Week {w}</option>)}
@@ -1287,6 +1282,7 @@ function App() {
                       {lifts.map(x => <option key={x}>{x}</option>)}
                     </select>
                   </label>
+                  <button type="button" className="program-library-link" onClick={() => setActiveTab('program')}>Choose / track programs in Plan</button>
                 </div>
               </details>
             )}
