@@ -410,6 +410,20 @@ function AuthScreen() {
     setBusy(false)
   }
 
+  const forgotPassword = async () => {
+    if (!email.trim()) {
+      setMessage('Enter the account email first.')
+      return
+    }
+    setBusy(true)
+    setMessage('')
+    const {error} = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: appUrl()
+    })
+    setMessage(error ? error.message : 'Password reset requested. Check the inbox/spam folder for that account.')
+    setBusy(false)
+  }
+
   return (
     <main className="auth-shell">
       <section className="auth-card">
@@ -430,9 +444,12 @@ function AuthScreen() {
         </form>
 
         {mode === 'signin' && (
-          <div className="auth-help">
-            Password recovery is managed by WorkoutAdmin until custom SMTP is configured.
-          </div>
+          <>
+            <button className="forgot-button visible-forgot" type="button" onClick={forgotPassword} disabled={busy}>Forgot password?</button>
+            <div className="auth-help">
+              If reset email does not arrive, WorkoutAdmin can reset the password directly.
+            </div>
+          </>
         )}
 
         {message && <div className="auth-message">{message}</div>}
