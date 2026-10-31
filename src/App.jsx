@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
+import { supabase } from './supabase'
 
 const lifts = ['Squat', 'Bench', 'Deadlift', 'Press']
+const dbField = { Squat:'squat', Bench:'bench', Deadlift:'deadlift', Press:'press' }
 
 const weeks = {
   1: { phase:'Leader 1', main:[[65,5],[75,5],[85,5]], supplemental:'FSL 5x5 @ 65%', conditioning:'Easy only' },
@@ -26,12 +28,6 @@ const dayPlan = {
 
 const defaultTms = { Squat:'', Bench:'', Deadlift:'', Press:'' }
 const round5 = n => Math.round(n / 5) * 5
-const keyFor = (week, lift) => 'wb:w' + week + ':' + lift
-
-function safeJson(value, fallback) {
-  try { return value ? JSON.parse(value) : fallback }
-  catch { return fallback }
-}
 
 function backoffPercent(text) {
   const match = String(text || '').match(/@\s*(\d+)%/)
@@ -41,7 +37,7 @@ function backoffPercent(text) {
 function makeLog(plan, lift, tm) {
   const pct = backoffPercent(plan.supplemental)
   return {
-    version: 2,
+    version: 3,
     main: plan.main.map(([percent, reps]) => ({
       pct: percent,
       reps,
@@ -63,43 +59,20 @@ function makeLog(plan, lift, tm) {
 function normalizeLog(saved, plan, lift, tm) {
   const base = makeLog(plan, lift, tm)
   if (!saved) return base
-
-  const oldVersion = saved.version || 1
-  const oldMain = Array.isArray(saved.main) ? saved.main : []
-
   return {
     ...base,
     ...saved,
-    version: 2,
-    main: base.main.map((item, i) => {
-      const old = oldMain[i] || {}
-      const oldWeight = old.weight
-      const migrateBadV1Weight = oldVersion < 2 && Number(oldWeight || 0) <= 10
-      return {
-        ...item,
-        ...old,
-        weight: migrateBadV1Weight ? item.weight : (oldWeight === undefined ? item.weight : oldWeight),
-        done: Boolean(old.done),
-      }
-    }),
-    backoffWeight: saved.backoffWeight || base.backoffWeight,
-    backoffNote: saved.backoffNote || saved.supplemental || '',
-    assistance: base.assistance.map((item, i) => ({
-      ...item,
-      ...(saved.assistance && saved.assistance[i] ? saved.assistance[i] : {}),
-    })),
+    version: 3,
+    main: base.main.map((item, i) => ({ ...item, ...(saved.main?.[i] || {}) })),
+    assistance: base.assistance.map((item, i) => ({ ...item, ...(saved.assistance?.[i] || {}) })),
   }
 }
 
-function NumericInput({ value, onChange, placeholder, step=1, className='' }) {
-  const adjust = delta => {
-    const next = Math.max(0, Number(value || 0) + delta)
-    onChange(next)
-  }
-
+function NumericInput({ value, onChange, placeholder, step=1 }) {
+  const adjust = delta => onChange(Math.max(0, Number(value || 0) + delta))
   return (
-    <div className={'numeric ' + className}>
-      <button type="button" onClick={() => adjust(-step)} aria-label={'Decrease by ' + step}>−{step}</button>
+    <div className="numeric">
+      <button type="button" onClick={() => adjust(-step)}>−{step}</button>
       <input
         type="number"
         inputMode="decimal"
@@ -110,100 +83,236 @@ function NumericInput({ value, onChange, placeholder, step=1, className='' }) {
         onChange={e => onChange(e.target.value === '' ? '' : Number(e.target.value))}
         onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
       />
-      <button type="button" onClick={() => adjust(step)} aria-label={'Increase by ' + step}>+{step}</button>
+      <button type="button" onClick={() => adjust(step)}>+{step}</button>
     </div>
   )
 }
 
+function AuthScreen() {
+  const [mode, setMode] = useState('signin')
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [message, setMessage] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const submit = async e => {
+    e.preventDefault()
+    setBusy(true)
+    setMessage('')
+
+    if (mode === 'signup') {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { display_name: name.trim() || email.split('@')[0] } }
+      })
+      setMessage(error ? error.message : 'Account created. If Supabase asks for email confirmation, check your inbox, then sign in.')
+    } else {
+      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error) setMessage(error.message)
+    }
+    setBusy(false)
+  }
+
+  return (
+    <main className="auth-shell">
+      <section className="auth-card">
+        <div className="eyebrow">WORKOUTBOARD</div>
+        <h1>{mode === 'signin' ? 'Sign in' : 'Create account'}</h1>
+        <p className="auth-sub">Your weights and history stay separate from your workout partner.</p>
+
+        <div className="auth-tabs">
+          <button className={mode === 'signin' ? 'active' : ''} onClick={() => setMode('signin')}>Sign in</button>
+          <button className={mode === 'signup' ? 'active' : ''} onClick={() => setMode('signup')}>Create account</button>
+        </div>
+
+        <form onSubmit={submit}>
+          {mode === 'signup' && (
+            <label>Name
+              <input value={name} onChange={e => setName(e.target.value)} placeholder="Andy or Tracey" required />
+            </label>
+          )}
+          <label>Email
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" required />
+          </label>
+          <label>Password
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="At least 6 characters" minLength="6" required />
+          </label>
+          <button className="primary" disabled={busy}>{busy ? 'Working…' : mode === 'signin' ? 'Sign in' : 'Create account'}</button>
+        </form>
+
+        {message && <div className="auth-message">{message}</div>}
+      </section>
+    </main>
+  )
+}
+
 function App() {
+  const [session, setSession] = useState(null)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [profile, setProfile] = useState(null)
   const [week, setWeek] = useState(1)
   const [lift, setLift] = useState('Squat')
-  const [trainingMaxes, setTrainingMaxes] = useState(() => ({
-    ...defaultTms,
-    ...safeJson(localStorage.getItem('wb:tms'), {}),
-  }))
+  const [trainingMaxes, setTrainingMaxes] = useState(defaultTms)
   const [showSetup, setShowSetup] = useState(false)
-  const [history, setHistory] = useState(() => safeJson(localStorage.getItem('wb:history'), []))
+  const [history, setHistory] = useState([])
   const [saveState, setSaveState] = useState('Saved')
+  const [dataLoading, setDataLoading] = useState(true)
   const plan = weeks[week]
   const tm = Number(trainingMaxes[lift] || 0)
-
-  const [log, setLog] = useState(() => normalizeLog(
-    safeJson(localStorage.getItem(keyFor(1, 'Squat')), null),
-    weeks[1],
-    'Squat',
-    Number(trainingMaxes.Squat || 0)
-  ))
+  const [log, setLog] = useState(() => makeLog(weeks[1], 'Squat', 0))
 
   useEffect(() => {
-    localStorage.setItem('wb:tms', JSON.stringify(trainingMaxes))
-  }, [trainingMaxes])
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session)
+      setAuthLoading(false)
+    })
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession)
+    })
+    return () => listener.subscription.unsubscribe()
+  }, [])
 
   useEffect(() => {
-    const saved = safeJson(localStorage.getItem(keyFor(week, lift)), null)
-    setLog(normalizeLog(saved, plan, lift, tm))
-  }, [week, lift, tm, plan])
+    if (!session?.user) return
+    let cancelled = false
+
+    const loadUserData = async () => {
+      setDataLoading(true)
+      const userId = session.user.id
+
+      const [{ data: profileData }, { data: tmData }, { data: logsData }] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', userId).single(),
+        supabase.from('training_maxes').select('*').eq('user_id', userId).single(),
+        supabase.from('workout_logs').select('*').eq('user_id', userId).order('updated_at', { ascending:false }),
+      ])
+
+      if (cancelled) return
+      if (profileData) {
+        setProfile(profileData)
+        setWeek(profileData.current_week || 1)
+      }
+      if (tmData) {
+        setTrainingMaxes({
+          Squat: tmData.squat ?? '',
+          Bench: tmData.bench ?? '',
+          Deadlift: tmData.deadlift ?? '',
+          Press: tmData.press ?? '',
+        })
+      }
+      setHistory(logsData || [])
+      setDataLoading(false)
+    }
+
+    loadUserData()
+    return () => { cancelled = true }
+  }, [session?.user?.id])
 
   useEffect(() => {
-    localStorage.setItem(keyFor(week, lift), JSON.stringify(log))
-    setSaveState('Saved')
-  }, [log])
+    if (!session?.user || dataLoading) return
+    const found = history.find(row => row.week === week && row.lift === lift)
+    setLog(normalizeLog(found?.workout || null, plan, lift, tm))
+  }, [week, lift, history, tm, dataLoading, session?.user?.id])
 
   const previousWorkout = useMemo(() => {
-    return history
-      .filter(item => item.lift === lift && !(item.week === week && item.complete))
-      .sort((a,b) => String(b.savedAt || '').localeCompare(String(a.savedAt || '')))[0] || null
+    const rows = history
+      .filter(row => row.lift === lift && row.completed_at)
+      .sort((a,b) => String(b.completed_at).localeCompare(String(a.completed_at)))
+    return rows.find(row => !(row.week === week && row.lift === lift))?.workout || null
   }, [history, lift, week])
 
   const updateMain = (i, field, value) => {
-    setSaveState('Saving…')
-    setLog(v => ({
-      ...v,
-      complete: false,
-      main: v.main.map((set, idx) => idx === i ? { ...set, [field]: value } : set)
-    }))
-  }
-
-  const usePrevious = (i) => {
-    const prev = previousWorkout && previousWorkout.main ? previousWorkout.main[i] : null
-    if (!prev) return
+    setSaveState('Unsaved')
     setLog(v => ({
       ...v,
       complete:false,
-      main:v.main.map((set, idx) => idx === i
-        ? { ...set, weight:prev.weight, actualReps:prev.actualReps }
-        : set)
+      main:v.main.map((set, idx) => idx === i ? { ...set, [field]:value } : set)
     }))
   }
 
-  const setTm = (name, raw) => {
-    const cleaned = raw === '' ? '' : Math.max(0, Number(raw))
-    setTrainingMaxes(v => ({ ...v, [name]: cleaned }))
+  const saveTrainingMaxes = async next => {
+    setTrainingMaxes(next)
+    if (!session?.user) return
+    await supabase.from('training_maxes').upsert({
+      user_id: session.user.id,
+      squat: next.Squat === '' ? null : Number(next.Squat),
+      bench: next.Bench === '' ? null : Number(next.Bench),
+      deadlift: next.Deadlift === '' ? null : Number(next.Deadlift),
+      press: next.Press === '' ? null : Number(next.Press),
+      updated_at: new Date().toISOString(),
+    })
   }
 
-  const finishWorkout = () => {
-    const finalLog = {
+  const setTm = (name, raw) => {
+    const value = raw === '' ? '' : Math.max(0, Number(raw))
+    saveTrainingMaxes({ ...trainingMaxes, [name]:value })
+  }
+
+  const usePrevious = i => {
+    const prev = previousWorkout?.main?.[i]
+    if (!prev) return
+    updateMain(i, 'weight', prev.weight)
+    updateMain(i, 'actualReps', prev.actualReps)
+  }
+
+  const saveWorkout = async (complete=false) => {
+    if (!session?.user) return
+    setSaveState('Saving…')
+    const now = new Date().toISOString()
+    const payload = {
       ...log,
-      complete:true,
-      savedAt:new Date().toISOString(),
+      complete,
+      savedAt: now,
       week,
       lift,
-      phase:plan.phase,
+      phase: plan.phase,
     }
 
-    const nextHistory = [
-      finalLog,
-      ...history.filter(item => !(item.week === week && item.lift === lift))
-    ].slice(0, 200)
+    const { data, error } = await supabase.from('workout_logs').upsert({
+      user_id: session.user.id,
+      program: '12 Week Andy Hybrid',
+      week,
+      lift,
+      workout_date: new Date().toISOString().slice(0,10),
+      workout: payload,
+      completed_at: complete ? now : null,
+      updated_at: now,
+    }, { onConflict:'user_id,program,week,lift' }).select().single()
 
-    setLog(finalLog)
-    setHistory(nextHistory)
-    localStorage.setItem('wb:history', JSON.stringify(nextHistory))
-    localStorage.setItem(keyFor(week, lift), JSON.stringify(finalLog))
+    if (!error && data) {
+      setLog(payload)
+      setHistory(rows => [data, ...rows.filter(row => row.id !== data.id && !(row.week === week && row.lift === lift))])
+      setSaveState('Saved')
+    } else {
+      setSaveState('Save failed')
+    }
+  }
+
+  useEffect(() => {
+    if (!session?.user || dataLoading || saveState !== 'Unsaved') return
+    const timer = setTimeout(() => saveWorkout(false), 900)
+    return () => clearTimeout(timer)
+  }, [log, session?.user?.id, dataLoading, saveState])
+
+  const changeWeek = async value => {
+    const nextWeek = Number(value)
+    setWeek(nextWeek)
+    if (session?.user) {
+      await supabase.from('profiles').update({ current_week:nextWeek, updated_at:new Date().toISOString() }).eq('id', session.user.id)
+      setProfile(v => v ? { ...v, current_week:nextWeek } : v)
+    }
+  }
+
+  const finishWorkout = async () => {
+    await saveWorkout(true)
   }
 
   const backPct = backoffPercent(plan.supplemental)
   const backTarget = backPct && tm ? round5(tm * backPct / 100) : null
+
+  if (authLoading) return <div className="loading-screen">Loading WorkoutBoard…</div>
+  if (!session) return <AuthScreen />
 
   return (
     <main className="app">
@@ -213,49 +322,44 @@ function App() {
           <h1>{lift} Day</h1>
           <div className="phase">Week {week} · {plan.phase} · {dayPlan[lift].day}</div>
         </div>
-        <button className="setup-button" type="button" onClick={() => setShowSetup(!showSetup)}>
-          Setup
-        </button>
+        <div className="account-menu">
+          <strong>{profile?.display_name || session.user.email?.split('@')[0]}</strong>
+          <button type="button" onClick={() => supabase.auth.signOut()}>Sign out</button>
+        </div>
       </header>
 
-      <section className="selectors" aria-label="Choose workout">
-        <label>
-          <span>Week</span>
-          <select value={week} onChange={e => setWeek(Number(e.target.value))}>
+      <section className="selectors">
+        <label><span>Week</span>
+          <select value={week} onChange={e => changeWeek(e.target.value)}>
             {Object.keys(weeks).map(w => <option key={w} value={w}>Week {w}</option>)}
           </select>
         </label>
-        <label>
-          <span>Workout</span>
+        <label><span>Workout</span>
           <select value={lift} onChange={e => setLift(e.target.value)}>
             {lifts.map(x => <option key={x}>{x}</option>)}
           </select>
         </label>
       </section>
 
+      <div className="user-strip">
+        <span>Tracking as <strong>{profile?.display_name || 'You'}</strong></span>
+        <span>● {saveState}</span>
+        <button type="button" onClick={() => setShowSetup(!showSetup)}>Training Maxes</button>
+      </div>
+
       {showSetup && (
         <section className="setup-panel">
           <div className="section-heading">
-            <div>
-              <h2>Training Max Setup</h2>
-              <p>Enter these once. Workout weights will fill in automatically.</p>
-            </div>
+            <div><h2>Your Training Maxes</h2><p>Saved to your account, not Tracey's.</p></div>
           </div>
           <div className="tm-grid">
             {lifts.map(x => (
               <label key={x}>
                 <span>{x}</span>
                 <div className="input-with-unit">
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    enterKeyHint="done"
-                    value={trainingMaxes[x] || ''}
-                    placeholder="0"
+                  <input type="number" inputMode="decimal" value={trainingMaxes[x] || ''} placeholder="0"
                     onFocus={e => e.currentTarget.select()}
-                    onChange={e => setTm(x, e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
-                  />
+                    onChange={e => setTm(x, e.target.value)} />
                   <b>lb</b>
                 </div>
               </label>
@@ -264,80 +368,31 @@ function App() {
         </section>
       )}
 
-      {!tm ? (
-        <div className="hint">
-          <strong>No {lift} training max yet.</strong>
-          <span>Tap Setup to calculate targets, or just type your working weights below.</span>
-        </div>
-      ) : (
-        <div className="tm-summary">
-          <span>{lift} training max</span>
-          <strong>{tm} lb</strong>
-          <span className="autosave">● {saveState}</span>
-        </div>
-      )}
+      {!tm && <div className="hint"><strong>No {lift} training max yet.</strong><span>Tap Training Maxes, or type working weights directly.</span></div>}
 
       <section className="exercise-card">
         <div className="exercise-title">
-          <div>
-            <span>MAIN LIFT</span>
-            <h2>{lift}</h2>
-          </div>
-          {previousWorkout && <small>Previous workout shown below</small>}
+          <div><span>MAIN LIFT</span><h2>{lift}</h2></div>
+          {previousWorkout && <small>Tap “Last” to reuse a previous set.</small>}
         </div>
 
-        <div className="column-head">
-          <span>SET / TARGET</span>
-          <span>WEIGHT</span>
-          <span>REPS</span>
-          <span>DONE</span>
-        </div>
+        <div className="column-head"><span>SET / TARGET</span><span>WEIGHT</span><span>REPS</span><span>DONE</span></div>
 
         {log.main.map((set, i) => {
           const target = tm ? round5(tm * set.pct / 100) : null
-          const prev = previousWorkout && previousWorkout.main ? previousWorkout.main[i] : null
-
+          const prev = previousWorkout?.main?.[i]
           return (
             <div className={'set-row ' + (set.done ? 'completed' : '')} key={i}>
               <div className="set-meta">
-                <strong>Set {i + 1}</strong>
-                <span>{set.pct}% × {set.reps}</span>
+                <strong>Set {i+1}</strong><span>{set.pct}% × {set.reps}</span>
                 {target && <small>Target {target} lb</small>}
-                {prev && (
-                  <button className="previous" type="button" onClick={() => usePrevious(i)}>
-                    Last {prev.weight || '—'} × {prev.actualReps || '—'}
-                  </button>
-                )}
+                {prev && <button className="previous" type="button" onClick={() => usePrevious(i)}>Last {prev.weight || '—'} × {prev.actualReps || '—'}</button>}
               </div>
-
-              <NumericInput
-                value={set.weight}
-                placeholder={target ? String(target) : 'lb'}
-                step={5}
-                onChange={value => updateMain(i, 'weight', value)}
-                className="weight-input"
-              />
-
-              <input
-                className="reps-input"
-                type="number"
-                inputMode="numeric"
-                enterKeyHint="done"
-                value={set.actualReps}
-                placeholder={String(set.reps).replace('+','')}
+              <NumericInput value={set.weight} placeholder={target ? String(target) : 'lb'} step={5} onChange={v => updateMain(i,'weight',v)} />
+              <input className="reps-input" type="number" inputMode="numeric" value={set.actualReps}
                 onFocus={e => e.currentTarget.select()}
-                onChange={e => updateMain(i, 'actualReps', e.target.value === '' ? '' : Number(e.target.value))}
-                onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
-              />
-
-              <button
-                type="button"
-                className={'check ' + (set.done ? 'checked' : '')}
-                onClick={() => updateMain(i, 'done', !set.done)}
-                aria-label={'Mark set ' + (i + 1) + ' complete'}
-              >
-                ✓
-              </button>
+                onChange={e => updateMain(i,'actualReps',e.target.value === '' ? '' : Number(e.target.value))} />
+              <button type="button" className={'check ' + (set.done ? 'checked' : '')} onClick={() => updateMain(i,'done',!set.done)}>✓</button>
             </div>
           )
         })}
@@ -345,109 +400,48 @@ function App() {
 
       <section className="simple-card">
         <div className="section-heading">
-          <div>
-            <span className="card-label">BACKOFF</span>
-            <h3>{plan.supplemental}</h3>
-          </div>
+          <div><span className="card-label">BACKOFF</span><h3>{plan.supplemental}</h3></div>
           {backTarget && <strong className="target-pill">{backTarget} lb</strong>}
         </div>
-        <label className="field-label">
-          <span>Working weight</span>
-          <NumericInput
-            value={log.backoffWeight}
-            placeholder={backTarget ? String(backTarget) : 'lb'}
-            step={5}
-            onChange={value => setLog(v => ({ ...v, complete:false, backoffWeight:value }))}
-          />
+        <label className="field-label"><span>Working weight</span>
+          <NumericInput value={log.backoffWeight} placeholder={backTarget ? String(backTarget) : 'lb'} step={5}
+            onChange={v => { setSaveState('Unsaved'); setLog(x => ({ ...x, complete:false, backoffWeight:v })) }} />
         </label>
-        <input
-          className="text-input"
-          placeholder="Optional note, e.g. 5x5 completed"
-          value={log.backoffNote}
-          onChange={e => setLog(v => ({ ...v, complete:false, backoffNote:e.target.value }))}
-        />
+        <input className="text-input" placeholder="Optional note, e.g. 5x5 completed" value={log.backoffNote}
+          onChange={e => { setSaveState('Unsaved'); setLog(v => ({ ...v, complete:false, backoffNote:e.target.value })) }} />
       </section>
 
       <section className="simple-card">
-        <div className="section-heading">
-          <div>
-            <span className="card-label">ASSISTANCE</span>
-            <h3>Write it like the board</h3>
-          </div>
-        </div>
-        {log.assistance.map((item, i) => (
-          <label className="assist" key={item.name}>
-            <span>{item.name}</span>
-            <input
-              type="text"
-              enterKeyHint="next"
-              placeholder="50 × 8 × 3"
-              value={item.result}
-              onChange={e => setLog(v => ({
-                ...v,
-                complete:false,
-                assistance:v.assistance.map((x, idx) => idx === i ? { ...x, result:e.target.value } : x)
-              }))}
-            />
+        <div className="section-heading"><div><span className="card-label">ASSISTANCE</span><h3>Write it like the board</h3></div></div>
+        {log.assistance.map((item,i) => (
+          <label className="assist" key={item.name}><span>{item.name}</span>
+            <input placeholder="50 × 8 × 3" value={item.result}
+              onChange={e => { setSaveState('Unsaved'); setLog(v => ({ ...v, complete:false, assistance:v.assistance.map((x,idx)=>idx===i?{...x,result:e.target.value}:x) })) }} />
           </label>
         ))}
       </section>
 
       <section className="simple-card">
-        <div className="section-heading">
-          <div>
-            <span className="card-label">CONDITIONING</span>
-            <h3>{plan.conditioning}</h3>
-          </div>
-        </div>
-        <input
-          className="text-input"
-          placeholder="Time / rounds / distance"
-          value={log.conditioning}
-          onChange={e => setLog(v => ({ ...v, complete:false, conditioning:e.target.value }))}
-        />
+        <div className="section-heading"><div><span className="card-label">CONDITIONING</span><h3>{plan.conditioning}</h3></div></div>
+        <input className="text-input" placeholder="Time / rounds / distance" value={log.conditioning}
+          onChange={e => { setSaveState('Unsaved'); setLog(v => ({ ...v, complete:false, conditioning:e.target.value })) }} />
       </section>
 
       <section className="metrics">
-        <label>
-          <span>Workout RPE</span>
-          <input
-            type="number"
-            inputMode="decimal"
-            enterKeyHint="next"
-            placeholder="1-10"
-            value={log.rpe}
-            onFocus={e => e.currentTarget.select()}
-            onChange={e => setLog(v => ({ ...v, complete:false, rpe:e.target.value }))}
-          />
-        </label>
-        <label>
-          <span>Bodyweight</span>
-          <input
-            type="number"
-            inputMode="decimal"
-            enterKeyHint="done"
-            placeholder="lb"
-            value={log.bodyweight}
-            onFocus={e => e.currentTarget.select()}
-            onChange={e => setLog(v => ({ ...v, complete:false, bodyweight:e.target.value }))}
-          />
-        </label>
+        <label><span>Workout RPE</span><input type="number" inputMode="decimal" placeholder="1-10" value={log.rpe}
+          onChange={e => { setSaveState('Unsaved'); setLog(v => ({ ...v, complete:false, rpe:e.target.value })) }} /></label>
+        <label><span>Bodyweight</span><input type="number" inputMode="decimal" placeholder="lb" value={log.bodyweight}
+          onChange={e => { setSaveState('Unsaved'); setLog(v => ({ ...v, complete:false, bodyweight:e.target.value })) }} /></label>
       </section>
 
-      <textarea
-        className="notes"
-        placeholder="Quick workout note…"
-        value={log.note}
-        onChange={e => setLog(v => ({ ...v, complete:false, note:e.target.value }))}
-      />
+      <textarea className="notes" placeholder="Quick workout note…" value={log.note}
+        onChange={e => { setSaveState('Unsaved'); setLog(v => ({ ...v, complete:false, note:e.target.value })) }} />
 
       <div className="finish-wrap">
         <button className={'finish ' + (log.complete ? 'done' : '')} onClick={finishWorkout}>
-          {log.complete ? '✓ WORKOUT FINISHED' : 'FINISH WORKOUT'}
+          {log.complete ? '✓ WORKOUT FINISHED & SAVED' : 'FINISH WORKOUT'}
         </button>
       </div>
-
       <div className="bottom-space" />
     </main>
   )
