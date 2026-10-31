@@ -156,7 +156,8 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss}) {
       const current=m?{weight:Number(m[1]),reps:Number(m[2]),e1rm:Number(m[1])*(1+Number(m[2])/30)}:null
       const isPR=Boolean(current&&hist&&(current.weight>(hist.bestWeight||0)||current.e1rm>(hist.bestE||0)+.5))
       const fallbackRest=/squat|deadlift|bench|press|clean|snatch/i.test(item.name||'')?180:90
-      const rest=timerPresets[key]||fallbackRest
+      const programRest=Number(item.rest_seconds||fallbackRest)
+      const rest=timerPresets[key]||programRest
       const sub=substitutions[key]?.[0]
       return <article className={'flex-exercise '+(item.done?'done':'')+(item.group?' grouped':'')} key={item.id||i}>
         <div className="flex-exercise-title"><div><div className="exercise-name-line">{item.group&&<b className="group-badge">{item.group}</b>}<strong>{item.name}</strong>{isPR&&<b className="pr-mini">PR</b>}</div><span>{item.prescription}</span>{item.note&&<small>{item.note}</small>}{hist?.last&&<small className="flex-history">Last: {hist.last}{current&&hist?.last?` · Suggested ${Math.round((current.weight||0)+5)} lb`:''}</small>}{sub&&<small className="sub-suggestion">Substitute: {sub.substitute}{sub.reason?' · '+sub.reason:''}</small>}</div><button type="button" className={'check '+(item.done?'checked':'')} onClick={()=>{ const next=!item.done; changeExercise(i,{done:next}); if(next) window.dispatchEvent(new CustomEvent('workoutboard:rest-timer',{detail:{seconds:rest}})) }}>✓</button></div>
