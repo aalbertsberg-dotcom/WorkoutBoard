@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './supabase'
 import { allArchivePrograms, archiveProgramById, makePlannedFromArchive } from './archivePrograms'
 import { ProgressToolbox, WorkoutTemplates } from './trainingTools'
+import { AdvancedProgressCenter, PlannedWorkoutTools, ShareImportPanel, AdminDashboardSummary } from './advancedFeatures'
 
 function startOfWeek(date = new Date()) {
   const d = new Date(date)
@@ -203,6 +204,7 @@ export function PlatformProgress({
         flexSessions={flexSessions}
         formatWeight={formatWeight}
       />
+      <AdvancedProgressCenter session={session} />
     </>:<>
       {ready===false?<div className="setup-needed"><span className="card-label">PLATFORM UPDATE NEEDED</span><h2>Community is ready in the app</h2><p>Run the platform-foundation SQL migration once to enable it.</p></div>:<>
         <section className="community-control">
@@ -441,9 +443,58 @@ export function PlanPage({
     setPreviewDay(0)
   }
 
+  const snapshotProgram = p => ({
+    key:p.key,
+    name:p.name,
+    kind:p.kind,
+    source:p.source,
+    description:p.description,
+    category:p.category,
+    difficulty:p.difficulty,
+    weeksCount:p.weeksCount,
+    daysPerWeek:p.daysPerWeek,
+    weeks:Array.from({length:Number(p.weeksCount||0)},(_,i)=>{
+      const n=i+1
+      return {week:n,days:p.getWeek?p.getWeek(n):[]}
+    })
+  })
+
+  const createProgramVersion = async p => {
+    const {data:latest}=await supabase.from('program_versions').select('version_number')
+      .eq('user_id',session.user.id).eq('program_key',p.key)
+      .order('version_number',{ascending:false}).limit(1)
+    const version=Number(latest?.[0]?.version_number||0)+1
+    const {data,error}=await supabase.from('program_versions').insert({
+      user_id:session.user.id,
+      program_key:p.key,
+      version_number:version,
+      title:p.name,
+      snapshot:snapshotProgram(p)
+    }).select('id').single()
+    if(error)return null
+    return data?.id||null
+  }
+
+  const shareProgram = async p => {
+    if(!session?.user||!p)return
+    const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+    const code=Array.from({length:8},()=>chars[Math.floor(Math.random()*chars.length)]).join('')
+    const {error}=await supabase.from('shared_library_items').insert({
+      owner_user_id:session.user.id,
+      share_code:code,
+      item_type:'program',
+      title:p.name,
+      payload:snapshotProgram(p)
+    })
+    if(error){setMessage(error.message);return}
+    try{await navigator.clipboard.writeText(code)}catch{}
+    setMessage('Program share code '+code+' copied.')
+  }
+
   const startTracking = async p => {
     if(!session?.user || !p)return
-    const {error}=await supabase.rpc('start_program_tracking',{
+    const versionId=await createProgramVersion(p)
+    const {data,error}=await supabase.rpc('start_program_tracking',{
       target_program_key:p.key,
       target_program_name:p.name,
       target_program_kind:p.kind,
@@ -453,8 +504,10 @@ export function PlanPage({
       setMessage('Run the unified-program-tracking migration first: '+error.message)
       return
     }
+    const trackId=Array.isArray(data)?data[0]?.id:data?.id
+    if(trackId&&versionId)await supabase.from('user_program_tracking').update({program_version_id:versionId}).eq('id',trackId)
     if(p.kind==='classic') await chooseProgram(p.id)
-    setMessage(p.name+' is now in Tracked Programs.')
+    setMessage(p.name+' is now in Tracked Programs. Version snapshot saved.')
     await load()
   }
 
@@ -648,11 +701,14 @@ export function PlanPage({
       <div className="sample-workout"><h3>{previewDays[previewDay]?.title}</h3>{previewDays[previewDay]?.exercises?.map((x,i)=><div className="sample-exercise" key={i}><strong>{x.name}</strong><span>{x.prescription}</span>{x.note&&<small>{x.note}</small>}</div>)}</div>
       <div className="program-preview-actions">
         <div className="schedule-row"><input type="date" value={scheduleDate} onChange={e=>setScheduleDate(e.target.value)}/><button className="primary-action" onClick={scheduleProgramWorkout}>Add this workout</button></div>
+        <button className="wide-button" onClick={()=>shareProgram(preview)}>Share program code</button>
         {trackingReady&&!trackedKeys.has(preview.key)&&<button className="wide-button" onClick={()=>startTracking(preview)}>{completedKeys.has(preview.key)?'Track this program again':'Track this program'}</button>}
       </div>
       {!preview.getWeek&&<p className="helper-text">This program is cataloged from your archive but not fully transcribed yet. Its preview keeps the original source visible rather than inventing prescriptions.</p>}
     </section>}
 
+    <PlannedWorkoutTools session={session} />
+    <ShareImportPanel session={session} />
     <WorkoutTemplates session={session} />
 
         {library.filter(item=>item.owner_user_id===session.user.id).length>0&&<section className="simple-card">
@@ -673,7 +729,8 @@ export function AdminPanel({ programs }) {
   const [resetPassword,setResetPassword] = useState('')
 
   const loadUsers = async () => {
-    const {data,error} = await supabase.rpc('admin_user_overview')
+    let {data,error} = await supabase.rpc('admin_user_overview_v2')
+    if (error) ({data,error}=await supabase.rpc('admin_user_overview'))
     if (error) { setMessage(error.message); return }
     setUsers(data || [])
   }
@@ -755,6 +812,7 @@ export function AdminPanel({ programs }) {
   if(!selected){
     const totalWorkouts=users.reduce((sum,u)=>sum+Number(u.workout_count||0),0)
     return <section className="page-section">
+      <AdminDashboardSummary />
       <section className="summary-grid"><div><span>Users</span><strong>{users.length}</strong></div><div><span>Completed workouts</span><strong>{totalWorkouts}</strong></div></section>
       <section className="simple-card">
         <div className="section-heading"><div><span className="card-label">ADMIN</span><h3>WorkoutBoard users</h3></div></div>
