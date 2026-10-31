@@ -131,6 +131,125 @@ const programs = {
     }
   },
 
+  'andy-531-original-6': {
+    name:'Andy Original 5/3/1 + Jokers',
+    shortName:'Andy 5/3/1',
+    dbName:'Andy Original 5/3/1 + Jokers',
+    weeksCount:6,
+    basis:'tm',
+    description:'From Andy_531 Spreadsheet.xlsx in your archive: three FSL weeks followed by three Joker-set weeks.',
+    phases:{1:'FSL',2:'FSL',3:'FSL',4:'Jokers',5:'Jokers',6:'Jokers'},
+    main:{
+      1:[{pct:65,reps:5},{pct:75,reps:5},{pct:85,reps:'5+'}],
+      2:[{pct:70,reps:3},{pct:80,reps:3},{pct:90,reps:'3+'}],
+      3:[{pct:75,reps:5},{pct:85,reps:3},{pct:95,reps:'1+'}],
+      4:[{pct:65,reps:5},{pct:75,reps:5},{pct:85,reps:'5+'}],
+      5:[{pct:70,reps:3},{pct:80,reps:3},{pct:90,reps:'3+'}],
+      6:[{pct:75,reps:5},{pct:85,reps:3},{pct:95,reps:'1+'}],
+    },
+    secondary:{
+      1:{label:'FSL',title:'First Set Last 5x5',pct:65},
+      2:{label:'FSL',title:'First Set Last 5x5',pct:70},
+      3:{label:'FSL',title:'First Set Last 5x5',pct:75},
+      4:{label:'JOKERS + BACKOFF',title:'Joker sets + 1x5 first-set backoff',pct:65},
+      5:{label:'JOKERS + BACKOFF',title:'Joker sets + 1x5 first-set backoff',pct:70},
+      6:{label:'JOKERS + BACKOFF',title:'Joker sets + 1x5 first-set backoff',pct:75},
+    },
+    assistance:{
+      Squat:['Joker set 1 (weeks 4-6)','Joker set 2 (weeks 4-6)','Leg / core assistance'],
+      Bench:['Joker set 1 (weeks 4-6)','Joker set 2 (weeks 4-6)','Pull / triceps assistance'],
+      Deadlift:['Joker set 1 (weeks 4-6)','Joker set 2 (weeks 4-6)','Back / core assistance'],
+      Press:['Joker set 1 (weeks 4-6)','Joker set 2 (weeks 4-6)','Pull / arms assistance'],
+    },
+    conditioning:() => 'Optional / easy'
+  },
+
+  'new-531-leader-anchor-11': {
+    name:'New 5/3/1 Leader + Anchor',
+    shortName:'New 5/3/1',
+    dbName:'New 5/3/1 Leader + Anchor',
+    weeksCount:11,
+    basis:'tm',
+    description:'From NEW 531 PROGRAM.docx: two leader cycles, 7th-week deload, one anchor cycle, then a training-max test.',
+    phases:{1:'Leader 1',2:'Leader 1',3:'Leader 1',4:'Leader 2',5:'Leader 2',6:'Leader 2',7:'7th Week Deload',8:'Anchor',9:'Anchor',10:'Anchor',11:'TM Test'},
+    main:{
+      1:[{pct:70,reps:3},{pct:80,reps:3},{pct:90,reps:3}],
+      2:[{pct:65,reps:5},{pct:75,reps:5},{pct:85,reps:'5+'}],
+      3:[{pct:75,reps:5},{pct:85,reps:3},{pct:95,reps:1}],
+      4:[{pct:70,reps:3},{pct:80,reps:3},{pct:90,reps:3}],
+      5:[{pct:65,reps:5},{pct:75,reps:5},{pct:85,reps:'5+'}],
+      6:[{pct:75,reps:5},{pct:85,reps:3},{pct:95,reps:1}],
+      7:[{pct:70,reps:5},{pct:80,reps:3},{pct:100,reps:1}],
+      8:[{pct:65,reps:5},{pct:75,reps:5},{pct:85,reps:'5+'}],
+      9:[{pct:70,reps:3},{pct:80,reps:3},{pct:90,reps:'3+'}],
+      10:[{pct:75,reps:5},{pct:85,reps:3},{pct:95,reps:'1+'}],
+      11:[{pct:70,reps:5},{pct:80,reps:5},{pct:90,reps:5},{pct:100,reps:'3-5'}],
+    },
+    secondary:{
+      1:{label:'FSL',title:'FSL 5x5 @ 70%',pct:70},
+      2:{label:'FSL',title:'FSL 5x5 @ 65%',pct:65},
+      3:{label:'FSL',title:'FSL 5x5 @ 75%',pct:75},
+      4:{label:'FSL',title:'FSL 5x5 @ 70%',pct:70},
+      5:{label:'FSL',title:'FSL 5x5 @ 65%',pct:65},
+      6:{label:'FSL',title:'FSL 5x5 @ 75%',pct:75},
+      7:{label:'DELOAD',title:'Light assistance only',pct:null},
+      8:{label:'WIDOWMAKER',title:'1x20 @ 65%',pct:65},
+      9:{label:'WIDOWMAKER',title:'1x20 @ 70%',pct:70},
+      10:{label:'WIDOWMAKER',title:'1x20 @ 75%',pct:75},
+      11:{label:'TM TEST',title:'Fast, strong 3-5 reps at TM',pct:100},
+    },
+    assistance:{
+      Squat:['Push 50-100 reps','Pull 50-100 reps','Single-leg / core 50-100 reps'],
+      Bench:['Push 50-100 reps','Pull 50-100 reps','Single-leg / core 50-100 reps'],
+      Deadlift:['Push 50-100 reps','Pull 50-100 reps','Single-leg / core 50-100 reps'],
+      Press:['Push 50-100 reps','Pull 50-100 reps','Single-leg / core 50-100 reps'],
+    },
+    conditioning:(week) => week >= 8 && week <= 10 ? 'More hard conditioning allowed' : 'Easy / light conditioning'
+  },
+
+  'andy-bbb-jokers-11': {
+    name:'Andy BBB + Jokers Archive',
+    shortName:'BBB + Jokers',
+    dbName:'Andy BBB + Jokers Archive',
+    weeksCount:11,
+    basis:'tm',
+    description:'From ANDY 531-Boring But Big-Jokers.xlsx: two BBB leader cycles, deload, Joker/FSL anchor, and max test.',
+    phases:{1:'BBB Leader 1',2:'BBB Leader 1',3:'BBB Leader 1',4:'BBB Leader 2',5:'BBB Leader 2',6:'BBB Leader 2',7:'7th Week Deload',8:'Joker Anchor',9:'Joker Anchor',10:'Joker Anchor',11:'Max Test'},
+    main:{
+      1:[{pct:70,reps:5},{pct:80,reps:5},{pct:90,reps:5}],
+      2:[{pct:65,reps:5},{pct:75,reps:5},{pct:85,reps:5}],
+      3:[{pct:75,reps:5},{pct:85,reps:5},{pct:95,reps:5}],
+      4:[{pct:70,reps:5},{pct:80,reps:5},{pct:90,reps:5}],
+      5:[{pct:65,reps:5},{pct:75,reps:5},{pct:85,reps:5}],
+      6:[{pct:75,reps:5},{pct:85,reps:5},{pct:95,reps:5}],
+      7:[{pct:50,reps:5},{pct:60,reps:5},{pct:70,reps:5},{pct:80,reps:3},{pct:90,reps:1},{pct:100,reps:1}],
+      8:[{pct:65,reps:5},{pct:75,reps:5},{pct:85,reps:5}],
+      9:[{pct:70,reps:5},{pct:80,reps:5},{pct:90,reps:5}],
+      10:[{pct:75,reps:5},{pct:85,reps:5},{pct:95,reps:5}],
+      11:[{pct:50,reps:5},{pct:60,reps:5},{pct:70,reps:5},{pct:80,reps:5},{pct:90,reps:5},{pct:100,reps:'3-5'}],
+    },
+    secondary:{
+      1:{label:'BBB',title:'BBB 5x10 - source target',pct:null},
+      2:{label:'BBB',title:'BBB 5x10 - source target',pct:null},
+      3:{label:'BBB',title:'BBB 5x10 - source target',pct:null},
+      4:{label:'BBB',title:'BBB 5x10 - source target',pct:null},
+      5:{label:'BBB',title:'BBB 5x10 - source target',pct:null},
+      6:{label:'BBB',title:'BBB 5x10 - source target',pct:null},
+      7:{label:'DELOAD',title:'Assistance only after main work',pct:null},
+      8:{label:'JOKERS + FSL',title:'Jokers 2x2 + FSL 5x5',pct:65},
+      9:{label:'JOKERS + FSL',title:'Jokers 1x2 + 1x1 + FSL 5x5',pct:70},
+      10:{label:'JOKERS + FSL',title:'Joker max-effort single + FSL',pct:75},
+      11:{label:'MAX TEST',title:'Training max x 3-5',pct:100},
+    },
+    assistance:{
+      Squat:['DB Front Squat','Single-leg Bulgarian Split Squat','Leg Raises'],
+      Bench:['Dumbbell Rows','Pullups','Triceps / push assistance'],
+      Deadlift:['Rows / posterior chain','Pullups','Core'],
+      Press:['Rows / pullups','Arms','Core'],
+    },
+    conditioning:(week) => week === 7 || week === 11 ? 'Light / easy' : 'Easy conditioning'
+  },
+
   'reset-4': {
     name:'4 Week Reset',
     shortName:'4W Reset',
@@ -166,7 +285,7 @@ const programs = {
   }
 }
 
-const programOrder = ['andy-hybrid-12','powerbuilding-8','strength-power-6','reset-4']
+const programOrder = ['andy-hybrid-12','andy-531-original-6','new-531-leader-anchor-11','andy-bbb-jokers-11','powerbuilding-8','strength-power-6','reset-4']
 const dbNameToProgram = Object.fromEntries(Object.entries(programs).map(([id,p]) => [p.dbName,id]))
 const defaultTms = { Squat:'', Bench:'', Deadlift:'', Press:'' }
 const round5 = n => Math.round(n / 5) * 5
