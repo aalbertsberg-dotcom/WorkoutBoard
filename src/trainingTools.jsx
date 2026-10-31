@@ -133,7 +133,7 @@ export function TrainingTimer() {
   }
   const startRest=(seconds=restSeconds)=>{
     setMode('Rest');setRestSeconds(seconds);localStorage.setItem('wb-rest-seconds',String(seconds))
-    setElapsed(0);baseElapsed.current=0;startAt.current=Date.now();endBeeped.current=false;setRunning(true);setExpanded(true)
+    setElapsed(0);baseElapsed.current=0;startAt.current=Date.now();endBeeped.current=false;setRunning(true)
   }
 
   useEffect(()=>{
