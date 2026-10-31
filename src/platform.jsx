@@ -51,181 +51,166 @@ export function PlatformProgress({
 }) {
   const [mode,setMode] = useState('mine')
   const [community,setCommunity] = useState([])
+  const [flexSessions,setFlexSessions] = useState([])
   const [ready,setReady] = useState(null)
   const [message,setMessage] = useState('')
-  const [resetPassword,setResetPassword] = useState('')
 
-  const loadCommunity = async () => {
-    const {data,error} = await supabase
-      .from('community_activity')
-      .select('*')
-      .order('created_at',{ascending:false})
-      .limit(50)
-
-    if (error) {
-      setReady(false)
-      return
-    }
+  const loadData = async () => {
+    if (!session?.user) return
+    const [{data:communityRows,error:communityError},{data:sessionRows}] = await Promise.all([
+      supabase.from('community_activity').select('*').order('created_at',{ascending:false}).limit(50),
+      supabase.from('training_sessions').select('*').eq('user_id',session.user.id).is('legacy_log_id',null).not('completed_at','is',null).order('completed_at',{ascending:false}).limit(250),
+    ])
+    if (communityError) { setReady(false); return }
     setReady(true)
-    setCommunity(data || [])
+    setCommunity(communityRows || [])
+    setFlexSessions(sessionRows || [])
   }
 
-  useEffect(() => {
-    loadCommunity()
-  },[])
+  useEffect(() => { loadData() },[session?.user?.id])
 
   const toggleCommunity = async enabled => {
     if (!session?.user) return
     setMessage('Saving…')
-    const {error} = await supabase
-      .from('profiles')
-      .update({community_opt_in:enabled,updated_at:new Date().toISOString()})
-      .eq('id',session.user.id)
-
-    if (error) {
-      setReady(false)
-      setMessage('Platform migration still needs to be run.')
-      return
-    }
-
-    if (!enabled) {
-      await supabase.from('community_activity').delete().eq('user_id',session.user.id)
-    }
-
-    setProfile(v => ({...v,community_opt_in:enabled}))
-    setMessage(enabled ? 'Community sharing is on for future completed workouts.' : 'Community sharing is off and your community posts were removed.')
-    await loadCommunity()
+    const {error}=await supabase.from('profiles').update({community_opt_in:enabled,updated_at:new Date().toISOString()}).eq('id',session.user.id)
+    if(error){setReady(false);setMessage('Platform migration still needs to be run.');return}
+    if(!enabled) await supabase.from('community_activity').delete().eq('user_id',session.user.id)
+    setProfile(v=>({...v,community_opt_in:enabled}))
+    setMessage(enabled?'Community sharing is on for future completed workouts.':'Community sharing is off and your community posts were removed.')
+    await loadData()
   }
 
   const toggleBodyweight = async enabled => {
-    if (!session?.user) return
-    const {error} = await supabase
-      .from('profiles')
-      .update({community_share_bodyweight:enabled,updated_at:new Date().toISOString()})
-      .eq('id',session.user.id)
-    if (!error) setProfile(v => ({...v,community_share_bodyweight:enabled}))
+    if(!session?.user)return
+    const {error}=await supabase.from('profiles').update({community_share_bodyweight:enabled,updated_at:new Date().toISOString()}).eq('id',session.user.id)
+    if(!error)setProfile(v=>({...v,community_share_bodyweight:enabled}))
   }
 
-  const maxWeeklyVolume = Math.max(1,...progress.weekly.map(item => item.volume))
+  const now=Date.now()
+  const dayMs=86400000
+  const flexWithin=(row,minDays,maxDays=0)=>{
+    const age=(now-new Date(row.completed_at||row.session_date).getTime())/dayMs
+    return age<=minDays && age>maxDays
+  }
+  const legacyPrevious30=progress.completed.filter(r=>{
+    const age=(now-new Date(r.completed_at).getTime())/dayMs
+    return age>30&&age<=60
+  }).reduce((sum,r)=>sum+Number(r._metrics?.volume||0),0)
+  const flex30=flexSessions.filter(r=>flexWithin(r,30)).reduce((sum,r)=>sum+Number(r.total_volume||0),0)
+  const flexPrev30=flexSessions.filter(r=>flexWithin(r,60,30)).reduce((sum,r)=>sum+Number(r.total_volume||0),0)
+  const volume30=progress.volume30+flex30
+  const previous30=legacyPrevious30+flexPrev30
+  const volumeDeltaPct=previous30?Math.round((volume30-previous30)/previous30*100):null
 
-  return (
-    <section className="page-section">
-      <div className="segmented">
-        <button className={mode === 'mine' ? 'active' : ''} onClick={() => setMode('mine')}>My Progress</button>
-        <button className={mode === 'community' ? 'active' : ''} onClick={() => setMode('community')}>Community</button>
-      </div>
+  const monthKey=new Date().toISOString().slice(0,7)
+  const thisMonth=progress.completed.filter(r=>String(r.completed_at).slice(0,7)===monthKey).length+
+    flexSessions.filter(r=>String(r.completed_at||r.session_date).slice(0,7)===monthKey).length
 
-      {mode === 'mine' ? (
-        <>
-          <section className="summary-grid">
-            <div><span>Workouts</span><strong>{progress.completed.length}</strong></div>
-            <div><span>7-day volume</span><strong>{formatWeight(progress.volume7)} lb</strong></div>
-            <div><span>30-day volume</span><strong>{formatWeight(progress.volume30)} lb</strong></div>
-            <div><span>Bodyweight</span><strong>{progress.latestBodyweight ? progress.latestBodyweight + ' lb' : '—'}</strong></div>
-          </section>
+  const weekKey=value=>{
+    const d=new Date(value); const dow=d.getDay(); d.setDate(d.getDate()+(dow===0?-6:1-dow)); d.setHours(0,0,0,0); return d.toISOString().slice(0,10)
+  }
+  const activeWeeks=new Set([
+    ...progress.completed.map(r=>weekKey(r.completed_at)),
+    ...flexSessions.map(r=>weekKey(r.completed_at||r.session_date))
+  ])
+  let activeWeekStreak=0
+  const cursor=startOfWeek()
+  while(activeWeeks.has(isoDate(cursor))){
+    activeWeekStreak++
+    cursor.setDate(cursor.getDate()-7)
+  }
 
-          <section className="simple-card">
-            <div className="section-heading"><div><span className="card-label">STRENGTH PROGRESS</span><h3>Estimated 1RM</h3></div></div>
-            <div className="strength-list">
-              {lifts.map(name => {
-                const stat = progress.strength[name]
-                return (
-                  <div className="strength-row" key={name}>
-                    <div><strong>{name}</strong><span>{stat?.bestSet ? 'Best set ' + stat.bestSet.weight + ' × ' + stat.bestSet.reps : 'No completed data yet'}</span></div>
-                    <div className="strength-number">
-                      <strong>{stat ? formatWeight(stat.latest) + ' lb' : '—'}</strong>
-                      {stat && <span className={stat.delta >= 0 ? 'positive' : 'negative'}>{stat.delta >= 0 ? '+' : ''}{formatWeight(stat.delta)} since first log</span>}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </section>
+  const volumeByLift=Object.fromEntries(lifts.map(x=>[x,0]))
+  progress.completed.forEach(r=>{if(volumeByLift[r.lift]!=null)volumeByLift[r.lift]+=Number(r._metrics?.volume||0)})
+  flexSessions.forEach(r=>{if(volumeByLift[r.primary_lift]!=null)volumeByLift[r.primary_lift]+=Number(r.total_volume||0)})
+  const maxLiftVolume=Math.max(1,...Object.values(volumeByLift))
 
-          <section className="simple-card">
-            <div className="section-heading"><div><span className="card-label">VOLUME TREND</span><h3>Last 8 weeks</h3></div></div>
-            <div className="volume-chart">
-              {progress.weekly.map(item => (
-                <div className="volume-bar-row" key={item.label}>
-                  <span>{item.label}</span>
-                  <div className="bar-track"><div className="bar-fill" style={{width:(item.volume / maxWeeklyVolume * 100) + '%'}} /></div>
-                  <strong>{formatWeight(item.volume)}</strong>
-                </div>
-              ))}
-            </div>
-          </section>
+  const flexBody=flexSessions.find(r=>Number(r.bodyweight||0))?.bodyweight
+  const latestBodyweight=flexBody||progress.latestBodyweight
+  const totalWorkouts=progress.completed.length+flexSessions.length
+  const maxWeeklyVolume=Math.max(1,...progress.weekly.map(item=>item.volume))
 
-          <section className="simple-card">
-            <div className="section-heading"><div><span className="card-label">RECENT WORKOUTS</span><h3>Volume by day</h3></div></div>
-            <div className="history-list">
-              {progress.completed.slice(-12).reverse().map(row => {
-                const programId = dbNameToProgram[row.program] || 'andy-hybrid-12'
-                const date = new Date(row.completed_at).toLocaleDateString(undefined,{month:'short',day:'numeric'})
-                return (
-                  <article className="progress-workout" key={row.id}>
-                    <div><strong>{date} · {row.lift}</strong><span>{programs[programId]?.shortName || row.program} · Week {row.week}</span></div>
-                    <div><strong>{formatWeight(row._metrics.volume)} lb</strong><span>{row._metrics.estimated1rm ? 'e1RM ' + formatWeight(row._metrics.estimated1rm) : ''}</span></div>
-                  </article>
-                )
-              })}
-              {!progress.completed.length && <div className="empty-state">Your progress summary fills in as you finish workouts.</div>}
-            </div>
-            <p className="helper-text progress-note">Tracked volume includes main work, programmed weighted backoff sets, and assistance entered as weight × reps × sets.</p>
-          </section>
-        </>
-      ) : (
-        <>
-          {ready === false ? (
-            <div className="setup-needed">
-              <span className="card-label">PLATFORM UPDATE NEEDED</span>
-              <h2>Community is ready in the app</h2>
-              <p>Run the platform-foundation SQL migration once to enable it.</p>
-            </div>
-          ) : (
-            <>
-              <section className="community-control">
-                <div>
-                  <span className="card-label">PRIVACY</span>
-                  <h3>{profile?.community_opt_in ? 'Community sharing is ON' : 'Community sharing is OFF'}</h3>
-                  <p>Off is the default. Turning it on shares future workout summaries, not your email.</p>
-                </div>
-                <button className={profile?.community_opt_in ? 'on' : ''} onClick={() => toggleCommunity(!profile?.community_opt_in)}>
-                  {profile?.community_opt_in ? 'Turn off' : 'Opt in'}
-                </button>
-              </section>
+  const recentCombined=[
+    ...progress.completed.map(r=>({
+      id:'legacy-'+r.id,date:r.completed_at,title:r.lift+' Day',
+      subtitle:(programs[dbNameToProgram[r.program]]?.shortName||r.program)+(r.week?' · Week '+r.week:''),
+      volume:r._metrics?.volume||0,e1rm:r._metrics?.estimated1rm||0
+    })),
+    ...flexSessions.map(r=>({
+      id:'flex-'+r.id,date:r.completed_at||r.session_date,title:r.title,
+      subtitle:r.program||'Flexible workout',volume:Number(r.total_volume||0),e1rm:Number(r.estimated_1rm||0)
+    }))
+  ].sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,15)
 
-              {profile?.community_opt_in && (
-                <label className="privacy-row">
-                  <div><strong>Share bodyweight</strong><span>Off unless you explicitly enable it.</span></div>
-                  <input type="checkbox" checked={Boolean(profile?.community_share_bodyweight)} onChange={e => toggleBodyweight(e.target.checked)} />
-                </label>
-              )}
+  return <section className="page-section">
+    <div className="segmented">
+      <button className={mode==='mine'?'active':''} onClick={()=>setMode('mine')}>My Progress</button>
+      <button className={mode==='community'?'active':''} onClick={()=>setMode('community')}>Community</button>
+    </div>
 
-              {message && <div className="status-message">{message}</div>}
+    {mode==='mine'?<>
+      <section className="summary-grid progress-kpis">
+        <div><span>Workouts</span><strong>{totalWorkouts}</strong></div>
+        <div><span>This month</span><strong>{thisMonth}</strong></div>
+        <div><span>Active-week streak</span><strong>{activeWeekStreak}</strong></div>
+        <div><span>Bodyweight</span><strong>{latestBodyweight?latestBodyweight+' lb':'—'}</strong></div>
+        <div><span>30-day volume</span><strong>{formatWeight(volume30)} lb</strong></div>
+        <div><span>vs prior 30d</span><strong className={volumeDeltaPct==null?'':volumeDeltaPct>=0?'positive':'negative'}>{volumeDeltaPct==null?'—':(volumeDeltaPct>=0?'+':'')+volumeDeltaPct+'%'}</strong></div>
+      </section>
 
-              <div className="community-feed">
-                {community.map(item => (
-                  <article className="community-card" key={item.id}>
-                    <div className="community-card-head">
-                      <strong>{item.display_name}</strong>
-                      <span>{new Date(item.created_at).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span>
-                    </div>
-                    <h3>{item.title}</h3>
-                    <div className="community-stats">
-                      <span>{item.summary?.volume ? Number(item.summary.volume).toLocaleString() + ' lb volume' : 'Workout complete'}</span>
-                      {item.summary?.estimated_1rm ? <span>e1RM {Math.round(item.summary.estimated_1rm)} lb</span> : null}
-                      {item.summary?.bodyweight ? <span>BW {item.summary.bodyweight} lb</span> : null}
-                    </div>
-                  </article>
-                ))}
-                {!community.length && <div className="empty-state">No community workouts yet. Community is opt-in, so this will grow as people choose to share.</div>}
-              </div>
-            </>
-          )}
-        </>
-      )}
-    </section>
-  )
+      <section className="simple-card">
+        <div className="section-heading"><div><span className="card-label">STRENGTH PROGRESS</span><h3>Estimated 1RM</h3></div></div>
+        <div className="strength-list">{lifts.map(name=>{
+          const stat=progress.strength[name]
+          const flexBest=Math.max(0,...flexSessions.filter(r=>r.primary_lift===name).map(r=>Number(r.estimated_1rm||0)))
+          const shown=Math.max(stat?.latest||0,flexBest)
+          return <div className="strength-row" key={name}>
+            <div><strong>{name}</strong><span>{stat?.bestSet?'Best set '+stat.bestSet.weight+' × '+stat.bestSet.reps:flexBest?'Flexible-session estimate':'No completed data yet'}</span></div>
+            <div className="strength-number"><strong>{shown?formatWeight(shown)+' lb':'—'}</strong>{stat&&<span className={stat.delta>=0?'positive':'negative'}>{stat.delta>=0?'+':''}{formatWeight(stat.delta)} since first log</span>}</div>
+          </div>
+        })}</div>
+      </section>
+
+      <section className="simple-card">
+        <div className="section-heading"><div><span className="card-label">VOLUME BY LIFT</span><h3>Where your work is going</h3></div></div>
+        <div className="volume-chart">{lifts.map(name=><div className="volume-bar-row" key={name}>
+          <span>{name}</span><div className="bar-track"><div className="bar-fill" style={{width:(volumeByLift[name]/maxLiftVolume*100)+'%'}}/></div><strong>{formatWeight(volumeByLift[name])}</strong>
+        </div>)}</div>
+      </section>
+
+      <section className="simple-card">
+        <div className="section-heading"><div><span className="card-label">VOLUME TREND</span><h3>Last 8 weeks</h3></div></div>
+        <div className="volume-chart">{progress.weekly.map(item=><div className="volume-bar-row" key={item.label}>
+          <span>{item.label}</span><div className="bar-track"><div className="bar-fill" style={{width:(item.volume/maxWeeklyVolume*100)+'%'}}/></div><strong>{formatWeight(item.volume)}</strong>
+        </div>)}</div>
+        <p className="helper-text">The legacy trend chart uses four-lift logs; flexible/archive sessions are included in totals and recent history. The chart will move fully to session-first data as more archive workouts are completed.</p>
+      </section>
+
+      <section className="simple-card">
+        <div className="section-heading"><div><span className="card-label">RECENT WORKOUTS</span><h3>All completed sessions</h3></div></div>
+        <div className="history-list">{recentCombined.map(row=><article className="progress-workout" key={row.id}>
+          <div><strong>{new Date(row.date).toLocaleDateString(undefined,{month:'short',day:'numeric'})} · {row.title}</strong><span>{row.subtitle}</span></div>
+          <div><strong>{formatWeight(row.volume)} lb</strong><span>{row.e1rm?'e1RM '+formatWeight(row.e1rm):''}</span></div>
+        </article>)}
+        {!recentCombined.length&&<div className="empty-state">Your progress summary fills in as you finish workouts.</div>}</div>
+        <p className="helper-text progress-note">Tracked volume includes four-lift work plus flexible/archive exercise results entered as weight × reps × sets.</p>
+      </section>
+    </>:<>
+      {ready===false?<div className="setup-needed"><span className="card-label">PLATFORM UPDATE NEEDED</span><h2>Community is ready in the app</h2><p>Run the platform-foundation SQL migration once to enable it.</p></div>:<>
+        <section className="community-control">
+          <div><span className="card-label">PRIVACY</span><h3>{profile?.community_opt_in?'Community sharing is ON':'Community sharing is OFF'}</h3><p>Off is the default. Turning it on shares future workout summaries, not your email.</p></div>
+          <button className={profile?.community_opt_in?'on':''} onClick={()=>toggleCommunity(!profile?.community_opt_in)}>{profile?.community_opt_in?'Turn off':'Opt in'}</button>
+        </section>
+        {profile?.community_opt_in&&<label className="privacy-row"><div><strong>Share bodyweight</strong><span>Off unless you explicitly enable it.</span></div><input type="checkbox" checked={Boolean(profile?.community_share_bodyweight)} onChange={e=>toggleBodyweight(e.target.checked)}/></label>}
+        {message&&<div className="status-message">{message}</div>}
+        <div className="community-feed">{community.map(item=><article className="community-card" key={item.id}>
+          <div className="community-card-head"><strong>{item.display_name}</strong><span>{new Date(item.created_at).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span></div>
+          <h3>{item.title}</h3><div className="community-stats"><span>{item.summary?.volume?Number(item.summary.volume).toLocaleString()+' lb volume':'Workout complete'}</span>{item.summary?.estimated_1rm?<span>e1RM {Math.round(item.summary.estimated_1rm)} lb</span>:null}{item.summary?.bodyweight?<span>BW {item.summary.bodyweight} lb</span>:null}</div>
+        </article>)}
+        {!community.length&&<div className="empty-state">No community workouts yet. Community is opt-in.</div>}</div>
+      </>}
+    </>}
+  </section>
 }
 
 export function PlanPage({
