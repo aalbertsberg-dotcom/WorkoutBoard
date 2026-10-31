@@ -916,3 +916,105 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
 .admin-max-grid strong { display:block; margin-top:3px; font-size:16px; }
 .admin-session-volume { text-align:right; display:grid; gap:2px; }
 .admin-session-volume span { color:#94a3b8; font-size:10px; }
+
+
+/* Navigation accessibility fix */
+.app { padding-bottom:28px; }
+
+.app-header {
+  position:sticky;
+  top:0;
+  z-index:20;
+  background:rgba(11,18,32,.97);
+  padding-top:8px;
+}
+
+.account-chip {
+  display:flex;
+  flex-direction:column;
+  align-items:flex-end;
+  gap:2px;
+  min-height:44px;
+  border:1px solid #334155;
+  border-radius:12px;
+  background:#111a2c;
+  color:#fff;
+  padding:7px 10px;
+  font-weight:900;
+}
+.account-chip span { font-size:13px; }
+.account-chip b { color:#a7f3d0; font-size:8px; letter-spacing:.08em; }
+.account-chip.admin { border-color:#7c3aed; }
+
+.primary-nav {
+  position:sticky;
+  top:67px;
+  z-index:19;
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:5px;
+  margin:0 0 12px;
+  padding:6px;
+  border:1px solid #26344f;
+  border-radius:13px;
+  background:rgba(15,23,39,.98);
+}
+.primary-nav button {
+  min-width:0;
+  min-height:48px;
+  border:0;
+  border-radius:9px;
+  background:transparent;
+  color:#8190a6;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:5px;
+  font-size:11px;
+  font-weight:900;
+}
+.primary-nav button.active {
+  background:#24324a;
+  color:#a7f3d0;
+}
+.primary-nav b { font-size:13px; }
+
+.finish-wrap { bottom:10px; }
+
+.together-workout-preview {
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  margin:10px 0;
+  padding:9px 10px;
+  border-radius:10px;
+  background:#0f1727;
+  color:#cbd5e1;
+  font-size:11px;
+}
+.together-workout-preview span { color:#94a3b8; }
+.code-help {
+  margin:-2px 0 10px;
+  color:#93c5fd;
+  font-size:11px;
+  font-weight:800;
+}
+.admin-setup-warning {
+  border:1px solid #f59e0b;
+  border-radius:14px;
+  background:#2a1d08;
+  padding:13px;
+}
+.admin-setup-warning h3 { margin:4px 0; font-size:15px; }
+.admin-setup-warning p { margin:0; color:#fde68a; font-size:12px; line-height:1.4; }
+
+/* Old bottom nav intentionally disabled; Netlify's free-site overlay was covering it. */
+.bottom-nav { display:none !important; }
+
+@media (max-width:390px) {
+  .app { padding-left:8px; padding-right:8px; }
+  .app-header { top:0; }
+  .primary-nav { top:65px; }
+  .primary-nav button { min-height:46px; font-size:10px; gap:3px; }
+  .account-chip { padding:6px 8px; }
+}
