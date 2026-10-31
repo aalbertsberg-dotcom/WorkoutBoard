@@ -382,64 +382,31 @@ function AuthScreen() {
   const [name,setName] = useState('')
   const [email,setEmail] = useState('')
   const [password,setPassword] = useState('')
-  const [showPassword,setShowPassword] = useState(false)
   const [message,setMessage] = useState('')
   const [busy,setBusy] = useState(false)
 
-  const createAccount = async e => {
+  const submit = async e => {
     e.preventDefault()
     setBusy(true)
     setMessage('')
-    const {error} = await supabase.auth.signUp({
-      email:email.trim(),
-      password,
-      options:{
-        emailRedirectTo:appUrl(),
-        data:{display_name:name.trim() || email.split('@')[0],active_program:'andy-hybrid-12'}
-      }
-    })
-    setMessage(error ? error.message : 'Account created. Check your email to confirm the account.')
-    setBusy(false)
-  }
 
-  const sendMagicLink = async () => {
-    if (!email.trim()) {
-      setMessage('Enter your email first.')
-      return
+    if (mode === 'signup') {
+      const {error} = await supabase.auth.signUp({
+        email:email.trim(),
+        password,
+        options:{
+          data:{display_name:name.trim() || email.split('@')[0],active_program:'andy-hybrid-12'}
+        }
+      })
+      setMessage(error ? error.message : 'Account created. You can sign in with this email and password.')
+    } else {
+      const {error} = await supabase.auth.signInWithPassword({
+        email:email.trim(),
+        password
+      })
+      setMessage(error ? (error.code ? error.code + ': ' + error.message : error.message) : '')
     }
-    setBusy(true)
-    setMessage('')
-    const {error} = await supabase.auth.signInWithOtp({
-      email:email.trim(),
-      options:{
-        emailRedirectTo:appUrl(),
-        shouldCreateUser:false
-      }
-    })
-    setMessage(error ? error.message : 'Sign-in email sent. Open the WorkoutBoard sign-in link in that email.')
-    setBusy(false)
-  }
 
-  const passwordSignIn = async e => {
-    e.preventDefault()
-    setBusy(true)
-    setMessage('')
-    const {error} = await supabase.auth.signInWithPassword({email:email.trim(),password})
-    setMessage(error ? error.message : '')
-    setBusy(false)
-  }
-
-  const forgotPassword = async () => {
-    if (!email.trim()) {
-      setMessage('Enter your email first.')
-      return
-    }
-    setBusy(true)
-    setMessage('')
-    const {error} = await supabase.auth.resetPasswordForEmail(email.trim(),{
-      redirectTo:appUrl()
-    })
-    setMessage(error ? error.message : 'Password reset email sent. Open the reset link in that email.')
     setBusy(false)
   }
 
@@ -448,42 +415,24 @@ function AuthScreen() {
       <section className="auth-card">
         <div className="eyebrow">WORKOUTBOARD</div>
         <h1>{mode === 'signin' ? 'Sign in' : 'Create account'}</h1>
-        <p className="auth-sub">{mode === 'signin' ? 'Use an email sign-in link. No password required.' : 'Create your WorkoutBoard account.'}</p>
+        <p className="auth-sub">Use your WorkoutBoard email and password.</p>
 
         <div className="auth-tabs">
           <button className={mode === 'signin' ? 'active' : ''} onClick={() => {setMode('signin');setMessage('')}}>Sign in</button>
           <button className={mode === 'signup' ? 'active' : ''} onClick={() => {setMode('signup');setMessage('')}}>Create account</button>
         </div>
 
-        {mode === 'signup' ? (
-          <form onSubmit={createAccount}>
-            <label>Name<input value={name} onChange={e => setName(e.target.value)} placeholder="Andy, Tracey, Myra…" required /></label>
-            <label>Email<input type="email" value={email} onChange={e => setEmail(e.target.value)} required /></label>
-            <label>Password<input type="password" value={password} onChange={e => setPassword(e.target.value)} minLength="6" required /></label>
-            <button className="primary" disabled={busy}>{busy ? 'Working…' : 'Create account'}</button>
-          </form>
-        ) : (
-          <>
-            <label className="auth-field">Email
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)} required />
-            </label>
+        <form onSubmit={submit}>
+          {mode === 'signup' && <label>Name<input value={name} onChange={e => setName(e.target.value)} placeholder="Andy, Tracey, Myra…" required /></label>}
+          <label>Email<input type="email" value={email} onChange={e => setEmail(e.target.value)} required /></label>
+          <label>Password<input type="password" value={password} onChange={e => setPassword(e.target.value)} minLength="10" required /></label>
+          <button className="primary" disabled={busy}>{busy ? 'Working…' : mode === 'signin' ? 'Sign in' : 'Create account'}</button>
+        </form>
 
-            <button className="primary code-primary" type="button" onClick={sendMagicLink} disabled={busy}>
-              {busy ? 'Sending…' : 'Email me a sign-in link'}
-            </button>
-
-            <button className="link-button password-toggle" type="button" onClick={() => setShowPassword(v => !v)}>
-              {showPassword ? 'Hide password options' : 'Use password instead'}
-            </button>
-
-            {showPassword && (
-              <form onSubmit={passwordSignIn} className="password-form">
-                <label>Password<input type="password" value={password} onChange={e => setPassword(e.target.value)} minLength="6" required /></label>
-                <button className="secondary-auth-button" disabled={busy}>Sign in with password</button>
-                <button className="forgot-button" type="button" onClick={forgotPassword} disabled={busy}>Reset password</button>
-              </form>
-            )}
-          </>
+        {mode === 'signin' && (
+          <div className="auth-help">
+            Password recovery is managed by WorkoutAdmin until custom SMTP is configured.
+          </div>
         )}
 
         {message && <div className="auth-message">{message}</div>}
