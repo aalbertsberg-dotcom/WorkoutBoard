@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './supabase'
 
 const lifts = ['Squat', 'Bench', 'Deadlift', 'Press']
-const dbField = { Squat:'squat', Bench:'bench', Deadlift:'deadlift', Press:'press' }
 
 const weeks = {
   1: { phase:'Leader 1', main:[[65,5],[75,5],[85,5]], supplemental:'FSL 5x5 @ 65%', conditioning:'Easy only' },
@@ -37,7 +36,7 @@ function backoffPercent(text) {
 function makeLog(plan, lift, tm) {
   const pct = backoffPercent(plan.supplemental)
   return {
-    version: 3,
+    version: 4,
     main: plan.main.map(([percent, reps]) => ({
       pct: percent,
       reps,
@@ -62,7 +61,7 @@ function normalizeLog(saved, plan, lift, tm) {
   return {
     ...base,
     ...saved,
-    version: 3,
+    version: 4,
     main: base.main.map((item, i) => ({ ...item, ...(saved.main?.[i] || {}) })),
     assistance: base.assistance.map((item, i) => ({ ...item, ...(saved.assistance?.[i] || {}) })),
   }
@@ -105,13 +104,17 @@ function AuthScreen() {
       const { error } = await supabase.auth.signUp({
         email,
         password,
-        options: { emailRedirectTo: window.location.origin, data: { display_name: name.trim() || email.split('@')[0] } }
+        options: {
+          emailRedirectTo: window.location.origin,
+          data: { display_name: name.trim() || email.split('@')[0] }
+        }
       })
-      setMessage(error ? error.message : 'Account created. If Supabase asks for email confirmation, check your inbox, then sign in.')
+      setMessage(error ? error.message : 'Account created. Check your email if confirmation is required.')
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) setMessage(error.message)
     }
+
     setBusy(false)
   }
 
@@ -120,7 +123,7 @@ function AuthScreen() {
       <section className="auth-card">
         <div className="eyebrow">WORKOUTBOARD</div>
         <h1>{mode === 'signin' ? 'Sign in' : 'Create account'}</h1>
-        <p className="auth-sub">Your weights and history stay separate from your workout partner.</p>
+        <p className="auth-sub">Your weights, maxes, and workout history are saved to your account.</p>
 
         <div className="auth-tabs">
           <button className={mode === 'signin' ? 'active' : ''} onClick={() => setMode('signin')}>Sign in</button>
@@ -151,26 +154,25 @@ function AuthScreen() {
 function App() {
   const [session, setSession] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
+  const [dataLoading, setDataLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState('today')
   const [profile, setProfile] = useState(null)
   const [week, setWeek] = useState(1)
   const [lift, setLift] = useState('Squat')
   const [trainingMaxes, setTrainingMaxes] = useState(defaultTms)
-  const [showSetup, setShowSetup] = useState(false)
   const [history, setHistory] = useState([])
   const [saveState, setSaveState] = useState('Saved')
-  const [dataLoading, setDataLoading] = useState(true)
+  const [log, setLog] = useState(() => makeLog(weeks[1], 'Squat', 0))
+
   const plan = weeks[week]
   const tm = Number(trainingMaxes[lift] || 0)
-  const [log, setLog] = useState(() => makeLog(weeks[1], 'Squat', 0))
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session)
       setAuthLoading(false)
     })
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession)
-    })
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => setSession(nextSession))
     return () => listener.subscription.unsubscribe()
   }, [])
 
@@ -178,7 +180,7 @@ function App() {
     if (!session?.user) return
     let cancelled = false
 
-    const loadUserData = async () => {
+    const load = async () => {
       setDataLoading(true)
       const userId = session.user.id
 
@@ -189,10 +191,13 @@ function App() {
       ])
 
       if (cancelled) return
-      if (profileData) {
-        setProfile(profileData)
-        setWeek(profileData.current_week || 1)
-      }
+
+      const currentWeek = profileData?.current_week || 1
+      const rows = logsData || []
+      setProfile(profileData)
+      setWeek(currentWeek)
+      setHistory(rows)
+
       if (tmData) {
         setTrainingMaxes({
           Squat: tmData.squat ?? '',
@@ -201,11 +206,14 @@ function App() {
           Press: tmData.press ?? '',
         })
       }
-      setHistory(logsData || [])
+
+      const completedThisWeek = new Set(rows.filter(r => r.week === currentWeek && r.completed_at).map(r => r.lift))
+      const nextLift = lifts.find(x => !completedThisWeek.has(x)) || 'Press'
+      setLift(nextLift)
       setDataLoading(false)
     }
 
-    loadUserData()
+    load()
     return () => { cancelled = true }
   }, [session?.user?.id])
 
@@ -213,7 +221,17 @@ function App() {
     if (!session?.user || dataLoading) return
     const found = history.find(row => row.week === week && row.lift === lift)
     setLog(normalizeLog(found?.workout || null, plan, lift, tm))
+    setSaveState('Saved')
   }, [week, lift, history, tm, dataLoading, session?.user?.id])
+
+  const completedByWeek = useMemo(() => {
+    const map = {}
+    history.filter(r => r.completed_at).forEach(r => {
+      map[r.week] ||= new Set()
+      map[r.week].add(r.lift)
+    })
+    return map
+  }, [history])
 
   const previousWorkout = useMemo(() => {
     const rows = history
@@ -221,6 +239,11 @@ function App() {
       .sort((a,b) => String(b.completed_at).localeCompare(String(a.completed_at)))
     return rows.find(row => !(row.week === week && row.lift === lift))?.workout || null
   }, [history, lift, week])
+
+  const completedHistory = useMemo(
+    () => history.filter(r => r.completed_at).sort((a,b) => String(b.completed_at).localeCompare(String(a.completed_at))),
+    [history]
+  )
 
   const updateMain = (i, field, value) => {
     setSaveState('Unsaved')
@@ -252,22 +275,19 @@ function App() {
   const usePrevious = i => {
     const prev = previousWorkout?.main?.[i]
     if (!prev) return
-    updateMain(i, 'weight', prev.weight)
-    updateMain(i, 'actualReps', prev.actualReps)
+    setSaveState('Unsaved')
+    setLog(v => ({
+      ...v,
+      complete:false,
+      main:v.main.map((set, idx) => idx === i ? { ...set, weight:prev.weight, actualReps:prev.actualReps } : set)
+    }))
   }
 
   const saveWorkout = async (complete=false) => {
-    if (!session?.user) return
+    if (!session?.user) return null
     setSaveState('Saving…')
     const now = new Date().toISOString()
-    const payload = {
-      ...log,
-      complete,
-      savedAt: now,
-      week,
-      lift,
-      phase: plan.phase,
-    }
+    const payload = { ...log, complete, savedAt:now, week, lift, phase:plan.phase }
 
     const { data, error } = await supabase.from('workout_logs').upsert({
       user_id: session.user.id,
@@ -280,13 +300,15 @@ function App() {
       updated_at: now,
     }, { onConflict:'user_id,program,week,lift' }).select().single()
 
-    if (!error && data) {
-      setLog(payload)
-      setHistory(rows => [data, ...rows.filter(row => row.id !== data.id && !(row.week === week && row.lift === lift))])
-      setSaveState('Saved')
-    } else {
+    if (error || !data) {
       setSaveState('Save failed')
+      return null
     }
+
+    setLog(payload)
+    setHistory(rows => [data, ...rows.filter(row => row.id !== data.id && !(row.week === week && row.lift === lift))])
+    setSaveState('Saved')
+    return data
   }
 
   useEffect(() => {
@@ -295,17 +317,53 @@ function App() {
     return () => clearTimeout(timer)
   }, [log, session?.user?.id, dataLoading, saveState])
 
-  const changeWeek = async value => {
-    const nextWeek = Number(value)
-    setWeek(nextWeek)
-    if (session?.user) {
-      await supabase.from('profiles').update({ current_week:nextWeek, updated_at:new Date().toISOString() }).eq('id', session.user.id)
-      setProfile(v => v ? { ...v, current_week:nextWeek } : v)
-    }
+  const changeWeek = async nextWeek => {
+    setWeek(Number(nextWeek))
+    if (!session?.user) return
+    await supabase.from('profiles').update({
+      current_week:Number(nextWeek),
+      updated_at:new Date().toISOString()
+    }).eq('id', session.user.id)
+    setProfile(v => v ? { ...v, current_week:Number(nextWeek) } : v)
   }
 
   const finishWorkout = async () => {
-    await saveWorkout(true)
+    const saved = await saveWorkout(true)
+    if (!saved) return
+
+    const completed = new Set([
+      ...(completedByWeek[week] ? Array.from(completedByWeek[week]) : []),
+      lift
+    ])
+
+    const nextLift = lifts.find(x => !completed.has(x))
+    if (nextLift) {
+      setLift(nextLift)
+      return
+    }
+
+    if (week < 12) {
+      const nextWeek = week + 1
+      await changeWeek(nextWeek)
+      setLift('Squat')
+    }
+  }
+
+  const saveDisplayName = async name => {
+    if (!session?.user) return
+    const clean = name.trim()
+    if (!clean) return
+    await supabase.from('profiles').update({
+      display_name:clean,
+      updated_at:new Date().toISOString()
+    }).eq('id', session.user.id)
+    setProfile(v => ({ ...v, display_name:clean }))
+  }
+
+  const jumpToWorkout = (targetWeek, targetLift='Squat') => {
+    setWeek(Number(targetWeek))
+    setLift(targetLift)
+    setActiveTab('today')
   }
 
   const backPct = backoffPercent(plan.supplemental)
@@ -314,136 +372,225 @@ function App() {
   if (authLoading) return <div className="loading-screen">Loading WorkoutBoard…</div>
   if (!session) return <AuthScreen />
 
+  const displayName = profile?.display_name || session.user.email?.split('@')[0] || 'You'
+
   return (
-    <main className="app">
-      <header className="topbar">
-        <div>
-          <div className="eyebrow">WORKOUTBOARD</div>
-          <h1>{lift} Day</h1>
-          <div className="phase">Week {week} · {plan.phase} · {dayPlan[lift].day}</div>
-        </div>
-        <div className="account-menu">
-          <strong>{profile?.display_name || session.user.email?.split('@')[0]}</strong>
-          <button type="button" onClick={() => supabase.auth.signOut()}>Sign out</button>
-        </div>
-      </header>
-
-      <section className="selectors">
-        <label><span>Week</span>
-          <select value={week} onChange={e => changeWeek(e.target.value)}>
-            {Object.keys(weeks).map(w => <option key={w} value={w}>Week {w}</option>)}
-          </select>
-        </label>
-        <label><span>Workout</span>
-          <select value={lift} onChange={e => setLift(e.target.value)}>
-            {lifts.map(x => <option key={x}>{x}</option>)}
-          </select>
-        </label>
-      </section>
-
-      <div className="user-strip">
-        <span>Tracking as <strong>{profile?.display_name || 'You'}</strong></span>
-        <span>● {saveState}</span>
-        <button type="button" onClick={() => setShowSetup(!showSetup)}>Training Maxes</button>
-      </div>
-
-      {showSetup && (
-        <section className="setup-panel">
-          <div className="section-heading">
-            <div><h2>Your Training Maxes</h2><p>Saved to your account, not Tracey's.</p></div>
+    <>
+      <main className="app">
+        <header className="app-header">
+          <div>
+            <div className="eyebrow">WORKOUTBOARD</div>
+            <h1>{activeTab === 'today' ? 'Today' : activeTab[0].toUpperCase() + activeTab.slice(1)}</h1>
           </div>
-          <div className="tm-grid">
-            {lifts.map(x => (
-              <label key={x}>
-                <span>{x}</span>
-                <div className="input-with-unit">
-                  <input type="number" inputMode="decimal" value={trainingMaxes[x] || ''} placeholder="0"
-                    onFocus={e => e.currentTarget.select()}
-                    onChange={e => setTm(x, e.target.value)} />
-                  <b>lb</b>
-                </div>
-              </label>
-            ))}
-          </div>
-        </section>
-      )}
+          <div className="mini-user">{displayName}</div>
+        </header>
 
-      {!tm && <div className="hint"><strong>No {lift} training max yet.</strong><span>Tap Training Maxes, or type working weights directly.</span></div>}
-
-      <section className="exercise-card">
-        <div className="exercise-title">
-          <div><span>MAIN LIFT</span><h2>{lift}</h2></div>
-          {previousWorkout && <small>Tap “Last” to reuse a previous set.</small>}
-        </div>
-
-        <div className="column-head"><span>SET / TARGET</span><span>WEIGHT</span><span>REPS</span><span>DONE</span></div>
-
-        {log.main.map((set, i) => {
-          const target = tm ? round5(tm * set.pct / 100) : null
-          const prev = previousWorkout?.main?.[i]
-          return (
-            <div className={'set-row ' + (set.done ? 'completed' : '')} key={i}>
-              <div className="set-meta">
-                <strong>Set {i+1}</strong><span>{set.pct}% × {set.reps}</span>
-                {target && <small>Target {target} lb</small>}
-                {prev && <button className="previous" type="button" onClick={() => usePrevious(i)}>Last {prev.weight || '—'} × {prev.actualReps || '—'}</button>}
+        {dataLoading ? (
+          <div className="loading-card">Loading your workouts…</div>
+        ) : activeTab === 'today' ? (
+          <>
+            <section className="today-card">
+              <div>
+                <span className="card-label">CURRENT WORKOUT</span>
+                <h2>{lift} Day</h2>
+                <p>Week {week} · {plan.phase} · {dayPlan[lift].day}</p>
               </div>
-              <NumericInput value={set.weight} placeholder={target ? String(target) : 'lb'} step={5} onChange={v => updateMain(i,'weight',v)} />
-              <input className="reps-input" type="number" inputMode="numeric" value={set.actualReps}
-                onFocus={e => e.currentTarget.select()}
-                onChange={e => updateMain(i,'actualReps',e.target.value === '' ? '' : Number(e.target.value))} />
-              <button type="button" className={'check ' + (set.done ? 'checked' : '')} onClick={() => updateMain(i,'done',!set.done)}>✓</button>
+              <div className="progress-badge">{completedByWeek[week]?.size || 0}/4 done</div>
+            </section>
+
+            <details className="change-workout">
+              <summary>Change workout</summary>
+              <div className="selectors">
+                <label><span>Week</span>
+                  <select value={week} onChange={e => setWeek(Number(e.target.value))}>
+                    {Object.keys(weeks).map(w => <option key={w} value={w}>Week {w}</option>)}
+                  </select>
+                </label>
+                <label><span>Workout</span>
+                  <select value={lift} onChange={e => setLift(e.target.value)}>
+                    {lifts.map(x => <option key={x}>{x}</option>)}
+                  </select>
+                </label>
+              </div>
+            </details>
+
+            {!tm && (
+              <div className="hint">
+                <strong>No {lift} training max yet.</strong>
+                <span>Add it under Me → Training Maxes, or type your working weights directly.</span>
+              </div>
+            )}
+
+            <section className="exercise-card">
+              <div className="exercise-title">
+                <div><span>MAIN LIFT</span><h2>{lift}</h2></div>
+                {previousWorkout && <small>Tap “Last” to reuse your previous set.</small>}
+              </div>
+
+              <div className="column-head"><span>SET / TARGET</span><span>WEIGHT</span><span>REPS</span><span>DONE</span></div>
+
+              {log.main.map((set, i) => {
+                const target = tm ? round5(tm * set.pct / 100) : null
+                const prev = previousWorkout?.main?.[i]
+                return (
+                  <div className={'set-row ' + (set.done ? 'completed' : '')} key={i}>
+                    <div className="set-meta">
+                      <strong>Set {i+1}</strong>
+                      <span>{set.pct}% × {set.reps}</span>
+                      {target && <small>Target {target} lb</small>}
+                      {prev && <button className="previous" type="button" onClick={() => usePrevious(i)}>Last {prev.weight || '—'} × {prev.actualReps || '—'}</button>}
+                    </div>
+                    <NumericInput value={set.weight} placeholder={target ? String(target) : 'lb'} step={5} onChange={v => updateMain(i,'weight',v)} />
+                    <input className="reps-input" type="number" inputMode="numeric" value={set.actualReps}
+                      onFocus={e => e.currentTarget.select()}
+                      onChange={e => updateMain(i,'actualReps',e.target.value === '' ? '' : Number(e.target.value))} />
+                    <button type="button" className={'check ' + (set.done ? 'checked' : '')} onClick={() => updateMain(i,'done',!set.done)}>✓</button>
+                  </div>
+                )
+              })}
+            </section>
+
+            <section className="simple-card">
+              <div className="section-heading">
+                <div><span className="card-label">BACKOFF</span><h3>{plan.supplemental}</h3></div>
+                {backTarget && <strong className="target-pill">{backTarget} lb</strong>}
+              </div>
+              <label className="field-label"><span>Working weight</span>
+                <NumericInput value={log.backoffWeight} placeholder={backTarget ? String(backTarget) : 'lb'} step={5}
+                  onChange={v => { setSaveState('Unsaved'); setLog(x => ({ ...x, complete:false, backoffWeight:v })) }} />
+              </label>
+              <input className="text-input" placeholder="Optional note, e.g. 5x5 completed" value={log.backoffNote}
+                onChange={e => { setSaveState('Unsaved'); setLog(v => ({ ...v, complete:false, backoffNote:e.target.value })) }} />
+            </section>
+
+            <section className="simple-card">
+              <div className="section-heading"><div><span className="card-label">ASSISTANCE</span><h3>Write it like the board</h3></div></div>
+              {log.assistance.map((item,i) => (
+                <label className="assist" key={item.name}><span>{item.name}</span>
+                  <input placeholder="50 × 8 × 3" value={item.result}
+                    onChange={e => { setSaveState('Unsaved'); setLog(v => ({ ...v, complete:false, assistance:v.assistance.map((x,idx)=>idx===i?{...x,result:e.target.value}:x) })) }} />
+                </label>
+              ))}
+            </section>
+
+            <section className="simple-card">
+              <div className="section-heading"><div><span className="card-label">CONDITIONING</span><h3>{plan.conditioning}</h3></div></div>
+              <input className="text-input" placeholder="Time / rounds / distance" value={log.conditioning}
+                onChange={e => { setSaveState('Unsaved'); setLog(v => ({ ...v, complete:false, conditioning:e.target.value })) }} />
+            </section>
+
+            <section className="metrics">
+              <label><span>Workout RPE</span><input type="number" inputMode="decimal" placeholder="1-10" value={log.rpe}
+                onChange={e => { setSaveState('Unsaved'); setLog(v => ({ ...v, complete:false, rpe:e.target.value })) }} /></label>
+              <label><span>Bodyweight</span><input type="number" inputMode="decimal" placeholder="lb" value={log.bodyweight}
+                onChange={e => { setSaveState('Unsaved'); setLog(v => ({ ...v, complete:false, bodyweight:e.target.value })) }} /></label>
+            </section>
+
+            <textarea className="notes" placeholder="Quick workout note…" value={log.note}
+              onChange={e => { setSaveState('Unsaved'); setLog(v => ({ ...v, complete:false, note:e.target.value })) }} />
+
+            <div className="save-line">● {saveState}</div>
+
+            <div className="finish-wrap">
+              <button className={'finish ' + (log.complete ? 'done' : '')} onClick={finishWorkout}>
+                {log.complete ? '✓ WORKOUT FINISHED' : 'FINISH WORKOUT'}
+              </button>
             </div>
-          )
-        })}
-      </section>
+          </>
+        ) : activeTab === 'history' ? (
+          <section className="page-section">
+            {completedHistory.length === 0 ? (
+              <div className="empty-state">Finish your first workout and it will appear here.</div>
+            ) : (
+              <div className="history-list">
+                {completedHistory.map(row => {
+                  const top = row.workout?.main?.[row.workout.main.length - 1]
+                  const date = new Date(row.completed_at).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' })
+                  return (
+                    <article className="history-card" key={row.id}>
+                      <div>
+                        <span>{date}</span>
+                        <h3>Week {row.week} · {row.lift}</h3>
+                        <p>{top?.weight ? 'Top set: ' + top.weight + ' × ' + top.actualReps : 'Workout completed'}</p>
+                      </div>
+                      <button onClick={() => jumpToWorkout(row.week, row.lift)}>Open</button>
+                    </article>
+                  )
+                })}
+              </div>
+            )}
+          </section>
+        ) : activeTab === 'program' ? (
+          <section className="page-section">
+            <div className="program-summary">
+              <span className="card-label">12 WEEK ANDY HYBRID</span>
+              <h2>Your program</h2>
+              <p>4 workouts per week. Tap a week to view or repeat it.</p>
+            </div>
+            <div className="week-list">
+              {Object.entries(weeks).map(([number, info]) => {
+                const count = completedByWeek[number]?.size || 0
+                return (
+                  <button className={'week-card ' + (Number(number) === week ? 'current' : '')} key={number} onClick={() => jumpToWorkout(number, lifts.find(x => !completedByWeek[number]?.has(x)) || 'Squat')}>
+                    <div>
+                      <strong>Week {number}</strong>
+                      <span>{info.phase}</span>
+                    </div>
+                    <div className="week-progress">{count}/4</div>
+                  </button>
+                )
+              })}
+            </div>
+          </section>
+        ) : (
+          <section className="page-section">
+            <section className="profile-card">
+              <span className="card-label">ACCOUNT</span>
+              <h2>{displayName}</h2>
+              <p>{session.user.email}</p>
+              <label>Display name
+                <input defaultValue={displayName} onBlur={e => saveDisplayName(e.target.value)} />
+              </label>
+            </section>
 
-      <section className="simple-card">
-        <div className="section-heading">
-          <div><span className="card-label">BACKOFF</span><h3>{plan.supplemental}</h3></div>
-          {backTarget && <strong className="target-pill">{backTarget} lb</strong>}
-        </div>
-        <label className="field-label"><span>Working weight</span>
-          <NumericInput value={log.backoffWeight} placeholder={backTarget ? String(backTarget) : 'lb'} step={5}
-            onChange={v => { setSaveState('Unsaved'); setLog(x => ({ ...x, complete:false, backoffWeight:v })) }} />
-        </label>
-        <input className="text-input" placeholder="Optional note, e.g. 5x5 completed" value={log.backoffNote}
-          onChange={e => { setSaveState('Unsaved'); setLog(v => ({ ...v, complete:false, backoffNote:e.target.value })) }} />
-      </section>
+            <section className="simple-card">
+              <div className="section-heading"><div><span className="card-label">TRAINING MAXES</span><h3>Your current numbers</h3></div></div>
+              <div className="tm-grid">
+                {lifts.map(x => (
+                  <label key={x}>
+                    <span>{x}</span>
+                    <div className="input-with-unit">
+                      <input type="number" inputMode="decimal" value={trainingMaxes[x] || ''} placeholder="0"
+                        onFocus={e => e.currentTarget.select()}
+                        onChange={e => setTm(x, e.target.value)} />
+                      <b>lb</b>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </section>
 
-      <section className="simple-card">
-        <div className="section-heading"><div><span className="card-label">ASSISTANCE</span><h3>Write it like the board</h3></div></div>
-        {log.assistance.map((item,i) => (
-          <label className="assist" key={item.name}><span>{item.name}</span>
-            <input placeholder="50 × 8 × 3" value={item.result}
-              onChange={e => { setSaveState('Unsaved'); setLog(v => ({ ...v, complete:false, assistance:v.assistance.map((x,idx)=>idx===i?{...x,result:e.target.value}:x) })) }} />
-          </label>
-        ))}
-      </section>
+            <section className="simple-card">
+              <div className="section-heading"><div><span className="card-label">PROGRAM</span><h3>Current week</h3></div></div>
+              <select className="wide-select" value={week} onChange={e => changeWeek(e.target.value)}>
+                {Object.keys(weeks).map(w => <option key={w} value={w}>Week {w} · {weeks[w].phase}</option>)}
+              </select>
+            </section>
 
-      <section className="simple-card">
-        <div className="section-heading"><div><span className="card-label">CONDITIONING</span><h3>{plan.conditioning}</h3></div></div>
-        <input className="text-input" placeholder="Time / rounds / distance" value={log.conditioning}
-          onChange={e => { setSaveState('Unsaved'); setLog(v => ({ ...v, complete:false, conditioning:e.target.value })) }} />
-      </section>
+            <button className="signout-button" onClick={() => supabase.auth.signOut()}>Sign out</button>
+          </section>
+        )}
 
-      <section className="metrics">
-        <label><span>Workout RPE</span><input type="number" inputMode="decimal" placeholder="1-10" value={log.rpe}
-          onChange={e => { setSaveState('Unsaved'); setLog(v => ({ ...v, complete:false, rpe:e.target.value })) }} /></label>
-        <label><span>Bodyweight</span><input type="number" inputMode="decimal" placeholder="lb" value={log.bodyweight}
-          onChange={e => { setSaveState('Unsaved'); setLog(v => ({ ...v, complete:false, bodyweight:e.target.value })) }} /></label>
-      </section>
+        <div className="bottom-space" />
+      </main>
 
-      <textarea className="notes" placeholder="Quick workout note…" value={log.note}
-        onChange={e => { setSaveState('Unsaved'); setLog(v => ({ ...v, complete:false, note:e.target.value })) }} />
-
-      <div className="finish-wrap">
-        <button className={'finish ' + (log.complete ? 'done' : '')} onClick={finishWorkout}>
-          {log.complete ? '✓ WORKOUT FINISHED & SAVED' : 'FINISH WORKOUT'}
-        </button>
-      </div>
-      <div className="bottom-space" />
-    </main>
+      <nav className="bottom-nav">
+        <button className={activeTab === 'today' ? 'active' : ''} onClick={() => setActiveTab('today')}><b>●</b><span>Today</span></button>
+        <button className={activeTab === 'history' ? 'active' : ''} onClick={() => setActiveTab('history')}><b>↺</b><span>History</span></button>
+        <button className={activeTab === 'program' ? 'active' : ''} onClick={() => setActiveTab('program')}><b>▦</b><span>Program</span></button>
+        <button className={activeTab === 'me' ? 'active' : ''} onClick={() => setActiveTab('me')}><b>☺</b><span>Me</span></button>
+      </nav>
+    </>
   )
 }
 
