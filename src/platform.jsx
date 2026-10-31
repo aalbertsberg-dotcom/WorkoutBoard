@@ -57,6 +57,7 @@ export function PlatformProgress({
   const [community,setCommunity] = useState([])
   const [ready,setReady] = useState(null)
   const [message,setMessage] = useState('')
+  const [resetPassword,setResetPassword] = useState('')
 
   const loadCommunity = async () => {
     const {data,error} = await supabase
@@ -508,6 +509,7 @@ export function AdminPanel({ programs }) {
   const [maxes,setMaxes] = useState(null)
   const [sessions,setSessions] = useState([])
   const [message,setMessage] = useState('')
+  const [resetPassword,setResetPassword] = useState('')
 
   const loadUsers = async () => {
     const {data,error} = await supabase.rpc('admin_user_overview')
@@ -545,6 +547,19 @@ export function AdminPanel({ programs }) {
     setMessage('User program updated.')
     await loadUsers()
     setSelected(v => v ? {...v,active_program:programId,current_week:Number(week || 1)} : v)
+  }
+
+  const resetUserPassword = async () => {
+    if (!selected || resetPassword.length < 10) {
+      setMessage('Enter a new password with at least 10 characters.')
+      return
+    }
+    const {error} = await supabase.rpc('admin_reset_user_password',{
+      target_user:selected.user_id,
+      new_password:resetPassword
+    })
+    setMessage(error ? error.message : 'Password reset successfully.')
+    if (!error) setResetPassword('')
   }
 
   const fmtDate = value => value ? new Date(value).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}) : 'Never'
@@ -613,6 +628,15 @@ export function AdminPanel({ programs }) {
           const week = document.getElementById('admin-week').value
           saveProgram(programId,week)
         }}>Save program/week</button>
+      </section>
+
+      <section className="simple-card">
+        <div className="section-heading"><div><span className="card-label">ACCOUNT ACCESS</span><h3>Reset password</h3></div></div>
+        <p className="helper-text">Set a new password for this user without sending email.</p>
+        <div className="admin-password-row">
+          <input type="password" value={resetPassword} onChange={e => setResetPassword(e.target.value)} placeholder="New password (10+ characters)" />
+          <button onClick={resetUserPassword}>Reset</button>
+        </div>
       </section>
 
       <section className="simple-card">
