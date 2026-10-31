@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './supabase'
+import { DrawWhiteboard } from './drawWhiteboard'
 
 const kinds=['General','Workout Idea','Cue','Goal / PR']
 
 export function WhiteboardPage({session}) {
   const [notes,setNotes]=useState([])
+  const [view,setView]=useState('draw')
   const [loading,setLoading]=useState(true)
   const [message,setMessage]=useState('')
   const [showNew,setShowNew]=useState(false)
@@ -112,9 +114,24 @@ export function WhiteboardPage({session}) {
   if(loading)return <section className="page-section"><div className="loading-card">Loading whiteboard…</div></section>
 
   return <section className="page-section whiteboard-page">
+    <div className="segmented whiteboard-view-tabs">
+      <button className={view==='draw'?'active':''} onClick={()=>setView('draw')}>Draw</button>
+      <button className={view==='cards'?'active':''} onClick={()=>setView('cards')}>Cards</button>
+    </div>
+
+    {view==='draw' ? <>
+      <section className="whiteboard-draw-intro">
+        <div>
+          <span className="card-label">DRAW WHITEBOARD</span>
+          <h2>Sketch it out</h2>
+          <p>Use your mouse, finger, or stylus. Save the board to sync it across devices.</p>
+        </div>
+      </section>
+      <DrawWhiteboard session={session} />
+    </> : <>
     <section className="whiteboard-hero">
       <div>
-        <span className="card-label">WHITEBOARD</span>
+        <span className="card-label">CARD BOARD</span>
         <h2>Keep the stuff you don't want to lose</h2>
         <p>Workout ideas, cues, goals, PR targets, substitutions, or anything you want waiting for you later.</p>
       </div>
@@ -178,5 +195,6 @@ export function WhiteboardPage({session}) {
       </article>)}
       {!visible.length&&<div className="empty-state whiteboard-empty">Nothing here yet. Add your first card.</div>}
     </div>
+    </>}
   </section>
 }
