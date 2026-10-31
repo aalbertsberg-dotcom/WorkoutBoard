@@ -319,7 +319,7 @@ function makeLog(programId, week, lift, tm) {
   const secondaryTarget = plan.secondary?.pct != null ? targetWeight(tm,plan.secondary.pct,program.basis) : ''
 
   return {
-    version:6,
+    version:7,
     main:plan.main.map(set => ({
       ...set,
       weight:set.pct != null ? targetWeight(tm,set.pct,program.basis) : '',
@@ -328,7 +328,8 @@ function makeLog(programId, week, lift, tm) {
     })),
     backoffWeight:secondaryTarget || '',
     backoffNote:'',
-    assistance:plan.assistance.map(name => ({name,result:''})),
+    backoffSets:prescribedSetProgress(plan.secondary?.title),
+    assistance:plan.assistance.map(name => ({name,result:'',setProgress:prescribedSetProgress(name)})),
     conditioning:'',
     metcon:{name:'',format:'For time',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx'},
     sleep:'',
@@ -347,9 +348,17 @@ function normalizeLog(saved, programId, week, lift, tm) {
   return {
     ...base,
     ...saved,
-    version:6,
+    version:7,
     main:base.main.map((item,i) => ({...item,...(saved.main?.[i] || {})})),
-    assistance:base.assistance.map((item,i) => ({...item,...(saved.assistance?.[i] || {})})),
+    backoffSets:base.backoffSets.map((item,i)=>({...item,...(saved.backoffSets?.[i]||{})})),
+    assistance:base.assistance.map((item,i) => {
+      const prior=saved.assistance?.[i] || {}
+      return {
+        ...item,
+        ...prior,
+        setProgress:item.setProgress.map((set,j)=>({...set,...(prior.setProgress?.[j]||{})}))
+      }
+    }),
   }
 }
 
@@ -376,6 +385,21 @@ function secondarySetsReps(title) {
   return match ? {sets:Number(match[1]),reps:Number(match[2])} : null
 }
 
+function prescribedSetProgress(text) {
+  const value=String(text || '')
+  const rx=value.match(/(\d+)\s*[x×]\s*(\d+)/i)
+  if (rx) {
+    const sets=Number(rx[1]),reps=Number(rx[2])
+    return Array.from({length:sets},(_,i)=>({set:i+1,reps,done:false}))
+  }
+  const setsOnly=value.match(/(\d+)\s*sets?/i)
+  if (setsOnly) {
+    const sets=Number(setsOnly[1])
+    return Array.from({length:sets},(_,i)=>({set:i+1,reps:null,done:false}))
+  }
+  return []
+}
+
 function metricsForWorkout(workout, programId, week, lift) {
   if (!workout) return {volume:0,estimated1rm:0,bestSet:null}
   const plan = getProgramWeek(programId,week,lift)
@@ -398,7 +422,9 @@ function metricsForWorkout(workout, programId, week, lift) {
 
   const secondaryRx = secondarySetsReps(plan.secondary?.title)
   if (secondaryRx && Number(workout.backoffWeight || 0)) {
-    volume += Number(workout.backoffWeight) * secondaryRx.reps * secondaryRx.sets
+    const tracked=Array.isArray(workout.backoffSets)&&workout.backoffSets.length
+    const completedSets=tracked ? workout.backoffSets.filter(x=>x.done).length : secondaryRx.sets
+    volume += Number(workout.backoffWeight) * secondaryRx.reps * completedSets
   } else {
     volume += parseLoggedVolume(workout.backoffNote)
   }
@@ -1349,7 +1375,10 @@ function App() {
               <section className="simple-card">
                 <div className="section-heading">
                   <div><span className="card-label">{secondary.label}</span><h3>{secondary.title}</h3></div>
-                  {secondaryTarget && <strong className="target-pill">{secondaryTarget} lb</strong>}
+                  <div className="supplemental-head-right">
+                    {secondaryTarget && <strong className="target-pill">{secondaryTarget} lb</strong>}
+                    {log.backoffSets?.length>0&&<span className="set-count-pill">{log.backoffSets.filter(x=>x.done).length}/{log.backoffSets.length} done</span>}
+                  </div>
                 </div>
                 {secondary.pct != null && (
                   <label className="field-label"><span>Working weight</span>
@@ -1357,7 +1386,23 @@ function App() {
                       onChange={v => {setSaveState('Unsaved');setLog(x => ({...x,complete:false,backoffWeight:v}))}} />
                   </label>
                 )}
-                <input className="text-input" placeholder={secondary.pct != null ? 'Optional note, e.g. all sets completed' : 'What you did / weight / reps'}
+                {log.backoffSets?.length>0&&<div className="set-progress-grid">
+                  {log.backoffSets.map((set,i)=><button
+                    type="button"
+                    key={i}
+                    className={'set-progress-button '+(set.done?'done':'')}
+                    onClick={()=>{
+                      const next=!set.done
+                      setSaveState('Unsaved')
+                      setLog(v=>({...v,complete:false,backoffSets:v.backoffSets.map((x,idx)=>idx===i?{...x,done:next}:x)}))
+                      if(next){const seconds=Number(localStorage.getItem('wb-rest-'+String(lift).toLowerCase())||((lift==='Squat'||lift==='Deadlift')?180:120));window.dispatchEvent(new CustomEvent('workoutboard:rest-timer',{detail:{seconds}}))}
+                    }}>
+                    <strong>Set {i+1}</strong>
+                    <span>{set.reps?set.reps+' reps':'Done?'}</span>
+                    <b>{set.done?'✓':'○'}</b>
+                  </button>)}
+                </div>}
+                <input className="text-input" placeholder={secondary.pct != null ? 'Optional note' : 'What you did / weight / reps'}
                   value={log.backoffNote}
                   onChange={e => {setSaveState('Unsaved');setLog(v => ({...v,complete:false,backoffNote:e.target.value}))}} />
               </section>
@@ -1366,10 +1411,28 @@ function App() {
             <section className="simple-card">
               <div className="section-heading"><div><span className="card-label">ASSISTANCE</span><h3>Log assistance work</h3></div></div>
               {log.assistance.map((item,i) => (
-                <label className="assist" key={item.name}><span>{item.name}</span>
+                <div className="assist assist-with-progress" key={item.name}>
+                  <div className="assist-title-row">
+                    <span>{item.name}</span>
+                    {item.setProgress?.length>0&&<b>{item.setProgress.filter(x=>x.done).length}/{item.setProgress.length}</b>}
+                  </div>
                   <input placeholder="weight × reps × sets" value={item.result}
                     onChange={e => {setSaveState('Unsaved');setLog(v => ({...v,complete:false,assistance:v.assistance.map((x,idx) => idx === i ? {...x,result:e.target.value} : x)}))}} />
-                </label>
+                  {item.setProgress?.length>0&&<div className="set-progress-grid compact">
+                    {item.setProgress.map((set,j)=><button
+                      type="button"
+                      key={j}
+                      className={'set-progress-button '+(set.done?'done':'')}
+                      onClick={()=>{
+                        const next=!set.done
+                        setSaveState('Unsaved')
+                        setLog(v=>({...v,complete:false,assistance:v.assistance.map((x,idx)=>idx===i?{...x,setProgress:x.setProgress.map((sp,k)=>k===j?{...sp,done:next}:sp)}:x)}))
+                        if(next)window.dispatchEvent(new CustomEvent('workoutboard:rest-timer',{detail:{seconds:90}}))
+                      }}>
+                      <strong>Set {j+1}</strong><span>{set.reps?set.reps+' reps':'Done?'}</span><b>{set.done?'✓':'○'}</b>
+                    </button>)}
+                  </div>}
+                </div>
               ))}
             </section>
 
