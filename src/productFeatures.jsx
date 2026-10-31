@@ -10,11 +10,38 @@ function parseVolume(value) {
   return Number(m[1])*Number(m[2])*(m[3]?Number(m[3]):1)
 }
 
+function prescribedSetProgress(text) {
+  const value=String(text||'')
+  const rx=value.match(/(\d+)\s*[x×]\s*(\d+)/i)
+  if(rx){
+    const sets=Number(rx[1]),reps=Number(rx[2])
+    return Array.from({length:sets},(_,i)=>({set:i+1,reps,done:false}))
+  }
+  const setsOnly=value.match(/(\d+)\s*sets?/i)
+  if(setsOnly){
+    const sets=Number(setsOnly[1])
+    return Array.from({length:sets},(_,i)=>({set:i+1,reps:null,done:false}))
+  }
+  return []
+}
+
+function withSetProgress(workout) {
+  return {
+    ...workout,
+    exercises:(workout?.exercises||[]).map(item=>({
+      ...item,
+      setProgress:Array.isArray(item.setProgress)&&item.setProgress.length
+        ? item.setProgress
+        : prescribedSetProgress(item.prescription||item.name)
+    }))
+  }
+}
+
 export function PlannedWorkoutRunner({planned,onFinished,onDismiss}) {
   const [workout,setWorkout]=useState(()=>{
     let cached=null
     try { cached=planned?.id ? JSON.parse(localStorage.getItem('wb-planned-draft-'+planned.id) || 'null') : null } catch {}
-    return {exercises:[],sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',circuit_rounds:'',metcon:{name:'',format:'For time',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx'},...(planned?.workout||{}),...(cached||{})}
+    return withSetProgress({exercises:[],sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',circuit_rounds:'',metcon:{name:'',format:'For time',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx'},...(planned?.workout||{}),...(cached||{})})
   })
   const [saveState,setSaveState]=useState('Saved')
   const [finishing,setFinishing]=useState(false)
@@ -25,7 +52,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss}) {
   useEffect(()=>{
     let cached=null
     try { cached=planned?.id ? JSON.parse(localStorage.getItem('wb-planned-draft-'+planned.id) || 'null') : null } catch {}
-    setWorkout({exercises:[],sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',circuit_rounds:'',metcon:{name:'',format:'For time',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx'},...(planned?.workout||{}),...(cached||{})})
+    setWorkout(withSetProgress({exercises:[],sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',circuit_rounds:'',metcon:{name:'',format:'For time',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx'},...(planned?.workout||{}),...(cached||{})}))
   },[planned?.id])
 
   useEffect(()=>{
@@ -138,6 +165,19 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss}) {
           <input className="text-input" value={item.result||''} onChange={e=>changeExercise(i,{result:e.target.value})} placeholder="Result, e.g. 185 × 5 × 3 or completed" />
           <span className="rest-chip">{rest<120?rest+'s':rest/60+'m'} rest</span>
         </div>
+        {item.setProgress?.length>0&&<div className="set-progress-grid compact flexible-set-progress">
+          {item.setProgress.map((set,j)=><button
+            type="button"
+            key={j}
+            className={'set-progress-button '+(set.done?'done':'')}
+            onClick={()=>{
+              const next=!set.done
+              changeExercise(i,{setProgress:item.setProgress.map((sp,k)=>k===j?{...sp,done:next}:sp)})
+              if(next)window.dispatchEvent(new CustomEvent('workoutboard:rest-timer',{detail:{seconds:rest}}))
+            }}>
+            <strong>Set {j+1}</strong><span>{set.reps?set.reps+' reps':'Done?'}</span><b>{set.done?'✓':'○'}</b>
+          </button>)}
+        </div>}
       </article>
     })}
 
