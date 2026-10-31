@@ -1,19 +1,33 @@
 {
+  "id": "./",
   "name": "WorkoutBoard",
   "short_name": "WorkoutBoard",
   "description": "Workout planning, tracking, progress, and shared training sessions.",
-  "start_url": ".",
-  "scope": ".",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#08101f",
   "theme_color": "#0b1425",
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "./icon.svg",
-      "sizes": "any",
+      "sizes": "192x192",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "./icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
     }
   ]
 }
