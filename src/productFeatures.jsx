@@ -10,16 +10,24 @@ function parseVolume(value) {
 }
 
 export function PlannedWorkoutRunner({planned,onFinished,onDismiss}) {
-  const [workout,setWorkout]=useState(()=>({
-    exercises:[],sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',
-    ...(planned?.workout || {})
-  }))
+  const [workout,setWorkout]=useState(()=>{
+    let cached=null
+    try { cached=planned?.id ? JSON.parse(localStorage.getItem('wb-planned-draft-'+planned.id) || 'null') : null } catch {}
+    return {exercises:[],sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',...(planned?.workout||{}),...(cached||{})}
+  })
   const [saveState,setSaveState]=useState('Saved')
   const [finishing,setFinishing]=useState(false)
 
   useEffect(()=>{
-    setWorkout({exercises:[],sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',...(planned?.workout||{})})
+    let cached=null
+    try { cached=planned?.id ? JSON.parse(localStorage.getItem('wb-planned-draft-'+planned.id) || 'null') : null } catch {}
+    setWorkout({exercises:[],sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',...(planned?.workout||{}),...(cached||{})})
   },[planned?.id])
+
+  useEffect(()=>{
+    if(!planned?.id)return
+    try { localStorage.setItem('wb-planned-draft-'+planned.id,JSON.stringify(workout)) } catch {}
+  },[workout,planned?.id])
 
   useEffect(()=>{
     if (!planned?.id || saveState !== 'Unsaved') return
@@ -63,6 +71,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss}) {
     }
     if (!error) {
       await supabase.from('planned_workouts').update({status:'completed',workout:finalWorkout,updated_at:now}).eq('id',planned.id)
+      try { localStorage.removeItem('wb-planned-draft-'+planned.id) } catch {}
       onFinished?.()
     } else {
       setSaveState('Finish failed: '+error.message)
