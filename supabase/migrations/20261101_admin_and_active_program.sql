@@ -166,3 +166,17 @@ end;
 $$;
 
 grant execute on function public.admin_set_user_program(uuid,text,integer) to authenticated;
+
+
+-- Preserve any program choice that was previously stored in auth metadata.
+update public.profiles p
+set active_program = u.raw_user_meta_data ->> 'active_program',
+    updated_at = now()
+from auth.users u
+where p.id = u.id
+  and (u.raw_user_meta_data ->> 'active_program') in (
+    'andy-hybrid-12',
+    'powerbuilding-8',
+    'strength-power-6',
+    'reset-4'
+  );
