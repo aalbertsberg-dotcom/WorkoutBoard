@@ -17,6 +17,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss}) {
   })
   const [saveState,setSaveState]=useState('Saved')
   const [finishing,setFinishing]=useState(false)
+  const [historyByExercise,setHistoryByExercise]=useState({})
 
   useEffect(()=>{
     let cached=null
@@ -28,6 +29,25 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss}) {
     if(!planned?.id)return
     try { localStorage.setItem('wb-planned-draft-'+planned.id,JSON.stringify(workout)) } catch {}
   },[workout,planned?.id])
+
+  useEffect(()=>{
+    if(!planned?.user_id)return
+    let cancelled=false
+    supabase.from('training_sessions').select('workout,completed_at').eq('user_id',planned.user_id)
+      .not('completed_at','is',null).order('completed_at',{ascending:false}).limit(100)
+      .then(({data})=>{
+        if(cancelled)return
+        const map={}
+        for(const row of (data||[])){
+          for(const item of (row.workout?.exercises||[])){
+            const key=String(item.name||'').trim().toLowerCase()
+            if(key&&item.result&&!map[key])map[key]=item.result
+          }
+        }
+        setHistoryByExercise(map)
+      })
+    return()=>{cancelled=true}
+  },[planned?.user_id,planned?.id])
 
   useEffect(()=>{
     if (!planned?.id || saveState !== 'Unsaved') return
@@ -86,7 +106,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss}) {
     </div>
     {planned.workout?.source && <div className="source-pill">Source: {planned.workout.source}</div>}
     {(workout.exercises||[]).map((item,i)=><article className={'flex-exercise '+(item.done?'done':'')} key={item.id||i}>
-      <div className="flex-exercise-title"><div><strong>{item.name}</strong><span>{item.prescription}</span>{item.note&&<small>{item.note}</small>}</div><button type="button" className={'check '+(item.done?'checked':'')} onClick={()=>changeExercise(i,{done:!item.done})}>✓</button></div>
+      <div className="flex-exercise-title"><div><strong>{item.name}</strong><span>{item.prescription}</span>{item.note&&<small>{item.note}</small>}{historyByExercise[String(item.name||'').trim().toLowerCase()]&&<small className="flex-history">Last: {historyByExercise[String(item.name||'').trim().toLowerCase()]}</small>}</div><button type="button" className={'check '+(item.done?'checked':'')} onClick={()=>changeExercise(i,{done:!item.done})}>✓</button></div>
       <input className="text-input" value={item.result||''} onChange={e=>changeExercise(i,{result:e.target.value})} placeholder="Result, e.g. 185 × 5 × 3 or completed" />
     </article>)}
 
@@ -178,10 +198,56 @@ export function ExportDataButton({userId}) {
   return <button className="wide-button" onClick={exportData} disabled={busy}>{busy?'Preparing export…':'Export JSON + sessions CSV'}</button>
 }
 
-export function SharedTimer() {
-  const [seconds,setSeconds]=useState(0)
-  const [running,setRunning]=useState(false)
-  useEffect(()=>{if(!running)return;const t=setInterval(()=>setSeconds(s=>s+1),1000);return()=>clearInterval(t)},[running])
-  const mm=String(Math.floor(seconds/60)).padStart(2,'0'), ss=String(seconds%60).padStart(2,'0')
-  return <div className="shared-timer"><strong>{mm}:{ss}</strong><button onClick={()=>setRunning(v=>!v)}>{running?'Pause':'Start'}</button><button onClick={()=>{setSeconds(0);setRunning(false)}}>Reset</button></div>
+export function SharedTimer({session,isHost,onChanged}) {
+  const syncReady=session && session.timer_elapsed_seconds !== undefined
+  const [localSeconds,setLocalSeconds]=useState(0)
+  const [localRunning,setLocalRunning]=useState(false)
+  const [tick,setTick]=useState(0)
+
+  useEffect(()=>{
+    if(syncReady && session?.timer_started_at){
+      const t=setInterval(()=>setTick(v=>v+1),1000)
+      return()=>clearInterval(t)
+    }
+    if(!syncReady && localRunning){
+      const t=setInterval(()=>setLocalSeconds(v=>v+1),1000)
+      return()=>clearInterval(t)
+    }
+  },[syncReady,session?.timer_started_at,localRunning])
+
+  const syncedSeconds=syncReady
+    ? Number(session.timer_elapsed_seconds||0)+(session.timer_started_at?Math.max(0,Math.floor((Date.now()-new Date(session.timer_started_at).getTime())/1000)):0)
+    : localSeconds
+  const running=syncReady?Boolean(session.timer_started_at):localRunning
+  const mm=String(Math.floor(syncedSeconds/60)).padStart(2,'0')
+  const ss=String(syncedSeconds%60).padStart(2,'0')
+
+  const update=async patch=>{
+    if(!session?.id)return
+    await supabase.from('shared_sessions').update(patch).eq('id',session.id)
+    onChanged?.()
+  }
+
+  const start=()=>{
+    if(!syncReady){setLocalRunning(true);return}
+    if(isHost) update({timer_started_at:new Date().toISOString()})
+  }
+  const pause=()=>{
+    if(!syncReady){setLocalRunning(false);return}
+    if(isHost) update({timer_elapsed_seconds:syncedSeconds,timer_started_at:null})
+  }
+  const reset=()=>{
+    if(!syncReady){setLocalSeconds(0);setLocalRunning(false);return}
+    if(isHost) update({timer_elapsed_seconds:0,timer_started_at:null})
+  }
+
+  return <div>
+    <div className="shared-timer">
+      <strong>{mm}:{ss}</strong>
+      <button onClick={running?pause:start} disabled={syncReady&&!isHost}>{running?'Pause':'Start'}</button>
+      <button onClick={reset} disabled={syncReady&&!isHost}>Reset</button>
+    </div>
+    {syncReady&&!isHost&&<p className="helper-text">The host controls the shared timer.</p>}
+    {!syncReady&&<p className="helper-text">Local timer until the product-upgrades migration is run.</p>}
+  </div>
 }
