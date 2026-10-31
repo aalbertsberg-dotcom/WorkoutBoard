@@ -379,7 +379,6 @@ function NumericInput({value,onChange,placeholder,step=1}) {
 
 function AuthScreen() {
   const [mode,setMode] = useState('signin')
-  const [name,setName] = useState('')
   const [email,setEmail] = useState('')
   const [password,setPassword] = useState('')
   const [message,setMessage] = useState('')
@@ -390,21 +389,30 @@ function AuthScreen() {
     setBusy(true)
     setMessage('')
 
+    const cleanEmail = email.trim()
+
     if (mode === 'signup') {
-      const {error} = await supabase.auth.signUp({
-        email:email.trim(),
+      const {data,error} = await supabase.auth.signUp({
+        email:cleanEmail,
         password,
         options:{
-          data:{display_name:name.trim() || email.split('@')[0],active_program:'andy-hybrid-12'}
+          data:{active_program:'andy-hybrid-12'}
         }
       })
-      setMessage(error ? error.message : 'Account created. You can sign in with this email and password.')
+
+      if (error) {
+        setMessage(error.message)
+      } else if (data.session) {
+        setMessage('')
+      } else {
+        setMessage('Account created, but Supabase is still requiring email confirmation. Turn Confirm email OFF in Supabase Authentication → Sign In / Providers → Email.')
+      }
     } else {
       const {error} = await supabase.auth.signInWithPassword({
-        email:email.trim(),
+        email:cleanEmail,
         password
       })
-      setMessage(error ? (error.code ? error.code + ': ' + error.message : error.message) : '')
+      if (error) setMessage(error.message)
     }
 
     setBusy(false)
@@ -429,7 +437,7 @@ function AuthScreen() {
       <section className="auth-card">
         <div className="eyebrow">WORKOUTBOARD</div>
         <h1>{mode === 'signin' ? 'Sign in' : 'Create account'}</h1>
-        <p className="auth-sub">Use your WorkoutBoard email and password.</p>
+        <p className="auth-sub">{mode === 'signin' ? 'Use your WorkoutBoard email and password.' : 'Just enter an email and password.'}</p>
 
         <div className="auth-tabs">
           <button className={mode === 'signin' ? 'active' : ''} onClick={() => {setMode('signin');setMessage('')}}>Sign in</button>
@@ -437,19 +445,36 @@ function AuthScreen() {
         </div>
 
         <form onSubmit={submit}>
-          {mode === 'signup' && <label>Name<input value={name} onChange={e => setName(e.target.value)} placeholder="Andy, Tracey, Myra…" required /></label>}
-          <label>Email<input type="email" value={email} onChange={e => setEmail(e.target.value)} required /></label>
-          <label>Password<input type="password" value={password} onChange={e => setPassword(e.target.value)} minLength="10" required /></label>
-          <button className="primary" disabled={busy}>{busy ? 'Working…' : mode === 'signin' ? 'Sign in' : 'Create account'}</button>
+          <label>Email
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              autoComplete="email"
+              required
+            />
+          </label>
+
+          <label>Password
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+              minLength="6"
+              required
+            />
+          </label>
+
+          <button className="primary" disabled={busy}>
+            {busy ? 'Working…' : mode === 'signin' ? 'Sign in' : 'Create account'}
+          </button>
         </form>
 
         {mode === 'signin' && (
-          <>
-            <button className="forgot-button visible-forgot" type="button" onClick={forgotPassword} disabled={busy}>Forgot password?</button>
-            <div className="auth-help">
-              If reset email does not arrive, WorkoutAdmin can reset the password directly.
-            </div>
-          </>
+          <button className="forgot-button visible-forgot" type="button" onClick={forgotPassword} disabled={busy}>
+            Forgot password?
+          </button>
         )}
 
         {message && <div className="auth-message">{message}</div>}
