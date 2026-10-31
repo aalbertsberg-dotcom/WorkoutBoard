@@ -1171,6 +1171,29 @@ function App() {
     await refreshTogether(activeSession.id)
   }
 
+  const repeatTogetherSession = async () => {
+    if (!activeSession || activeSession.host_user_id !== session?.user?.id) return
+    setTogetherMessage('Creating repeat session…')
+    let created=null
+    for(let attempt=0;attempt<4&&!created;attempt++){
+      const code=randomJoinCode()
+      const {data,error}=await supabase.from('shared_sessions').insert({
+        join_code:code,
+        host_user_id:session.user.id,
+        program:activeSession.program,
+        week:activeSession.week,
+        lift:activeSession.lift,
+        status:'open',
+      }).select().single()
+      if(!error) created=data
+    }
+    if(!created){setTogetherMessage('Could not create repeat session. Try again.');return}
+    const displayName=profile?.display_name||session.user.email?.split('@')[0]||'You'
+    await supabase.from('session_participants').insert({session_id:created.id,user_id:session.user.id,display_name:displayName})
+    setActiveSession(created);setSessionResults([]);setTogetherMessage('')
+    await refreshTogether(created.id)
+  }
+
   const leaveTogetherView = () => {
     restorePersonalWorkout()
     setActiveSession(null)
@@ -1438,6 +1461,10 @@ function App() {
 
                 {activeSession.host_user_id === session.user.id && activeSession.status === 'open' && (
                   <button className="secondary-action danger-lite" onClick={endTogetherSession}>End shared session</button>
+                )}
+
+                {activeSession.status === 'completed' && activeSession.host_user_id === session.user.id && (
+                  <button className="primary-action" onClick={repeatTogetherSession}>Repeat this session</button>
                 )}
 
                 <button className="secondary-action" onClick={leaveTogetherView}>Leave this view</button>
