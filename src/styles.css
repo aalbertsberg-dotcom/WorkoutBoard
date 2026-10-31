@@ -1774,3 +1774,125 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   .measurement-form { grid-template-columns:repeat(2,1fr); }
   .template-form { grid-template-columns:1fr; }
 }
+
+
+/* Drawable Whiteboard + card-board layout fix */
+.whiteboard-view-tabs {
+  max-width:300px;
+}
+.whiteboard-hero > div {
+  flex:1 1 auto;
+  min-width:0;
+}
+.whiteboard-add {
+  flex:0 0 auto;
+  width:auto !important;
+  max-width:220px;
+}
+.whiteboard-draw-intro {
+  padding:13px 15px;
+  border:1px solid #2a3b58;
+  border-radius:16px;
+  background:#101a2c;
+}
+.whiteboard-draw-intro h2 { margin:3px 0 4px; }
+.whiteboard-draw-intro p { margin:0; color:#9aa8bd; }
+
+.draw-board-section {
+  display:grid;
+  gap:10px;
+}
+.draw-board-toolbar {
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:8px;
+  padding:10px;
+  border:1px solid #2d405e;
+  border-radius:13px;
+  background:#101a2c;
+}
+.draw-tools,
+.draw-actions,
+.draw-colors {
+  display:flex;
+  align-items:center;
+  gap:5px;
+}
+.draw-tools button,
+.draw-actions button {
+  min-height:36px;
+  border:1px solid #3b4e6d;
+  border-radius:9px;
+  background:#172338;
+  color:#dbe4f0;
+  padding:0 10px;
+  font-weight:850;
+}
+.draw-tools button.active {
+  border-color:#65a30d;
+  background:#263b14;
+  color:#d9f99d;
+}
+.draw-actions button:disabled { opacity:.35; }
+.draw-colors button {
+  width:28px;
+  height:28px;
+  border:2px solid #cbd5e1;
+  border-radius:50%;
+  padding:0;
+}
+.draw-colors button.active {
+  outline:3px solid #84cc16;
+  outline-offset:2px;
+}
+.draw-width,
+.draw-grid-toggle {
+  display:flex;
+  align-items:center;
+  gap:7px;
+  color:#aab6c9;
+  font-size:10px;
+  font-weight:800;
+}
+.draw-width input { width:90px; }
+.draw-board-wrap {
+  width:100%;
+  min-width:0;
+  overflow:hidden;
+  border:1px solid #51627c;
+  border-radius:14px;
+  background:#fff;
+  box-shadow:0 16px 40px rgba(0,0,0,.2);
+}
+.draw-board-wrap canvas {
+  display:block;
+  width:100%;
+  touch-action:none;
+  cursor:crosshair;
+}
+.draw-board-bottom {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  color:#8fa0b8;
+  font-size:10px;
+}
+.draw-board-bottom > div {
+  display:flex;
+  gap:7px;
+  flex:0 0 auto;
+}
+
+@media (max-width:700px) {
+  .whiteboard-view-tabs { max-width:none; }
+  .whiteboard-add { width:100% !important; max-width:none; }
+  .draw-board-toolbar { align-items:flex-start; }
+  .draw-tools { width:100%; }
+  .draw-tools button { flex:1; }
+  .draw-actions { width:100%; }
+  .draw-actions button { flex:1; }
+  .draw-board-bottom { align-items:stretch; flex-direction:column; }
+  .draw-board-bottom > div { display:grid; grid-template-columns:1fr 1fr; }
+}
