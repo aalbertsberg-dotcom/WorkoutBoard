@@ -2189,3 +2189,27 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
     padding:6px 7px;
   }
 }
+
+
+/* Program-prescribed rest */
+.program-rest-label,
+.assistance-rest-label {
+  color:#8fa0b8;
+  font-size:9px;
+  font-weight:750;
+}
+.assistance-rest-label { font-weight:650; }
+.coach-rest-control {
+  position:relative;
+}
+.coach-rest-control button {
+  margin-top:5px;
+  min-height:26px;
+  border:1px solid #40526e;
+  border-radius:7px;
+  background:#172338;
+  color:#cbd5e1;
+  padding:0 7px;
+  font-size:8px;
+  font-weight:800;
+}
