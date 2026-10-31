@@ -3,6 +3,7 @@ import { supabase } from './supabase'
 import { PlatformProgress, PlanPage, AdminPanel } from './platform'
 import { PlannedWorkoutRunner, ExerciseHistoryStrip, InstallAppButton, ExportDataButton, SharedTimer } from './productFeatures'
 import { WhiteboardPage } from './whiteboard'
+import { TrainingTimer } from './trainingTools'
 
 const lifts = ['Squat', 'Bench', 'Deadlift', 'Press']
 const repeatSets = (count, pct, reps, pctLabel) =>
@@ -1242,6 +1243,8 @@ function App() {
           <button className={activeTab === 'whiteboard' ? 'active' : ''} onClick={() => setActiveTab('whiteboard')}><b>□</b><span>Board</span></button>
         </nav>
 
+        {activeTab === 'today' && <TrainingTimer />}
+
         {dataLoading ? (
           <div className="loading-card">Loading your workouts…</div>
         ) : activeTab === 'today' ? (
@@ -1315,7 +1318,7 @@ function App() {
                     <input className="reps-input" type="number" inputMode="numeric" value={set.actualReps}
                       onFocus={e => e.currentTarget.select()}
                       onChange={e => updateMain(i,'actualReps',e.target.value === '' ? '' : Number(e.target.value))} />
-                    <button type="button" className={'check ' + (set.done ? 'checked' : '')} onClick={() => updateMain(i,'done',!set.done)}>✓</button>
+                    <button type="button" className={'check ' + (set.done ? 'checked' : '')} onClick={() => { const next=!set.done; updateMain(i,'done',next); if(next) window.dispatchEvent(new CustomEvent('workoutboard:rest-timer')) }}>✓</button>
                   </div>
                 )
               })}
