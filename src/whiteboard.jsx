@@ -82,6 +82,33 @@ export function WhiteboardPage({session}) {
     setNotes(v=>v.filter(x=>x.id!==note.id))
   }
 
+  const planWorkout=async note=>{
+    const date=new Date().toISOString().slice(0,10)
+    const lines=String(note.body||'').split('\n').map(x=>x.trim()).filter(Boolean)
+    const exercises=(lines.length?lines:[note.title||'Whiteboard workout']).map((line,i)=>({
+      id:`e${i+1}`,name:line,prescription:'Log as performed',note:'From Whiteboard',result:'',done:false
+    }))
+    const workout={version:2,type:'flexible',source:'Whiteboard',whiteboard_note_id:note.id,exercises,sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:''}
+    const {error}=await supabase.from('planned_workouts').insert({
+      user_id:session.user.id,scheduled_date:date,title:note.title||'Whiteboard workout',
+      source_program_name:'Whiteboard',source_day:note.title||'Workout idea',workout,status:'planned'
+    })
+    setMessage(error?error.message:'Added to Today.')
+  }
+
+  const createProgramDraft=async note=>{
+    const {error}=await supabase.from('program_library').insert({
+      owner_user_id:session.user.id,
+      name:note.title||'Whiteboard program',
+      description:note.body||null,
+      source_type:'manual',
+      visibility:'private',
+      status:'draft',
+      plan:{source:'whiteboard',whiteboard_note_id:note.id,notes:note.body||''}
+    })
+    setMessage(error?error.message:'Program draft created in Plan.')
+  }
+
   if(loading)return <section className="page-section"><div className="loading-card">Loading whiteboard…</div></section>
 
   return <section className="page-section whiteboard-page">
@@ -141,6 +168,8 @@ export function WhiteboardPage({session}) {
           <div className="whiteboard-note-foot">
             <small>{new Date(note.updated_at).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</small>
             <div>
+              {(note.kind==='Workout Idea'||note.kind==='General')&&<button onClick={()=>planWorkout(note)}>Plan workout</button>}
+              {(note.kind==='Workout Idea'||note.kind==='General')&&<button onClick={()=>createProgramDraft(note)}>Program draft</button>}
               <button onClick={()=>setEditing({...note})}>Edit</button>
               <button className="danger-lite" onClick={()=>remove(note)}>Delete</button>
             </div>
