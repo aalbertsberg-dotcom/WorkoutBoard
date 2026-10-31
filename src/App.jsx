@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './supabase'
 import { PlatformProgress, PlanPage, AdminPanel } from './platform'
+import { PlannedWorkoutRunner, ExerciseHistoryStrip, InstallAppButton, ExportDataButton, SharedTimer } from './productFeatures'
 
 const lifts = ['Squat', 'Bench', 'Deadlift', 'Press']
 const repeatSets = (count, pct, reps, pctLabel) =>
@@ -326,6 +327,9 @@ function makeLog(programId, week, lift, tm) {
     backoffNote:'',
     assistance:plan.assistance.map(name => ({name,result:''})),
     conditioning:'',
+    sleep:'',
+    energy:'',
+    pain:'',
     rpe:'',
     bodyweight:'',
     note:'',
@@ -662,6 +666,8 @@ function App() {
   const [togetherMessage,setTogetherMessage] = useState('')
   const [sharedWorkoutActive,setSharedWorkoutActive] = useState(false)
   const [isAdmin,setIsAdmin] = useState(false)
+  const [plannedToday,setPlannedToday] = useState(null)
+  const [showRegularToday,setShowRegularToday] = useState(false)
 
   const personalProgram = programs[activeProgram]
   const sharedProgramId = activeSession ? (dbNameToProgram[activeSession.program] || activeProgram) : activeProgram
@@ -717,10 +723,12 @@ function App() {
     const load = async () => {
       setDataLoading(true)
       const userId = session.user.id
-      const [{data:profileData},{data:tmData},{data:logsData}] = await Promise.all([
+      const today = new Date().toISOString().slice(0,10)
+      const [{data:profileData},{data:tmData},{data:logsData},{data:todayPlans}] = await Promise.all([
         supabase.from('profiles').select('*').eq('id',userId).single(),
         supabase.from('training_maxes').select('*').eq('user_id',userId).single(),
         supabase.from('workout_logs').select('*').eq('user_id',userId).order('updated_at',{ascending:false}),
+        supabase.from('planned_workouts').select('*').eq('user_id',userId).eq('scheduled_date',today).in('status',['planned','started']).order('created_at').limit(1),
       ])
 
       if (cancelled) return
@@ -737,6 +745,8 @@ function App() {
       setActiveProgram(chosenProgram)
       setWeek(currentWeek)
       setHistory(rows)
+      setPlannedToday(todayPlans?.[0] || null)
+      setShowRegularToday(false)
 
       if (tmData) {
         setTrainingMaxes({
@@ -1185,6 +1195,13 @@ function App() {
         {dataLoading ? (
           <div className="loading-card">Loading your workouts…</div>
         ) : activeTab === 'today' ? (
+          plannedToday && !showRegularToday ? (
+            <PlannedWorkoutRunner
+              planned={plannedToday}
+              onFinished={() => { setPlannedToday(null); setShowRegularToday(false) }}
+              onDismiss={() => setShowRegularToday(true)}
+            />
+          ) : (
           <>
             {sharedWorkoutActive && activeSession && (
               <section className="together-banner">
@@ -1227,6 +1244,8 @@ function App() {
             )}
 
             {!tm && <div className="hint"><strong>No {lift} training max yet.</strong><span>Add it under Me → Training Maxes, or type working weights directly.</span></div>}
+
+            <ExerciseHistoryStrip history={history} lift={lift} formatWeight={formatWeight} />
 
             <section className="exercise-card">
               <div className="exercise-title">
@@ -1290,12 +1309,19 @@ function App() {
                 onChange={e => {setSaveState('Unsaved');setLog(v => ({...v,complete:false,conditioning:e.target.value}))}} />
             </section>
 
-            <section className="metrics">
+            <section className="metrics readiness-metrics">
+              <label><span>Sleep</span><input type="number" min="1" max="10" inputMode="numeric" placeholder="1-10" value={log.sleep || ''}
+                onChange={e => {setSaveState('Unsaved');setLog(v => ({...v,complete:false,sleep:e.target.value}))}} /></label>
+              <label><span>Energy</span><input type="number" min="1" max="10" inputMode="numeric" placeholder="1-10" value={log.energy || ''}
+                onChange={e => {setSaveState('Unsaved');setLog(v => ({...v,complete:false,energy:e.target.value}))}} /></label>
               <label><span>Workout RPE</span><input type="number" inputMode="decimal" placeholder="1-10" value={log.rpe}
                 onChange={e => {setSaveState('Unsaved');setLog(v => ({...v,complete:false,rpe:e.target.value}))}} /></label>
               <label><span>Bodyweight</span><input type="number" inputMode="decimal" placeholder="lb" value={log.bodyweight}
                 onChange={e => {setSaveState('Unsaved');setLog(v => ({...v,complete:false,bodyweight:e.target.value}))}} /></label>
             </section>
+
+            <input className="text-input pain-input" placeholder="Pain / injury (optional)" value={log.pain || ''}
+              onChange={e => {setSaveState('Unsaved');setLog(v => ({...v,complete:false,pain:e.target.value}))}} />
 
             <textarea className="notes" placeholder="Quick workout note…" value={log.note}
               onChange={e => {setSaveState('Unsaved');setLog(v => ({...v,complete:false,note:e.target.value}))}} />
@@ -1307,6 +1333,7 @@ function App() {
               </button>
             </div>
           </>
+          )
         ) : activeTab === 'together' ? (
           <section className="page-section">
             {togetherReady === false ? (
@@ -1354,6 +1381,11 @@ function App() {
                   <div><span>People</span><strong>{participants.length}</strong></div>
                   <div><span>Finished</span><strong>{sessionResults.filter(r => r.completed_at).length}</strong></div>
                   <div><span>Combined volume</span><strong>{formatWeight(combinedSessionVolume)} lb</strong></div>
+                </section>
+
+                <section className="simple-card">
+                  <div className="section-heading"><div><span className="card-label">SESSION TIMER</span><h3>Shared workout clock</h3></div></div>
+                  <SharedTimer />
                 </section>
 
                 <section className="simple-card">
@@ -1464,6 +1496,18 @@ function App() {
               <p className="helper-text">Tracey, Myra, or anyone else gets their own account, program, maxes, history, and progress dashboard.</p>
               <button className="wide-button invite-button" onClick={shareInvite}>Share WorkoutBoard</button>
               {inviteState && <div className="invite-status">{inviteState}</div>}
+            </section>
+
+            <section className="simple-card">
+              <div className="section-heading"><div><span className="card-label">APP</span><h3>Install WorkoutBoard</h3></div></div>
+              <p className="helper-text">Install it on your phone or desktop for a full-screen app experience and faster reopening.</p>
+              <InstallAppButton />
+            </section>
+
+            <section className="simple-card">
+              <div className="section-heading"><div><span className="card-label">BACKUP</span><h3>Export your data</h3></div></div>
+              <p className="helper-text">Downloads your profile, training maxes, workout logs, sessions, and planned workouts as JSON.</p>
+              <ExportDataButton userId={session.user.id} />
             </section>
 
             {isAdmin && (
