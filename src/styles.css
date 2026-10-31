@@ -58,6 +58,7 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
 }
 .change-workout summary { padding:11px 13px; color:#cbd5e1; font-size:13px; font-weight:800; }
 .selectors { display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:0 10px 10px; }
+.selectors .program-select { grid-column:1 / -1; }
 .selectors label, .metrics label, .field-label { display:block; color:#94a3b8; font-size:10px; font-weight:800; letter-spacing:.06em; }
 .selectors select, .wide-select {
   width:100%;
@@ -1122,3 +1123,16 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   color:#fff;
   font-weight:900;
 }
+
+
+.danger-card { border-color:#7f1d1d !important; }
+.danger-button {
+  width:100%;
+  min-height:46px;
+  border:1px solid #dc2626;
+  border-radius:10px;
+  background:#450a0a;
+  color:#fecaca;
+  font-weight:900;
+}
+.danger-button:hover { background:#7f1d1d; color:#fff; }
