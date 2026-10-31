@@ -769,6 +769,16 @@ function App() {
     return () => { cancelled = true }
   },[session?.user?.id])
 
+  const refreshPlannedToday = async () => {
+    if (!session?.user) return
+    const today = new Date().toISOString().slice(0,10)
+    const {data}=await supabase.from('planned_workouts').select('*')
+      .eq('user_id',session.user.id).eq('scheduled_date',today)
+      .in('status',['planned','started']).order('created_at').limit(1)
+    setPlannedToday(data?.[0] || null)
+    setShowRegularToday(false)
+  }
+
   const personalRows = useMemo(
     () => history.filter(row => row.program === personalProgram.dbName),
     [history,personalProgram.dbName]
@@ -782,9 +792,18 @@ function App() {
   useEffect(() => {
     if (!session?.user || dataLoading) return
     const found = workoutRows.find(row => row.week === week && row.lift === lift)
-    setLog(normalizeLog(found?.workout || null,workoutProgramId,week,lift,tm))
+    const cacheKey = `wb-draft-${session.user.id}-${workoutProgramId}-${week}-${lift}`
+    let cached = null
+    try { cached = JSON.parse(localStorage.getItem(cacheKey) || 'null') } catch {}
+    setLog(normalizeLog(found?.workout || cached || null,workoutProgramId,week,lift,tm))
     setSaveState('Saved')
   },[workoutProgramId,week,lift,workoutRows,tm,dataLoading,session?.user?.id])
+
+  useEffect(() => {
+    if (!session?.user || dataLoading) return
+    const cacheKey = `wb-draft-${session.user.id}-${workoutProgramId}-${week}-${lift}`
+    try { localStorage.setItem(cacheKey,JSON.stringify(log)) } catch {}
+  },[log,session?.user?.id,dataLoading,workoutProgramId,week,lift])
 
   const completedByWeek = useMemo(() => {
     const map = {}
@@ -1186,7 +1205,7 @@ function App() {
         </header>
 
         <nav className="primary-nav">
-          <button className={activeTab === 'today' ? 'active' : ''} onClick={() => setActiveTab('today')}><b>●</b><span>Today</span></button>
+          <button className={activeTab === 'today' ? 'active' : ''} onClick={async () => { await refreshPlannedToday(); setActiveTab('today') }}><b>●</b><span>Today</span></button>
           <button className={activeTab === 'together' ? 'active' : ''} onClick={() => setActiveTab('together')}><b>⇄</b><span>Together</span></button>
           <button className={activeTab === 'progress' ? 'active' : ''} onClick={() => setActiveTab('progress')}><b>↗</b><span>Progress</span></button>
           <button className={activeTab === 'program' ? 'active' : ''} onClick={() => setActiveTab('program')}><b>▦</b><span>Plan</span></button>
