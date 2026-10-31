@@ -953,10 +953,20 @@ function App() {
         <header className="app-header">
           <div>
             <div className="eyebrow">WORKOUTBOARD</div>
-            <h1>{activeTab === 'today' ? 'Today' : activeTab === 'together' ? 'Together' : activeTab === 'progress' ? 'Progress' : activeTab === 'program' ? 'Plan' : activeTab === 'admin' ? 'Admin' : activeTab[0].toUpperCase() + activeTab.slice(1)}</h1>
+            <h1>{activeTab === 'today' ? 'Today' : activeTab === 'together' ? 'Together' : activeTab === 'progress' ? 'Progress' : activeTab === 'program' ? 'Plan' : activeTab === 'admin' ? 'Admin' : 'Account'}</h1>
           </div>
-          <div className="mini-user">{displayName}</div>
+          <button className={'account-chip ' + (isAdmin ? 'admin' : '')} onClick={() => setActiveTab('me')}>
+            <span>{displayName}</span>
+            {isAdmin && <b>ADMIN</b>}
+          </button>
         </header>
+
+        <nav className="primary-nav">
+          <button className={activeTab === 'today' ? 'active' : ''} onClick={() => setActiveTab('today')}><b>●</b><span>Today</span></button>
+          <button className={activeTab === 'together' ? 'active' : ''} onClick={() => setActiveTab('together')}><b>⇄</b><span>Together</span></button>
+          <button className={activeTab === 'progress' ? 'active' : ''} onClick={() => setActiveTab('progress')}><b>↗</b><span>Progress</span></button>
+          <button className={activeTab === 'program' ? 'active' : ''} onClick={() => setActiveTab('program')}><b>▦</b><span>Plan</span></button>
+        </nav>
 
         {dataLoading ? (
           <div className="loading-card">Loading your workouts…</div>
@@ -1089,15 +1099,17 @@ function App() {
             ) : !activeSession ? (
               <>
                 <section className="together-start-card">
-                  <span className="card-label">START TOGETHER</span>
-                  <h2>{personalProgram.shortName}</h2>
-                  <p>Week {profile?.current_week || week} · {lift} Day</p>
-                  <button className="primary-action" onClick={createTogetherSession}>Create join code</button>
+                  <span className="card-label">HOST A WORKOUT</span>
+                  <h2>1. Create a session code</h2>
+                  <p>You create the code here. Send that 6-character code to Tracey/Myra. They enter it in the Join box below.</p>
+                  <div className="together-workout-preview"><strong>{personalProgram.shortName}</strong><span>Week {profile?.current_week || week} · {lift} Day</span></div>
+                  <button className="primary-action" onClick={createTogetherSession}>Create my 6-character code</button>
                 </section>
 
                 <section className="together-start-card">
-                  <span className="card-label">JOIN SOMEONE</span>
-                  <h2>Enter their code</h2>
+                  <span className="card-label">JOIN A WORKOUT</span>
+                  <h2>2. Enter the host's code</h2>
+                  <p>If someone else is hosting, they send you their 6-character code. Enter it here.</p>
                   <div className="join-row">
                     <input value={joinCode} onChange={e => setJoinCode(e.target.value.toUpperCase())} maxLength="6" placeholder="ABC123" />
                     <button onClick={joinTogetherSession}>Join</button>
@@ -1110,6 +1122,7 @@ function App() {
                 <section className="session-hero">
                   <span className="card-label">{activeSession.status === 'open' ? 'LIVE SESSION' : 'SESSION SUMMARY'}</span>
                   <div className="session-code">{activeSession.join_code}</div>
+                  <div className="code-help">This is the code your workout partners enter.</div>
                   <h2>{programs[sharedProgramId]?.shortName || activeSession.program}</h2>
                   <p>Week {activeSession.week} · {activeSession.lift}</p>
                   <div className="session-actions">
@@ -1190,6 +1203,14 @@ function App() {
           <AdminPanel programs={programs} />
         ) : (
           <section className="page-section">
+            {displayName === 'WorkoutAdmin' && !isAdmin && (
+              <section className="admin-setup-warning">
+                <span className="card-label">ADMIN SETUP INCOMPLETE</span>
+                <h3>WorkoutAdmin account exists, but the admin role has not been granted yet.</h3>
+                <p>Run the admin migration and one-time grant query in Supabase. Then sign out and back in.</p>
+              </section>
+            )}
+
             <section className="profile-card">
               <span className="card-label">ACCOUNT</span>
               <h2>{displayName}</h2>
@@ -1241,13 +1262,6 @@ function App() {
         <div className="bottom-space" />
       </main>
 
-      <nav className="bottom-nav five">
-        <button className={activeTab === 'today' ? 'active' : ''} onClick={() => setActiveTab('today')}><b>●</b><span>Today</span></button>
-        <button className={activeTab === 'together' ? 'active' : ''} onClick={() => setActiveTab('together')}><b>⇄</b><span>Together</span></button>
-        <button className={activeTab === 'progress' ? 'active' : ''} onClick={() => setActiveTab('progress')}><b>↗</b><span>Progress</span></button>
-        <button className={activeTab === 'program' ? 'active' : ''} onClick={() => setActiveTab('program')}><b>▦</b><span>Plan</span></button>
-        <button className={activeTab === 'me' ? 'active' : ''} onClick={() => setActiveTab('me')}><b>☺</b><span>Me</span></button>
-      </nav>
     </>
   )
 }
