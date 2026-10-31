@@ -170,6 +170,7 @@ const programOrder = ['andy-hybrid-12','powerbuilding-8','strength-power-6','res
 const dbNameToProgram = Object.fromEntries(Object.entries(programs).map(([id,p]) => [p.dbName,id]))
 const defaultTms = { Squat:'', Bench:'', Deadlift:'', Press:'' }
 const round5 = n => Math.round(n / 5) * 5
+const appUrl = () => new URL(import.meta.env.BASE_URL, appUrl()).toString()
 
 function targetWeight(tm, pct, basis) {
   if (!tm || pct == null) return null
@@ -394,7 +395,7 @@ function AuthScreen() {
         email,
         password,
         options:{
-          emailRedirectTo:window.location.origin,
+          emailRedirectTo:appUrl(),
           data:{display_name:name.trim() || email.split('@')[0],active_program:'andy-hybrid-12'}
         }
       })
@@ -808,7 +809,7 @@ function App() {
   }
 
   const shareInvite = async () => {
-    const url = window.location.origin
+    const url = appUrl()
     const data = {title:'WorkoutBoard',text:'Join me on WorkoutBoard. Create your own account and track your workouts.',url}
     try {
       if (navigator.share) {
@@ -910,9 +911,9 @@ function App() {
     if (!activeSession) return
     const text = 'Join my WorkoutBoard session with code ' + activeSession.join_code
     try {
-      if (navigator.share) await navigator.share({title:'WorkoutBoard Together',text,url:window.location.origin})
+      if (navigator.share) await navigator.share({title:'WorkoutBoard Together',text,url:appUrl()})
       else {
-        await navigator.clipboard.writeText(text + ' — ' + window.location.origin)
+        await navigator.clipboard.writeText(text + ' — ' + appUrl())
         setTogetherMessage('Session code and link copied.')
       }
     } catch {
