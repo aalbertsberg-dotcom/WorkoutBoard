@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './supabase'
+import { MetconTracker } from './advancedFeatures'
 
 function parseVolume(value) {
   if (!value) return 0
@@ -13,16 +14,18 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss}) {
   const [workout,setWorkout]=useState(()=>{
     let cached=null
     try { cached=planned?.id ? JSON.parse(localStorage.getItem('wb-planned-draft-'+planned.id) || 'null') : null } catch {}
-    return {exercises:[],sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',...(planned?.workout||{}),...(cached||{})}
+    return {exercises:[],sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',circuit_rounds:'',metcon:{name:'',format:'For time',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx'},...(planned?.workout||{}),...(cached||{})}
   })
   const [saveState,setSaveState]=useState('Saved')
   const [finishing,setFinishing]=useState(false)
   const [historyByExercise,setHistoryByExercise]=useState({})
+  const [substitutions,setSubstitutions]=useState({})
+  const [timerPresets,setTimerPresets]=useState({})
 
   useEffect(()=>{
     let cached=null
     try { cached=planned?.id ? JSON.parse(localStorage.getItem('wb-planned-draft-'+planned.id) || 'null') : null } catch {}
-    setWorkout({exercises:[],sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',...(planned?.workout||{}),...(cached||{})})
+    setWorkout({exercises:[],sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',circuit_rounds:'',metcon:{name:'',format:'For time',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx'},...(planned?.workout||{}),...(cached||{})})
   },[planned?.id])
 
   useEffect(()=>{
@@ -33,19 +36,29 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss}) {
   useEffect(()=>{
     if(!planned?.user_id)return
     let cancelled=false
-    supabase.from('training_sessions').select('workout,completed_at').eq('user_id',planned.user_id)
-      .not('completed_at','is',null).order('completed_at',{ascending:false}).limit(100)
-      .then(({data})=>{
-        if(cancelled)return
-        const map={}
-        for(const row of (data||[])){
-          for(const item of (row.workout?.exercises||[])){
-            const key=String(item.name||'').trim().toLowerCase()
-            if(key&&item.result&&!map[key])map[key]=item.result
-          }
+    Promise.all([
+      supabase.from('training_sessions').select('workout,completed_at').eq('user_id',planned.user_id).not('completed_at','is',null).order('completed_at',{ascending:false}).limit(150),
+      supabase.from('exercise_substitutions').select('*').eq('user_id',planned.user_id),
+      supabase.from('exercise_timer_presets').select('*').eq('user_id',planned.user_id),
+    ]).then(([sessions,subs,timers])=>{
+      if(cancelled)return
+      const map={}
+      for(const row of (sessions.data||[])){
+        for(const item of (row.workout?.exercises||[])){
+          const key=String(item.name||'').trim().toLowerCase()
+          if(!key||!item.result)continue
+          const m=String(item.result).replace(/[×X]/g,'x').match(/(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/i)
+          const parsed=m?{weight:Number(m[1]),reps:Number(m[2]),e1rm:Number(m[1])*(1+Number(m[2])/30)}:null
+          if(!map[key])map[key]={last:item.result,bestE:parsed?.e1rm||0,bestWeight:parsed?.weight||0}
+          else if(parsed){map[key].bestE=Math.max(map[key].bestE||0,parsed.e1rm);map[key].bestWeight=Math.max(map[key].bestWeight||0,parsed.weight)}
         }
-        setHistoryByExercise(map)
-      })
+      }
+      setHistoryByExercise(map)
+      const subMap={}
+      for(const x of subs.data||[])(subMap[String(x.exercise||'').trim().toLowerCase()]??=[]).push(x)
+      setSubstitutions(subMap)
+      setTimerPresets(Object.fromEntries((timers.data||[]).map(x=>[String(x.exercise||'').trim().toLowerCase(),x.seconds])))
+    })
     return()=>{cancelled=true}
   },[planned?.user_id,planned?.id])
 
@@ -105,10 +118,30 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss}) {
       <span className="save-pill">{saveState}</span>
     </div>
     {planned.workout?.source && <div className="source-pill">Source: {planned.workout.source}</div>}
-    {(workout.exercises||[]).map((item,i)=><article className={'flex-exercise '+(item.done?'done':'')} key={item.id||i}>
-      <div className="flex-exercise-title"><div><strong>{item.name}</strong><span>{item.prescription}</span>{item.note&&<small>{item.note}</small>}{historyByExercise[String(item.name||'').trim().toLowerCase()]&&<small className="flex-history">Last: {historyByExercise[String(item.name||'').trim().toLowerCase()]}</small>}</div><button type="button" className={'check '+(item.done?'checked':'')} onClick={()=>{ const next=!item.done; changeExercise(i,{done:next}); if(next) window.dispatchEvent(new CustomEvent('workoutboard:rest-timer')) }}>✓</button></div>
-      <input className="text-input" value={item.result||''} onChange={e=>changeExercise(i,{result:e.target.value})} placeholder="Result, e.g. 185 × 5 × 3 or completed" />
-    </article>)}
+    <section className="simple-card circuit-controls">
+      <div className="section-heading"><div><span className="card-label">SUPERSETS / CIRCUITS</span><h3>Group work when it belongs together</h3></div></div>
+      <label className="field-label"><span>Circuit rounds (optional)</span><input className="text-input" type="number" min="1" value={workout.circuit_rounds||''} onChange={e=>change('circuit_rounds',e.target.value)} placeholder="e.g. 4"/></label>
+    </section>
+    {(workout.exercises||[]).map((item,i)=>{
+      const key=String(item.name||'').trim().toLowerCase()
+      const hist=historyByExercise[key]
+      const m=String(item.result||'').replace(/[×X]/g,'x').match(/(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/i)
+      const current=m?{weight:Number(m[1]),reps:Number(m[2]),e1rm:Number(m[1])*(1+Number(m[2])/30)}:null
+      const isPR=Boolean(current&&hist&&(current.weight>(hist.bestWeight||0)||current.e1rm>(hist.bestE||0)+.5))
+      const fallbackRest=/squat|deadlift|bench|press|clean|snatch/i.test(item.name||'')?180:90
+      const rest=timerPresets[key]||fallbackRest
+      const sub=substitutions[key]?.[0]
+      return <article className={'flex-exercise '+(item.done?'done':'')+(item.group?' grouped':'')} key={item.id||i}>
+        <div className="flex-exercise-title"><div><div className="exercise-name-line">{item.group&&<b className="group-badge">{item.group}</b>}<strong>{item.name}</strong>{isPR&&<b className="pr-mini">PR</b>}</div><span>{item.prescription}</span>{item.note&&<small>{item.note}</small>}{hist?.last&&<small className="flex-history">Last: {hist.last}{current&&hist?.last?` · Suggested ${Math.round((current.weight||0)+5)} lb`:''}</small>}{sub&&<small className="sub-suggestion">Substitute: {sub.substitute}{sub.reason?' · '+sub.reason:''}</small>}</div><button type="button" className={'check '+(item.done?'checked':'')} onClick={()=>{ const next=!item.done; changeExercise(i,{done:next}); if(next) window.dispatchEvent(new CustomEvent('workoutboard:rest-timer',{detail:{seconds:rest}})) }}>✓</button></div>
+        <div className="flex-exercise-inputs">
+          <select value={item.group||''} onChange={e=>changeExercise(i,{group:e.target.value})}><option value="">Straight set</option><option>A1</option><option>A2</option><option>B1</option><option>B2</option><option>C1</option><option>C2</option><option>Circuit</option></select>
+          <input className="text-input" value={item.result||''} onChange={e=>changeExercise(i,{result:e.target.value})} placeholder="Result, e.g. 185 × 5 × 3 or completed" />
+          <span className="rest-chip">{rest<120?rest+'s':rest/60+'m'} rest</span>
+        </div>
+      </article>
+    })}
+
+    <MetconTracker value={workout.metcon} onChange={value=>change('metcon',value)} />
 
     <section className="simple-card readiness-card">
       <div className="section-heading"><div><span className="card-label">HOW YOU FELT</span><h3>Session notes</h3></div></div>
