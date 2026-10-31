@@ -275,7 +275,10 @@ export function PlanPage({
       difficulty:meta.difficulty,
       weeksCount:p.weeksCount,
       daysPerWeek:lifts.length,
-      source:'WorkoutBoard built-in',
+      source:id==='andy-531-original-6' ? 'Andy_531 Spreadsheet.xlsx'
+        : id==='new-531-leader-anchor-11' ? 'NEW 531 PROGRAM.docx'
+        : id==='andy-bbb-jokers-11' ? 'ANDY 531-Boring But Big-Jokers.xlsx'
+        : 'WorkoutBoard built-in',
       dbName:p.dbName,
       getWeek:(targetWeek)=>lifts.map(liftName=>{
         const main=(p.main?.[targetWeek]||[]).map(set => set.pct != null ? `${set.pct}% × ${set.reps}` : `× ${set.reps}`)
@@ -541,7 +544,7 @@ export function PlanPage({
           <div className="archive-card-head"><span className="program-length">Run {track.run_number} · started {new Date(track.started_at).toLocaleDateString()}</span><span className="tracking-badge">TRACKING</span></div>
           <h3>{p.name}</h3>
           <p>{done} of {expected || '—'} expected workouts completed.</p>
-          <div className="program-progress-track"><div style={{width:expected?Math.min(100,done/expected*100):0+'%'}} /></div>
+          <div className="program-progress-track"><div style={{width:(expected ? Math.min(100,done/expected*100) : 0)+'%'}} /></div>
           <div className="program-card-actions">
             <button className="wide-button" onClick={()=>openPreview(p.key)}>Preview / schedule</button>
             <button className="secondary-action" onClick={()=>markComplete(track)}>Mark complete</button>
