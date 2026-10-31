@@ -562,6 +562,50 @@ export function AdminPanel({ programs }) {
     if (!error) setResetPassword('')
   }
 
+  const resetUserTraining = async () => {
+    if (!selected) return
+
+    const label = selected.display_name || selected.email || 'this user'
+    if (!window.confirm(`Reset ALL workouts and training maxes for ${label}? This cannot be undone.`)) return
+
+    setMessage('Resetting training data…')
+    const target = selected.user_id
+
+    const results = await Promise.all([
+      supabase.from('session_results').delete().eq('user_id',target),
+      supabase.from('training_sessions').delete().eq('user_id',target),
+      supabase.from('workout_logs').delete().eq('user_id',target),
+      supabase.from('planned_workouts').delete().eq('user_id',target),
+      supabase.from('community_activity').delete().eq('user_id',target),
+      supabase.from('training_maxes').update({
+        squat:null,
+        bench:null,
+        deadlift:null,
+        press:null,
+        updated_at:new Date().toISOString(),
+      }).eq('user_id',target),
+      supabase.from('profiles').update({
+        current_week:1,
+        updated_at:new Date().toISOString(),
+      }).eq('id',target),
+    ])
+
+    const failed = results.find(result => result.error)
+    if (failed?.error) {
+      setMessage('Reset failed: ' + failed.error.message)
+      return
+    }
+
+    setMaxes({squat:null,bench:null,deadlift:null,press:null})
+    setSessions([])
+    setSelected(v => v ? {...v,workout_count:0,total_volume:0,last_workout:null,current_week:1} : v)
+    await loadUsers()
+    setMessage('Workout history and training maxes reset.')
+
+    const {data:{user}} = await supabase.auth.getUser()
+    if (user?.id === target) window.setTimeout(() => window.location.reload(),500)
+  }
+
   const fmtDate = value => value ? new Date(value).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}) : 'Never'
 
   if (!selected) {
@@ -647,6 +691,12 @@ export function AdminPanel({ programs }) {
           <div><span>Deadlift</span><strong>{maxes?.deadlift ?? '—'}</strong></div>
           <div><span>Press</span><strong>{maxes?.press ?? '—'}</strong></div>
         </div>
+      </section>
+
+      <section className="simple-card danger-card">
+        <div className="section-heading"><div><span className="card-label">RESET TRAINING DATA</span><h3>Start this user over</h3></div></div>
+        <p className="helper-text">Deletes workout history, planned workouts, shared results, community activity, and clears all training maxes. The account and selected program stay in place.</p>
+        <button className="danger-button" onClick={resetUserTraining}>Reset workouts + training maxes</button>
       </section>
 
       <section className="simple-card">
