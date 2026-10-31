@@ -8,14 +8,20 @@ declare
   target_count integer;
   new_password text := 'CHANGE-ME-TO-A-TEMP-PASSWORD';
 begin
-  select count(*), min(id)
-    into target_count, target_id
+  select count(*)
+    into target_count
   from auth.users
   where raw_user_meta_data ->> 'display_name' = 'WorkoutAdmin';
 
   if target_count <> 1 then
     raise exception 'Expected exactly one WorkoutAdmin account, found %', target_count;
   end if;
+
+  select id
+    into target_id
+  from auth.users
+  where raw_user_meta_data ->> 'display_name' = 'WorkoutAdmin'
+  limit 1;
 
   if new_password = 'CHANGE-ME-TO-A-TEMP-PASSWORD' or length(new_password) < 10 then
     raise exception 'Edit new_password first and use at least 10 characters';
@@ -32,7 +38,6 @@ $$;
 
 select
   u.email,
-  u.raw_user_meta_data ->> 'display_name' as display_name,
-  public.is_workout_admin() as current_session_is_admin
+  u.raw_user_meta_data ->> 'display_name' as display_name
 from auth.users u
 where u.raw_user_meta_data ->> 'display_name' = 'WorkoutAdmin';
