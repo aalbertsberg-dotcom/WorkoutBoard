@@ -1,39 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './supabase'
-const archiveCatalog = [
-  {name:'5/3/1 BBB + Jokers', source:'ANDY 531-Boring But Big-Jokers.xlsx', structure:'11 weeks', builtinId:'andy-bbb-jokers-11'},
-  {name:'Original 5/3/1 + Jokers', source:'Andy_531 Spreadsheet.xlsx', structure:'6-week runnable version', builtinId:'andy-531-original-6'},
-  {name:'New 5/3/1 Leader + Anchor', source:'NEW 531 PROGRAM.docx', structure:'11 weeks', builtinId:'new-531-leader-anchor-11'},
-  {name:'Squatober', source:'FEB SQUATOBER.pdf', structure:'8 squat-focused sessions with bench/deadlift/accessory work', recommended:true},
-  {name:'PHAT - Power Hypertrophy Adaptive Training', source:'phat_ebook.pdf', structure:'5 training days · upper/lower power + hypertrophy', recommended:true},
-  {name:'Juggernaut Method 2.0', source:'The_Juggernaut_Method_2.0 .pdf', structure:'percentage/RPE strength progression', recommended:true},
-  {name:'Juggernaut Cowboy Method', source:'JUGGERNAUT-THE-COWBOY-METHOD.pdf', structure:'Texas Method / Juggernaut squat-focused hybrid', recommended:true},
-  {name:'Wild 20 Powerbuilding', source:'wild20powerbuilding.pdf', structure:'20 weeks · 4 days', recommended:true},
-  {name:'6 Week PL / Olympic Lifting', source:'6 week PL _ Oly Program.pdf', structure:'6 weeks · Olympic lifting + powerlifting', recommended:true},
-  {name:'8 Week Strength for CrossFitters', source:'8 Week Strength Program for Crossfitters.pdf', structure:'8 weeks · 5 training days', recommended:true},
-  {name:'8 Week Deadlift Program', source:'Deadlift_8_Week.01.pdf', structure:'8-week deadlift specialization', recommended:true},
-  {name:'Building the Monolith + KB / Prowler', source:'Monolith With KB  and Prowler Conditioning.docx', structure:'6 weeks · 3 lifting days + conditioning', recommended:true},
-  {name:'Starting Strength - Original Novice', source:'Starting Strength Calculator Spreadsheet.xlsx', structure:'A/B novice linear progression', recommended:true},
-  {name:'Beach 5/3/1', source:'Beach 5-3-1 (1).docx', structure:'3 weeks · 3 days', recommended:true},
-  {name:'Von Moger Mass', source:"Andy's Von Moger Mass.xlsx", structure:'6 weeks · 5-6 day bodybuilding split', recommended:true},
-  {name:'Colorado Experiment', source:'Colorado Experiment.xlsx', structure:'14 workouts', recommended:true},
-  {name:'Nick Cheadle Lifestyle Powerbuilding', source:'Nick_Cheadles_Lifestyle_Powerbuilding.pdf', structure:'powerbuilding program', recommended:true},
-  {name:'MASSbuilder', source:'MASSbuilder.pdf', structure:'12-week mass / strength program', recommended:true},
-  {name:'Beginner Olympic Lifting', source:'Beginner Oly Program.docx', structure:'4 weeks · 4-5 days'},
-  {name:'Lower Body Program', source:'Lower Body Program.docx', structure:'6 weeks · 3 days'},
-  {name:'Deadlift Cycle for Maximum Floor Speed', source:'Revised Deadlift Cycle.docx', structure:'9 weeks · deadlift focus'},
-  {name:'Wendler Challenge', source:'Wendler challenge.docx', structure:'3-week strength challenge'},
-  {name:'8 Week Heavy / Explosive Program', source:'New Program.docx', structure:'8 weeks · bench/squat/deadlift/clean'},
-  {name:'Summer Swolstice', source:'Summer Swolstice Template.docx', structure:'Olympic lifting + strength + conditioning'},
-  {name:'Raider', source:'Raider.docx', structure:'multi-week tactical strength + stamina'},
-  {name:'Starting Strength Variants', source:'Starting Strength Calculator Spreadsheet.xlsx', structure:'multiple novice-program variants'},
-  {name:'12 Week Training Program', source:'12 Week Training Program.xlsx', structure:'Burst / Y3T / FST-7 / Negative blocks'},
-  {name:"Kara's 9 Weeks of Heaven", source:'Karas-9-Weeks-of-Heaven.xlsx', structure:'9 weeks'},
-  {name:'Powerbuild', source:'Powerbuild.xlsx', structure:'3-month powerbuilding workbook'},
-  {name:"Occam's Protocol", source:"Occam's Protocol Tracking.xlsx", structure:'minimalist strength / mass tracking'},
-  {name:'Primer 4 Program', source:'Primer 4 Program.xlsx', structure:'monthly training template'},
-]
-
+import { allArchivePrograms, archiveProgramById, makePlannedFromArchive } from './archivePrograms'
 
 function startOfWeek(date = new Date()) {
   const d = new Date(date)
@@ -58,22 +25,17 @@ function weekDays() {
 }
 
 function quickWorkoutPayload(lift, scheme, notes='') {
-  const definitions = {
-    '3x10': Array.from({length:3},() => ({pct:null,reps:10,label:'3 × 10'})),
-    '5x5': Array.from({length:5},() => ({pct:null,reps:5,label:'5 × 5'})),
-    '531-fsl': [
-      {pct:65,reps:5,label:'65% × 5'},
-      {pct:75,reps:5,label:'75% × 5'},
-      {pct:85,reps:'5+',label:'85% × 5+'},
-    ],
-  }
+  const rx = scheme === '3x10' ? '3 × 10'
+    : scheme === '5x5' ? '5 × 5'
+    : scheme === '531-fsl' ? '65% × 5, 75% × 5, 85% × 5+; then FSL 5 × 5'
+    : 'Custom - use notes'
   return {
-    type:'quick',
-    primary_lift:lift,
+    version:2,
+    type:'flexible',
     scheme,
-    main:definitions[scheme] || [],
-    secondary:scheme === '531-fsl' ? {title:'FSL 5x5 @ 65%',sets:5,reps:5,pct:65} : null,
     notes,
+    sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',
+    exercises:[{id:'main',name:lift,prescription:rx,note:notes,result:'',done:false}],
   }
 }
 
@@ -285,23 +247,40 @@ export function PlanPage({
   const [showSubmit,setShowSubmit] = useState(false)
   const [submitMode,setSubmitMode] = useState('build')
   const [form,setForm] = useState({
-    scheduled_date:isoDate(new Date()),
-    title:'Squat 3×10',
-    lift:'Squat',
-    scheme:'3x10',
-    notes:'',
+    scheduled_date:isoDate(new Date()), title:'Squat 3×10', lift:'Squat', scheme:'3x10', notes:'',
   })
-  const [submission,setSubmission] = useState({
-    name:'',
-    description:'',
-    source_url:'',
-    visibility:'private',
-  })
+  const [submission,setSubmission] = useState({name:'',description:'',source_url:'',visibility:'private'})
   const [message,setMessage] = useState('')
+  const [category,setCategory] = useState('All')
+  const [search,setSearch] = useState('')
+  const [previewId,setPreviewId] = useState('squatober')
+  const [previewWeek,setPreviewWeek] = useState(1)
+  const [previewDay,setPreviewDay] = useState(0)
+  const [scheduleDate,setScheduleDate] = useState(isoDate(new Date()))
+  const [favorites,setFavorites] = useState(() => {
+    const fromProfile=profile?.favorite_programs
+    if (Array.isArray(fromProfile)) return fromProfile
+    try { return JSON.parse(localStorage.getItem('wb-program-favorites') || '[]') } catch { return [] }
+  })
 
   const days = useMemo(() => weekDays(),[])
   const start = isoDate(days[0])
   const end = isoDate(days[6])
+  const categories = useMemo(() => ['All','Favorites',...Array.from(new Set(allArchivePrograms.map(p=>p.category))).sort()],[])
+  const preview = archiveProgramById[previewId] || allArchivePrograms[0]
+  const previewDays = preview?.getWeek ? preview.getWeek(previewWeek) : [{
+    title:'Source program session',
+    exercises:[{name:'Source program',prescription:'Use the original source prescription for this session',note:preview?.source || ''}]
+  }]
+
+  const filteredPrograms = useMemo(() => {
+    const q=search.trim().toLowerCase()
+    return allArchivePrograms.filter(p => {
+      const categoryOk = category === 'All' || (category === 'Favorites' ? favorites.includes(p.id) : p.category === category)
+      const searchOk = !q || [p.name,p.category,p.description,p.source].some(v=>String(v||'').toLowerCase().includes(q))
+      return categoryOk && searchOk
+    })
+  },[category,search,favorites])
 
   const load = async () => {
     if (!session?.user) return
@@ -309,10 +288,7 @@ export function PlanPage({
       supabase.from('planned_workouts').select('*').eq('user_id',session.user.id).gte('scheduled_date',start).lte('scheduled_date',end).order('scheduled_date'),
       supabase.from('program_library').select('*').order('created_at',{ascending:false}),
     ])
-    if (plannedError || libraryError) {
-      setReady(false)
-      return
-    }
+    if (plannedError || libraryError) { setReady(false); return }
     setReady(true)
     setPlanned(plannedRows || [])
     setLibrary(libraryRows || [])
@@ -322,22 +298,18 @@ export function PlanPage({
 
   const addWorkout = async e => {
     e.preventDefault()
-    const workout = quickWorkoutPayload(form.lift,form.scheme,form.notes)
     const {error} = await supabase.from('planned_workouts').insert({
       user_id:session.user.id,
       scheduled_date:form.scheduled_date,
       title:form.title.trim() || form.lift + ' workout',
       source_program_name:form.scheme === '531-fsl' ? 'Flexible 5/3/1' : 'Flexible',
       source_day:form.lift,
-      workout,
+      workout:quickWorkoutPayload(form.lift,form.scheme,form.notes),
       status:'planned',
     })
-    if (error) {
-      setMessage(error.message)
-      return
-    }
+    if (error) { setMessage(error.message); return }
     setShowAdd(false)
-    setMessage('Workout added to this week.')
+    setMessage('Workout added. If it is scheduled for today, tap Today to run it.')
     await load()
   }
 
@@ -346,32 +318,33 @@ export function PlanPage({
     await load()
   }
 
+  const toggleFavorite = async id => {
+    const next=favorites.includes(id) ? favorites.filter(x=>x!==id) : [...favorites,id]
+    setFavorites(next)
+    localStorage.setItem('wb-program-favorites',JSON.stringify(next))
+    if (session?.user) {
+      const {error}=await supabase.from('profiles').update({favorite_programs:next,updated_at:new Date().toISOString()}).eq('id',session.user.id)
+      if (error && !String(error.message).includes('favorite_programs')) setMessage(error.message)
+    }
+  }
+
+  const openPreview = id => {
+    setPreviewId(id); setPreviewWeek(1); setPreviewDay(0)
+  }
+
+  const scheduleArchive = async () => {
+    if (!session?.user || !preview) return
+    const payload=makePlannedFromArchive(preview,previewWeek,previewDay,scheduleDate)
+    const {error}=await supabase.from('planned_workouts').insert({...payload,user_id:session.user.id})
+    if (error) { setMessage(error.message); return }
+    setMessage(`${preview.name} · ${payload.title} added to ${scheduleDate}. Tap Today when you are ready to train.`)
+    await load()
+  }
+
   const submitPlan = async e => {
     e.preventDefault()
-    let imported = null
     const sourceUrl = submitMode === 'link' ? submission.source_url.trim() : null
-
-    if (submitMode === 'link') {
-      setMessage('Reading workout page…')
-      try {
-        const {data:{session:authSession}} = await supabase.auth.getSession()
-        const response = await fetch('/.netlify/functions/import-program',{
-          method:'POST',
-          headers:{
-            'content-type':'application/json',
-            Authorization:'Bearer ' + authSession.access_token,
-          },
-          body:JSON.stringify({url:sourceUrl}),
-        })
-        const payload = await response.json()
-        if (!response.ok) throw new Error(payload.error || 'Import failed')
-        imported = payload
-      } catch (error) {
-        setMessage('Could not read that site automatically. The link will still be saved: ' + (error?.message || 'Import failed'))
-      }
-    }
-
-    const name = submission.name.trim() || imported?.title || (submitMode === 'link' ? 'Imported program' : 'Custom program')
+    const name = submission.name.trim() || (submitMode === 'link' ? 'Linked program' : 'Custom program')
     const {error} = await supabase.from('program_library').insert({
       owner_user_id:session.user.id,
       name,
@@ -379,400 +352,312 @@ export function PlanPage({
       source_type:submitMode === 'link' ? 'url' : 'manual',
       source_url:sourceUrl || null,
       visibility:submission.visibility,
-      status:submitMode === 'link' && !imported ? 'pending_import' : 'draft',
-      plan:{
-        submission_mode:submitMode,
-        notes:submission.description.trim(),
-        source_title:imported?.title || null,
-        detected_lines:imported?.detected_lines || [],
-      },
+      status:'draft',
+      plan:{submission_mode:submitMode,notes:submission.description.trim()},
     })
-    if (error) {
-      setMessage(error.message)
-      return
-    }
+    if (error) { setMessage(error.message); return }
     setShowSubmit(false)
     setSubmission({name:'',description:'',source_url:'',visibility:'private'})
-    setMessage(submitMode === 'link'
-      ? (imported ? 'Workout page imported for review.' : 'Link saved. Some sites block automated imports.')
-      : 'Workout plan draft saved.')
+    setMessage(submitMode === 'link' ? 'Link saved as a draft. Automatic web import will be added when a GitHub-compatible backend is connected.' : 'Workout plan draft saved.')
     await load()
   }
 
   if (ready === false) {
-    return (
-      <section className="page-section">
-        <div className="setup-needed">
-          <span className="card-label">PLATFORM UPDATE NEEDED</span>
-          <h2>Flexible planning is ready</h2>
-          <p>Run the platform-foundation SQL migration once. Your existing workout history stays intact.</p>
-        </div>
-      </section>
-    )
+    return <section className="page-section"><div className="setup-needed">
+      <span className="card-label">PLATFORM UPDATE NEEDED</span><h2>Flexible planning is ready</h2>
+      <p>Run the platform-foundation SQL migration once, then refresh.</p>
+    </div></section>
   }
 
-  return (
-    <section className="page-section">
-      <section className="program-summary">
-        <span className="card-label">THIS WEEK</span>
-        <h2>Train what fits the week</h2>
-        <p>Mix your program, Tracey-style 3×10, 5×5, or one-off workouts without changing your long-term history.</p>
-      </section>
-
-      <section className="active-program-card">
-        <div>
-          <span className="card-label">ACTIVE PROGRAM</span>
-          <h3>{programs[activeProgram].name}</h3>
-          <p>Changing this affects what is suggested next. Completed workout history is never deleted.</p>
-        </div>
-        <select value={activeProgram} onChange={e => chooseProgram(e.target.value)}>
-          {programOrder.map(id => <option value={id} key={id}>{programs[id].name}</option>)}
-        </select>
-      </section>
-
-      <div className="weekly-plan">
-        {days.map(day => {
-          const date = isoDate(day)
-          const rows = planned.filter(item => item.scheduled_date === date)
-          return (
-            <article className="day-plan" key={date}>
-              <div className="day-plan-head">
-                <div><strong>{day.toLocaleDateString(undefined,{weekday:'short'})}</strong><span>{day.toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span></div>
-                {date === isoDate(new Date()) && <b>Today</b>}
-              </div>
-              {rows.map(row => (
-                <div className="planned-item" key={row.id}>
-                  <div><strong>{row.title}</strong><span>{row.workout?.scheme || row.source_program_name || 'Workout'}</span></div>
-                  <button onClick={() => removePlanned(row.id)}>×</button>
-                </div>
-              ))}
-              {!rows.length && <span className="rest-label">Open / rest / add workout</span>}
-            </article>
-          )
-        })}
-      </div>
-
-      <button className="primary-action" onClick={() => setShowAdd(v => !v)}>{showAdd ? 'Close' : '+ Add workout this week'}</button>
-
-      {showAdd && (
-        <form className="builder-card" onSubmit={addWorkout}>
-          <h3>Quick workout</h3>
-          <label>Date<input type="date" value={form.scheduled_date} onChange={e => setForm(v => ({...v,scheduled_date:e.target.value}))} /></label>
-          <label>Name<input value={form.title} onChange={e => setForm(v => ({...v,title:e.target.value}))} /></label>
-          <div className="builder-two">
-            <label>Primary lift<select value={form.lift} onChange={e => setForm(v => ({...v,lift:e.target.value}))}>{lifts.map(x => <option key={x}>{x}</option>)}</select></label>
-            <label>Scheme<select value={form.scheme} onChange={e => setForm(v => ({...v,scheme:e.target.value}))}><option value="3x10">3 × 10</option><option value="5x5">5 × 5</option><option value="531-fsl">5/3/1 + FSL 5×5</option><option value="custom">Custom notes</option></select></label>
-          </div>
-          <label>Notes<textarea value={form.notes} onChange={e => setForm(v => ({...v,notes:e.target.value}))} placeholder="Optional accessories, conditioning, substitutions…" /></label>
-          <button className="primary-action">Add to week</button>
-        </form>
-      )}
-
-      <section className="simple-card">
-        <div className="section-heading">
-          <div><span className="card-label">WORKOUT PLANS</span><h3>Program library</h3></div>
-          <button className="mini-action" onClick={() => setShowSubmit(v => !v)}>Submit plan</button>
-        </div>
-        <p className="helper-text">Build your own plan or submit a link to a program from another site. Links are fetched server-side when the site allows it. Imported set/rep lines are saved with the source URL for review before becoming a runnable program.</p>
-      </section>
-
-      {showSubmit && (
-        <form className="builder-card" onSubmit={submitPlan}>
-          <div className="segmented">
-            <button type="button" className={submitMode === 'build' ? 'active' : ''} onClick={() => setSubmitMode('build')}>Build</button>
-            <button type="button" className={submitMode === 'link' ? 'active' : ''} onClick={() => setSubmitMode('link')}>Link</button>
-          </div>
-          <label>Plan name<input value={submission.name} onChange={e => setSubmission(v => ({...v,name:e.target.value}))} placeholder="My 3-day strength plan" /></label>
-          {submitMode === 'link' && <label>Source URL<input type="url" required value={submission.source_url} onChange={e => setSubmission(v => ({...v,source_url:e.target.value}))} placeholder="https://..." /></label>}
-          <label>{submitMode === 'build' ? 'Plan outline' : 'Notes'}<textarea value={submission.description} onChange={e => setSubmission(v => ({...v,description:e.target.value}))} placeholder="Days, exercises, sets/reps, progression, substitutions…" /></label>
-          <label>Visibility<select value={submission.visibility} onChange={e => setSubmission(v => ({...v,visibility:e.target.value}))}><option value="private">Private</option><option value="community">Community</option></select></label>
-          <button className="primary-action">{submitMode === 'link' ? 'Save link for import' : 'Save plan draft'}</button>
-        </form>
-      )}
-
-      {message && <div className="status-message">{message}</div>}
-
-      <section className="simple-card">
-        <div className="section-heading">
-          <div><span className="card-label">YOUR WORKOUT ARCHIVE</span><h3>Programs from Workouts.zip</h3></div>
-        </div>
-        <p className="helper-text">These are actual named programs from your archive. The 5/3/1 entries below are already converted into the WorkoutBoard runner; the different day-split programs remain listed by their original source instead of being forced into the wrong 4-lift format.</p>
-        <div className="archive-program-list">
-          {archiveCatalog.map(item => (
-            <div className="library-row" key={item.name}>
-              <div>
-                <strong>{item.name}</strong>
-                <span>{item.structure} · {item.source}</span>
-              </div>
-              {item.builtinId
-                ? <button className="mini-action" onClick={() => chooseProgram(item.builtinId)}>{activeProgram === item.builtinId ? 'Current' : 'Use'}</button>
-                : <span className="archive-source-badge">SOURCE</span>}
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <div className="program-picker">
-        {programOrder.map(id => {
-          const p = programs[id]
-          const selected = id === activeProgram
-          return (
-            <article className={'program-card ' + (selected ? 'selected' : '')} key={id}>
-              <div><span className="program-length">{p.weeksCount} weeks</span><h3>{p.name}</h3><p>{p.description}</p></div>
-              <button onClick={() => chooseProgram(id)}>{selected ? 'Current program' : 'Use this program'}</button>
-            </article>
-          )
-        })}
-      </div>
-
-      {library.filter(item => item.owner_user_id).length > 0 && (
-        <section className="simple-card">
-          <div className="section-heading"><div><span className="card-label">YOUR SUBMISSIONS</span><h3>Drafts & links</h3></div></div>
-          {library.filter(item => item.owner_user_id === session.user.id).map(item => (
-            <div className="library-row" key={item.id}>
-              <div><strong>{item.name}</strong><span>{item.source_type === 'url' ? 'Link · ' + item.status : 'Build · ' + item.status}</span></div>
-              <span>{item.visibility}</span>
-            </div>
-          ))}
-        </section>
-      )}
-
-      <section className="simple-card">
-        <div className="section-heading"><div><span className="card-label">CURRENT PROGRAM</span><h3>{programs[activeProgram].shortName}</h3></div></div>
-        <div className="week-list">
-          {Array.from({length:programs[activeProgram].weeksCount},(_,i) => i+1).map(number => {
-            const count = completedByWeek[number]?.size || 0
-            return (
-              <button className={'week-card ' + (number === week ? 'current' : '')} key={number}
-                onClick={() => jumpToWorkout(activeProgram,number,lifts.find(x => !completedByWeek[number]?.has(x)) || 'Squat')}>
-                <div><strong>Week {number}</strong><span>{programs[activeProgram].phases[number]}</span></div>
-                <div className="week-progress">{count}/4</div>
-              </button>
-            )
-          })}
-        </div>
-      </section>
+  return <section className="page-section">
+    <section className="program-summary">
+      <span className="card-label">THIS WEEK</span>
+      <h2>Train what fits the week</h2>
+      <p>Schedule a source program, your normal program, or a one-off workout. Completed history stays separate and safe.</p>
     </section>
-  )
-}
 
+    <section className="active-program-card">
+      <div><span className="card-label">LEGACY 4-LIFT PROGRAM</span><h3>{programs[activeProgram].name}</h3><p>This is still available for the classic Squat / Bench / Deadlift / Press runner.</p></div>
+      <select value={activeProgram} onChange={e => chooseProgram(e.target.value)}>
+        {programOrder.map(id => <option value={id} key={id}>{programs[id].name}</option>)}
+      </select>
+    </section>
+
+    <div className="weekly-plan">
+      {days.map(calendarDay => {
+        const date=isoDate(calendarDay)
+        const rows=planned.filter(item=>item.scheduled_date===date)
+        return <article className="day-plan" key={date}>
+          <div className="day-plan-head">
+            <div><strong>{calendarDay.toLocaleDateString(undefined,{weekday:'short'})}</strong><span>{calendarDay.toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span></div>
+            {date===isoDate(new Date())&&<b>Today</b>}
+          </div>
+          {rows.map(row=><div className="planned-item" key={row.id}>
+            <div><strong>{row.title}</strong><span>{row.source_program_name || row.workout?.scheme || 'Workout'} · {row.status}</span></div>
+            <button onClick={()=>removePlanned(row.id)}>×</button>
+          </div>)}
+          {!rows.length&&<span className="rest-label">Open / rest / add workout</span>}
+        </article>
+      })}
+    </div>
+
+    <button className="primary-action" onClick={()=>setShowAdd(v=>!v)}>{showAdd?'Close':'+ Add one-off workout'}</button>
+    {showAdd&&<form className="builder-card" onSubmit={addWorkout}>
+      <h3>Quick workout</h3>
+      <label>Date<input type="date" value={form.scheduled_date} onChange={e=>setForm(v=>({...v,scheduled_date:e.target.value}))}/></label>
+      <label>Name<input value={form.title} onChange={e=>setForm(v=>({...v,title:e.target.value}))}/></label>
+      <div className="builder-two">
+        <label>Primary lift<select value={form.lift} onChange={e=>setForm(v=>({...v,lift:e.target.value}))}>{lifts.map(x=><option key={x}>{x}</option>)}</select></label>
+        <label>Scheme<select value={form.scheme} onChange={e=>setForm(v=>({...v,scheme:e.target.value}))}><option value="3x10">3 × 10</option><option value="5x5">5 × 5</option><option value="531-fsl">5/3/1 + FSL 5×5</option><option value="custom">Custom</option></select></label>
+      </div>
+      <label>Notes<textarea value={form.notes} onChange={e=>setForm(v=>({...v,notes:e.target.value}))}/></label>
+      <button className="primary-action">Add to calendar</button>
+    </form>}
+
+    <section className="library-toolbar simple-card">
+      <div className="section-heading">
+        <div><span className="card-label">PROGRAM LIBRARY</span><h3>Your archive, organized</h3></div>
+        <button className="mini-action" onClick={()=>setShowSubmit(v=>!v)}>Add your own</button>
+      </div>
+      <input className="text-input" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search programs…" />
+      <div className="category-chips">{categories.map(c=><button key={c} className={category===c?'active':''} onClick={()=>setCategory(c)}>{c}</button>)}</div>
+    </section>
+
+    {showSubmit&&<form className="builder-card" onSubmit={submitPlan}>
+      <div className="segmented"><button type="button" className={submitMode==='build'?'active':''} onClick={()=>setSubmitMode('build')}>Build</button><button type="button" className={submitMode==='link'?'active':''} onClick={()=>setSubmitMode('link')}>Link</button></div>
+      <label>Plan name<input value={submission.name} onChange={e=>setSubmission(v=>({...v,name:e.target.value}))}/></label>
+      {submitMode==='link'&&<label>Source URL<input type="url" required value={submission.source_url} onChange={e=>setSubmission(v=>({...v,source_url:e.target.value}))}/></label>}
+      <label>{submitMode==='build'?'Plan outline':'Notes'}<textarea value={submission.description} onChange={e=>setSubmission(v=>({...v,description:e.target.value}))}/></label>
+      <label>Visibility<select value={submission.visibility} onChange={e=>setSubmission(v=>({...v,visibility:e.target.value}))}><option value="private">Private</option><option value="community">Community</option></select></label>
+      <button className="primary-action">Save draft</button>
+    </form>}
+
+    {message&&<div className="status-message">{message}</div>}
+
+    <div className="archive-grid">
+      {filteredPrograms.map(p=><article className={'archive-card '+(previewId===p.id?'selected':'')} key={p.id}>
+        <div className="archive-card-head">
+          <span className="program-length">{p.weeksCount} weeks · {p.daysPerWeek} day{p.daysPerWeek===1?'':'s'}/wk</span>
+          <button className={'favorite-button '+(favorites.includes(p.id)?'active':'')} onClick={()=>toggleFavorite(p.id)} title="Favorite">{favorites.includes(p.id)?'★':'☆'}</button>
+        </div>
+        <h3>{p.name}</h3><p>{p.description}</p>
+        <div className="program-meta"><span>{p.category}</span><span>{p.difficulty}</span></div>
+        <button className="wide-button" onClick={()=>openPreview(p.id)}>Preview / schedule</button>
+      </article>)}
+      {!filteredPrograms.length&&<div className="empty-state">No programs match this filter.</div>}
+    </div>
+
+    {preview&&<section className="program-preview-card">
+      <div className="preview-head">
+        <div><span className="card-label">PROGRAM PREVIEW</span><h2>{preview.name}</h2><p>{preview.description}</p></div>
+        <button className={'favorite-button large '+(favorites.includes(preview.id)?'active':'')} onClick={()=>toggleFavorite(preview.id)}>{favorites.includes(preview.id)?'★':'☆'}</button>
+      </div>
+      <div className="preview-facts">
+        <div><span>Category</span><strong>{preview.category}</strong></div>
+        <div><span>Difficulty</span><strong>{preview.difficulty}</strong></div>
+        <div><span>Length</span><strong>{preview.weeksCount} weeks</strong></div>
+        <div><span>Frequency</span><strong>{preview.daysPerWeek} days/week</strong></div>
+      </div>
+      <div className="source-pill">Source: {preview.source}</div>
+      <div className="builder-two preview-controls">
+        <label>Week<select value={previewWeek} onChange={e=>{setPreviewWeek(Number(e.target.value));setPreviewDay(0)}}>{Array.from({length:preview.weeksCount},(_,i)=>i+1).map(n=><option key={n} value={n}>Week {n}</option>)}</select></label>
+        <label>Workout<select value={previewDay} onChange={e=>setPreviewDay(Number(e.target.value))}>{previewDays.map((d,i)=><option key={i} value={i}>{d.title}</option>)}</select></label>
+      </div>
+      <div className="sample-workout">
+        <h3>{previewDays[previewDay]?.title}</h3>
+        {previewDays[previewDay]?.exercises?.map((x,i)=><div className="sample-exercise" key={i}><strong>{x.name}</strong><span>{x.prescription}</span>{x.note&&<small>{x.note}</small>}</div>)}
+      </div>
+      <div className="schedule-row">
+        <input type="date" value={scheduleDate} onChange={e=>setScheduleDate(e.target.value)} />
+        <button className="primary-action" onClick={scheduleArchive}>Add this workout</button>
+      </div>
+      {!preview.getWeek&&<p className="helper-text">This source is cataloged but not fully transcribed yet. Scheduling it creates an editable source-session card so you can still use it without losing the source.</p>}
+    </section>}
+
+    <div className="program-picker">
+      {programOrder.map(id=>{const p=programs[id],selected=id===activeProgram;return <article className={'program-card '+(selected?'selected':'')} key={id}>
+        <div><span className="program-length">{p.weeksCount} weeks</span><h3>{p.name}</h3><p>{p.description}</p></div>
+        <button onClick={()=>chooseProgram(id)}>{selected?'Current 4-lift program':'Use 4-lift program'}</button>
+      </article>})}
+    </div>
+
+    {library.filter(item=>item.owner_user_id===session.user.id).length>0&&<section className="simple-card">
+      <div className="section-heading"><div><span className="card-label">YOUR SUBMISSIONS</span><h3>Drafts & links</h3></div></div>
+      {library.filter(item=>item.owner_user_id===session.user.id).map(item=><div className="library-row" key={item.id}><div><strong>{item.name}</strong><span>{item.source_type==='url'?'Link · '+item.status:'Build · '+item.status}</span></div><span>{item.visibility}</span></div>)}
+    </section>}
+
+    <section className="simple-card">
+      <div className="section-heading"><div><span className="card-label">CURRENT 4-LIFT PROGRAM</span><h3>{programs[activeProgram].shortName}</h3></div></div>
+      <div className="week-list">
+        {Array.from({length:programs[activeProgram].weeksCount},(_,i)=>i+1).map(number=>{
+          const count=completedByWeek[number]?.size||0
+          return <button className={'week-card '+(number===week?'current':'')} key={number} onClick={()=>jumpToWorkout(activeProgram,number,lifts.find(x=>!completedByWeek[number]?.has(x))||'Squat')}>
+            <div><strong>Week {number}</strong><span>{programs[activeProgram].phases[number]}</span></div><div className="week-progress">{count}/4</div>
+          </button>
+        })}
+      </div>
+    </section>
+  </section>
+}
 
 export function AdminPanel({ programs }) {
   const [users,setUsers] = useState([])
   const [selected,setSelected] = useState(null)
   const [maxes,setMaxes] = useState(null)
+  const [maxDraft,setMaxDraft] = useState({squat:'',bench:'',deadlift:'',press:''})
   const [sessions,setSessions] = useState([])
+  const [editSession,setEditSession] = useState(null)
   const [message,setMessage] = useState('')
   const [resetPassword,setResetPassword] = useState('')
 
   const loadUsers = async () => {
     const {data,error} = await supabase.rpc('admin_user_overview')
-    if (error) {
-      setMessage(error.message)
-      return
-    }
+    if (error) { setMessage(error.message); return }
     setUsers(data || [])
   }
-
   useEffect(() => { loadUsers() },[])
 
   const openUser = async user => {
-    setSelected(user)
-    setMessage('')
+    setSelected(user); setMessage(''); setEditSession(null)
     const [{data:tm},{data:rows}] = await Promise.all([
       supabase.from('training_maxes').select('*').eq('user_id',user.user_id).maybeSingle(),
-      supabase.from('training_sessions').select('*').eq('user_id',user.user_id).order('session_date',{ascending:false}).limit(20),
+      supabase.from('training_sessions').select('*').eq('user_id',user.user_id).order('session_date',{ascending:false}).limit(50),
     ])
-    setMaxes(tm || null)
+    const next=tm||{squat:null,bench:null,deadlift:null,press:null}
+    setMaxes(next)
+    setMaxDraft({squat:next.squat??'',bench:next.bench??'',deadlift:next.deadlift??'',press:next.press??''})
     setSessions(rows || [])
   }
 
   const saveProgram = async (programId,week) => {
     if (!selected) return
-    const {error} = await supabase.rpc('admin_set_user_program',{
-      target_user:selected.user_id,
-      new_program:programId,
-      new_week:Number(week || 1),
-    })
-    if (error) {
-      setMessage(error.message)
-      return
-    }
+    const {error}=await supabase.rpc('admin_set_user_program',{target_user:selected.user_id,new_program:programId,new_week:Number(week||1)})
+    if(error){setMessage(error.message);return}
     setMessage('User program updated.')
     await loadUsers()
-    setSelected(v => v ? {...v,active_program:programId,current_week:Number(week || 1)} : v)
+    setSelected(v=>v?{...v,active_program:programId,current_week:Number(week||1)}:v)
   }
 
   const resetUserPassword = async () => {
-    if (!selected || resetPassword.length < 10) {
-      setMessage('Enter a new password with at least 10 characters.')
-      return
-    }
-    const {error} = await supabase.rpc('admin_reset_user_password',{
-      target_user:selected.user_id,
-      new_password:resetPassword
+    if (!selected || resetPassword.length < 10) { setMessage('Enter a new password with at least 10 characters.'); return }
+    const {error}=await supabase.rpc('admin_reset_user_password',{target_user:selected.user_id,new_password:resetPassword})
+    setMessage(error?error.message:'Password reset successfully.')
+    if(!error)setResetPassword('')
+  }
+
+  const saveMaxes = async () => {
+    if(!selected)return
+    const num=v=>v===''?null:Number(v)
+    const {error}=await supabase.rpc('admin_set_training_maxes',{
+      target_user:selected.user_id,new_squat:num(maxDraft.squat),new_bench:num(maxDraft.bench),
+      new_deadlift:num(maxDraft.deadlift),new_press:num(maxDraft.press)
     })
-    setMessage(error ? error.message : 'Password reset successfully.')
-    if (!error) setResetPassword('')
+    if(error){setMessage('Run the product-upgrades migration first: '+error.message);return}
+    setMaxes({...maxDraft})
+    setMessage('Training maxes updated.')
   }
 
   const resetUserTraining = async () => {
-    if (!selected) return
-
-    const label = selected.display_name || selected.email || 'this user'
-    if (!window.confirm(`Reset ALL workouts and training maxes for ${label}? This cannot be undone.`)) return
-
+    if(!selected)return
+    const label=selected.display_name||selected.email||'this user'
+    if(!window.confirm(`Reset ALL workouts and training maxes for ${label}? This cannot be undone.`))return
     setMessage('Resetting training data…')
-    const target = selected.user_id
-
-    const results = await Promise.all([
-      supabase.from('session_results').delete().eq('user_id',target),
-      supabase.from('training_sessions').delete().eq('user_id',target),
-      supabase.from('workout_logs').delete().eq('user_id',target),
-      supabase.from('planned_workouts').delete().eq('user_id',target),
-      supabase.from('community_activity').delete().eq('user_id',target),
-      supabase.from('training_maxes').update({
-        squat:null,
-        bench:null,
-        deadlift:null,
-        press:null,
-        updated_at:new Date().toISOString(),
-      }).eq('user_id',target),
-      supabase.from('profiles').update({
-        current_week:1,
-        updated_at:new Date().toISOString(),
-      }).eq('id',target),
-    ])
-
-    const failed = results.find(result => result.error)
-    if (failed?.error) {
-      setMessage('Reset failed: ' + failed.error.message)
-      return
-    }
-
+    const {error}=await supabase.rpc('admin_reset_training',{target_user:selected.user_id})
+    if(error){setMessage('Run the product-upgrades migration first: '+error.message);return}
     setMaxes({squat:null,bench:null,deadlift:null,press:null})
-    setSessions([])
-    setSelected(v => v ? {...v,workout_count:0,total_volume:0,last_workout:null,current_week:1} : v)
-    await loadUsers()
-    setMessage('Workout history and training maxes reset.')
-
-    const {data:{user}} = await supabase.auth.getUser()
-    if (user?.id === target) window.setTimeout(() => window.location.reload(),500)
+    setMaxDraft({squat:'',bench:'',deadlift:'',press:''});setSessions([])
+    setSelected(v=>v?{...v,workout_count:0,total_volume:0,last_workout:null,current_week:1}:v)
+    await loadUsers();setMessage('Workout history and training maxes reset.')
   }
 
-  const fmtDate = value => value ? new Date(value).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}) : 'Never'
-
-  if (!selected) {
-    const totalWorkouts = users.reduce((sum,u) => sum + Number(u.workout_count || 0),0)
-    return (
-      <section className="page-section">
-        <section className="summary-grid">
-          <div><span>Users</span><strong>{users.length}</strong></div>
-          <div><span>Completed workouts</span><strong>{totalWorkouts}</strong></div>
-        </section>
-
-        <section className="simple-card">
-          <div className="section-heading"><div><span className="card-label">ADMIN</span><h3>WorkoutBoard users</h3></div></div>
-          <div className="admin-user-list">
-            {users.map(user => (
-              <button className="admin-user-row" key={user.user_id} onClick={() => openUser(user)}>
-                <div>
-                  <strong>{user.display_name || 'Unnamed user'}</strong>
-                  <span>{user.email}</span>
-                </div>
-                <div>
-                  <strong>{user.workout_count || 0} workouts</strong>
-                  <span>{fmtDate(user.last_workout)}</span>
-                </div>
-              </button>
-            ))}
-          </div>
-          {!users.length && <div className="empty-state">No users returned.</div>}
-        </section>
-        {message && <div className="status-message">{message}</div>}
-      </section>
-    )
+  const saveSessionEdit = async () => {
+    if(!selected||!editSession)return
+    const {error}=await supabase.rpc('admin_update_training_session',{
+      target_user:selected.user_id,target_session:editSession.id,new_title:editSession.title,
+      new_total_volume:Number(editSession.total_volume||0),new_bodyweight:editSession.bodyweight===''?null:Number(editSession.bodyweight)
+    })
+    if(error){setMessage('Run the product-upgrades migration first: '+error.message);return}
+    setSessions(rows=>rows.map(r=>r.id===editSession.id?{...r,...editSession}:r))
+    setEditSession(null);setMessage('Completed session updated.')
   }
 
-  return (
-    <section className="page-section">
-      <button className="secondary-action" onClick={() => { setSelected(null); setMaxes(null); setSessions([]) }}>← All users</button>
+  const deleteSession = async row => {
+    if(!selected||!window.confirm(`Delete "${row.title}" from this user's history? This cannot be undone.`))return
+    const {error}=await supabase.rpc('admin_delete_training_session',{target_user:selected.user_id,target_session:row.id})
+    if(error){setMessage('Run the product-upgrades migration first: '+error.message);return}
+    setSessions(rows=>rows.filter(r=>r.id!==row.id));setMessage('Session deleted.');await loadUsers()
+  }
 
-      <section className="profile-card">
-        <span className="card-label">USER</span>
-        <h2>{selected.display_name || 'Unnamed user'}</h2>
-        <p>{selected.email}</p>
-        <div className="admin-meta">
-          <span>{selected.workout_count || 0} workouts</span>
-          <span>{Number(selected.total_volume || 0).toLocaleString()} lb tracked volume</span>
-          <span>Last: {fmtDate(selected.last_workout)}</span>
-        </div>
-      </section>
+  const fmtDate=value=>value?new Date(value).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}):'Never'
 
+  if(!selected){
+    const totalWorkouts=users.reduce((sum,u)=>sum+Number(u.workout_count||0),0)
+    return <section className="page-section">
+      <section className="summary-grid"><div><span>Users</span><strong>{users.length}</strong></div><div><span>Completed workouts</span><strong>{totalWorkouts}</strong></div></section>
       <section className="simple-card">
-        <div className="section-heading"><div><span className="card-label">PROGRAM</span><h3>Manage current program</h3></div></div>
-        <div className="builder-two">
-          <label className="admin-field">Program
-            <select id="admin-program" defaultValue={selected.active_program || 'andy-hybrid-12'}>
-              {Object.entries(programs).map(([id,p]) => <option value={id} key={id}>{p.name}</option>)}
-            </select>
-          </label>
-          <label className="admin-field">Week
-            <input id="admin-week" type="number" min="1" max="12" defaultValue={selected.current_week || 1} />
-          </label>
-        </div>
-        <button className="wide-button" onClick={() => {
-          const programId = document.getElementById('admin-program').value
-          const week = document.getElementById('admin-week').value
-          saveProgram(programId,week)
-        }}>Save program/week</button>
+        <div className="section-heading"><div><span className="card-label">ADMIN</span><h3>WorkoutBoard users</h3></div></div>
+        <div className="admin-user-list">{users.map(user=><button className="admin-user-row" key={user.user_id} onClick={()=>openUser(user)}>
+          <div><strong>{user.display_name||'Unnamed user'}</strong><span>{user.email}</span></div>
+          <div><strong>{user.workout_count||0} workouts</strong><span>{fmtDate(user.last_workout)}</span></div>
+        </button>)}</div>
+        {!users.length&&<div className="empty-state">No users returned.</div>}
       </section>
-
-      <section className="simple-card">
-        <div className="section-heading"><div><span className="card-label">ACCOUNT ACCESS</span><h3>Reset password</h3></div></div>
-        <p className="helper-text">Set a new password for this user without sending email.</p>
-        <div className="admin-password-row">
-          <input type="password" value={resetPassword} onChange={e => setResetPassword(e.target.value)} placeholder="New password (10+ characters)" />
-          <button onClick={resetUserPassword}>Reset</button>
-        </div>
-      </section>
-
-      <section className="simple-card">
-        <div className="section-heading"><div><span className="card-label">TRAINING MAXES</span><h3>Current numbers</h3></div></div>
-        <div className="admin-max-grid">
-          <div><span>Squat</span><strong>{maxes?.squat ?? '—'}</strong></div>
-          <div><span>Bench</span><strong>{maxes?.bench ?? '—'}</strong></div>
-          <div><span>Deadlift</span><strong>{maxes?.deadlift ?? '—'}</strong></div>
-          <div><span>Press</span><strong>{maxes?.press ?? '—'}</strong></div>
-        </div>
-      </section>
-
-      <section className="simple-card danger-card">
-        <div className="section-heading"><div><span className="card-label">RESET TRAINING DATA</span><h3>Start this user over</h3></div></div>
-        <p className="helper-text">Deletes workout history, planned workouts, shared results, community activity, and clears all training maxes. The account and selected program stay in place.</p>
-        <button className="danger-button" onClick={resetUserTraining}>Reset workouts + training maxes</button>
-      </section>
-
-      <section className="simple-card">
-        <div className="section-heading"><div><span className="card-label">RECENT HISTORY</span><h3>Training sessions</h3></div></div>
-        <div className="admin-session-list">
-          {sessions.map(row => (
-            <div className="library-row" key={row.id}>
-              <div>
-                <strong>{row.title}</strong>
-                <span>{fmtDate(row.session_date)}{row.program ? ' · ' + row.program : ''}</span>
-              </div>
-              <div className="admin-session-volume">
-                <strong>{Number(row.total_volume || 0).toLocaleString()} lb</strong>
-                <span>{row.estimated_1rm ? 'e1RM ' + Math.round(row.estimated_1rm) : ''}</span>
-              </div>
-            </div>
-          ))}
-          {!sessions.length && <div className="empty-state">No completed sessions yet.</div>}
-        </div>
-      </section>
-
-      {message && <div className="status-message">{message}</div>}
+      {message&&<div className="status-message">{message}</div>}
     </section>
-  )
+  }
+
+  return <section className="page-section">
+    <button className="secondary-action" onClick={()=>{setSelected(null);setMaxes(null);setSessions([]);setEditSession(null)}}>← All users</button>
+    <section className="profile-card">
+      <span className="card-label">USER</span><h2>{selected.display_name||'Unnamed user'}</h2><p>{selected.email}</p>
+      <div className="admin-meta"><span>{selected.workout_count||0} workouts</span><span>{Number(selected.total_volume||0).toLocaleString()} lb tracked volume</span><span>Last: {fmtDate(selected.last_workout)}</span></div>
+    </section>
+
+    <section className="simple-card">
+      <div className="section-heading"><div><span className="card-label">PROGRAM</span><h3>Manage current program</h3></div></div>
+      <div className="builder-two">
+        <label className="admin-field">Program<select id="admin-program" defaultValue={selected.active_program||'andy-hybrid-12'}>{Object.entries(programs).map(([id,p])=><option value={id} key={id}>{p.name}</option>)}</select></label>
+        <label className="admin-field">Week<input id="admin-week" type="number" min="1" max="20" defaultValue={selected.current_week||1}/></label>
+      </div>
+      <button className="wide-button" onClick={()=>saveProgram(document.getElementById('admin-program').value,document.getElementById('admin-week').value)}>Save program/week</button>
+    </section>
+
+    <section className="simple-card">
+      <div className="section-heading"><div><span className="card-label">TRAINING MAXES</span><h3>Edit current numbers</h3></div></div>
+      <div className="admin-edit-max-grid">
+        {['squat','bench','deadlift','press'].map(name=><label key={name}><span>{name[0].toUpperCase()+name.slice(1)}</span><input type="number" inputMode="decimal" value={maxDraft[name]} onChange={e=>setMaxDraft(v=>({...v,[name]:e.target.value}))} placeholder="—"/></label>)}
+      </div>
+      <button className="wide-button" onClick={saveMaxes}>Save training maxes</button>
+    </section>
+
+    <section className="simple-card">
+      <div className="section-heading"><div><span className="card-label">ACCOUNT ACCESS</span><h3>Reset password</h3></div></div>
+      <p className="helper-text">Set a new password for this user without email.</p>
+      <div className="admin-password-row"><input type="password" value={resetPassword} onChange={e=>setResetPassword(e.target.value)} placeholder="New password (10+ characters)"/><button onClick={resetUserPassword}>Reset</button></div>
+    </section>
+
+    <section className="simple-card danger-card">
+      <div className="section-heading"><div><span className="card-label">RESET TRAINING DATA</span><h3>Start this user over</h3></div></div>
+      <p className="helper-text">Deletes workout history, planned workouts, shared results, community activity, and clears all training maxes. Account and program stay in place.</p>
+      <button className="danger-button" onClick={resetUserTraining}>Reset workouts + training maxes</button>
+    </section>
+
+    {editSession&&<section className="builder-card session-editor">
+      <span className="card-label">EDIT COMPLETED SESSION</span>
+      <label>Title<input value={editSession.title||''} onChange={e=>setEditSession(v=>({...v,title:e.target.value}))}/></label>
+      <div className="builder-two"><label>Tracked volume<input type="number" value={editSession.total_volume??''} onChange={e=>setEditSession(v=>({...v,total_volume:e.target.value}))}/></label><label>Bodyweight<input type="number" value={editSession.bodyweight??''} onChange={e=>setEditSession(v=>({...v,bodyweight:e.target.value}))}/></label></div>
+      <div className="session-edit-actions"><button className="secondary-action" onClick={()=>setEditSession(null)}>Cancel</button><button className="primary-action" onClick={saveSessionEdit}>Save session</button></div>
+    </section>}
+
+    <section className="simple-card">
+      <div className="section-heading"><div><span className="card-label">RECENT HISTORY</span><h3>Training sessions</h3></div></div>
+      <div className="admin-session-list">{sessions.map(row=><div className="library-row admin-history-row" key={row.id}>
+        <div><strong>{row.title}</strong><span>{fmtDate(row.session_date)}{row.program?' · '+row.program:''}</span></div>
+        <div className="admin-session-volume"><strong>{Number(row.total_volume||0).toLocaleString()} lb</strong><span>{row.estimated_1rm?'e1RM '+Math.round(row.estimated_1rm):''}</span></div>
+        <div className="admin-history-actions"><button onClick={()=>setEditSession({...row,bodyweight:row.bodyweight??''})}>Edit</button><button className="danger-lite" onClick={()=>deleteSession(row)}>Delete</button></div>
+      </div>)}
+      {!sessions.length&&<div className="empty-state">No completed sessions yet.</div>}</div>
+    </section>
+    {message&&<div className="status-message">{message}</div>}
+  </section>
 }
