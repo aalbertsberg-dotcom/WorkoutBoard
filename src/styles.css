@@ -1028,3 +1028,19 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   color:#93c5fd;
   font-weight:800;
 }
+
+.auth-secondary-actions {
+  display:grid;
+  grid-template-columns:1fr;
+  gap:6px;
+  margin-top:10px;
+}
+.magic-link-button {
+  width:100%;
+  min-height:44px;
+  border:1px solid #2563eb;
+  border-radius:10px;
+  background:#172554;
+  color:#dbeafe;
+  font-weight:900;
+}
