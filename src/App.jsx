@@ -382,58 +382,79 @@ function AuthScreen() {
   const [name,setName] = useState('')
   const [email,setEmail] = useState('')
   const [password,setPassword] = useState('')
+  const [otp,setOtp] = useState('')
+  const [otpSent,setOtpSent] = useState(false)
+  const [showPassword,setShowPassword] = useState(false)
   const [message,setMessage] = useState('')
   const [busy,setBusy] = useState(false)
 
-  const submit = async e => {
+  const createAccount = async e => {
     e.preventDefault()
     setBusy(true)
     setMessage('')
-
-    if (mode === 'signup') {
-      const {error} = await supabase.auth.signUp({
-        email,
-        password,
-        options:{
-          emailRedirectTo:appUrl(),
-          data:{display_name:name.trim() || email.split('@')[0],active_program:'andy-hybrid-12'}
-        }
-      })
-      setMessage(error ? error.message : 'Account created. Check your email if confirmation is required.')
-    } else {
-      const {error} = await supabase.auth.signInWithPassword({email,password})
-      if (error) setMessage(error.message)
-    }
-
+    const {error} = await supabase.auth.signUp({
+      email:email.trim(),
+      password,
+      options:{
+        emailRedirectTo:appUrl(),
+        data:{display_name:name.trim() || email.split('@')[0],active_program:'andy-hybrid-12'}
+      }
+    })
+    setMessage(error ? error.message : 'Account created. Check your email if confirmation is required.')
     setBusy(false)
   }
 
-  const forgotPassword = async () => {
-    if (!email.trim()) {
-      setMessage('Enter your email first, then tap Forgot password.')
-      return
-    }
+  const passwordSignIn = async e => {
+    e.preventDefault()
     setBusy(true)
-    const {error} = await supabase.auth.resetPasswordForEmail(email.trim(),{redirectTo:appUrl()})
-    setMessage(error ? error.message : 'Password reset email sent. Open it, set a new password, then sign in.')
+    setMessage('')
+    const {error} = await supabase.auth.signInWithPassword({email:email.trim(),password})
+    setMessage(error ? error.message : '')
     setBusy(false)
   }
 
-  const sendMagicLink = async () => {
+  const sendCode = async () => {
     if (!email.trim()) {
-      setMessage('Enter your email first, then tap Email me a sign-in link.')
+      setMessage('Enter your email first.')
       return
     }
     setBusy(true)
     setMessage('')
     const {error} = await supabase.auth.signInWithOtp({
       email:email.trim(),
-      options:{
-        emailRedirectTo:appUrl(),
-        shouldCreateUser:false
-      }
+      options:{shouldCreateUser:false}
     })
-    setMessage(error ? error.message : 'Sign-in link sent. Open the email on this device and you will be signed in.')
+    if (error) {
+      setMessage(error.message)
+    } else {
+      setOtpSent(true)
+      setMessage('Check your email for the 6-digit WorkoutBoard sign-in code.')
+    }
+    setBusy(false)
+  }
+
+  const verifyCode = async e => {
+    e.preventDefault()
+    if (!otp.trim()) return
+    setBusy(true)
+    setMessage('')
+    const {error} = await supabase.auth.verifyOtp({
+      email:email.trim(),
+      token:otp.trim(),
+      type:'email'
+    })
+    if (error) setMessage(error.message)
+    setBusy(false)
+  }
+
+  const forgotPassword = async () => {
+    if (!email.trim()) {
+      setMessage('Enter your email first.')
+      return
+    }
+    setBusy(true)
+    const {error} = await supabase.auth.resetPasswordForEmail(email.trim(),{redirectTo:appUrl()})
+    setMessage(error ? error.message : 'Password reset email sent.')
     setBusy(false)
   }
 
@@ -442,23 +463,63 @@ function AuthScreen() {
       <section className="auth-card">
         <div className="eyebrow">WORKOUTBOARD</div>
         <h1>{mode === 'signin' ? 'Sign in' : 'Create account'}</h1>
-        <p className="auth-sub">Your program, weights, maxes, and history are saved to your account.</p>
+        <p className="auth-sub">{mode === 'signin' ? 'Use a one-time email code. No password required.' : 'Create your WorkoutBoard account.'}</p>
+
         <div className="auth-tabs">
-          <button className={mode === 'signin' ? 'active' : ''} onClick={() => setMode('signin')}>Sign in</button>
-          <button className={mode === 'signup' ? 'active' : ''} onClick={() => setMode('signup')}>Create account</button>
+          <button className={mode === 'signin' ? 'active' : ''} onClick={() => {setMode('signin');setMessage('')}}>Sign in</button>
+          <button className={mode === 'signup' ? 'active' : ''} onClick={() => {setMode('signup');setMessage('')}}>Create account</button>
         </div>
-        <form onSubmit={submit}>
-          {mode === 'signup' && <label>Name<input value={name} onChange={e => setName(e.target.value)} placeholder="Andy, Tracey, Myra…" required /></label>}
-          <label>Email<input type="email" value={email} onChange={e => setEmail(e.target.value)} required /></label>
-          <label>Password<input type="password" value={password} onChange={e => setPassword(e.target.value)} minLength="6" required /></label>
-          <button className="primary" disabled={busy}>{busy ? 'Working…' : mode === 'signin' ? 'Sign in' : 'Create account'}</button>
-        </form>
-        {mode === 'signin' && (
-          <div className="auth-secondary-actions">
-            <button className="magic-link-button" type="button" onClick={sendMagicLink} disabled={busy}>Email me a sign-in link</button>
-            <button className="forgot-button" type="button" onClick={forgotPassword} disabled={busy}>Forgot password?</button>
-          </div>
+
+        {mode === 'signup' ? (
+          <form onSubmit={createAccount}>
+            <label>Name<input value={name} onChange={e => setName(e.target.value)} placeholder="Andy, Tracey, Myra…" required /></label>
+            <label>Email<input type="email" value={email} onChange={e => setEmail(e.target.value)} required /></label>
+            <label>Password<input type="password" value={password} onChange={e => setPassword(e.target.value)} minLength="6" required /></label>
+            <button className="primary" disabled={busy}>{busy ? 'Working…' : 'Create account'}</button>
+          </form>
+        ) : (
+          <>
+            <label className="auth-field">Email
+              <input type="email" value={email} onChange={e => {setEmail(e.target.value);setOtpSent(false)}} required />
+            </label>
+
+            {!otpSent ? (
+              <button className="primary code-primary" type="button" onClick={sendCode} disabled={busy}>
+                {busy ? 'Sending…' : 'Email me a 6-digit code'}
+              </button>
+            ) : (
+              <form onSubmit={verifyCode} className="otp-form">
+                <label>6-digit code
+                  <input
+                    className="otp-input"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength="8"
+                    value={otp}
+                    onChange={e => setOtp(e.target.value.replace(/\D/g,''))}
+                    placeholder="123456"
+                    required
+                  />
+                </label>
+                <button className="primary" disabled={busy}>{busy ? 'Checking…' : 'Sign in with code'}</button>
+                <button className="link-button" type="button" onClick={sendCode} disabled={busy}>Send another code</button>
+              </form>
+            )}
+
+            <button className="link-button password-toggle" type="button" onClick={() => setShowPassword(v => !v)}>
+              {showPassword ? 'Hide password sign in' : 'Use password instead'}
+            </button>
+
+            {showPassword && (
+              <form onSubmit={passwordSignIn} className="password-form">
+                <label>Password<input type="password" value={password} onChange={e => setPassword(e.target.value)} minLength="6" required /></label>
+                <button className="secondary-auth-button" disabled={busy}>Sign in with password</button>
+                <button className="forgot-button" type="button" onClick={forgotPassword} disabled={busy}>Forgot password?</button>
+              </form>
+            )}
+          </>
         )}
+
         {message && <div className="auth-message">{message}</div>}
       </section>
     </main>
