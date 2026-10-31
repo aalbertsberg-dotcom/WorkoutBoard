@@ -289,6 +289,24 @@ export const referenceArchivePrograms = [
 export const allArchivePrograms = [...archivePrograms,...referenceArchivePrograms]
 export const archiveProgramById = Object.fromEntries(allArchivePrograms.map(p=>[p.id,p]))
 
+function archiveExerciseRest(program,item) {
+  const name=String(item?.name||'').toLowerCase()
+  const rx=String(item?.prescription||'').toLowerCase()
+  const category=String(program?.category||'').toLowerCase()
+
+  if (/metcon|conditioning|prowler|sled|run|row|bike|burpee/.test(name)) return 60
+  if (/curl|triceps|raise|abs|core|calf|fly|pushup/.test(name)) return 60
+  if (/pullup|pulldown|row|lunge|split squat|ham curl|good morning|carry/.test(name)) return 75
+  if (/snatch|clean|jerk|squat|deadlift|bench|press/.test(name)) {
+    if (/1x|2x|3x|4x|5x|single|double|triple|@8[0-9]|@9[0-9]|@100|max/.test(rx)) return 180
+    if (/8x|10x|12x|15x|20x|hypertrophy/.test(rx) || /bodybuilding/.test(category)) return 90
+    return 120
+  }
+  if (/olympic|strength|powerlifting|specialization/.test(category)) return 120
+  if (/bodybuilding|powerbuilding/.test(category)) return 75
+  return 90
+}
+
 export function makePlannedFromArchive(program, week, dayIndex, scheduledDate) {
   const days = program.getWeek ? program.getWeek(week) : [day(`Week ${week} - Source workout`,[
     ex('Source program session','Use the original program prescription for this day','Add/edit exercises below as needed.')
@@ -306,7 +324,7 @@ export function makePlannedFromArchive(program, week, dayIndex, scheduledDate) {
       archive_program_id:program.id,
       source:program.source,
       notes:chosen.note || '',
-      exercises:(chosen.exercises || []).map((item,i)=>({...item,id:`e${i+1}`,result:'',done:false})),
+      exercises:(chosen.exercises || []).map((item,i)=>({...item,id:`e${i+1}`,rest_seconds:archiveExerciseRest(program,item),result:'',done:false})),
       sleep:'', energy:'', pain:'', rpe:'', bodyweight:'', note:'',
     },
     status:'planned',
