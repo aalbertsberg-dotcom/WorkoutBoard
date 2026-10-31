@@ -1162,6 +1162,12 @@ function App() {
     }
   }
 
+  const saveTogetherNote = async value => {
+    if (!activeSession || activeSession.host_user_id !== session?.user?.id || activeSession.session_note === undefined) return
+    await supabase.from('shared_sessions').update({session_note:value}).eq('id',activeSession.id)
+    await refreshTogether(activeSession.id)
+  }
+
   const endTogetherSession = async () => {
     if (!activeSession || activeSession.host_user_id !== session?.user?.id) return
     await supabase.from('shared_sessions').update({
@@ -1427,8 +1433,28 @@ function App() {
 
                 <section className="simple-card">
                   <div className="section-heading"><div><span className="card-label">SESSION TIMER</span><h3>Shared workout clock</h3></div></div>
-                  <SharedTimer />
+                  <SharedTimer
+                    session={activeSession}
+                    isHost={activeSession.host_user_id === session.user.id}
+                    onChanged={() => refreshTogether(activeSession.id)}
+                  />
                 </section>
+
+                {activeSession.session_note !== undefined && (
+                  <section className="simple-card">
+                    <div className="section-heading"><div><span className="card-label">SESSION NOTE</span><h3>Group note</h3></div></div>
+                    {activeSession.host_user_id === session.user.id ? (
+                      <textarea
+                        className="notes"
+                        defaultValue={activeSession.session_note || ''}
+                        placeholder="Shared cue, goal, substitutions, or session note…"
+                        onBlur={e => saveTogetherNote(e.target.value)}
+                      />
+                    ) : (
+                      <p className="helper-text">{activeSession.session_note || 'No shared note from the host.'}</p>
+                    )}
+                  </section>
+                )}
 
                 <section className="simple-card">
                   <div className="section-heading"><div><span className="card-label">PARTNERS</span><h3>Live results</h3></div></div>
