@@ -102,3 +102,67 @@ end;
 $$;
 
 grant execute on function public.admin_delete_training_session(uuid,uuid) to authenticated;
+
+
+create or replace function public.admin_update_training_session(
+  target_user uuid,
+  target_session uuid,
+  new_title text,
+  new_total_volume numeric,
+  new_bodyweight numeric
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  legacy_id uuid;
+  next_workout jsonb;
+begin
+  if not public.is_workout_admin() then
+    raise exception 'Admin access required';
+  end if;
+
+  select legacy_log_id, workout
+    into legacy_id, next_workout
+  from public.training_sessions
+  where id = target_session
+    and user_id = target_user;
+
+  if not found then
+    raise exception 'Training session not found';
+  end if;
+
+  next_workout = jsonb_set(
+    coalesce(next_workout,'{}'::jsonb),
+    '{bodyweight}',
+    to_jsonb(coalesce(new_bodyweight,0)),
+    true
+  );
+
+  update public.training_sessions
+  set title = coalesce(nullif(trim(new_title),''),title),
+      total_volume = greatest(coalesce(new_total_volume,0),0),
+      bodyweight = new_bodyweight,
+      workout = next_workout,
+      updated_at = now()
+  where id = target_session
+    and user_id = target_user;
+
+  if legacy_id is not null then
+    update public.workout_logs
+    set workout = jsonb_set(
+          coalesce(workout,'{}'::jsonb),
+          '{bodyweight}',
+          to_jsonb(coalesce(new_bodyweight,0)),
+          true
+        ),
+        updated_at = now()
+    where id = legacy_id
+      and user_id = target_user;
+  end if;
+end;
+$$;
+
+grant execute on function public.admin_update_training_session(uuid,uuid,text,numeric,numeric) to authenticated;
