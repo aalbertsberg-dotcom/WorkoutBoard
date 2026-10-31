@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './supabase'
-import { PlatformProgress, PlanPage } from './platform'
+import { PlatformProgress, PlanPage, AdminPanel } from './platform'
 
 const lifts = ['Squat', 'Bench', 'Deadlift', 'Press']
 const repeatSets = (count, pct, reps, pctLabel) =>
@@ -451,6 +451,7 @@ function App() {
   const [joinCode,setJoinCode] = useState('')
   const [togetherMessage,setTogetherMessage] = useState('')
   const [sharedWorkoutActive,setSharedWorkoutActive] = useState(false)
+  const [isAdmin,setIsAdmin] = useState(false)
 
   const personalProgram = programs[activeProgram]
   const sharedProgramId = activeSession ? (dbNameToProgram[activeSession.program] || activeProgram) : activeProgram
@@ -512,9 +513,10 @@ function App() {
       if (cancelled) return
 
       const rows = logsData || []
+      const profileProgram = profileData?.active_program
       const metaProgram = session.user.user_metadata?.active_program
       const latestProgram = rows[0]?.program ? dbNameToProgram[rows[0].program] : null
-      const chosenProgram = programs[metaProgram] ? metaProgram : latestProgram || 'andy-hybrid-12'
+      const chosenProgram = programs[profileProgram] ? profileProgram : programs[metaProgram] ? metaProgram : latestProgram || 'andy-hybrid-12'
       const chosen = programs[chosenProgram]
       const currentWeek = Math.min(profileData?.current_week || 1,chosen.weeksCount)
 
@@ -534,6 +536,8 @@ function App() {
 
       const completed = new Set(rows.filter(r => r.program === chosen.dbName && r.week === currentWeek && r.completed_at).map(r => r.lift))
       setLift(lifts.find(x => !completed.has(x)) || 'Press')
+      const {data:adminFlag} = await supabase.rpc('is_workout_admin')
+      setIsAdmin(Boolean(adminFlag))
       setDataLoading(false)
       loadOpenSession(userId)
     }
@@ -743,9 +747,9 @@ function App() {
     if (session?.user) {
       await Promise.all([
         supabase.auth.updateUser({data:{...session.user.user_metadata,active_program:programId}}),
-        supabase.from('profiles').update({current_week:1,updated_at:new Date().toISOString()}).eq('id',session.user.id)
+        supabase.from('profiles').update({active_program:programId,current_week:1,updated_at:new Date().toISOString()}).eq('id',session.user.id)
       ])
-      setProfile(v => v ? {...v,current_week:1} : v)
+      setProfile(v => v ? {...v,active_program:programId,current_week:1} : v)
     }
   }
 
@@ -947,7 +951,7 @@ function App() {
         <header className="app-header">
           <div>
             <div className="eyebrow">WORKOUTBOARD</div>
-            <h1>{activeTab === 'today' ? 'Today' : activeTab === 'together' ? 'Together' : activeTab === 'progress' ? 'Progress' : activeTab === 'program' ? 'Plan' : activeTab[0].toUpperCase() + activeTab.slice(1)}</h1>
+            <h1>{activeTab === 'today' ? 'Today' : activeTab === 'together' ? 'Together' : activeTab === 'progress' ? 'Progress' : activeTab === 'program' ? 'Plan' : activeTab === 'admin' ? 'Admin' : activeTab[0].toUpperCase() + activeTab.slice(1)}</h1>
           </div>
           <div className="mini-user">{displayName}</div>
         </header>
@@ -1180,6 +1184,8 @@ function App() {
             lifts={lifts}
             jumpToWorkout={jumpToWorkout}
           />
+        ) : activeTab === 'admin' ? (
+          <AdminPanel programs={programs} />
         ) : (
           <section className="page-section">
             <section className="profile-card">
@@ -1217,6 +1223,14 @@ function App() {
               <button className="wide-button invite-button" onClick={shareInvite}>Share WorkoutBoard</button>
               {inviteState && <div className="invite-status">{inviteState}</div>}
             </section>
+
+            {isAdmin && (
+              <section className="simple-card admin-entry">
+                <div className="section-heading"><div><span className="card-label">WORKOUTADMIN</span><h3>Administration</h3></div></div>
+                <p className="helper-text">View users, workout history, progress totals, training maxes, and manage current programs.</p>
+                <button className="wide-button admin-button" onClick={() => setActiveTab('admin')}>Open Admin</button>
+              </section>
+            )}
 
             <button className="signout-button" onClick={() => supabase.auth.signOut()}>Sign out</button>
           </section>
