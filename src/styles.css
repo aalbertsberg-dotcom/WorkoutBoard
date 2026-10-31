@@ -1044,3 +1044,52 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   color:#dbeafe;
   font-weight:900;
 }
+
+.auth-field {
+  display:grid;
+  gap:5px;
+  color:#cbd5e1;
+  font-size:13px;
+  font-weight:700;
+}
+.auth-field input {
+  width:100%;
+  min-height:48px;
+  border:1px solid #3a4964;
+  border-radius:11px;
+  background:#0b1220;
+  color:#fff;
+  padding:10px 12px;
+}
+.code-primary { width:100%; margin-top:12px; }
+.otp-form,.password-form { display:grid; gap:10px; margin-top:12px; }
+.otp-form label,.password-form label {
+  display:grid;
+  gap:5px;
+  color:#cbd5e1;
+  font-size:13px;
+  font-weight:700;
+}
+.otp-input {
+  letter-spacing:.28em;
+  text-align:center;
+  font-size:24px !important;
+  font-weight:900;
+}
+.link-button {
+  width:100%;
+  min-height:38px;
+  border:0;
+  background:transparent;
+  color:#93c5fd;
+  font-weight:800;
+}
+.password-toggle { margin-top:8px; }
+.secondary-auth-button {
+  min-height:44px;
+  border:1px solid #334155;
+  border-radius:10px;
+  background:#172033;
+  color:#fff;
+  font-weight:800;
+}
