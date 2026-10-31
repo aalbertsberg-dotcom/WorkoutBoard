@@ -1,9 +1,19 @@
 {
   "name": "WorkoutBoard",
   "short_name": "WorkoutBoard",
-  "start_url": "/",
+  "description": "Workout planning, tracking, progress, and shared training sessions.",
+  "start_url": ".",
+  "scope": ".",
   "display": "standalone",
-  "background_color": "#0b1220",
-  "theme_color": "#111827",
-  "description": "Whiteboard-style workout tracking for the gym."
+  "orientation": "any",
+  "background_color": "#08101f",
+  "theme_color": "#0b1425",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
 }
