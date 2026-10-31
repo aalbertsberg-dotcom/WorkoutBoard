@@ -1088,8 +1088,13 @@ function App() {
               <details className="change-workout">
                 <summary>Change workout</summary>
                 <div className="selectors">
+                  <label className="program-select"><span>Program</span>
+                    <select value={activeProgram} onChange={e => chooseProgram(e.target.value)}>
+                      {programOrder.map(id => <option key={id} value={id}>{programs[id].name}</option>)}
+                    </select>
+                  </label>
                   <label><span>Week</span>
-                    <select value={week} onChange={e => setWeek(Number(e.target.value))}>
+                    <select value={week} onChange={e => changeWeek(Number(e.target.value))}>
                       {Array.from({length:personalProgram.weeksCount},(_,i) => i+1).map(w => <option key={w} value={w}>Week {w}</option>)}
                     </select>
                   </label>
@@ -1151,7 +1156,7 @@ function App() {
             )}
 
             <section className="simple-card">
-              <div className="section-heading"><div><span className="card-label">ASSISTANCE</span><h3>Write it like the board</h3></div></div>
+              <div className="section-heading"><div><span className="card-label">ASSISTANCE</span><h3>Log assistance work</h3></div></div>
               {log.assistance.map((item,i) => (
                 <label className="assist" key={item.name}><span>{item.name}</span>
                   <input placeholder="weight × reps × sets" value={item.result}
