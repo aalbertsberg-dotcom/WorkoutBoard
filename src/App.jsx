@@ -4,6 +4,7 @@ import { PlatformProgress, PlanPage, AdminPanel } from './platform'
 import { PlannedWorkoutRunner, ExerciseHistoryStrip, InstallAppButton, ExportDataButton, SharedTimer } from './productFeatures'
 import { WhiteboardPage } from './whiteboard'
 import { TrainingTimer } from './trainingTools'
+import { WorkoutCoach, MetconTracker, AccountSecurityPanel, BackupRestorePanel } from './advancedFeatures'
 
 const lifts = ['Squat', 'Bench', 'Deadlift', 'Press']
 const repeatSets = (count, pct, reps, pctLabel) =>
@@ -329,6 +330,7 @@ function makeLog(programId, week, lift, tm) {
     backoffNote:'',
     assistance:plan.assistance.map(name => ({name,result:''})),
     conditioning:'',
+    metcon:{name:'',format:'For time',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx'},
     sleep:'',
     energy:'',
     pain:'',
@@ -521,6 +523,7 @@ function AuthScreen() {
         email:cleanEmail,
         password,
         options:{
+          emailRedirectTo:appUrl(),
           data:{active_program:'andy-hybrid-12'}
         }
       })
@@ -557,6 +560,18 @@ function AuthScreen() {
     setBusy(false)
   }
 
+  const resendConfirmation = async () => {
+    if (!email.trim()) { setMessage('Enter the account email first.'); return }
+    setBusy(true)
+    const {error}=await supabase.auth.resend({
+      type:'signup',
+      email:email.trim(),
+      options:{emailRedirectTo:appUrl()}
+    })
+    setMessage(error?error.message:'Confirmation email requested. Check inbox/spam.')
+    setBusy(false)
+  }
+
   return (
     <main className="auth-shell">
       <section className="auth-card">
@@ -586,7 +601,7 @@ function AuthScreen() {
               value={password}
               onChange={e => setPassword(e.target.value)}
               autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
-              minLength="6"
+              minLength="10"
               required
             />
           </label>
@@ -599,6 +614,11 @@ function AuthScreen() {
         {mode === 'signin' && (
           <button className="forgot-button visible-forgot" type="button" onClick={forgotPassword} disabled={busy}>
             Forgot password?
+          </button>
+        )}
+        {mode === 'signup' && message && (
+          <button className="forgot-button visible-forgot" type="button" onClick={resendConfirmation} disabled={busy}>
+            Resend confirmation email
           </button>
         )}
 
@@ -635,7 +655,7 @@ function RecoveryScreen({onDone}) {
         <h1>Set new password</h1>
         <p className="auth-sub">Choose a new password for this account.</p>
         <form onSubmit={save}>
-          <label>New password<input type="password" value={password} onChange={e => setPassword(e.target.value)} minLength="6" required /></label>
+          <label>New password<input type="password" value={password} onChange={e => setPassword(e.target.value)} minLength="10" required /></label>
           <button className="primary" disabled={busy}>{busy ? 'Saving…' : 'Save new password'}</button>
         </form>
         {message && <div className="auth-message">{message}</div>}
@@ -1295,6 +1315,7 @@ function App() {
             {!tm && <div className="hint"><strong>No {lift} training max yet.</strong><span>Add it under Me → Training Maxes, or type working weights directly.</span></div>}
 
             <ExerciseHistoryStrip history={history} lift={lift} formatWeight={formatWeight} />
+            <WorkoutCoach session={session} lift={lift} log={log} history={history} tm={tm} plan={plan} />
 
             <section className="exercise-card">
               <div className="exercise-title">
@@ -1318,7 +1339,7 @@ function App() {
                     <input className="reps-input" type="number" inputMode="numeric" value={set.actualReps}
                       onFocus={e => e.currentTarget.select()}
                       onChange={e => updateMain(i,'actualReps',e.target.value === '' ? '' : Number(e.target.value))} />
-                    <button type="button" className={'check ' + (set.done ? 'checked' : '')} onClick={() => { const next=!set.done; updateMain(i,'done',next); if(next) window.dispatchEvent(new CustomEvent('workoutboard:rest-timer')) }}>✓</button>
+                    <button type="button" className={'check ' + (set.done ? 'checked' : '')} onClick={() => { const next=!set.done; updateMain(i,'done',next); if(next) { const saved=Number(localStorage.getItem('wb-rest-'+String(lift).toLowerCase())||((lift==='Squat'||lift==='Deadlift')?180:120)); window.dispatchEvent(new CustomEvent('workoutboard:rest-timer',{detail:{seconds:saved}})) } }}>✓</button>
                   </div>
                 )
               })}
@@ -1357,6 +1378,8 @@ function App() {
               <input className="text-input" placeholder="Time / rounds / distance" value={log.conditioning}
                 onChange={e => {setSaveState('Unsaved');setLog(v => ({...v,complete:false,conditioning:e.target.value}))}} />
             </section>
+
+            <MetconTracker value={log.metcon} onChange={metcon => {setSaveState('Unsaved');setLog(v=>({...v,complete:false,metcon}))}} />
 
             <section className="metrics readiness-metrics">
               <label><span>Sleep</span><input type="number" min="1" max="10" inputMode="numeric" placeholder="1-10" value={log.sleep || ''}
@@ -1584,6 +1607,9 @@ function App() {
               <p className="helper-text">Downloads your completed session history as CSV.</p>
               <ExportDataButton userId={session.user.id} />
             </section>
+
+            <AccountSecurityPanel session={session} appUrl={appUrl()} />
+            <BackupRestorePanel session={session} />
 
             {isAdmin && (
               <section className="simple-card admin-entry">
