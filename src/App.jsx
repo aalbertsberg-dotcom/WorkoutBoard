@@ -1581,7 +1581,7 @@ function App() {
 
             <section className="simple-card">
               <div className="section-heading"><div><span className="card-label">BACKUP</span><h3>Export your data</h3></div></div>
-              <p className="helper-text">Downloads your profile, training maxes, workout logs, sessions, and planned workouts as JSON.</p>
+              <p className="helper-text">Downloads your completed session history as CSV.</p>
               <ExportDataButton userId={session.user.id} />
             </section>
 
