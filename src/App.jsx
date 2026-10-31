@@ -382,8 +382,6 @@ function AuthScreen() {
   const [name,setName] = useState('')
   const [email,setEmail] = useState('')
   const [password,setPassword] = useState('')
-  const [otp,setOtp] = useState('')
-  const [otpSent,setOtpSent] = useState(false)
   const [showPassword,setShowPassword] = useState(false)
   const [message,setMessage] = useState('')
   const [busy,setBusy] = useState(false)
@@ -400,7 +398,25 @@ function AuthScreen() {
         data:{display_name:name.trim() || email.split('@')[0],active_program:'andy-hybrid-12'}
       }
     })
-    setMessage(error ? error.message : 'Account created. Check your email if confirmation is required.')
+    setMessage(error ? error.message : 'Account created. Check your email to confirm the account.')
+    setBusy(false)
+  }
+
+  const sendMagicLink = async () => {
+    if (!email.trim()) {
+      setMessage('Enter your email first.')
+      return
+    }
+    setBusy(true)
+    setMessage('')
+    const {error} = await supabase.auth.signInWithOtp({
+      email:email.trim(),
+      options:{
+        emailRedirectTo:appUrl(),
+        shouldCreateUser:false
+      }
+    })
+    setMessage(error ? error.message : 'Sign-in email sent. Open the WorkoutBoard sign-in link in that email.')
     setBusy(false)
   }
 
@@ -413,48 +429,17 @@ function AuthScreen() {
     setBusy(false)
   }
 
-  const sendCode = async () => {
-    if (!email.trim()) {
-      setMessage('Enter your email first.')
-      return
-    }
-    setBusy(true)
-    setMessage('')
-    const {error} = await supabase.auth.signInWithOtp({
-      email:email.trim(),
-      options:{shouldCreateUser:false}
-    })
-    if (error) {
-      setMessage(error.message)
-    } else {
-      setOtpSent(true)
-      setMessage('Check your email for the 6-digit WorkoutBoard sign-in code.')
-    }
-    setBusy(false)
-  }
-
-  const verifyCode = async e => {
-    e.preventDefault()
-    if (!otp.trim()) return
-    setBusy(true)
-    setMessage('')
-    const {error} = await supabase.auth.verifyOtp({
-      email:email.trim(),
-      token:otp.trim(),
-      type:'email'
-    })
-    if (error) setMessage(error.message)
-    setBusy(false)
-  }
-
   const forgotPassword = async () => {
     if (!email.trim()) {
       setMessage('Enter your email first.')
       return
     }
     setBusy(true)
-    const {error} = await supabase.auth.resetPasswordForEmail(email.trim(),{redirectTo:appUrl()})
-    setMessage(error ? error.message : 'Password reset email sent.')
+    setMessage('')
+    const {error} = await supabase.auth.resetPasswordForEmail(email.trim(),{
+      redirectTo:appUrl()
+    })
+    setMessage(error ? error.message : 'Password reset email sent. Open the reset link in that email.')
     setBusy(false)
   }
 
@@ -463,7 +448,7 @@ function AuthScreen() {
       <section className="auth-card">
         <div className="eyebrow">WORKOUTBOARD</div>
         <h1>{mode === 'signin' ? 'Sign in' : 'Create account'}</h1>
-        <p className="auth-sub">{mode === 'signin' ? 'Use a one-time email code. No password required.' : 'Create your WorkoutBoard account.'}</p>
+        <p className="auth-sub">{mode === 'signin' ? 'Use an email sign-in link. No password required.' : 'Create your WorkoutBoard account.'}</p>
 
         <div className="auth-tabs">
           <button className={mode === 'signin' ? 'active' : ''} onClick={() => {setMode('signin');setMessage('')}}>Sign in</button>
@@ -480,41 +465,22 @@ function AuthScreen() {
         ) : (
           <>
             <label className="auth-field">Email
-              <input type="email" value={email} onChange={e => {setEmail(e.target.value);setOtpSent(false)}} required />
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} required />
             </label>
 
-            {!otpSent ? (
-              <button className="primary code-primary" type="button" onClick={sendCode} disabled={busy}>
-                {busy ? 'Sending…' : 'Email me a 6-digit code'}
-              </button>
-            ) : (
-              <form onSubmit={verifyCode} className="otp-form">
-                <label>6-digit code
-                  <input
-                    className="otp-input"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    maxLength="8"
-                    value={otp}
-                    onChange={e => setOtp(e.target.value.replace(/\D/g,''))}
-                    placeholder="123456"
-                    required
-                  />
-                </label>
-                <button className="primary" disabled={busy}>{busy ? 'Checking…' : 'Sign in with code'}</button>
-                <button className="link-button" type="button" onClick={sendCode} disabled={busy}>Send another code</button>
-              </form>
-            )}
+            <button className="primary code-primary" type="button" onClick={sendMagicLink} disabled={busy}>
+              {busy ? 'Sending…' : 'Email me a sign-in link'}
+            </button>
 
             <button className="link-button password-toggle" type="button" onClick={() => setShowPassword(v => !v)}>
-              {showPassword ? 'Hide password sign in' : 'Use password instead'}
+              {showPassword ? 'Hide password options' : 'Use password instead'}
             </button>
 
             {showPassword && (
               <form onSubmit={passwordSignIn} className="password-form">
                 <label>Password<input type="password" value={password} onChange={e => setPassword(e.target.value)} minLength="6" required /></label>
                 <button className="secondary-auth-button" disabled={busy}>Sign in with password</button>
-                <button className="forgot-button" type="button" onClick={forgotPassword} disabled={busy}>Forgot password?</button>
+                <button className="forgot-button" type="button" onClick={forgotPassword} disabled={busy}>Reset password</button>
               </form>
             )}
           </>
