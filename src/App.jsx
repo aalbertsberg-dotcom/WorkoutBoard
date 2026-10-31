@@ -24,15 +24,93 @@ const dayPlan = {
   Press: { day:'Fri', assistance:['DB Press','Pullups','Curls / Face Pulls'] },
 }
 
+const defaultTms = { Squat:'', Bench:'', Deadlift:'', Press:'' }
 const round5 = n => Math.round(n / 5) * 5
-const keyFor = (week, lift) => `wb:w${week}:${lift}`
+const keyFor = (week, lift) => 'wb:w' + week + ':' + lift
 
-function NumberControl({value, onChange, step=5, min=0, suffix=''}) {
+function safeJson(value, fallback) {
+  try { return value ? JSON.parse(value) : fallback }
+  catch { return fallback }
+}
+
+function backoffPercent(text) {
+  const match = String(text || '').match(/@\s*(\d+)%/)
+  return match ? Number(match[1]) : null
+}
+
+function makeLog(plan, lift, tm) {
+  const pct = backoffPercent(plan.supplemental)
+  return {
+    version: 2,
+    main: plan.main.map(([percent, reps]) => ({
+      pct: percent,
+      reps,
+      weight: tm ? round5(tm * percent / 100) : '',
+      actualReps: String(reps).replace('+',''),
+      done: false,
+    })),
+    backoffWeight: pct && tm ? round5(tm * pct / 100) : '',
+    backoffNote: '',
+    assistance: dayPlan[lift].assistance.map(name => ({ name, result:'' })),
+    conditioning: '',
+    rpe: '',
+    bodyweight: '',
+    note: '',
+    complete: false,
+  }
+}
+
+function normalizeLog(saved, plan, lift, tm) {
+  const base = makeLog(plan, lift, tm)
+  if (!saved) return base
+
+  const oldVersion = saved.version || 1
+  const oldMain = Array.isArray(saved.main) ? saved.main : []
+
+  return {
+    ...base,
+    ...saved,
+    version: 2,
+    main: base.main.map((item, i) => {
+      const old = oldMain[i] || {}
+      const oldWeight = old.weight
+      const migrateBadV1Weight = oldVersion < 2 && Number(oldWeight || 0) <= 10
+      return {
+        ...item,
+        ...old,
+        weight: migrateBadV1Weight ? item.weight : (oldWeight === undefined ? item.weight : oldWeight),
+        done: Boolean(old.done),
+      }
+    }),
+    backoffWeight: saved.backoffWeight || base.backoffWeight,
+    backoffNote: saved.backoffNote || saved.supplemental || '',
+    assistance: base.assistance.map((item, i) => ({
+      ...item,
+      ...(saved.assistance && saved.assistance[i] ? saved.assistance[i] : {}),
+    })),
+  }
+}
+
+function NumericInput({ value, onChange, placeholder, step=1, className='' }) {
+  const adjust = delta => {
+    const next = Math.max(0, Number(value || 0) + delta)
+    onChange(next)
+  }
+
   return (
-    <div className="number-control">
-      <button type="button" onClick={() => onChange(Math.max(min, Number(value || 0) - step))}>−{step}</button>
-      <div className="number-value">{value || 0}{suffix}</div>
-      <button type="button" onClick={() => onChange(Number(value || 0) + step)}>+{step}</button>
+    <div className={'numeric ' + className}>
+      <button type="button" onClick={() => adjust(-step)} aria-label={'Decrease by ' + step}>−{step}</button>
+      <input
+        type="number"
+        inputMode="decimal"
+        enterKeyHint="done"
+        value={value}
+        placeholder={placeholder || '0'}
+        onFocus={e => e.currentTarget.select()}
+        onChange={e => onChange(e.target.value === '' ? '' : Number(e.target.value))}
+        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+      />
+      <button type="button" onClick={() => adjust(step)} aria-label={'Increase by ' + step}>+{step}</button>
     </div>
   )
 }
@@ -40,132 +118,335 @@ function NumberControl({value, onChange, step=5, min=0, suffix=''}) {
 function App() {
   const [week, setWeek] = useState(1)
   const [lift, setLift] = useState('Squat')
-  const [trainingMaxes, setTrainingMaxes] = useState(() => JSON.parse(localStorage.getItem('wb:tms') || '{"Squat":0,"Bench":0,"Deadlift":0,"Press":0}'))
+  const [trainingMaxes, setTrainingMaxes] = useState(() => ({
+    ...defaultTms,
+    ...safeJson(localStorage.getItem('wb:tms'), {}),
+  }))
   const [showSetup, setShowSetup] = useState(false)
+  const [history, setHistory] = useState(() => safeJson(localStorage.getItem('wb:history'), []))
+  const [saveState, setSaveState] = useState('Saved')
   const plan = weeks[week]
+  const tm = Number(trainingMaxes[lift] || 0)
 
-  const initial = useMemo(() => ({
-    main: plan.main.map(([pct, reps]) => ({ pct, reps, weight:'', actualReps:String(reps).replace('+','') })),
-    supplemental: '',
-    assistance: dayPlan[lift].assistance.map(x => ({name:x, result:''})),
-    conditioning: '',
-    rpe: '',
-    bodyweight: '',
-    note: '',
-    complete: false,
-  }), [week, lift])
-
-  const [log, setLog] = useState(initial)
-
-  useEffect(() => {
-    const saved = localStorage.getItem(keyFor(week,lift))
-    setLog(saved ? JSON.parse(saved) : initial)
-  }, [week, lift, initial])
+  const [log, setLog] = useState(() => normalizeLog(
+    safeJson(localStorage.getItem(keyFor(1, 'Squat')), null),
+    weeks[1],
+    'Squat',
+    Number(trainingMaxes.Squat || 0)
+  ))
 
   useEffect(() => {
     localStorage.setItem('wb:tms', JSON.stringify(trainingMaxes))
   }, [trainingMaxes])
 
-  const tm = Number(trainingMaxes[lift] || 0)
-  const plannedWeight = pct => tm ? round5(tm * pct / 100) : null
+  useEffect(() => {
+    const saved = safeJson(localStorage.getItem(keyFor(week, lift)), null)
+    setLog(normalizeLog(saved, plan, lift, tm))
+  }, [week, lift, tm, plan])
+
+  useEffect(() => {
+    localStorage.setItem(keyFor(week, lift), JSON.stringify(log))
+    setSaveState('Saved')
+  }, [log])
+
+  const previousWorkout = useMemo(() => {
+    return history
+      .filter(item => item.lift === lift && !(item.week === week && item.complete))
+      .sort((a,b) => String(b.savedAt || '').localeCompare(String(a.savedAt || '')))[0] || null
+  }, [history, lift, week])
 
   const updateMain = (i, field, value) => {
-    setLog(v => ({...v, main:v.main.map((s,idx) => idx===i ? {...s,[field]:value} : s)}))
+    setSaveState('Saving…')
+    setLog(v => ({
+      ...v,
+      complete: false,
+      main: v.main.map((set, idx) => idx === i ? { ...set, [field]: value } : set)
+    }))
   }
 
-  const saveWorkout = () => {
-    const finalLog = {...log, complete:true, savedAt:new Date().toISOString()}
-    setLog(finalLog)
-    localStorage.setItem(keyFor(week,lift), JSON.stringify(finalLog))
+  const usePrevious = (i) => {
+    const prev = previousWorkout && previousWorkout.main ? previousWorkout.main[i] : null
+    if (!prev) return
+    setLog(v => ({
+      ...v,
+      complete:false,
+      main:v.main.map((set, idx) => idx === i
+        ? { ...set, weight:prev.weight, actualReps:prev.actualReps }
+        : set)
+    }))
   }
+
+  const setTm = (name, raw) => {
+    const cleaned = raw === '' ? '' : Math.max(0, Number(raw))
+    setTrainingMaxes(v => ({ ...v, [name]: cleaned }))
+  }
+
+  const finishWorkout = () => {
+    const finalLog = {
+      ...log,
+      complete:true,
+      savedAt:new Date().toISOString(),
+      week,
+      lift,
+      phase:plan.phase,
+    }
+
+    const nextHistory = [
+      finalLog,
+      ...history.filter(item => !(item.week === week && item.lift === lift))
+    ].slice(0, 200)
+
+    setLog(finalLog)
+    setHistory(nextHistory)
+    localStorage.setItem('wb:history', JSON.stringify(nextHistory))
+    localStorage.setItem(keyFor(week, lift), JSON.stringify(finalLog))
+  }
+
+  const backPct = backoffPercent(plan.supplemental)
+  const backTarget = backPct && tm ? round5(tm * backPct / 100) : null
 
   return (
     <main className="app">
       <header className="topbar">
         <div>
           <div className="eyebrow">WORKOUTBOARD</div>
-          <h1>{dayPlan[lift].day} · {lift}</h1>
-          <div className="phase">Week {week} · {plan.phase}</div>
+          <h1>{lift} Day</h1>
+          <div className="phase">Week {week} · {plan.phase} · {dayPlan[lift].day}</div>
         </div>
-        <button className="setup" onClick={() => setShowSetup(!showSetup)}>TM</button>
+        <button className="setup-button" type="button" onClick={() => setShowSetup(!showSetup)}>
+          Setup
+        </button>
       </header>
+
+      <section className="selectors" aria-label="Choose workout">
+        <label>
+          <span>Week</span>
+          <select value={week} onChange={e => setWeek(Number(e.target.value))}>
+            {Object.keys(weeks).map(w => <option key={w} value={w}>Week {w}</option>)}
+          </select>
+        </label>
+        <label>
+          <span>Workout</span>
+          <select value={lift} onChange={e => setLift(e.target.value)}>
+            {lifts.map(x => <option key={x}>{x}</option>)}
+          </select>
+        </label>
+      </section>
 
       {showSetup && (
         <section className="setup-panel">
-          <h2>Training Maxes</h2>
-          {lifts.map(x => (
-            <label key={x}>
-              <span>{x}</span>
-              <input inputMode="decimal" type="number" value={trainingMaxes[x]} onChange={e => setTrainingMaxes(v => ({...v,[x]:e.target.value}))} />
-            </label>
-          ))}
+          <div className="section-heading">
+            <div>
+              <h2>Training Max Setup</h2>
+              <p>Enter these once. Workout weights will fill in automatically.</p>
+            </div>
+          </div>
+          <div className="tm-grid">
+            {lifts.map(x => (
+              <label key={x}>
+                <span>{x}</span>
+                <div className="input-with-unit">
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    enterKeyHint="done"
+                    value={trainingMaxes[x] || ''}
+                    placeholder="0"
+                    onFocus={e => e.currentTarget.select()}
+                    onChange={e => setTm(x, e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                  />
+                  <b>lb</b>
+                </div>
+              </label>
+            ))}
+          </div>
         </section>
       )}
 
-      <section className="selectors">
-        <select value={week} onChange={e => setWeek(Number(e.target.value))}>
-          {Object.keys(weeks).map(w => <option key={w} value={w}>Week {w}</option>)}
-        </select>
-        <select value={lift} onChange={e => setLift(e.target.value)}>
-          {lifts.map(x => <option key={x}>{x}</option>)}
-        </select>
-      </section>
-
-      {!tm && <div className="hint">Set your {lift} training max with the <b>TM</b> button to see suggested working weights.</div>}
-
-      <section className="board">
-        <div className="board-title">MAIN WORK</div>
-        {log.main.map((set, i) => (
-          <article className="set-card" key={i}>
-            <div className="set-plan">
-              <span>SET {i+1}</span>
-              <strong>{set.pct}% × {set.reps}</strong>
-              {plannedWeight(set.pct) && <small>Suggested: {plannedWeight(set.pct)} lb</small>}
-            </div>
-            <div className="entry-label">MY WEIGHT</div>
-            <NumberControl value={set.weight} onChange={v => updateMain(i,'weight',v)} step={5} suffix=" lb" />
-            <div className="entry-label">REPS</div>
-            <NumberControl value={set.actualReps} onChange={v => updateMain(i,'actualReps',v)} step={1} />
-          </article>
-        ))}
-      </section>
-
-      <section className="simple-card">
-        <div>
-          <span className="card-label">BACKOFF</span>
-          <strong>{plan.supplemental}</strong>
+      {!tm ? (
+        <div className="hint">
+          <strong>No {lift} training max yet.</strong>
+          <span>Tap Setup to calculate targets, or just type your working weights below.</span>
         </div>
-        <input placeholder="Example: 225 × 5 × 5" value={log.supplemental} onChange={e => setLog(v => ({...v,supplemental:e.target.value}))} />
+      ) : (
+        <div className="tm-summary">
+          <span>{lift} training max</span>
+          <strong>{tm} lb</strong>
+          <span className="autosave">● {saveState}</span>
+        </div>
+      )}
+
+      <section className="exercise-card">
+        <div className="exercise-title">
+          <div>
+            <span>MAIN LIFT</span>
+            <h2>{lift}</h2>
+          </div>
+          {previousWorkout && <small>Previous workout shown below</small>}
+        </div>
+
+        <div className="column-head">
+          <span>SET / TARGET</span>
+          <span>WEIGHT</span>
+          <span>REPS</span>
+          <span>DONE</span>
+        </div>
+
+        {log.main.map((set, i) => {
+          const target = tm ? round5(tm * set.pct / 100) : null
+          const prev = previousWorkout && previousWorkout.main ? previousWorkout.main[i] : null
+
+          return (
+            <div className={'set-row ' + (set.done ? 'completed' : '')} key={i}>
+              <div className="set-meta">
+                <strong>Set {i + 1}</strong>
+                <span>{set.pct}% × {set.reps}</span>
+                {target && <small>Target {target} lb</small>}
+                {prev && (
+                  <button className="previous" type="button" onClick={() => usePrevious(i)}>
+                    Last {prev.weight || '—'} × {prev.actualReps || '—'}
+                  </button>
+                )}
+              </div>
+
+              <NumericInput
+                value={set.weight}
+                placeholder={target ? String(target) : 'lb'}
+                step={5}
+                onChange={value => updateMain(i, 'weight', value)}
+                className="weight-input"
+              />
+
+              <input
+                className="reps-input"
+                type="number"
+                inputMode="numeric"
+                enterKeyHint="done"
+                value={set.actualReps}
+                placeholder={String(set.reps).replace('+','')}
+                onFocus={e => e.currentTarget.select()}
+                onChange={e => updateMain(i, 'actualReps', e.target.value === '' ? '' : Number(e.target.value))}
+                onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+              />
+
+              <button
+                type="button"
+                className={'check ' + (set.done ? 'checked' : '')}
+                onClick={() => updateMain(i, 'done', !set.done)}
+                aria-label={'Mark set ' + (i + 1) + ' complete'}
+              >
+                ✓
+              </button>
+            </div>
+          )
+        })}
       </section>
 
       <section className="simple-card">
-        <span className="card-label">ASSISTANCE</span>
-        {log.assistance.map((a,i) => (
-          <label className="assist" key={a.name}>
-            <span>{a.name}</span>
-            <input placeholder="weight × reps" value={a.result} onChange={e => setLog(v => ({...v,assistance:v.assistance.map((x,idx)=>idx===i?{...x,result:e.target.value}:x)}))} />
+        <div className="section-heading">
+          <div>
+            <span className="card-label">BACKOFF</span>
+            <h3>{plan.supplemental}</h3>
+          </div>
+          {backTarget && <strong className="target-pill">{backTarget} lb</strong>}
+        </div>
+        <label className="field-label">
+          <span>Working weight</span>
+          <NumericInput
+            value={log.backoffWeight}
+            placeholder={backTarget ? String(backTarget) : 'lb'}
+            step={5}
+            onChange={value => setLog(v => ({ ...v, complete:false, backoffWeight:value }))}
+          />
+        </label>
+        <input
+          className="text-input"
+          placeholder="Optional note, e.g. 5x5 completed"
+          value={log.backoffNote}
+          onChange={e => setLog(v => ({ ...v, complete:false, backoffNote:e.target.value }))}
+        />
+      </section>
+
+      <section className="simple-card">
+        <div className="section-heading">
+          <div>
+            <span className="card-label">ASSISTANCE</span>
+            <h3>Write it like the board</h3>
+          </div>
+        </div>
+        {log.assistance.map((item, i) => (
+          <label className="assist" key={item.name}>
+            <span>{item.name}</span>
+            <input
+              type="text"
+              enterKeyHint="next"
+              placeholder="50 × 8 × 3"
+              value={item.result}
+              onChange={e => setLog(v => ({
+                ...v,
+                complete:false,
+                assistance:v.assistance.map((x, idx) => idx === i ? { ...x, result:e.target.value } : x)
+              }))}
+            />
           </label>
         ))}
       </section>
 
       <section className="simple-card">
-        <div>
-          <span className="card-label">CONDITIONING</span>
-          <strong>{plan.conditioning}</strong>
+        <div className="section-heading">
+          <div>
+            <span className="card-label">CONDITIONING</span>
+            <h3>{plan.conditioning}</h3>
+          </div>
         </div>
-        <input placeholder="time / rounds / distance" value={log.conditioning} onChange={e => setLog(v => ({...v,conditioning:e.target.value}))} />
+        <input
+          className="text-input"
+          placeholder="Time / rounds / distance"
+          value={log.conditioning}
+          onChange={e => setLog(v => ({ ...v, complete:false, conditioning:e.target.value }))}
+        />
       </section>
 
       <section className="metrics">
-        <label>RPE<input inputMode="decimal" value={log.rpe} onChange={e => setLog(v=>({...v,rpe:e.target.value}))} /></label>
-        <label>Bodyweight<input inputMode="decimal" value={log.bodyweight} onChange={e => setLog(v=>({...v,bodyweight:e.target.value}))} /></label>
+        <label>
+          <span>Workout RPE</span>
+          <input
+            type="number"
+            inputMode="decimal"
+            enterKeyHint="next"
+            placeholder="1-10"
+            value={log.rpe}
+            onFocus={e => e.currentTarget.select()}
+            onChange={e => setLog(v => ({ ...v, complete:false, rpe:e.target.value }))}
+          />
+        </label>
+        <label>
+          <span>Bodyweight</span>
+          <input
+            type="number"
+            inputMode="decimal"
+            enterKeyHint="done"
+            placeholder="lb"
+            value={log.bodyweight}
+            onFocus={e => e.currentTarget.select()}
+            onChange={e => setLog(v => ({ ...v, complete:false, bodyweight:e.target.value }))}
+          />
+        </label>
       </section>
 
-      <textarea className="notes" placeholder="Quick note…" value={log.note} onChange={e => setLog(v=>({...v,note:e.target.value}))} />
+      <textarea
+        className="notes"
+        placeholder="Quick workout note…"
+        value={log.note}
+        onChange={e => setLog(v => ({ ...v, complete:false, note:e.target.value }))}
+      />
 
-      <button className={log.complete ? 'finish done' : 'finish'} onClick={saveWorkout}>
-        {log.complete ? '✓ WORKOUT SAVED' : 'FINISH WORKOUT'}
-      </button>
+      <div className="finish-wrap">
+        <button className={'finish ' + (log.complete ? 'done' : '')} onClick={finishWorkout}>
+          {log.complete ? '✓ WORKOUT FINISHED' : 'FINISH WORKOUT'}
+        </button>
+      </div>
 
       <div className="bottom-space" />
     </main>
