@@ -419,6 +419,24 @@ function AuthScreen() {
     setBusy(false)
   }
 
+  const sendMagicLink = async () => {
+    if (!email.trim()) {
+      setMessage('Enter your email first, then tap Email me a sign-in link.')
+      return
+    }
+    setBusy(true)
+    setMessage('')
+    const {error} = await supabase.auth.signInWithOtp({
+      email:email.trim(),
+      options:{
+        emailRedirectTo:appUrl(),
+        shouldCreateUser:false
+      }
+    })
+    setMessage(error ? error.message : 'Sign-in link sent. Open the email on this device and you will be signed in.')
+    setBusy(false)
+  }
+
   return (
     <main className="auth-shell">
       <section className="auth-card">
@@ -435,7 +453,12 @@ function AuthScreen() {
           <label>Password<input type="password" value={password} onChange={e => setPassword(e.target.value)} minLength="6" required /></label>
           <button className="primary" disabled={busy}>{busy ? 'Working…' : mode === 'signin' ? 'Sign in' : 'Create account'}</button>
         </form>
-        {mode === 'signin' && <button className="forgot-button" type="button" onClick={forgotPassword} disabled={busy}>Forgot password?</button>}
+        {mode === 'signin' && (
+          <div className="auth-secondary-actions">
+            <button className="magic-link-button" type="button" onClick={sendMagicLink} disabled={busy}>Email me a sign-in link</button>
+            <button className="forgot-button" type="button" onClick={forgotPassword} disabled={busy}>Forgot password?</button>
+          </div>
+        )}
         {message && <div className="auth-message">{message}</div>}
       </section>
     </main>
