@@ -1,0 +1,314 @@
+const ex = (name, prescription, note='') => ({name,prescription,note})
+const day = (title, exercises, note='') => ({title,exercises,note})
+
+const squatoberWeeks = {
+  1:[
+    day('Squatober - Day 1',[
+      ex('Squat','5x8 @ 67.5%','Rest 3 min'),
+      ex('Bench Press','4x10 @ 62.5%','Superset with slow strict pullups'),
+      ex('Slow Strict Pullup','4x3 @ bodyweight'),
+      ex('Deadlift','4x5 @ 70%','Superset with chest-supported DB rows'),
+      ex('Chest-Supported DB Row','4x15','Record weight used'),
+    ]),
+    day('Squatober - Day 4',[
+      ex('Squat','5x5 @ 73%','Rest 2.5 min'),
+      ex('Bench Press','5x5 @ 73%','Rest 2.5 min'),
+      ex('Barbell Press','5x5','Record weight used'),
+      ex('Close-Grip Bench','5x5','Start around 50% of bench 1RM'),
+    ]),
+  ],
+  2:[
+    day('Squatober - Day 5',[
+      ex('Squat','6@60%, 5@65%, 4@70%, 3@75%, 2@80%','Rest 2.5 min'),
+      ex('Deadlift','4x4 @ 75%','Rest 2.5 min'),
+      ex('DB Romanian Deadlift','3x10','Record weight used'),
+      ex('Strict Pullup','3x4','Add weight if appropriate'),
+    ]),
+    day('Squatober - Day 6',[
+      ex('Squat','5@60%, 5@70%, 6/7/8/9 reps @ 75%','Rest 3.5 min'),
+      ex('Bench Press','5@60%, 5@70%, 6/7/8/9 reps @ 75%','Rest 3.5 min'),
+    ]),
+  ],
+  3:[
+    day('Squatober - Day 7',[
+      ex('Squat','4@60%, 4@70%, 2x2 @ 73%','Rest 2 min'),
+      ex('Strict Pullup','4x4 @ bodyweight'),
+      ex('Trap Bar Deadlift','4x4 @ 60% of deadlift 1RM'),
+      ex('Chest-Supported DB Row','4x15','Record weight used'),
+      ex('Barbell Curl','4x15','Record weight used'),
+    ]),
+    day('Squatober - Day 8',[
+      ex('Tempo Squat','3x3 @ 65%, then 3x2 @ 68%','5-second negative; rest 3 min'),
+      ex('Bench Press','5x8 @ 70%','Rest 3 min'),
+      ex('DB Front Raise','3x10','Light and controlled'),
+      ex('DB Lateral Raise','3x10','Light and controlled'),
+      ex('DB Curl to Press','3x10','Light and controlled'),
+    ]),
+  ],
+}
+
+const phatDays = [
+  day('Upper Body Power',[
+    ex('Bent-Over or Pendlay Row','3x3-5'),ex('Weighted Pullup','2x6-10'),ex('Rack Chin','2x6-10'),
+    ex('Flat DB Press','3x3-5'),ex('Weighted Dip','2x6-10'),ex('Seated DB Shoulder Press','3x6-10'),
+    ex('Cambered Bar Curl','3x6-10'),ex('Skull Crusher','3x6-10')]),
+  day('Lower Body Power',[
+    ex('Squat','3x3-5'),ex('Hack Squat','2x6-10'),ex('Leg Extension','2x6-10'),
+    ex('Stiff-Leg Deadlift','3x5-8'),ex('Glute-Ham Raise / Lying Leg Curl','2x6-10'),
+    ex('Standing Calf Raise','3x6-10'),ex('Seated Calf Raise','2x6-10')]),
+  day('Back + Shoulders Hypertrophy',[
+    ex('Bent-Over or Pendlay Row','4x8-10 @ ~85% of normal 3-5RM'),ex('Rack Chin','3x8-12'),
+    ex('Seated Cable Row','3x8-12'),ex('Incline-Supported DB Row / Shrug','2x12-15'),
+    ex('Close-Grip Pulldown','2x15-20'),ex('Seated DB Press','3x8-12'),ex('Upright Row','2x12-15'),ex('Lateral Raise','3x12-20')]),
+  day('Lower Body Hypertrophy',[
+    ex('Squat','4x8-10 @ ~85% of normal 3-5RM'),ex('Hack Squat','3x8-12'),ex('Leg Press','2x12-15'),
+    ex('Leg Extension','3x15-20'),ex('Romanian Deadlift','3x8-12'),ex('Lying Leg Curl','2x12-15'),
+    ex('Seated Leg Curl','2x15-20'),ex('Donkey Calf Raise','4x10-15'),ex('Seated Calf Raise','3x15-20')]),
+  day('Chest + Arms Hypertrophy',[
+    ex('Flat DB Press','4x8-10 @ ~85% of normal 3-5RM'),ex('Incline DB Press','3x8-12'),
+    ex('Machine Chest Press','3x12-15'),ex('Incline Cable Fly','2x15-20'),ex('Preacher Curl','3x8-12'),
+    ex('Concentration Curl','2x12-15'),ex('Spider Curl','2x15-20'),ex('Seated Triceps Extension','3x8-12'),
+    ex('Rope Pressdown','2x12-15'),ex('Cable Kickback','2x15-20')]),
+]
+
+const wild20Days = [
+  day('Chest + Triceps',[
+    ex('Bench Press','7 sets - Wild 20 method'),ex('DB Incline Bench','3x8-12'),ex('Machine Chest Press','3x8-12'),
+    ex('Pec Deck / Cable Crossover','3x10-15'),ex('Lying Triceps Extension','3-4x8-12'),ex('Rope Triceps Extension','3-4x10-15')]),
+  day('Back + Biceps',[
+    ex('Barbell Row or Deadlift','7 sets - Wild 20 method'),ex('Pullup / Inverted Row','3 sets AMAP'),
+    ex('Machine Row','3x8-12'),ex('T-Bar / Seated Cable Row','3x8-12'),ex('DB Curl','3-4x8-12'),ex('Rope Cable Curl','3-4x10-15')]),
+  day('Shoulders + Traps',[
+    ex('Military Press','7 sets - Wild 20 method'),ex('Seated Arnold Press','3x8-12'),ex('Lateral Raise','3x10-15'),
+    ex('Bent-Over Reverse Fly','3x10-15'),ex('Power Shrug','3-4x8-12'),ex('Machine Shrug','3-4x8-12')]),
+  day('Quads + Hamstrings + Calves',[
+    ex('Squat','7 sets - Wild 20 method'),ex('Hack Squat','3x8-12'),ex('Leg Extension','3x10-15'),
+    ex('DB Stiff-Leg Deadlift','3x8-12'),ex('Leg Curl','3x10-15'),ex('Seated Calf Raise','3-4x10-15')]),
+]
+
+const startingStrengthDays = [
+  day('Workout A',[
+    ex('Squat','3x5','Add weight each session'),ex('Bench Press','3x5','Add weight each A session'),ex('Deadlift','1x5','Add weight each A session')]),
+  day('Workout B',[
+    ex('Squat','3x5','Add weight each session'),ex('Press','3x5','Add weight each B session'),ex('Power Clean','5x3','Add weight each B session')]),
+]
+
+const beach531 = {
+  1:[
+    day('Monday - Squat / Clean / Press',[ex('Squat','70/80/90% x5'),ex('Hang Clean','2 sets @ 70% - max reps short of failure'),ex('Shoulder Press','Ramp 10-100%; top set max reps'),ex('Strict Pullups','50 total reps')]),
+    day('Wednesday - Squat / Deadlift',[ex('Squat','Ramp 10-100%; top set max reps'),ex('Deadlift','70/80/90% x5'),ex('Shoulder Press','70% x 50 total reps'),ex('Barbell Row','100 total reps')]),
+    day('Friday - Clean / Squat / Press',[ex('Hang Clean','Ramp 10-100%; top set max reps; then 85% 3x5'),ex('Squat','70% x max reps (15+ target)'),ex('Shoulder Press','70/80/90% x5'),ex('Strict Pullups','50 total reps')]),
+  ],
+  2:[
+    day('Monday - Squat / Clean / Press',[ex('Squat','65/75/85% x5'),ex('Hang Clean','2 sets @ 65% - max reps short of failure'),ex('Shoulder Press','Ramp 10-100%; top set max reps'),ex('Strict Pullups','50 total reps')]),
+    day('Wednesday - Squat / Deadlift',[ex('Squat','Ramp 10-100%; top set max reps'),ex('Deadlift','65/75/85% x5'),ex('Shoulder Press','65% x 50 total reps'),ex('Barbell Row','100 total reps')]),
+    day('Friday - Clean / Squat / Press',[ex('Hang Clean','Ramp 10-100%; top set max reps; then 85% 3x5'),ex('Squat','65% x max reps (15+ target)'),ex('Shoulder Press','65/75/85% x5'),ex('Strict Pullups','50 total reps')]),
+  ],
+  3:[
+    day('Monday - Squat / Clean / Press',[ex('Squat','75/85/95% x5'),ex('Hang Clean','2 sets @ 75% - max reps short of failure'),ex('Shoulder Press','Ramp 10-100%; top set max reps'),ex('Strict Pullups','50 total reps')]),
+    day('Wednesday - Squat / Deadlift',[ex('Squat','Ramp 10-100%; top set max reps'),ex('Deadlift','75/85/95% x5'),ex('Shoulder Press','75% x 50 total reps'),ex('Barbell Row','100 total reps')]),
+    day('Friday - Clean / Squat / Press',[ex('Hang Clean','Ramp 10-100%; top set max reps; then 85% 3x5'),ex('Squat','75% x max reps (15+ target)'),ex('Shoulder Press','75/85/95% x5'),ex('Strict Pullups','50 total reps')]),
+  ],
+}
+
+const monolithPct = [[70,80,90],[65,75,85],[75,85,95],[70,80,90],[65,75,85],[75,85,95]]
+const monolithFriday = [45,55,55,50,65,70]
+const monolithPressVolume = ['10x5 @ 70%','10x5 @ 50%','10x5 @ 75%','12x5 @ 60%','15x5 @ 65%','12x5 @ 75%']
+const monolithDays = week => {
+  const [a,b,c] = monolithPct[Math.max(1,Math.min(6,week))-1]
+  const w=Math.max(1,Math.min(6,week))
+  return [
+    day('Monday - Squat + Press',[ex('Squat',`${a}%x5, ${b}%x5, ${c}%x5, then ${c}% 4x5`),ex('Press',`${a}%x5, ${b}%x5, ${c}%x5, then ${a}% AMRAP`),ex('Pullups','50 total reps')]),
+    day('Wednesday - Deadlift + Bench',[ex('Deadlift',`${a}%x5, ${b}%x5, ${c}%x5, then ${c}% 2x5`),ex('Bench Press',`${a}%x5, ${b}%x5, ${c}%x5, then ${c}% 4x5`),ex('Barbell Row','5 sets of 10-20 reps')]),
+    day('Friday - Squat + Press',[ex('Squat',`${a}%x5, ${b}%x5, ${c}%x5, then ${monolithFriday[w-1]}% x20`),ex('Press',monolithPressVolume[w-1]),ex('Weighted Pullups','5x5')],`Week ${w}: add KB/Prowler conditioning from the source plan as recovery allows.`),
+  ]
+}
+
+const cowboy = {
+  1:['10x5 @ 60%','55/60/65/70/75% x5','Work to 10RM'],
+  2:['10x4 @ 67.5%','60/65/70/75/80% x3','Work to 8RM'],
+  3:['10x3 @ 75%','65x5,70x4,75x3,80x2,85%x1+','Work to 5RM'],
+  4:['5x3 @ 60%','3x3 @ 60%','Walkout/hold 95% goal max x10 sec'],
+  5:['8x5 @ 65%','60/67.5/75/82.5% x4','Work to 8RM'],
+  6:['8x4 @ 72.5%','65/72.5%x3,80/87.5%x2','Work to 5RM'],
+  7:['8x3 @ 80%','70x4,77.5x3,85x2,92.5%x1+','Work to 3RM'],
+  8:['5x3 @ 65%','3x3 @ 65%','Walkout/hold 100% goal max x10 sec'],
+  9:['5x5 @ 70%','65/75/85% x3','Work to 5RM'],
+  10:['5x4 @ 77.5%','70/80/90% x2','Work to 3RM'],
+  11:['5x3 @ 85%','75x3,85x2,95%x1+','Work to 2RM'],
+  12:['5x3 @ 70%','3x3 @ 70%','Walkout/hold 105% goal max x10 sec'],
+  13:['Front squat - work to 1RM','Off','Back squat - work to 1RM'],
+}
+const cowboyDays = week => {
+  const p=cowboy[Math.max(1,Math.min(13,week))]
+  return [day('Monday - Back Squat',[ex('Back Squat',p[0])]),day('Wednesday - Front Squat',[ex('Front Squat',p[1])]),day('Friday - Back Squat',[ex('Back Squat',p[2])])]
+}
+
+const deadlift8 = {
+  1:[ex('Deadlift','1x3 @ 75%'),ex('Speed Deadlift','6x3 @ 60%','60 sec rest'),ex('Trap Bar Deadlift','2x6 @ 65%'),ex('Neutral-Grip Pullup','3x5'),ex('Pull Through','3x12'),ex('Glute-Ham Raise','3x8'),ex('Suitcase Deadlift','3x3')],
+  2:[ex('Deadlift','1x3 @ 80%'),ex('Speed Deadlift','8x3 @ 60%'),ex('Trap Bar Deadlift','2x5 @ 68%'),ex('Neutral-Grip Pullup','3x6'),ex('Pull Through','3x12'),ex('Glute-Ham Raise','3x7'),ex('Suitcase Deadlift','3x3')],
+  3:[ex('Deadlift','1x3 @ 85%'),ex('Deadlift','6x3 @ 70%'),ex('Trap Bar Deadlift','3x3 @ 75%'),ex('Neutral-Grip Pullup','3x6'),ex('Pull Through','3x12'),ex('Glute-Ham Raise','3x6'),ex('Suitcase Deadlift','3x3')],
+  4:[ex('Deadlift','6x1 @ 60%','Reload'),ex('Trap Bar Deadlift','2x2 @ 50%'),ex('Neutral-Grip Pullup','2x5'),ex('Pull Through','2x12'),ex('Glute-Ham Raise','2x6'),ex('Suitcase Deadlift','2x3')],
+  5:[ex('Deadlift','1x2 @ 90%'),ex('Deadlift','4x2 @ 75%'),ex('Trap Bar Deadlift','3x3 @ 78%'),ex('Neutral-Grip Pullup','2x7'),ex('Pull Through','3x12'),ex('Glute-Ham Raise','3x5'),ex('Suitcase Deadlift','3x2')],
+  6:[ex('Deadlift','1x1 @ 95%'),ex('Deadlift','3x2 @ 80%'),ex('Trap Bar Deadlift','3x3 @ 80%'),ex('Neutral-Grip Pullup','2x7'),ex('Pull Through','3x12'),ex('Glute-Ham Raise','3x5'),ex('Suitcase Deadlift','3x2')],
+  7:[ex('Repeat Week 4','Reload exactly as Week 4')],
+  8:[ex('Deadlift','Attempt new 1RM','Source plan test week')],
+}
+
+const crossfit8 = {
+  1:[
+    day('Press / Overhead',[ex('Push Press','7x5 heavy'),ex('Paused Incline Bench','4x8 moderate'),ex('Wide-Grip Pullup','4x12')]),
+    day('Squat / Pull',[ex('Front Squat','7x5 heavy'),ex('Snatch-Grip Deadlift off Blocks','4x8 moderately heavy'),ex('GHD Situp','4x12')]),
+    day('Barbell-Free Metcon',[ex('Metcon','20 minutes or less; no barbell')]),
+    day('Olympic / Upper Back / Arms',[ex('Muscle Snatch','7x3 heavy'),ex('Hang Clean','5x3 moderately heavy'),ex('Axle Curl','10 minutes AMRAP')]),
+    day('Short Metcon + Medley',[ex('Short Metcon','10 minutes or less'),ex('Car Push + Sprint','3 rounds: 100m + 100m','Rest 5 min')]),
+  ],
+  2:[
+    day('Press / Overhead',[ex('Strict Press','6x3 heavy'),ex('Behind-Neck Push Press','4x8 moderate'),ex('DB Chest Fly','4x15'),ex('Pushups','75 total')]),
+    day('Squat / Pull',[ex('Pause Deadlift','6x3 heavy'),ex('Back-Rack Walking Lunge','4x8 total'),ex('Toes-to-Bar','3x10 strict')]),
+    day('Barbell-Free Metcon',[ex('Metcon','Barbell-free')]),
+    day('Olympic / Upper Back / Arms',[ex('Power Clean + Split Jerk','6 sets: 1 clean + 3 jerks'),ex('Snatch High Pull','4x10 moderate'),ex('Rack Pull below knee','4x12 @ 80% deadlift max')]),
+    day('Short Metcon + Medley',[ex('Short Metcon','Barbell-free'),ex('Zercher Carry + Sled Pull','4 heavy sets','100ft + 100ft; rest 5 min')]),
+  ],
+  3:[
+    day('Press / Overhead',[ex('Push Jerk','7x2 heavy','1-sec pause in dip'),ex('Close-Grip Bench','4x8 heavy'),ex('Band Triceps Pushdown','100 total'),ex('Weighted Pushup','50 total')]),
+    day('Squat / Pull',[ex('Back Squat','7x2 heavy'),ex('Clean-Grip Deadlift','4x4 heavy'),ex('Snatch-Grip RDL','4x8 moderate'),ex('Abmat Situp','2x50')]),
+    day('Barbell-Free Metcon',[ex('Metcon','Barbell-free')]),
+    day('Olympic / Upper Back / Arms',[ex('Power Snatch + Snatch Push Press + Snatch Balance','7 heavy sets'),ex('Power Clean + Front Squat + Push Press + 2 Jerks','7 sets'),ex('Barbell Curl','4x12 moderate')]),
+    day('Short Metcon + Medley',[ex('Short Metcon','Barbell-free'),ex('Clean & Jerk','3 sets max reps in 60 sec','No touch-and-go'),ex('Sprint','4x100m')]),
+  ],
+  4:[
+    day('Recovery Press',[ex('Strict Press','3x5 moderate'),ex('Bench Press','3x5 moderate'),ex('Pushups','50'),ex('Situps','100')]),
+    day('Recovery Lower',[ex('Back Squat','3x7 moderate'),ex('Axle Deadlift','3x5 moderate'),ex('KB Sidebend','100 total')]),
+    day('Low-Intensity Metcon',[ex('Metcon','Barbell-free; low intensity')]),
+    day('Recovery Olympic',[ex('Snatch','4x2 moderate'),ex('Power Clean + 2 Push Press','4 sets moderate'),ex('Rack Pull','3x10 @ 75%')]),
+    day('Short Metcon',[ex('Metcon','Short; barbell-free')]),
+  ],
+  5:[
+    day('Press / Overhead',[ex('Clean + Strict Press','7 sets: 1 clean + 5 press'),ex('Wide-Grip Incline Bench','4x12 moderate'),ex('Seated DB Press','4x12 moderate'),ex('Pushups','100')]),
+    day('Squat / Pull',[ex('1-1/4 Front Squat','7x5 heavy'),ex('Trap Bar / Farmer Deadlift','4x8 moderate'),ex('Pendlay Row','4x8 moderate'),ex('GHD Situp','3x15')]),
+    day('Barbell-Free Metcon',[ex('Metcon','Barbell-free')]),
+    day('Olympic / Upper Back / Arms',[ex('Hang Power Clean','7x5 heavy'),ex('Rack Pull at Knee','5x10 @ 110% deadlift'),ex('Sumo RDL','3x15 moderate'),ex('Wide-Grip Pullups','50 total')]),
+    day('Short Metcon + Medley',[ex('Short Metcon','Barbell-free'),ex('Sprint + Sandbag Squat','5 rounds: 100m sprint + 10 squats + 100m sprint','Rest 3-5 min')]),
+  ],
+  6:[
+    day('Press / Overhead',[ex('Pause Thruster','6x3 heavy'),ex('Behind-Neck Push Press','4x8 moderate'),ex('DB Chest Fly','4x15 moderate'),ex('Pushups','100')]),
+    day('Squat / Pull',[ex('Deadlift','6x3 heavy'),ex('Front-Rack Lunge','4x8'),ex('Snatch-Grip RDL','5x7 moderate')]),
+    day('Barbell-Free Metcon',[ex('Metcon','Barbell-free')]),
+    day('Olympic / Upper Back / Arms',[ex('2 Snatch High Pull + Snatch + OH Squat','6 heavy sets'),ex('Hang Clean + 2 Split Jerks','5 moderate sets'),ex('Jumping Back Squat','4x6 heavy'),ex('DB Curl','4x15'),ex('Hammer Curl','4x10')]),
+    day('Short Metcon + Medley',[ex('Short Metcon','Barbell-free'),ex('Car Push + Sled Pull','5 sets: 100m + 100ft','Rest 5 min')]),
+  ],
+  7:[
+    day('Press / Overhead',[ex('Behind-Neck Snatch Push Press','7x2 heavy'),ex('Strict Press + Push Press','5 sets: 5 + 5'),ex('Close-Grip Bench','4x12 moderate'),ex('Triceps Pushdown','75'),ex('Parallette Pushup','30')]),
+    day('Squat / Pull',[ex('Pause Back Squat','7x2 heavy'),ex('Block Deadlift','5x6 heavy'),ex('Barbell Row','4x8 moderate')]),
+    day('Barbell-Free Metcon',[ex('Metcon','Barbell-free')]),
+    day('Olympic / Upper Back / Arms',[ex('Muscle Snatch','Work to 3RM with 5-8% jumps'),ex('Axle Zercher Squat','4x5 heavy'),ex('Power Clean','5x3 heavy'),ex('Wide-Grip Pullup','50 total')]),
+    day('Short Metcon + Medley',[ex('Short Metcon','Barbell-free'),ex('DB Walking Lunge + Sprint','4 sets: 100ft + 100m','Rest 5 min')]),
+  ],
+  8:[
+    day('Recovery Press',[ex('Push Jerk','3x5 moderate'),ex('Bench Press','3x5 moderate'),ex('Pushups','100')]),
+    day('Recovery Lower',[ex('Front Squat','3x7 moderate'),ex('Snatch-Grip Deadlift','4x5 moderate'),ex('Toes-to-Bar','40 total')]),
+    day('Barbell-Free Metcon',[ex('Metcon','Barbell-free')]),
+    day('Recovery Olympic',[ex('Snatch','4x3 moderate'),ex('Clean & Jerk','4x3 moderate'),ex('Split Jerk','5x2 moderate')]),
+    day('Short Metcon',[ex('Metcon','Short; barbell-free')]),
+  ],
+}
+
+const plOly6 = {
+  1:[
+    day('Monday - Olympic',[ex('Snatch','3x3 @70%, 3x3 @75%'),ex('Back Squat','4x5 @75%'),ex('Behind-Neck Push Press','3x5 @70%'),ex('Snatch Pull','4x5 @110% snatch 1RM'),ex('Pullup','3x8')]),
+    day('Tuesday - Olympic',[ex('Clean & Jerk','3x3 @70%, 3x3 @75%'),ex('Snatch Balance','4x3 @70% snatch 1RM'),ex('Front Squat','4x5 @75%'),ex('Clean Pull','5x5 @115%'),ex('Abmat Situp','50')]),
+    day('Thursday - Powerlifting',[ex('Box Squat','8x3 @70%'),ex('Bench Press','5x3 @70%'),ex('Sumo Deadlift','3x3 @70%')]),
+    day('Friday - Powerlifting',[ex('DB Bench Press','4x8 heavy'),ex('Back Squat','3x5 @75%'),ex('Dip','3x7'),ex('Good Morning','3x7 moderate'),ex('Situp','50')]),
+  ],
+  2:[
+    day('Monday - Olympic',[ex('Snatch','3x3 @75%, 3x3 @80%'),ex('Back Squat','3x5 @80%'),ex('Push Press','5x3 @80%'),ex('Snatch Deadlift','4x5 @100% snatch 1RM'),ex('Box Jump','5x5')]),
+    day('Tuesday - Olympic',[ex('Clean & Jerk','3x3 @75%, 3x3 @80%'),ex('Snatch Balance','3x3 @80%'),ex('Front Squat','3x5 @80%'),ex('Behind-Neck Push Jerk','3x3 @80% jerk 1RM'),ex('Toes-to-Bar','3x12')]),
+    day('Thursday - Powerlifting',[ex('Back Squat','5x4 @80%'),ex('Overhead Press','5x3 @80%'),ex('GHD','3x10'),ex('DB Row','3x10')]),
+    day('Friday - Powerlifting',[ex('Barbell Lunge','3x3 each leg heavy'),ex('Pushup','3x15'),ex('Deadlift','5x3 @80%'),ex('Pullup','3x8')]),
+  ],
+  3:[
+    day('Monday - Reload Olympic',[ex('Snatch','2x3 @60%, 2x3 @65%'),ex('Back Squat','3x5 @65%'),ex('Push Press','5x3 @65%'),ex('Snatch Deadlift','4x5 @70% snatch 1RM'),ex('Box Jump','5x5')]),
+    day('Tuesday - Reload Olympic',[ex('Clean & Jerk','2x3 @60%, 2x3 @65%'),ex('Snatch Balance','3x3 @65%'),ex('Front Squat','3x5 @65%'),ex('Behind-Neck Push Jerk','3x3 @65% jerk 1RM'),ex('Toes-to-Bar','3x12')]),
+    day('Thursday - Reload Powerlifting',[ex('Box Squat','8x3 @65%'),ex('Bench Press','5x3 @65%'),ex('Sumo Deadlift','3x3 @65%')]),
+    day('Friday - Reload Powerlifting',[ex('DB Bench Press','4x8 heavy'),ex('Back Squat','3x5 @65%'),ex('Dip','3x7'),ex('Good Morning','3x7 moderate'),ex('Situp','50')]),
+  ],
+  4:[
+    day('Monday - Olympic',[ex('Snatch','2x2 @90%'),ex('Back Squat','3x2 @85%'),ex('Behind-Neck Jerk','3x2 @90%'),ex('Snatch Pull','4x3 @115%')]),
+    day('Tuesday - Olympic',[ex('Clean & Jerk','2x2 @90%'),ex('Snatch Balance','3x2 @90%'),ex('Front Squat','3x2 @90%'),ex('RDL','5x5 @85% clean')]),
+    day('Thursday - Powerlifting',[ex('Back Squat','3x2 @90%'),ex('Bench Press','3x2 @90%'),ex('Sumo Deadlift','2x2 @90%'),ex('DB Bench Fly','4x8 heavy')]),
+    day('Friday - Powerlifting',[ex('Row','1000m'),ex('DB Shoulder Press','4x7 heavy'),ex('Box Squat','4x1 @90%'),ex('Dip','4x8'),ex('Abmat Situp','55')]),
+  ],
+  5:[
+    day('Monday - Olympic',[ex('Power Snatch + OH Squat','3x3 @80%, 3x3 @85%'),ex('Back Squat','3x5 @80%'),ex('Push Press','5x3 @80%'),ex('Snatch Deadlift','4x5 @110% snatch 1RM'),ex('Box Jump','5x5'),ex('Toes-to-Bar','3x12')]),
+    day('Tuesday - Olympic',[ex('Hang Clean + Front Squat','3x3 @80%, 3x3 @85%'),ex('Snatch Balance','4x3 @75% snatch 1RM'),ex('Front Squat','4x5 @80%'),ex('Clean Pull','5x5 @120%'),ex('Abmat Situp','50')]),
+    day('Thursday - Powerlifting',[ex('Back Squat','5x4 @80%'),ex('Overhead Press','5x4 @80%'),ex('Good Morning','5x5')]),
+    day('Friday - Powerlifting',[ex('Pullup','3x12'),ex('Pushup','3x15'),ex('Deadlift','5x3 @80%')]),
+  ],
+  6:[
+    day('Monday - Olympic',[ex('Snatch','3x3 @85%, 2x2 @87%'),ex('Behind-Neck Push Press','3x3 @85%'),ex('Barbell Lunge','5x3 each leg'),ex('Snatch Pull','5x5 @115%'),ex('Box Jump','5x5')]),
+    day('Tuesday - Olympic',[ex('Clean & Jerk','3x3 @85%, 2x2 @87%'),ex('Push Jerk','3x3 @85%'),ex('Front Squat','5x3 @85%'),ex('Clean Pull','5x5 @115%')]),
+    day('Thursday - Powerlifting',[ex('Box Squat','8x1 @85%'),ex('Bench Press','5x3 @85%'),ex('RDL','5x5 @85%'),ex('Biceps Curl','3x8')]),
+    day('Friday - Powerlifting',[ex('Weighted Pullup','Find max'),ex('Back Squat','3x3 @85%'),ex('Deadlift','5x3 @85%'),ex('DB Chest Fly','3x8'),ex('Good Morning','3x5')]),
+  ],
+}
+
+export const archivePrograms = [
+  {id:'squatober',name:'Squatober',category:'Specialization',difficulty:'Intermediate',weeksCount:3,daysPerWeek:2,source:'FEB SQUATOBER.pdf',description:'Squat-focused block with bench, deadlift, pulling, and accessories.',getWeek:w=>squatoberWeeks[Math.max(1,Math.min(3,w))]},
+  {id:'phat',name:'PHAT - Power Hypertrophy Adaptive Training',category:'Powerbuilding',difficulty:'Intermediate',weeksCount:12,daysPerWeek:5,source:'phat_ebook.pdf',description:'Two power days plus three hypertrophy days.',getWeek:()=>phatDays},
+  {id:'wild20',name:'Wild 20 Powerbuilding',category:'Powerbuilding',difficulty:'Intermediate',weeksCount:20,daysPerWeek:4,source:'wild20powerbuilding.pdf',description:'Four-day powerbuilding split using the Wild 20 method on the lead movement.',getWeek:()=>wild20Days},
+  {id:'beach531',name:'Beach 5/3/1',category:'Strength',difficulty:'Intermediate',weeksCount:3,daysPerWeek:3,source:'Beach 5-3-1 (1).docx',description:'Three-day 5/3/1 variation combining squat, press, clean, deadlift and high-rep pulling.',getWeek:w=>beach531[Math.max(1,Math.min(3,w))]},
+  {id:'monolith',name:'Building the Monolith + KB / Prowler',category:'Strength + Conditioning',difficulty:'Advanced',weeksCount:6,daysPerWeek:3,source:'Monolith With KB  and Prowler Conditioning.docx',description:'Six-week high-volume strength block with kettlebell and prowler conditioning.',getWeek:monolithDays},
+  {id:'starting-strength',name:'Starting Strength - Original Novice',category:'Strength',difficulty:'Beginner',weeksCount:12,daysPerWeek:3,source:'Starting Strength Calculator Spreadsheet.xlsx',description:'A/B novice linear progression. Add weight each session.',getWeek:w=> w%2 ? [startingStrengthDays[0],startingStrengthDays[1],startingStrengthDays[0]] : [startingStrengthDays[1],startingStrengthDays[0],startingStrengthDays[1]]},
+  {id:'cowboy',name:'Juggernaut Cowboy Method - Squat',category:'Strength',difficulty:'Advanced',weeksCount:13,daysPerWeek:3,source:'JUGGERNAUT-THE-COWBOY-METHOD.pdf',description:'Thirteen-week high-frequency squat progression with low-, medium-, and high-intensity days.',getWeek:cowboyDays},
+  {id:'deadlift8',name:'8 Week Deadlift Program',category:'Specialization',difficulty:'Intermediate',weeksCount:8,daysPerWeek:1,source:'Deadlift_8_Week.01.pdf',description:'Eight-week deadlift specialization culminating in a new max attempt.',getWeek:w=>[day(`Week ${w} - Deadlift`,deadlift8[Math.max(1,Math.min(8,w))])]},
+  {id:'crossfit-strength8',name:'8 Week Strength for CrossFitters',category:'Strength + Conditioning',difficulty:'Intermediate',weeksCount:8,daysPerWeek:5,source:'8 Week Strength Program for Crossfitters.pdf',description:'Five-day strength-focused plan with barbell-free metcons and Olympic lifting.',getWeek:w=>crossfit8[Math.max(1,Math.min(8,w))]},
+  {id:'pl-oly6',name:'6 Week Powerlifting / Olympic Lifting',category:'Olympic + Strength',difficulty:'Intermediate',weeksCount:6,daysPerWeek:4,source:'6 week PL _ Oly Program.pdf',description:'Four training days: two Olympic-lifting days and two powerlifting days.',getWeek:w=>plOly6[Math.max(1,Math.min(6,w))]},
+]
+
+export const referenceArchivePrograms = [
+  {id:'juggernaut2',name:'Juggernaut Method 2.0',category:'Strength',difficulty:'Intermediate',weeksCount:16,daysPerWeek:4,source:'The_Juggernaut_Method_2.0 .pdf',description:'Four-wave Juggernaut progression.'},
+  {id:'von-moger',name:'Von Moger Mass',category:'Bodybuilding',difficulty:'Intermediate',weeksCount:6,daysPerWeek:5,source:"Andy's Von Moger Mass.xlsx",description:'High-volume bodybuilding split with alternating 5- and 6-day weeks.'},
+  {id:'colorado',name:'Colorado Experiment',category:'Bodybuilding',difficulty:'Advanced',weeksCount:4,daysPerWeek:3,source:'Colorado Experiment.xlsx',description:'Fourteen sequential high-intensity workouts from the archive.'},
+  {id:'lifestyle-powerbuilding',name:'Lifestyle Powerbuilding',category:'Powerbuilding',difficulty:'Intermediate',weeksCount:8,daysPerWeek:4,source:'Nick_Cheadles_Lifestyle_Powerbuilding.pdf',description:'Four-session powerbuilding plan with 4-week progression repeated with increased training maxes.'},
+  {id:'massbuilder',name:'MASSbuilder',category:'Strength + Conditioning',difficulty:'Advanced',weeksCount:12,daysPerWeek:4,source:'MASSbuilder.pdf',description:'Twelve-week, four-day giant-set strength/hypertrophy/conditioning program.'},
+  {id:'beginner-oly',name:'Beginner Olympic Lifting',category:'Olympic + Strength',difficulty:'Beginner',weeksCount:4,daysPerWeek:4,source:'Beginner Oly Program.docx',description:'Four-week beginner Olympic-lifting program.'},
+  {id:'lower-body',name:'Lower Body Program',category:'Specialization',difficulty:'Intermediate',weeksCount:6,daysPerWeek:3,source:'Lower Body Program.docx',description:'Six-week lower-body-focused plan.'},
+  {id:'revised-deadlift',name:'Deadlift Cycle for Maximum Floor Speed',category:'Specialization',difficulty:'Intermediate',weeksCount:9,daysPerWeek:1,source:'Revised Deadlift Cycle.docx',description:'Nine-week deadlift cycle focused on floor speed.'},
+  {id:'wendler-challenge',name:'Wendler Challenge',category:'Strength',difficulty:'Intermediate',weeksCount:3,daysPerWeek:4,source:'Wendler challenge.docx',description:'Three-week Wendler strength challenge.'},
+  {id:'heavy-explosive8',name:'8 Week Heavy / Explosive Program',category:'Strength + Power',difficulty:'Intermediate',weeksCount:8,daysPerWeek:4,source:'New Program.docx',description:'Eight-week bench/squat/deadlift/clean plan.'},
+  {id:'summer-swolstice',name:'Summer Swolstice',category:'Olympic + Conditioning',difficulty:'Intermediate',weeksCount:8,daysPerWeek:4,source:'Summer Swolstice Template.docx',description:'Olympic lifting, strength, and conditioning template.'},
+  {id:'raider',name:'Raider',category:'Tactical',difficulty:'Advanced',weeksCount:8,daysPerWeek:5,source:'Raider.docx',description:'Tactical strength and stamina program.'},
+  {id:'training12',name:'12 Week Training Program',category:'Bodybuilding',difficulty:'Intermediate',weeksCount:12,daysPerWeek:5,source:'12 Week Training Program.xlsx',description:'Multi-block program using Burst, Y3T, FST-7, and negative-training phases.'},
+  {id:'karas9',name:"Kara's 9 Weeks of Heaven",category:'Bodybuilding',difficulty:'Intermediate',weeksCount:9,daysPerWeek:4,source:'Karas-9-Weeks-of-Heaven.xlsx',description:'Nine-week training program.'},
+  {id:'powerbuild',name:'Powerbuild',category:'Powerbuilding',difficulty:'Intermediate',weeksCount:12,daysPerWeek:4,source:'Powerbuild.xlsx',description:'Three-month powerbuilding workbook.'},
+  {id:'occam',name:"Occam's Protocol",category:'Minimalist',difficulty:'Beginner',weeksCount:8,daysPerWeek:2,source:"Occam's Protocol Tracking.xlsx",description:'Minimalist strength/mass protocol.'},
+  {id:'primer4',name:'Primer 4 Program',category:'General',difficulty:'Intermediate',weeksCount:4,daysPerWeek:4,source:'Primer 4 Program.xlsx',description:'Four-week training template.'},
+]
+
+export const allArchivePrograms = [...archivePrograms,...referenceArchivePrograms]
+export const archiveProgramById = Object.fromEntries(allArchivePrograms.map(p=>[p.id,p]))
+
+export function makePlannedFromArchive(program, week, dayIndex, scheduledDate) {
+  const days = program.getWeek ? program.getWeek(week) : [day(`Week ${week} - Source workout`,[
+    ex('Source program session','Use the original program prescription for this day','Add/edit exercises below as needed.')
+  ])]
+  const chosen = days[Math.max(0,Math.min(days.length-1,dayIndex))]
+  return {
+    scheduled_date: scheduledDate,
+    title: chosen.title,
+    source_program_name: program.name,
+    source_week: week,
+    source_day: chosen.title,
+    workout: {
+      version:2,
+      type:'flexible',
+      archive_program_id:program.id,
+      source:program.source,
+      notes:chosen.note || '',
+      exercises:(chosen.exercises || []).map((item,i)=>({...item,id:`e${i+1}`,result:'',done:false})),
+      sleep:'', energy:'', pain:'', rpe:'', bodyweight:'', note:'',
+    },
+    status:'planned',
+  }
+}
