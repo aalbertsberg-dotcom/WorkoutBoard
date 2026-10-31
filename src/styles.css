@@ -2089,3 +2089,103 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   .admin-dashboard-grid { grid-template-columns:repeat(2,1fr); }
   .draw-board-manager { grid-template-columns:1fr 1fr; }
 }
+
+
+/* Per-set completion tracking */
+.supplemental-head-right {
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:7px;
+  flex-wrap:wrap;
+}
+.set-count-pill {
+  display:inline-flex;
+  align-items:center;
+  min-height:28px;
+  padding:0 8px;
+  border:1px solid #36511d;
+  border-radius:999px;
+  background:#15220f;
+  color:#d9f99d;
+  font-size:9px;
+  font-weight:900;
+  white-space:nowrap;
+}
+.set-progress-grid {
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(92px,1fr));
+  gap:7px;
+  margin:10px 0;
+}
+.set-progress-grid.compact {
+  grid-template-columns:repeat(auto-fit,minmax(84px,1fr));
+  margin:7px 0 0;
+}
+.set-progress-button {
+  display:grid;
+  grid-template-columns:1fr auto;
+  grid-template-areas:
+    "name mark"
+    "reps mark";
+  gap:1px 7px;
+  align-items:center;
+  min-height:54px;
+  padding:7px 9px;
+  border:1px solid #3a4d69;
+  border-radius:10px;
+  background:#111d31;
+  color:#dbe4ef;
+  text-align:left;
+}
+.set-progress-button strong { grid-area:name; font-size:10px; }
+.set-progress-button span { grid-area:reps; color:#8fa0b8; font-size:9px; }
+.set-progress-button b {
+  grid-area:mark;
+  display:grid;
+  place-items:center;
+  width:27px;
+  height:27px;
+  border:1px solid #52647d;
+  border-radius:50%;
+  color:#8fa0b8;
+  font-size:14px;
+}
+.set-progress-button.done {
+  border-color:#65a30d;
+  background:#18290f;
+}
+.set-progress-button.done strong,
+.set-progress-button.done b { color:#d9f99d; }
+.set-progress-button.done b {
+  border-color:#65a30d;
+  background:#2b4216;
+}
+.assist-with-progress {
+  display:grid !important;
+  gap:6px;
+}
+.assist-title-row {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+}
+.assist-title-row > b {
+  color:#d9f99d;
+  font-size:9px;
+}
+.flexible-set-progress {
+  padding-top:2px;
+}
+
+@media (max-width:700px) {
+  .set-progress-grid,
+  .set-progress-grid.compact {
+    grid-template-columns:repeat(3,minmax(0,1fr));
+  }
+  .set-progress-button {
+    min-height:50px;
+    padding:6px 7px;
+  }
+}
