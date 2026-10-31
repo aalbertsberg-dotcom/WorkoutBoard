@@ -106,7 +106,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss}) {
     </div>
     {planned.workout?.source && <div className="source-pill">Source: {planned.workout.source}</div>}
     {(workout.exercises||[]).map((item,i)=><article className={'flex-exercise '+(item.done?'done':'')} key={item.id||i}>
-      <div className="flex-exercise-title"><div><strong>{item.name}</strong><span>{item.prescription}</span>{item.note&&<small>{item.note}</small>}{historyByExercise[String(item.name||'').trim().toLowerCase()]&&<small className="flex-history">Last: {historyByExercise[String(item.name||'').trim().toLowerCase()]}</small>}</div><button type="button" className={'check '+(item.done?'checked':'')} onClick={()=>changeExercise(i,{done:!item.done})}>✓</button></div>
+      <div className="flex-exercise-title"><div><strong>{item.name}</strong><span>{item.prescription}</span>{item.note&&<small>{item.note}</small>}{historyByExercise[String(item.name||'').trim().toLowerCase()]&&<small className="flex-history">Last: {historyByExercise[String(item.name||'').trim().toLowerCase()]}</small>}</div><button type="button" className={'check '+(item.done?'checked':'')} onClick={()=>{ const next=!item.done; changeExercise(i,{done:next}); if(next) window.dispatchEvent(new CustomEvent('workoutboard:rest-timer')) }}>✓</button></div>
       <input className="text-input" value={item.result||''} onChange={e=>changeExercise(i,{result:e.target.value})} placeholder="Result, e.g. 185 × 5 × 3 or completed" />
     </article>)}
 
