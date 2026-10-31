@@ -195,7 +195,7 @@ export function ExportDataButton({userId}) {
     download(`WorkoutBoard-sessions-${stamp}.csv`,csv,'text/csv')
     setBusy(false)
   }
-  return <button className="wide-button" onClick={exportData} disabled={busy}>{busy?'Preparing export…':'Export JSON + sessions CSV'}</button>
+  return <button className="wide-button" onClick={exportData} disabled={busy}>{busy?'Preparing export…':'Export CSV'}</button>
 }
 
 export function SharedTimer({session,isHost,onChanged}) {
