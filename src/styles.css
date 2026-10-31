@@ -288,7 +288,7 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   bottom:0;
   z-index:10;
   display:grid;
-  grid-template-columns:repeat(5,minmax(84px,1fr));
+  grid-template-columns:repeat(4,1fr);
   background:rgba(10,17,30,.97);
   border-top:1px solid #253149;
   padding:6px max(6px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
@@ -952,7 +952,7 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   top:67px;
   z-index:19;
   display:grid;
-  grid-template-columns:repeat(4,1fr);
+  grid-template-columns:repeat(5,minmax(84px,1fr));
   gap:5px;
   margin:0 0 12px;
   padding:6px;
