@@ -170,7 +170,7 @@ const programOrder = ['andy-hybrid-12','powerbuilding-8','strength-power-6','res
 const dbNameToProgram = Object.fromEntries(Object.entries(programs).map(([id,p]) => [p.dbName,id]))
 const defaultTms = { Squat:'', Bench:'', Deadlift:'', Press:'' }
 const round5 = n => Math.round(n / 5) * 5
-const appUrl = () => new URL(import.meta.env.BASE_URL, appUrl()).toString()
+const appUrl = () => new URL(import.meta.env.BASE_URL, window.location.origin).toString()
 
 function targetWeight(tm, pct, basis) {
   if (!tm || pct == null) return null
