@@ -163,10 +163,19 @@ export function ExportDataButton({userId}) {
       supabase.from('planned_workouts').select('*').eq('user_id',userId).order('scheduled_date'),
     ])
     const payload={exported_at:new Date().toISOString(),profile:profile.data,training_maxes:tms.data,workout_logs:logs.data||[],training_sessions:sessions.data||[],planned_workouts:planned.data||[]}
-    download(`WorkoutBoard-${new Date().toISOString().slice(0,10)}.json`,JSON.stringify(payload,null,2))
+    const stamp=new Date().toISOString().slice(0,10)
+    download(`WorkoutBoard-${stamp}.json`,JSON.stringify(payload,null,2))
+
+    const esc=value=>`"${String(value??'').replace(/"/g,'""')}"`
+    const headers=['date','title','program','week','primary_lift','total_volume','estimated_1rm','bodyweight','completed_at']
+    const rows=(sessions.data||[]).map(row=>[
+      row.session_date,row.title,row.program,row.week,row.primary_lift,row.total_volume,row.estimated_1rm,row.bodyweight,row.completed_at
+    ])
+    const csv=[headers.map(esc).join(','),...rows.map(row=>row.map(esc).join(','))].join('\n')
+    download(`WorkoutBoard-sessions-${stamp}.csv`,csv,'text/csv')
     setBusy(false)
   }
-  return <button className="wide-button" onClick={exportData} disabled={busy}>{busy?'Preparing export…':'Export all my data'}</button>
+  return <button className="wide-button" onClick={exportData} disabled={busy}>{busy?'Preparing export…':'Export JSON + sessions CSV'}</button>
 }
 
 export function SharedTimer() {
