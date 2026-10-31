@@ -1,5 +1,27 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './supabase'
+const archiveCatalog = [
+  {name:'Andy 5/3/1 BBB + Jokers', source:'ANDY 531-Boring But Big-Jokers.xlsx', structure:'11 weeks', builtinId:'andy-bbb-jokers-11'},
+  {name:'Andy Original 5/3/1 + Jokers', source:'Andy_531 Spreadsheet.xlsx', structure:'6-week runnable version', builtinId:'andy-531-original-6'},
+  {name:'New 5/3/1 Leader + Anchor', source:'NEW 531 PROGRAM.docx', structure:'11 weeks', builtinId:'new-531-leader-anchor-11'},
+  {name:'Andy Von Moger Mass', source:"Andy's Von Moger Mass.xlsx", structure:'6 weeks · 5-6 day bodybuilding split'},
+  {name:'Monolith + KB / Prowler', source:'Monolith With KB and Prowler Conditioning.docx', structure:'6 weeks · 3 lifting days + conditioning'},
+  {name:'Beginner Olympic Lifting', source:'Beginner Oly Program.docx', structure:'4 weeks · 4-5 days'},
+  {name:'Lower Body Program', source:'Lower Body Program.docx', structure:'6 weeks · 3 days'},
+  {name:'Deadlift Cycle for Maximum Floor Speed', source:'Revised Deadlift Cycle.docx', structure:'9 weeks · deadlift focus'},
+  {name:'Wendler Challenge', source:'Wendler challenge.docx', structure:'3-week strength challenge'},
+  {name:'8 Week Heavy / Explosive Program', source:'New Program.docx', structure:'8 weeks · bench/squat/deadlift/clean'},
+  {name:'Summer Swolstice', source:'Summer Swolstice Template.docx', structure:'Olympic lifting + strength + conditioning'},
+  {name:'Raider', source:'Raider.docx', structure:'multi-week tactical strength + stamina'},
+  {name:'Colorado Experiment', source:'Colorado Experiment.xlsx', structure:'14 workouts'},
+  {name:'Starting Strength Variants', source:'Starting Strength Calculator Spreadsheet.xlsx', structure:'multiple novice programs'},
+  {name:'12 Week Training Program', source:'12 Week Training Program.xlsx', structure:'Burst / Y3T / FST-7 / Negative blocks'},
+  {name:'Kara\'s 9 Weeks of Heaven', source:'Karas-9-Weeks-of-Heaven.xlsx', structure:'9 weeks'},
+  {name:'Powerbuild', source:'Powerbuild.xlsx', structure:'3-month powerbuilding workbook'},
+  {name:"Occam's Protocol", source:"Occam's Protocol Tracking.xlsx", structure:'minimalist strength / mass tracking'},
+  {name:'Primer 4 Program', source:'Primer 4 Program.xlsx', structure:'monthly training template'},
+]
+
 
 function startOfWeek(date = new Date()) {
   const d = new Date(date)
@@ -457,6 +479,26 @@ export function PlanPage({
       )}
 
       {message && <div className="status-message">{message}</div>}
+
+      <section className="simple-card">
+        <div className="section-heading">
+          <div><span className="card-label">YOUR WORKOUT ARCHIVE</span><h3>Programs from Workouts.zip</h3></div>
+        </div>
+        <p className="helper-text">These are actual named programs from your archive. The 5/3/1 entries below are already converted into the WorkoutBoard runner; the different day-split programs remain listed by their original source instead of being forced into the wrong 4-lift format.</p>
+        <div className="archive-program-list">
+          {archiveCatalog.map(item => (
+            <div className="library-row" key={item.name}>
+              <div>
+                <strong>{item.name}</strong>
+                <span>{item.structure} · {item.source}</span>
+              </div>
+              {item.builtinId
+                ? <button className="mini-action" onClick={() => chooseProgram(item.builtinId)}>{activeProgram === item.builtinId ? 'Current' : 'Use'}</button>
+                : <span className="archive-source-badge">SOURCE</span>}
+            </div>
+          ))}
+        </div>
+      </section>
 
       <div className="program-picker">
         {programOrder.map(id => {
