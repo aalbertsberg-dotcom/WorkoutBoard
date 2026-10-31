@@ -408,6 +408,17 @@ function AuthScreen() {
     setBusy(false)
   }
 
+  const forgotPassword = async () => {
+    if (!email.trim()) {
+      setMessage('Enter your email first, then tap Forgot password.')
+      return
+    }
+    setBusy(true)
+    const {error} = await supabase.auth.resetPasswordForEmail(email.trim(),{redirectTo:appUrl()})
+    setMessage(error ? error.message : 'Password reset email sent. Open it, set a new password, then sign in.')
+    setBusy(false)
+  }
+
   return (
     <main className="auth-shell">
       <section className="auth-card">
@@ -424,6 +435,43 @@ function AuthScreen() {
           <label>Password<input type="password" value={password} onChange={e => setPassword(e.target.value)} minLength="6" required /></label>
           <button className="primary" disabled={busy}>{busy ? 'Working…' : mode === 'signin' ? 'Sign in' : 'Create account'}</button>
         </form>
+        {mode === 'signin' && <button className="forgot-button" type="button" onClick={forgotPassword} disabled={busy}>Forgot password?</button>}
+        {message && <div className="auth-message">{message}</div>}
+      </section>
+    </main>
+  )
+}
+
+function RecoveryScreen({onDone}) {
+  const [password,setPassword] = useState('')
+  const [message,setMessage] = useState('')
+  const [busy,setBusy] = useState(false)
+
+  const save = async e => {
+    e.preventDefault()
+    setBusy(true)
+    const {error} = await supabase.auth.updateUser({password})
+    if (error) {
+      setMessage(error.message)
+      setBusy(false)
+      return
+    }
+    setMessage('Password updated. You can sign in now.')
+    await supabase.auth.signOut()
+    onDone()
+    setBusy(false)
+  }
+
+  return (
+    <main className="auth-shell">
+      <section className="auth-card">
+        <div className="eyebrow">WORKOUTBOARD</div>
+        <h1>Set new password</h1>
+        <p className="auth-sub">Choose a new password for this account.</p>
+        <form onSubmit={save}>
+          <label>New password<input type="password" value={password} onChange={e => setPassword(e.target.value)} minLength="6" required /></label>
+          <button className="primary" disabled={busy}>{busy ? 'Saving…' : 'Save new password'}</button>
+        </form>
         {message && <div className="auth-message">{message}</div>}
       </section>
     </main>
@@ -433,6 +481,7 @@ function AuthScreen() {
 function App() {
   const [session,setSession] = useState(null)
   const [authLoading,setAuthLoading] = useState(true)
+  const [passwordRecovery,setPasswordRecovery] = useState(false)
   const [dataLoading,setDataLoading] = useState(true)
   const [activeTab,setActiveTab] = useState('today')
   const [profile,setProfile] = useState(null)
@@ -466,7 +515,10 @@ function App() {
       setSession(data.session)
       setAuthLoading(false)
     })
-    const {data:listener} = supabase.auth.onAuthStateChange((_event,nextSession) => setSession(nextSession))
+    const {data:listener} = supabase.auth.onAuthStateChange((event,nextSession) => {
+      if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
+      setSession(nextSession)
+    })
     return () => listener.subscription.unsubscribe()
   },[])
 
@@ -946,6 +998,7 @@ function App() {
   const maxWeeklyVolume = Math.max(1,...progress.weekly.map(item => item.volume))
 
   if (authLoading) return <div className="loading-screen">Loading WorkoutBoard…</div>
+  if (passwordRecovery) return <RecoveryScreen onDone={() => setPasswordRecovery(false)} />
   if (!session) return <AuthScreen />
 
   return (
