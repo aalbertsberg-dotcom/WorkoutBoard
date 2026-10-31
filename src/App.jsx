@@ -405,7 +405,7 @@ function AuthScreen() {
       } else if (data.session) {
         setMessage('')
       } else {
-        setMessage('Account created, but Supabase is still requiring email confirmation. Turn Confirm email OFF in Supabase Authentication → Sign In / Providers → Email.')
+        setMessage('Account created. Check your email and click the confirmation link, then sign in.')
       }
     } else {
       const {error} = await supabase.auth.signInWithPassword({
