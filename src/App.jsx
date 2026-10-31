@@ -733,16 +733,18 @@ function App() {
   }
 
   const chooseProgram = async programId => {
-    if (!programs[programId] || programId === activeProgram) {
-      setActiveTab('today')
-      return
+    if (!programs[programId] || programId === activeProgram) return
+
+    // Save any in-progress edits before switching program context.
+    if (saveState === 'Unsaved') {
+      await saveWorkout(false)
     }
+
     setSharedWorkoutActive(false)
     setSaveState('Saved')
     setActiveProgram(programId)
     setWeek(1)
     setLift('Squat')
-    setActiveTab('today')
 
     if (session?.user) {
       await Promise.all([
