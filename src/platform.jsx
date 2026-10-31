@@ -313,8 +313,30 @@ export function PlanPage({
 
   const submitPlan = async e => {
     e.preventDefault()
-    const name = submission.name.trim() || (submitMode === 'link' ? 'Imported program' : 'Custom program')
+    let imported = null
     const sourceUrl = submitMode === 'link' ? submission.source_url.trim() : null
+
+    if (submitMode === 'link') {
+      setMessage('Reading workout page…')
+      try {
+        const {data:{session:authSession}} = await supabase.auth.getSession()
+        const response = await fetch('/.netlify/functions/import-program',{
+          method:'POST',
+          headers:{
+            'content-type':'application/json',
+            Authorization:'Bearer ' + authSession.access_token,
+          },
+          body:JSON.stringify({url:sourceUrl}),
+        })
+        const payload = await response.json()
+        if (!response.ok) throw new Error(payload.error || 'Import failed')
+        imported = payload
+      } catch (error) {
+        setMessage('Could not read that site automatically. The link will still be saved: ' + (error?.message || 'Import failed'))
+      }
+    }
+
+    const name = submission.name.trim() || imported?.title || (submitMode === 'link' ? 'Imported program' : 'Custom program')
     const {error} = await supabase.from('program_library').insert({
       owner_user_id:session.user.id,
       name,
@@ -322,10 +344,12 @@ export function PlanPage({
       source_type:submitMode === 'link' ? 'url' : 'manual',
       source_url:sourceUrl || null,
       visibility:submission.visibility,
-      status:submitMode === 'link' ? 'pending_import' : 'draft',
+      status:submitMode === 'link' && !imported ? 'pending_import' : 'draft',
       plan:{
         submission_mode:submitMode,
         notes:submission.description.trim(),
+        source_title:imported?.title || null,
+        detected_lines:imported?.detected_lines || [],
       },
     })
     if (error) {
@@ -334,7 +358,9 @@ export function PlanPage({
     }
     setShowSubmit(false)
     setSubmission({name:'',description:'',source_url:'',visibility:'private'})
-    setMessage(submitMode === 'link' ? 'Link saved for import/review.' : 'Workout plan draft saved.')
+    setMessage(submitMode === 'link'
+      ? (imported ? 'Workout page imported for review.' : 'Link saved. Some sites block automated imports.')
+      : 'Workout plan draft saved.')
     await load()
   }
 
@@ -401,7 +427,7 @@ export function PlanPage({
           <div><span className="card-label">WORKOUT PLANS</span><h3>Program library</h3></div>
           <button className="mini-action" onClick={() => setShowSubmit(v => !v)}>Submit plan</button>
         </div>
-        <p className="helper-text">Build your own plan or submit a link to a program from another site. Link imports are saved with the source URL so they can be reviewed before becoming a runnable program.</p>
+        <p className="helper-text">Build your own plan or submit a link to a program from another site. Links are fetched server-side when the site allows it. Imported set/rep lines are saved with the source URL for review before becoming a runnable program.</p>
       </section>
 
       {showSubmit && (
