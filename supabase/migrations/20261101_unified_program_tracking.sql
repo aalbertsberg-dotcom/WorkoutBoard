@@ -24,6 +24,8 @@ on public.user_program_tracking(user_id, status, updated_at desc);
 
 alter table public.user_program_tracking enable row level security;
 
+grant select, insert, update, delete on public.user_program_tracking to authenticated;
+
 drop policy if exists "program_tracking_own_select" on public.user_program_tracking;
 create policy "program_tracking_own_select"
 on public.user_program_tracking for select to authenticated
