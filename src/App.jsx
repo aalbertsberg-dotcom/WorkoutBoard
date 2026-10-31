@@ -10,8 +10,8 @@ const dayNames = { Squat:'Mon', Bench:'Tue', Deadlift:'Thu', Press:'Fri' }
 
 const programs = {
   'andy-hybrid-12': {
-    name:'12 Week Andy Hybrid',
-    shortName:'12W Andy Hybrid',
+    name:'12 Week Hybrid',
+    shortName:'12W Hybrid',
     dbName:'12 Week Andy Hybrid',
     weeksCount:12,
     basis:'tm',
@@ -132,8 +132,8 @@ const programs = {
   },
 
   'andy-531-original-6': {
-    name:'Andy Original 5/3/1 + Jokers',
-    shortName:'Andy 5/3/1',
+    name:'Original 5/3/1 + Jokers',
+    shortName:'5/3/1 + Jokers',
     dbName:'Andy Original 5/3/1 + Jokers',
     weeksCount:6,
     basis:'tm',
@@ -208,7 +208,7 @@ const programs = {
   },
 
   'andy-bbb-jokers-11': {
-    name:'Andy BBB + Jokers Archive',
+    name:'5/3/1 BBB + Jokers',
     shortName:'BBB + Jokers',
     dbName:'Andy BBB + Jokers Archive',
     weeksCount:11,
