@@ -393,13 +393,13 @@ export function PlanPage({
   const trackedKeys = new Set(tracked.map(t=>t.program_key))
   const completedKeys = new Set(completed.map(t=>t.program_key))
 
-  const categories = useMemo(() => ['All','Runnable','Favorites',...Array.from(new Set(allPrograms.map(p=>p.category))).sort()],[allPrograms])
+  const categories = useMemo(() => ['All','Favorites',...Array.from(new Set(allPrograms.map(p=>p.category))).sort()],[allPrograms])
 
   const availablePrograms = useMemo(() => {
     const q=search.trim().toLowerCase()
     return allPrograms.filter(p => {
       if(trackedKeys.has(p.key) || completedKeys.has(p.key)) return false
-      const categoryOk = category === 'All' || (category === 'Runnable' ? p.transcriptionStatus==='full' : category === 'Favorites' ? favorites.includes(p.key) : p.category === category)
+      const categoryOk = category === 'All' || (category === 'Favorites' ? favorites.includes(p.key) : p.category === category)
       const searchOk = !q || [p.name,p.category,p.description,p.source].some(v=>String(v||'').toLowerCase().includes(q))
       return categoryOk && searchOk
     }).sort((a,b)=>{
@@ -582,7 +582,7 @@ export function PlanPage({
     return <article className={'archive-card '+(previewKey===p.key?'selected':'')+(runnable?'':' source-only')}>
       <div className="archive-card-head">
         <span className="program-length">{length} · {frequency}</span>
-        <div className="program-card-badges"><span className={runnable?'runnable-badge':'source-file-badge'}>{runnable?'RUNNABLE':'SOURCE FILE'}</span><button className={'favorite-button '+(favorites.includes(p.key)?'active':'')} onClick={()=>toggleFavorite(p.key)} title="Favorite">{favorites.includes(p.key)?'★':'☆'}</button></div>
+        <div className="program-card-badges"><button className={'favorite-button '+(favorites.includes(p.key)?'active':'')} onClick={()=>toggleFavorite(p.key)} title="Favorite">{favorites.includes(p.key)?'★':'☆'}</button></div>
       </div>
       <h3>{p.name}</h3>
       <p>{p.description}</p>
