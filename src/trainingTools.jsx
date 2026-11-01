@@ -6,7 +6,9 @@ const fmt=seconds=>`${pad(seconds/60)}:${pad(seconds%60)}`
 const today=()=>new Date().toISOString().slice(0,10)
 
 function beep() {
-  try {
+  const sound=localStorage.getItem('wb-setting-sound')!=='false'
+  const vibrate=localStorage.getItem('wb-setting-vibrate')!=='false'
+  if(sound) try {
     const Ctx=window.AudioContext||window.webkitAudioContext
     if(!Ctx)return
     const ctx=new Ctx()
@@ -19,7 +21,7 @@ function beep() {
     osc.stop(ctx.currentTime+.18)
     osc.onended=()=>ctx.close()
   } catch {}
-  try { navigator.vibrate?.([120,60,120]) } catch {}
+  if(vibrate) try { navigator.vibrate?.([120,60,120]) } catch {}
 }
 
 export function TrainingTimer() {
@@ -32,7 +34,7 @@ export function TrainingTimer() {
   const [workSeconds,setWorkSeconds]=useState(40)
   const [breakSeconds,setBreakSeconds]=useState(20)
   const [rounds,setRounds]=useState(8)
-  const [keepAwake,setKeepAwake]=useState(true)
+  const [keepAwake,setKeepAwake]=useState(()=>localStorage.getItem('wb-setting-wake-lock')!=='false')
   const [wakeActive,setWakeActive]=useState(false)
   const [expanded,setExpanded]=useState(false)
   const startAt=useRef(null)
@@ -115,7 +117,7 @@ export function TrainingTimer() {
     startAt.current=Date.now()
     baseElapsed.current=elapsed
     setRunning(true)
-    setExpanded(true)
+    setExpanded(false)
   }
   const pause=()=>{
     if(!running)return
@@ -133,7 +135,7 @@ export function TrainingTimer() {
   }
   const startRest=(seconds=restSeconds)=>{
     setMode('Rest');setRestSeconds(seconds);localStorage.setItem('wb-rest-seconds',String(seconds))
-    setElapsed(0);baseElapsed.current=0;startAt.current=Date.now();endBeeped.current=false;setRunning(true)
+    setElapsed(0);baseElapsed.current=0;startAt.current=Date.now();endBeeped.current=false;setRunning(true);setExpanded(false)
   }
 
   useEffect(()=>{
@@ -164,7 +166,11 @@ export function TrainingTimer() {
   }
   if(mode==='Stopwatch') display=elapsed
 
-  return <details className="training-timer-panel" open={expanded} onToggle={e=>setExpanded(e.currentTarget.open)}>
+  return <>
+    {running&&!expanded&&<button type="button" className={'floating-workout-timer '+(phase?phase.toLowerCase():'')} onClick={()=>setExpanded(true)}>
+      <span>{phase||mode}</span><strong>{fmt(display)}</strong>{round&&<small>{round}</small>}
+    </button>}
+    <details className={'training-timer-panel '+(running&&!expanded?'timer-floating-active':'')} open={expanded} onToggle={e=>setExpanded(e.currentTarget.open)}>
     <summary>
       <span><b>⏱ Timer</b><small>{running?`${mode} · ${fmt(display)}`:'Rest / Metcon / EMOM / Intervals'}</small></span>
       {running&&<i className="timer-live-dot">LIVE</i>}
@@ -194,10 +200,11 @@ export function TrainingTimer() {
         <button className="primary-action" onClick={running?pause:start}>{running?'Pause':'Start'}</button>
         <button className="secondary-action" onClick={reset}>Reset</button>
       </div>
-      <label className="wake-toggle"><input type="checkbox" checked={keepAwake} onChange={e=>{setKeepAwake(e.target.checked);if(!e.target.checked)releaseWake();else if(running)requestWake()}}/><span>Keep screen awake while timer runs</span><b>{'wakeLock' in navigator?(wakeActive?'ON':'Available'):'Not supported'}</b></label>
+      <label className="wake-toggle"><input type="checkbox" checked={keepAwake} onChange={e=>{setKeepAwake(e.target.checked);localStorage.setItem('wb-setting-wake-lock',String(e.target.checked));if(!e.target.checked)releaseWake();else if(running)requestWake()}}/><span>Keep screen awake while timer runs</span><b>{'wakeLock' in navigator?(wakeActive?'ON':'Available'):'Not supported'}</b></label>
       <p className="helper-text">Rest mode can start automatically when you mark a set complete. Wake lock only works while WorkoutBoard is visible and the browser/device allows it.</p>
     </div>
   </details>
+  </>
 }
 
 function parseResult(text){
