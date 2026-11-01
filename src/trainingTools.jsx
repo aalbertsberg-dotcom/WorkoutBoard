@@ -320,19 +320,19 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
     {tab==='PRs'&&<section className="simple-card">
       <div className="section-heading"><div><span className="card-label">PR BOARD</span><h3>Your best estimated sets</h3></div></div>
       <div className="pr-grid">{prs.slice(0,12).map(x=><div className="pr-card" key={x.name}><span>{x.name}</span><strong>{x.weight} × {x.reps}</strong><small>e1RM {formatWeight(x.e1rm)} lb</small></div>)}</div>
-      {!prs.length&&<div className="empty-state">PRs appear as you log weighted sets.</div>}
+      {!prs.length&&<div className="empty-state">No PRs yet. Finish weighted sets and WorkoutBoard will add them automatically.</div>}
     </section>}
 
     {tab==='Exercises'&&<section className="simple-card">
       <div className="section-heading"><div><span className="card-label">EXERCISE LIBRARY</span><h3>Everything you've trained</h3></div></div>
       <div className="exercise-library">{exerciseRows.map(x=><article key={x.name}><div><strong>{x.name}</strong><span>{x.count} logged session{x.count===1?'':'s'}</span></div><div><strong>{x.last?.result||'—'}</strong><span>{x.best?`Best e1RM ${formatWeight(x.best.e1rm)} lb`:'Latest result'}</span></div></article>)}</div>
-      {!exerciseRows.length&&<div className="empty-state">Your exercise library builds itself from completed workouts.</div>}
+      {!exerciseRows.length&&<div className="empty-state">No exercise history yet. Complete a workout and your exercise library will build itself.</div>}
     </section>}
 
     {tab==='Calendar'&&<section className="simple-card">
       <div className="section-heading"><div><span className="card-label">CALENDAR HISTORY</span><h3>Planned vs completed</h3></div><div className="adherence-score"><strong>{adherence.pct==null?'—':adherence.pct+'%'}</strong><span>adherence</span></div></div>
       <div className="calendar-history">{calendar.map(([date,v])=><div key={date}><strong>{new Date(date+'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'})}</strong><span>{v.completed} completed · {v.planned} planned</span></div>)}</div>
-      {!calendar.length&&<div className="empty-state">Your training calendar fills in as you plan and complete workouts.</div>}
+      {!calendar.length&&<div className="empty-state">No calendar history yet. Schedule or complete a workout to get started.</div>}
       {tracking.filter(x=>x.status==='tracking').map(x=><div className="adherence-program" key={x.id}><strong>{x.program_name}</strong><span>Run {x.run_number} · tracking</span></div>)}
     </section>}
 
