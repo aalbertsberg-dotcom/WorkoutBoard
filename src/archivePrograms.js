@@ -1,3 +1,5 @@
+import {verifiedSourcePrograms} from './programSources/sourcePrograms'
+
 const ex = (name, prescription, note='') => ({name,prescription,note})
 const day = (title, exercises, note='') => ({title,exercises,note})
 
@@ -313,7 +315,14 @@ export const referenceArchivePrograms = [
   {id:'ppsa-meat-wagon',name:'PPSA Meat Wagon',category:'Strength + Conditioning',difficulty:'Varies',weeksCount:null,daysPerWeek:null,source:'Workouts.zip · DOCX',description:'PPSA Meat Wagon program from the original archive.',transcriptionStatus:'source'},
 ]
 
-export const allArchivePrograms = [...archivePrograms,...referenceArchivePrograms]
+const verifiedById = Object.fromEntries(verifiedSourcePrograms.map(p=>[p.id,p]))
+const catalogBase = [...archivePrograms,...referenceArchivePrograms]
+const catalogIds = new Set(catalogBase.map(p=>p.id))
+
+export const allArchivePrograms = [
+  ...catalogBase.map(p=>verifiedById[p.id] ? {...p,...verifiedById[p.id]} : p),
+  ...verifiedSourcePrograms.filter(p=>!catalogIds.has(p.id)),
+]
 export const archiveProgramById = Object.fromEntries(allArchivePrograms.map(p=>[p.id,p]))
 
 function archiveExerciseRest(program,item) {
