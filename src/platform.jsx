@@ -393,13 +393,13 @@ export function PlanPage({
   const trackedKeys = new Set(tracked.map(t=>t.program_key))
   const completedKeys = new Set(completed.map(t=>t.program_key))
 
-  const categories = useMemo(() => ['All','Favorites',...Array.from(new Set(allPrograms.map(p=>p.category))).sort()],[allPrograms])
+  const categories = useMemo(() => ['All','Runnable','Source Files','Favorites',...Array.from(new Set(allPrograms.map(p=>p.category))).sort()],[allPrograms])
 
   const availablePrograms = useMemo(() => {
     const q=search.trim().toLowerCase()
     return allPrograms.filter(p => {
       if(trackedKeys.has(p.key) || completedKeys.has(p.key)) return false
-      const categoryOk = category === 'All' || (category === 'Favorites' ? favorites.includes(p.key) : p.category === category)
+      const categoryOk = category === 'All' || (category === 'Runnable' ? p.transcriptionStatus==='full' : category === 'Source Files' ? p.transcriptionStatus!=='full' : category === 'Favorites' ? favorites.includes(p.key) : p.category === category)
       const searchOk = !q || [p.name,p.category,p.description,p.source].some(v=>String(v||'').toLowerCase().includes(q))
       return categoryOk && searchOk
     }).sort((a,b)=>{
