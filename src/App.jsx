@@ -1548,7 +1548,7 @@ function App() {
               <button className="context-add-button" type="button" onClick={()=>{setSaveState('Unsaved');setLog(v=>({...v,conditioningEnabled:true}))}}>+ Conditioning</button>
             )}
 
-            <details className="today-collapsible workout-details" open={Boolean(log.sleep||log.energy||log.rpe||log.bodyweight||log.pain||log.note)}>
+            <details className="today-collapsible workout-details">
               <summary><span><b>Workout details</b><small>Readiness, bodyweight, pain & notes</small></span></summary>
               <div className="today-details-body">
                 <section className="metrics readiness-metrics">
