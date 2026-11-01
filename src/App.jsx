@@ -1360,7 +1360,7 @@ function App() {
         <header className="app-header">
           <div>
             <div className="eyebrow">WORKOUTBOARD</div>
-            <h1>{activeTab === 'today' ? 'Today' : activeTab === 'together' ? 'Together' : activeTab === 'progress' ? 'Progress' : activeTab === 'program' ? 'Plan' : activeTab === 'whiteboard' ? 'Whiteboard' : activeTab === 'admin' ? 'Admin' : 'Me'}</h1>
+            <h1>{activeTab === 'today' ? 'Today' : activeTab === 'together' ? 'Together' : activeTab === 'program' ? 'Plan' : activeTab === 'whiteboard' ? 'Whiteboard' : activeTab === 'admin' ? 'Admin' : 'Me'}</h1>
           </div>
           <button className={'account-chip ' + (isAdmin ? 'admin' : '')} onClick={() => setActiveTab('me')}>
             <span>{displayName}</span>
@@ -1371,15 +1371,14 @@ function App() {
         <nav className="primary-nav">
           <button className={activeTab === 'today' ? 'active' : ''} onClick={async () => { await refreshPlannedToday(); setActiveTab('today') }}><b>●</b><span>Today</span></button>
           <button className={activeTab === 'together' ? 'active' : ''} onClick={() => setActiveTab('together')}><b>⇄</b><span>Together</span></button>
-          <button className={activeTab === 'progress' ? 'active' : ''} onClick={() => setActiveTab('progress')}><b>↗</b><span>Progress</span></button>
           <button className={activeTab === 'program' ? 'active' : ''} onClick={() => setActiveTab('program')}><b>▦</b><span>Plan</span></button>
           <button className={activeTab === 'whiteboard' ? 'active' : ''} onClick={() => setActiveTab('whiteboard')}><b>□</b><span>Board</span></button>
+          <button className={activeTab === 'me' ? 'active' : ''} onClick={() => setActiveTab('me')}><b>◎</b><span>Me</span></button>
         </nav>
 
         <nav className="mobile-bottom-nav" aria-label="WorkoutBoard mobile navigation">
           <button className={activeTab==='today'?'active':''} onClick={async()=>{await refreshPlannedToday();setActiveTab('today')}}><b>●</b><span>Today</span></button>
           <button className={activeTab==='together'?'active':''} onClick={()=>setActiveTab('together')}><b>⇄</b><span>Together</span></button>
-          <button className={activeTab==='progress'?'active':''} onClick={()=>setActiveTab('progress')}><b>↗</b><span>Progress</span></button>
           <button className={activeTab==='program'?'active':''} onClick={()=>setActiveTab('program')}><b>▦</b><span>Plan</span></button>
           <button className={activeTab==='whiteboard'?'active':''} onClick={()=>setActiveTab('whiteboard')}><b>□</b><span>Board</span></button>
           <button className={activeTab==='me'?'active':''} onClick={()=>setActiveTab('me')}><b>◎</b><span>Me</span></button>
@@ -1692,17 +1691,6 @@ function App() {
               </>
             )}
           </section>
-        ) : activeTab === 'progress' ? (
-          <PlatformProgress
-            session={session}
-            profile={profile}
-            setProfile={setProfile}
-            progress={progress}
-            lifts={lifts}
-            formatWeight={formatWeight}
-            programs={programs}
-            dbNameToProgram={dbNameToProgram}
-          />
         ) : activeTab === 'program' ? (
           <PlanPage
             session={session}
@@ -1736,6 +1724,23 @@ function App() {
               <p>{session.user.email}</p>
               <label>Display name<input defaultValue={displayName} onBlur={e => saveDisplayName(e.target.value)} /></label>
             </section>
+
+            <section className="me-dashboard-heading">
+              <span className="card-label">YOUR DASHBOARD</span>
+              <h2>Analytics & tracking</h2>
+              <p>Strength, volume, bodyweight, PRs, goals, measurements, history, consistency and program tracking.</p>
+            </section>
+
+            <PlatformProgress
+              session={session}
+              profile={profile}
+              setProfile={setProfile}
+              progress={progress}
+              lifts={lifts}
+              formatWeight={formatWeight}
+              programs={programs}
+              dbNameToProgram={dbNameToProgram}
+            />
 
             <section className="simple-card">
               <div className="section-heading"><div><span className="card-label">TRAINING MAXES</span><h3>Your current numbers</h3></div></div>

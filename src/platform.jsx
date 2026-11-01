@@ -41,6 +41,49 @@ function quickWorkoutPayload(lift, scheme, notes='') {
   }
 }
 
+
+function AnalyticsLineChart({series=[],unit='lb',emptyText='Not enough data to draw this trend yet.'}) {
+  const cleaned=series.map(item=>({
+    ...item,
+    points:(item.points||[])
+      .filter(point=>point?.date&&Number.isFinite(Number(point.value))&&Number(point.value)>0)
+      .sort((a,b)=>new Date(a.date)-new Date(b.date))
+  })).filter(item=>item.points.length)
+  const points=cleaned.flatMap(item=>item.points)
+  if(!points.length)return <div className="empty-state action-empty"><strong>No chart data yet.</strong><span>{emptyText}</span></div>
+
+  const times=points.map(point=>new Date(point.date).getTime())
+  const values=points.map(point=>Number(point.value))
+  const minTime=Math.min(...times),maxTime=Math.max(...times)
+  const minValue=Math.min(...values),maxValue=Math.max(...values)
+  const width=720,height=230,left=34,right=18,top=18,bottom=26
+  const x=time=>left+((time-minTime)/Math.max(1,maxTime-minTime))*(width-left-right)
+  const y=value=>top+(1-(value-minValue)/Math.max(1,maxValue-minValue))*(height-top-bottom)
+  const dateLabel=value=>new Date(value).toLocaleDateString(undefined,{month:'short',day:'numeric'})
+
+  return <div className="analytics-line-chart">
+    <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Training trend chart">
+      {[0,.25,.5,.75,1].map(step=><line key={step} className="analytics-grid-line" x1={left} x2={width-right} y1={top+step*(height-top-bottom)} y2={top+step*(height-top-bottom)}/>)}
+      {cleaned.map((item,index)=>{
+        const path=item.points.map((point,i)=>{
+          const px=x(new Date(point.date).getTime()),py=y(Number(point.value))
+          return `${i?'L':'M'} ${px.toFixed(1)} ${py.toFixed(1)}`
+        }).join(' ')
+        const last=item.points.at(-1)
+        return <g key={item.name} className={`analytics-series analytics-series-${index%4}`}>
+          <path d={path}/>
+          {last&&<circle cx={x(new Date(last.date).getTime())} cy={y(Number(last.value))} r="4"/>}
+        </g>
+      })}
+    </svg>
+    <div className="analytics-chart-range"><span>{dateLabel(minTime)}</span><span>{dateLabel(maxTime)}</span></div>
+    <div className="analytics-chart-legend">{cleaned.map((item,index)=>{
+      const last=item.points.at(-1)
+      return <div key={item.name} className={`analytics-legend-item analytics-series-${index%4}`}><i/><span>{item.name}</span><strong>{Math.round(Number(last?.value||0)).toLocaleString()} {unit}</strong></div>
+    })}</div>
+  </div>
+}
+
 export function PlatformProgress({
   session,
   profile,
@@ -54,19 +97,22 @@ export function PlatformProgress({
   const [mode,setMode] = useState('mine')
   const [community,setCommunity] = useState([])
   const [flexSessions,setFlexSessions] = useState([])
+  const [measurements,setMeasurements] = useState([])
   const [ready,setReady] = useState(null)
   const [message,setMessage] = useState('')
 
   const loadData = async () => {
     if (!session?.user) return
-    const [{data:communityRows,error:communityError},{data:sessionRows}] = await Promise.all([
+    const [{data:communityRows,error:communityError},{data:sessionRows},{data:measurementRows}] = await Promise.all([
       supabase.from('community_activity').select('*').order('created_at',{ascending:false}).limit(50),
       supabase.from('training_sessions').select('*').eq('user_id',session.user.id).is('legacy_log_id',null).not('completed_at','is',null).order('completed_at',{ascending:false}).limit(250),
+      supabase.from('body_measurements').select('*').eq('user_id',session.user.id).order('measured_on',{ascending:true}).limit(500),
     ])
     if (communityError) { setReady(false); return }
     setReady(true)
     setCommunity(communityRows || [])
     setFlexSessions(sessionRows || [])
+    setMeasurements(measurementRows || [])
   }
 
   useEffect(() => { loadData() },[session?.user?.id])
@@ -130,7 +176,48 @@ export function PlatformProgress({
   const flexBody=flexSessions.find(r=>Number(r.bodyweight||0))?.bodyweight
   const latestBodyweight=flexBody||progress.latestBodyweight
   const totalWorkouts=progress.completed.length+flexSessions.length
-  const maxWeeklyVolume=Math.max(1,...progress.weekly.map(item=>item.volume))
+  const weeklyAnalytics=useMemo(()=>{
+    const rows=[
+      ...progress.completed.map(r=>({date:r.completed_at,volume:Number(r._metrics?.volume||0)})),
+      ...flexSessions.map(r=>({date:r.completed_at||r.session_date,volume:Number(r.total_volume||0)}))
+    ]
+    return Array.from({length:8},(_,i)=>{
+      const end=now-(7-i)*7*dayMs
+      const start=end-7*dayMs
+      const matches=rows.filter(row=>{const t=new Date(row.date).getTime();return t>start&&t<=end})
+      return {
+        label:i===7?'This week':(7-i)+'w ago',
+        volume:matches.reduce((sum,row)=>sum+row.volume,0),
+        workouts:matches.length,
+      }
+    })
+  },[progress.completed,flexSessions])
+  const maxWeeklyVolume=Math.max(1,...weeklyAnalytics.map(item=>item.volume))
+  const maxWeeklyWorkouts=Math.max(1,...weeklyAnalytics.map(item=>item.workouts))
+
+  const strengthTrendSeries=useMemo(()=>lifts.map(name=>({
+    name,
+    points:[
+      ...progress.completed.filter(r=>r.lift===name&&Number(r._metrics?.estimated1rm||0)>0).map(r=>({date:r.completed_at,value:Number(r._metrics.estimated1rm)})),
+      ...flexSessions.filter(r=>r.primary_lift===name&&Number(r.estimated_1rm||0)>0).map(r=>({date:r.completed_at||r.session_date,value:Number(r.estimated_1rm)})),
+    ]
+  })).filter(series=>series.points.length),[progress.completed,flexSessions,lifts])
+
+  const bodyweightTrendSeries=useMemo(()=>[{
+    name:'Bodyweight',
+    points:[
+      ...measurements.filter(r=>Number(r.bodyweight||0)>0).map(r=>({date:r.measured_on,value:Number(r.bodyweight)})),
+      ...progress.completed.filter(r=>Number(r.workout?.bodyweight||0)>0).map(r=>({date:r.completed_at,value:Number(r.workout.bodyweight)})),
+      ...flexSessions.filter(r=>Number(r.bodyweight||0)>0).map(r=>({date:r.completed_at||r.session_date,value:Number(r.bodyweight)})),
+    ]
+  }],[measurements,progress.completed,flexSessions])
+
+  const measurementTrendSeries=useMemo(()=>[
+    ['Waist','waist'],['Chest','chest'],['Arm','arm'],['Thigh','thigh']
+  ].map(([name,key])=>({
+    name,
+    points:measurements.filter(r=>Number(r[key]||0)>0).map(r=>({date:r.measured_on,value:Number(r[key])}))
+  })).filter(series=>series.points.length),[measurements])
 
   const recentCombined=[
     ...progress.completed.map(r=>({
@@ -167,7 +254,7 @@ export function PlatformProgress({
 
   return <section className="page-section">
     <div className="segmented">
-      <button className={mode==='mine'?'active':''} onClick={()=>setMode('mine')}>My Progress</button>
+      <button className={mode==='mine'?'active':''} onClick={()=>setMode('mine')}>Analytics</button>
       <button className={mode==='community'?'active':''} onClick={()=>setMode('community')}>Community</button>
     </div>
 
@@ -182,6 +269,33 @@ export function PlatformProgress({
       <section className="simple-card recent-pr-home">
         <div className="section-heading"><div><span className="card-label">LATEST PRS</span><h3>Recent personal bests</h3></div></div>
         {recentPrs.length?<div className="recent-pr-list">{recentPrs.map((pr,i)=><div key={pr.key+'-'+i}><div><strong>{pr.label}</strong><span>{new Date(pr.date).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span></div><b>{pr.set?pr.set.weight+' × '+pr.set.reps:'e1RM '+formatWeight(pr.e1rm)}</b></div>)}</div>:<div className="empty-state action-empty"><strong>No PRs yet.</strong><span>Complete weighted sets and your bests will appear here automatically.</span></div>}
+      </section>
+
+      <section className="analytics-dashboard-grid">
+        <section className="simple-card analytics-chart-card analytics-chart-wide">
+          <div className="section-heading"><div><span className="card-label">STRENGTH TREND</span><h3>Estimated 1RM over time</h3></div></div>
+          <AnalyticsLineChart series={strengthTrendSeries} unit="lb" emptyText="Complete weighted Squat, Bench, Deadlift or Press workouts and the strength lines will build automatically."/>
+        </section>
+
+        <section className="simple-card analytics-chart-card">
+          <div className="section-heading"><div><span className="card-label">BODYWEIGHT</span><h3>Weight over time</h3></div></div>
+          <AnalyticsLineChart series={bodyweightTrendSeries} unit="lb" emptyText="Add bodyweight in Workout details or Measurements to start this graph."/>
+        </section>
+
+        <section className="simple-card analytics-chart-card">
+          <div className="section-heading"><div><span className="card-label">MEASUREMENTS</span><h3>Body measurements over time</h3></div></div>
+          <AnalyticsLineChart series={measurementTrendSeries} unit="in" emptyText="Add waist, chest, arm or thigh measurements to build these tracking lines."/>
+        </section>
+
+        <section className="simple-card analytics-chart-card">
+          <div className="section-heading"><div><span className="card-label">TRAINING VOLUME</span><h3>Last 8 weeks</h3></div></div>
+          <div className="volume-chart">{weeklyAnalytics.map(item=><div className="volume-bar-row" key={item.label}><span>{item.label}</span><div className="bar-track"><div className="bar-fill" style={{width:(item.volume/maxWeeklyVolume*100)+'%'}}/></div><strong>{formatWeight(item.volume)}</strong></div>)}</div>
+        </section>
+
+        <section className="simple-card analytics-chart-card">
+          <div className="section-heading"><div><span className="card-label">WORKOUT FREQUENCY</span><h3>Sessions per week</h3></div></div>
+          <div className="volume-chart frequency-chart">{weeklyAnalytics.map(item=><div className="volume-bar-row" key={item.label}><span>{item.label}</span><div className="bar-track"><div className="bar-fill" style={{width:(item.workouts/maxWeeklyWorkouts*100)+'%'}}/></div><strong>{item.workouts}</strong></div>)}</div>
+        </section>
       </section>
 
       <details className="progress-detail-stack">
@@ -200,11 +314,6 @@ export function PlatformProgress({
           <section className="simple-card">
             <div className="section-heading"><div><span className="card-label">VOLUME BY LIFT</span><h3>Where your work is going</h3></div></div>
             <div className="volume-chart">{lifts.map(name=><div className="volume-bar-row" key={name}><span>{name}</span><div className="bar-track"><div className="bar-fill" style={{width:(volumeByLift[name]/maxLiftVolume*100)+'%'}}/></div><strong>{formatWeight(volumeByLift[name])}</strong></div>)}</div>
-          </section>
-
-          <section className="simple-card">
-            <div className="section-heading"><div><span className="card-label">VOLUME TREND</span><h3>Last 8 weeks</h3></div></div>
-            <div className="volume-chart">{progress.weekly.map(item=><div className="volume-bar-row" key={item.label}><span>{item.label}</span><div className="bar-track"><div className="bar-fill" style={{width:(item.volume/maxWeeklyVolume*100)+'%'}}/></div><strong>{formatWeight(item.volume)}</strong></div>)}</div>
           </section>
 
           <section className="simple-card">
