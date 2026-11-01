@@ -291,6 +291,7 @@ export function PlanPage({
         : id==='andy-bbb-jokers-11' ? 'ANDY 531-Boring But Big-Jokers.xlsx'
         : 'WorkoutBoard built-in',
       dbName:p.dbName,
+      transcriptionStatus:'full',
       getWeek:(targetWeek)=>lifts.map(liftName=>{
         const main=(p.main?.[targetWeek]||[]).map(set => set.pct != null ? `${set.pct}% × ${set.reps}` : `× ${set.reps}`)
         const secondary=p.secondary?.[targetWeek] || p.secondaryByLift?.[liftName]
@@ -310,15 +311,14 @@ export function PlanPage({
     ...p,
     key:'archive:'+p.id,
     kind:'archive',
+    transcriptionStatus:p.getWeek?'full':(p.transcriptionStatus||'source'),
   })),[])
 
   const allPrograms = useMemo(() => [...classicCatalog,...archiveCatalog],[classicCatalog,archiveCatalog])
   const programByKey = useMemo(() => Object.fromEntries(allPrograms.map(p=>[p.key,p])),[allPrograms])
   const preview = programByKey[previewKey] || allPrograms[0]
-  const previewDays = preview?.getWeek ? preview.getWeek(previewWeek) : [{
-    title:'Source program session',
-    exercises:[{name:'Source program',prescription:'Use the original source prescription for this session',note:preview?.source || ''}]
-  }]
+  const previewRunnable = Boolean(preview?.getWeek)
+  const previewDays = previewRunnable ? preview.getWeek(previewWeek) : []
 
   const days = useMemo(() => weekDays(),[])
   const start = isoDate(days[0])
@@ -402,6 +402,10 @@ export function PlanPage({
       const categoryOk = category === 'All' || (category === 'Favorites' ? favorites.includes(p.key) : p.category === category)
       const searchOk = !q || [p.name,p.category,p.description,p.source].some(v=>String(v||'').toLowerCase().includes(q))
       return categoryOk && searchOk
+    }).sort((a,b)=>{
+      const aRun=a.transcriptionStatus==='full'?0:1
+      const bRun=b.transcriptionStatus==='full'?0:1
+      return aRun-bRun || String(a.name).localeCompare(String(b.name))
     })
   },[allPrograms,category,search,favorites,tracking])
 
@@ -493,6 +497,10 @@ export function PlanPage({
 
   const startTracking = async p => {
     if(!session?.user || !p)return
+    if(!p.getWeek){
+      setMessage(p.name+' is cataloged from your archive but still needs its source prescription transcribed before it can be tracked.')
+      return
+    }
     const versionId=await createProgramVersion(p)
     const {data,error}=await supabase.rpc('start_program_tracking',{
       target_program_key:p.key,
@@ -520,6 +528,10 @@ export function PlanPage({
 
   const scheduleProgramWorkout = async () => {
     if(!session?.user || !preview)return
+    if(!previewRunnable){
+      setMessage(preview.name+' is source-backed only right now. I will not create a fake workout from an untranscribed file.')
+      return
+    }
     const chosen=previewDays[Math.max(0,Math.min(previewDays.length-1,previewDay))]
     let payload
     if(preview.kind==='archive'){
@@ -563,19 +575,24 @@ export function PlanPage({
     await load()
   }
 
-  const ProgramCard=({p,statusAction,statusLabel})=><article className={'archive-card '+(previewKey===p.key?'selected':'')}>
-    <div className="archive-card-head">
-      <span className="program-length">{p.weeksCount} weeks · {p.daysPerWeek} day{p.daysPerWeek===1?'':'s'}/wk</span>
-      <button className={'favorite-button '+(favorites.includes(p.key)?'active':'')} onClick={()=>toggleFavorite(p.key)} title="Favorite">{favorites.includes(p.key)?'★':'☆'}</button>
-    </div>
-    <h3>{p.name}</h3>
-    <p>{p.description}</p>
-    <div className="program-meta"><span>{p.category}</span><span>{p.difficulty}</span></div>
-    <div className="program-card-actions">
-      <button className="wide-button" onClick={()=>openPreview(p.key)}>Preview</button>
-      {statusAction&&<button className="primary-action compact" onClick={statusAction}>{statusLabel}</button>}
-    </div>
-  </article>
+  const ProgramCard=({p,statusAction,statusLabel})=>{
+    const runnable=p.transcriptionStatus==='full'
+    const length=p.durationLabel || (p.weeksCount?(`${p.weeksCount} weeks`):'Duration in source')
+    const frequency=p.daysPerWeek?(`${p.daysPerWeek} day${p.daysPerWeek===1?'':'s'}/wk`):'Frequency in source'
+    return <article className={'archive-card '+(previewKey===p.key?'selected':'')+(runnable?'':' source-only')}>
+      <div className="archive-card-head">
+        <span className="program-length">{length} · {frequency}</span>
+        <div className="program-card-badges"><span className={runnable?'runnable-badge':'source-file-badge'}>{runnable?'RUNNABLE':'SOURCE FILE'}</span><button className={'favorite-button '+(favorites.includes(p.key)?'active':'')} onClick={()=>toggleFavorite(p.key)} title="Favorite">{favorites.includes(p.key)?'★':'☆'}</button></div>
+      </div>
+      <h3>{p.name}</h3>
+      <p>{p.description}</p>
+      <div className="program-meta"><span>{p.category}</span><span>{p.difficulty}</span></div>
+      <div className="program-card-actions">
+        <button className="wide-button" onClick={()=>openPreview(p.key)}>{runnable?'Preview':'View source info'}</button>
+        {runnable&&statusAction&&<button className="primary-action compact" onClick={statusAction}>{statusLabel}</button>}
+      </div>
+    </article>
+  }
 
   if(ready===false){
     return <section className="page-section"><div className="setup-needed">
@@ -678,7 +695,7 @@ export function PlanPage({
     {message&&<div className="status-message">{message}</div>}
 
     <div className="archive-grid">
-      {availablePrograms.map(p=><ProgramCard key={p.key} p={p} statusAction={trackingReady?()=>startTracking(p):null} statusLabel="Track program"/>)}
+      {availablePrograms.map(p=><ProgramCard key={p.key} p={p} statusAction={trackingReady&&p.transcriptionStatus==='full'?()=>startTracking(p):null} statusLabel="Track program"/>)}
       {!availablePrograms.length&&<div className="empty-state">No untracked programs match this filter.</div>}
     </div>
 
@@ -690,21 +707,26 @@ export function PlanPage({
       <div className="preview-facts">
         <div><span>Category</span><strong>{preview.category}</strong></div>
         <div><span>Difficulty</span><strong>{preview.difficulty}</strong></div>
-        <div><span>Length</span><strong>{preview.weeksCount} weeks</strong></div>
-        <div><span>Frequency</span><strong>{preview.daysPerWeek} days/week</strong></div>
+        <div><span>Length</span><strong>{preview.durationLabel || (preview.weeksCount?preview.weeksCount+' weeks':'See source')}</strong></div>
+        <div><span>Frequency</span><strong>{preview.daysPerWeek?preview.daysPerWeek+' days/week':'See source'}</strong></div>
       </div>
       <div className="source-pill">Source: {preview.source}</div>
-      <div className="builder-two preview-controls">
-        <label>Week<select value={previewWeek} onChange={e=>{setPreviewWeek(Number(e.target.value));setPreviewDay(0)}}>{Array.from({length:preview.weeksCount},(_,i)=>i+1).map(n=><option key={n} value={n}>Week {n}</option>)}</select></label>
-        <label>Workout<select value={previewDay} onChange={e=>setPreviewDay(Number(e.target.value))}>{previewDays.map((d,i)=><option key={i} value={i}>{d.title}</option>)}</select></label>
-      </div>
-      <div className="sample-workout"><h3>{previewDays[previewDay]?.title}</h3>{previewDays[previewDay]?.exercises?.map((x,i)=><div className="sample-exercise" key={i}><strong>{x.name}</strong><span>{x.prescription}</span>{x.note&&<small>{x.note}</small>}</div>)}</div>
-      <div className="program-preview-actions">
-        <div className="schedule-row"><input type="date" value={scheduleDate} onChange={e=>setScheduleDate(e.target.value)}/><button className="primary-action" onClick={scheduleProgramWorkout}>Add this workout</button></div>
-        <button className="wide-button" onClick={()=>shareProgram(preview)}>Share program code</button>
-        {trackingReady&&!trackedKeys.has(preview.key)&&<button className="wide-button" onClick={()=>startTracking(preview)}>{completedKeys.has(preview.key)?'Track this program again':'Track this program'}</button>}
-      </div>
-      {!preview.getWeek&&<p className="helper-text">This program is cataloged from your archive but not fully transcribed yet. Its preview keeps the original source visible rather than inventing prescriptions.</p>}
+      {previewRunnable ? <>
+        <div className="builder-two preview-controls">
+          <label>Week<select value={previewWeek} onChange={e=>{setPreviewWeek(Number(e.target.value));setPreviewDay(0)}}>{Array.from({length:preview.weeksCount},(_,i)=>i+1).map(n=><option key={n} value={n}>Week {n}</option>)}</select></label>
+          <label>Workout<select value={previewDay} onChange={e=>setPreviewDay(Number(e.target.value))}>{previewDays.map((d,i)=><option key={i} value={i}>{d.title}</option>)}</select></label>
+        </div>
+        <div className="sample-workout"><h3>{previewDays[previewDay]?.title}</h3>{previewDays[previewDay]?.exercises?.map((x,i)=><div className="sample-exercise" key={i}><strong>{x.name}</strong><span>{x.prescription}</span>{x.note&&<small>{x.note}</small>}</div>)}</div>
+        <div className="program-preview-actions">
+          <div className="schedule-row"><input type="date" value={scheduleDate} onChange={e=>setScheduleDate(e.target.value)}/><button className="primary-action" onClick={scheduleProgramWorkout}>Add this workout</button></div>
+          <button className="wide-button" onClick={()=>shareProgram(preview)}>Share program code</button>
+          {trackingReady&&!trackedKeys.has(preview.key)&&<button className="wide-button" onClick={()=>startTracking(preview)}>{completedKeys.has(preview.key)?'Track this program again':'Track this program'}</button>}
+        </div>
+      </> : <div className="source-program-notice">
+        <span className="source-file-badge">SOURCE FILE</span>
+        <h3>Cataloged, not transcribed</h3>
+        <p>This program came from your original workout archive. Its source is preserved here, but the actual week/day prescription is not currently available in the app. WorkoutBoard will not invent a routine for it.</p>
+      </div>}
     </section>}
 
     <PlannedWorkoutTools session={session} />
