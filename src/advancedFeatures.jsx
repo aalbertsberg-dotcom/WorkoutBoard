@@ -346,3 +346,57 @@ export function AdminDashboardSummary() {
     <div><span>Never signed in</span><strong>{stats.never_signed_in}</strong></div>
   </section>
 }
+
+
+export function WorkoutSettingsPanel({session}) {
+  const [wake,setWake]=useState(()=>localStorage.getItem('wb-setting-wake-lock')!=='false')
+  const [sound,setSound]=useState(()=>localStorage.getItem('wb-setting-sound')!=='false')
+  const [vibrate,setVibrate]=useState(()=>localStorage.getItem('wb-setting-vibrate')!=='false')
+  const [compoundRest,setCompoundRest]=useState(()=>Number(localStorage.getItem('wb-setting-compound-rest')||180))
+  const [accessoryRest,setAccessoryRest]=useState(()=>Number(localStorage.getItem('wb-setting-accessory-rest')||90))
+  const [profiles,setProfiles]=useState([])
+  const [message,setMessage]=useState('')
+
+  const load=async()=>{
+    if(!session?.user)return
+    const {data}=await supabase.from('equipment_profiles').select('*').eq('user_id',session.user.id).order('is_active',{ascending:false}).order('name')
+    setProfiles(data||[])
+  }
+  useEffect(()=>{load()},[session?.user?.id])
+
+  const persist=(key,value,setter)=>{
+    setter(value)
+    localStorage.setItem(key,String(value))
+    window.dispatchEvent(new CustomEvent('workoutboard:settings-changed'))
+  }
+
+  const activateProfile=async id=>{
+    if(!session?.user)return
+    await supabase.from('equipment_profiles').update({is_active:false,updated_at:new Date().toISOString()}).eq('user_id',session.user.id)
+    const {error}=await supabase.from('equipment_profiles').update({is_active:true,updated_at:new Date().toISOString()}).eq('id',id)
+    setMessage(error?error.message:'Equipment profile updated.')
+    await load()
+  }
+
+  return <section className="simple-card settings-panel">
+    <div className="section-heading"><div><span className="card-label">SETTINGS</span><h3>Workout preferences</h3></div></div>
+
+    <div className="settings-grid">
+      <label className="settings-row"><div><strong>Weight units</strong><span>WorkoutBoard currently stores program and training weights in pounds.</span></div><select value="lb" disabled><option value="lb">Pounds (lb)</option></select></label>
+
+      <label className="settings-row"><div><strong>Keep screen awake</strong><span>Default for running workout timers.</span></div><input type="checkbox" checked={wake} onChange={e=>persist('wb-setting-wake-lock',e.target.checked,setWake)}/></label>
+
+      <label className="settings-row"><div><strong>Timer sound</strong><span>Play an alert at the end of rests and timer transitions.</span></div><input type="checkbox" checked={sound} onChange={e=>persist('wb-setting-sound',e.target.checked,setSound)}/></label>
+
+      <label className="settings-row"><div><strong>Timer vibration</strong><span>Vibrate on supported phones.</span></div><input type="checkbox" checked={vibrate} onChange={e=>persist('wb-setting-vibrate',e.target.checked,setVibrate)}/></label>
+
+      <label className="settings-row"><div><strong>Fallback compound rest</strong><span>Used only when a workout does not provide its own rest time.</span></div><select value={compoundRest} onChange={e=>persist('wb-setting-compound-rest',Number(e.target.value),setCompoundRest)}>{[120,150,180,240,300].map(x=><option key={x} value={x}>{x/60} min</option>)}</select></label>
+
+      <label className="settings-row"><div><strong>Fallback accessory rest</strong><span>Used for unprescribed assistance work.</span></div><select value={accessoryRest} onChange={e=>persist('wb-setting-accessory-rest',Number(e.target.value),setAccessoryRest)}>{[45,60,75,90,120].map(x=><option key={x} value={x}>{x<60?x+' sec':x/60+' min'}</option>)}</select></label>
+
+      <label className="settings-row"><div><strong>Equipment profile</strong><span>Choose the gym/equipment set you are using now.</span></div><select value={profiles.find(x=>x.is_active)?.id||''} onChange={e=>activateProfile(e.target.value)}><option value="">No active profile</option>{profiles.map(p=><option value={p.id} key={p.id}>{p.name}</option>)}</select></label>
+    </div>
+
+    {message&&<div className="status-message">{message}</div>}
+  </section>
+}
