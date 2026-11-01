@@ -952,7 +952,7 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   top:67px;
   z-index:19;
   display:grid;
-  grid-template-columns:repeat(5,minmax(84px,1fr));
+  grid-template-columns:repeat(4,minmax(84px,1fr));
   gap:5px;
   margin:0 0 12px;
   padding:6px;
@@ -2442,7 +2442,7 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
     bottom:0;
     z-index:110;
     display:grid;
-    grid-template-columns:repeat(5,minmax(0,1fr));
+    grid-template-columns:repeat(4,minmax(0,1fr));
     min-height:62px;
     padding:5px 5px calc(5px + env(safe-area-inset-bottom));
     border-top:1px solid #293b56;

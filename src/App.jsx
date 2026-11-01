@@ -1373,7 +1373,6 @@ function App() {
           <button className={activeTab === 'together' ? 'active' : ''} onClick={() => setActiveTab('together')}><b>⇄</b><span>Together</span></button>
           <button className={activeTab === 'program' ? 'active' : ''} onClick={() => setActiveTab('program')}><b>▦</b><span>Plan</span></button>
           <button className={activeTab === 'whiteboard' ? 'active' : ''} onClick={() => setActiveTab('whiteboard')}><b>□</b><span>Board</span></button>
-          <button className={activeTab === 'me' ? 'active' : ''} onClick={() => setActiveTab('me')}><b>◎</b><span>Me</span></button>
         </nav>
 
         <nav className="mobile-bottom-nav" aria-label="WorkoutBoard mobile navigation">
@@ -1381,7 +1380,6 @@ function App() {
           <button className={activeTab==='together'?'active':''} onClick={()=>setActiveTab('together')}><b>⇄</b><span>Together</span></button>
           <button className={activeTab==='program'?'active':''} onClick={()=>setActiveTab('program')}><b>▦</b><span>Plan</span></button>
           <button className={activeTab==='whiteboard'?'active':''} onClick={()=>setActiveTab('whiteboard')}><b>□</b><span>Board</span></button>
-          <button className={activeTab==='me'?'active':''} onClick={()=>setActiveTab('me')}><b>◎</b><span>Me</span></button>
         </nav>
 
         {activeTab === 'today' && <TrainingTimer />}
