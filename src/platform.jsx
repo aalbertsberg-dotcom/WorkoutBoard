@@ -626,7 +626,14 @@ export function PlanPage({
   }
 
   if(ready===false){
-    return <section className="page-section">
+    return <section className="page-section"><div className="setup-needed">
+      <span className="card-label">PLATFORM UPDATE NEEDED</span>
+      <h2>Planning tools are ready</h2>
+      <p>Run the platform-foundation SQL migration once, then refresh.</p>
+    </div></section>
+  }
+
+  return <section className="page-section">
     <section className="program-summary compact-plan-summary">
       <span className="card-label">PLAN</span>
       <h2>Programs & scheduling</h2>
