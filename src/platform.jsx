@@ -140,9 +140,30 @@ export function PlatformProgress({
     })),
     ...flexSessions.map(r=>({
       id:'flex-'+r.id,date:r.completed_at||r.session_date,title:r.title,
-      subtitle:r.program||'Flexible workout',volume:Number(r.total_volume||0),e1rm:Number(r.estimated_1rm||0)
+      subtitle:r.program||'Custom workout',volume:Number(r.total_volume||0),e1rm:Number(r.estimated_1rm||0)
     }))
   ].sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,15)
+
+  const recentPrs=useMemo(()=>{
+    const events=[]
+    const best={}
+    const rows=[
+      ...progress.completed.map(r=>({date:r.completed_at,key:r.lift,label:r.lift,e1rm:Number(r._metrics?.estimated1rm||0),set:r._metrics?.bestSet})),
+      ...flexSessions.flatMap(r=>(r.workout?.exercises||[]).map(item=>{
+        const m=String(item.result||'').replace(/[×X]/g,'x').match(/(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/i)
+        const weight=m?Number(m[1]):0,reps=m?Number(m[2]):0
+        return {date:r.completed_at||r.session_date,key:item.name||r.title,label:item.name||r.title,e1rm:weight&&reps?weight*(1+reps/30):0,set:weight&&reps?{weight,reps}:null}
+      }))
+    ].sort((a,b)=>String(a.date).localeCompare(String(b.date)))
+    for(const row of rows){
+      if(!row.e1rm)continue
+      if(row.e1rm>(best[row.key]||0)){
+        best[row.key]=row.e1rm
+        events.push(row)
+      }
+    }
+    return events.sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,3)
+  },[progress.completed,flexSessions])
 
   return <section className="page-section">
     <div className="segmented">
@@ -151,52 +172,48 @@ export function PlatformProgress({
     </div>
 
     {mode==='mine'?<>
-      <section className="summary-grid progress-kpis">
-        <div><span>Workouts</span><strong>{totalWorkouts}</strong></div>
-        <div><span>This month</span><strong>{thisMonth}</strong></div>
-        <div><span>Active-week streak</span><strong>{activeWeekStreak}</strong></div>
-        <div><span>Bodyweight</span><strong>{latestBodyweight?latestBodyweight+' lb':'—'}</strong></div>
+      <section className="summary-grid progress-home-kpis">
+        <div><span>Workouts this month</span><strong>{thisMonth}</strong></div>
         <div><span>30-day volume</span><strong>{formatWeight(volume30)} lb</strong></div>
-        <div><span>vs prior 30d</span><strong className={volumeDeltaPct==null?'':volumeDeltaPct>=0?'positive':'negative'}>{volumeDeltaPct==null?'—':(volumeDeltaPct>=0?'+':'')+volumeDeltaPct+'%'}</strong></div>
+        <div><span>Current streak</span><strong>{activeWeekStreak} wk</strong></div>
+        <div><span>Bodyweight</span><strong>{latestBodyweight?latestBodyweight+' lb':'—'}</strong></div>
       </section>
 
-      <section className="simple-card">
-        <div className="section-heading"><div><span className="card-label">STRENGTH PROGRESS</span><h3>Estimated 1RM</h3></div></div>
-        <div className="strength-list">{lifts.map(name=>{
-          const stat=progress.strength[name]
-          const flexBest=Math.max(0,...flexSessions.filter(r=>r.primary_lift===name).map(r=>Number(r.estimated_1rm||0)))
-          const shown=Math.max(stat?.latest||0,flexBest)
-          return <div className="strength-row" key={name}>
-            <div><strong>{name}</strong><span>{stat?.bestSet?'Best set '+stat.bestSet.weight+' × '+stat.bestSet.reps:flexBest?'Flexible-session estimate':'No completed data yet'}</span></div>
-            <div className="strength-number"><strong>{shown?formatWeight(shown)+' lb':'—'}</strong>{stat&&<span className={stat.delta>=0?'positive':'negative'}>{stat.delta>=0?'+':''}{formatWeight(stat.delta)} since first log</span>}</div>
-          </div>
-        })}</div>
+      <section className="simple-card recent-pr-home">
+        <div className="section-heading"><div><span className="card-label">LATEST PRS</span><h3>Recent personal bests</h3></div></div>
+        {recentPrs.length?<div className="recent-pr-list">{recentPrs.map((pr,i)=><div key={pr.key+'-'+i}><div><strong>{pr.label}</strong><span>{new Date(pr.date).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span></div><b>{pr.set?pr.set.weight+' × '+pr.set.reps:'e1RM '+formatWeight(pr.e1rm)}</b></div>)}</div>:<div className="empty-state action-empty"><strong>No PRs yet.</strong><span>Complete weighted sets and your bests will appear here automatically.</span></div>}
       </section>
 
-      <section className="simple-card">
-        <div className="section-heading"><div><span className="card-label">VOLUME BY LIFT</span><h3>Where your work is going</h3></div></div>
-        <div className="volume-chart">{lifts.map(name=><div className="volume-bar-row" key={name}>
-          <span>{name}</span><div className="bar-track"><div className="bar-fill" style={{width:(volumeByLift[name]/maxLiftVolume*100)+'%'}}/></div><strong>{formatWeight(volumeByLift[name])}</strong>
-        </div>)}</div>
-      </section>
+      <details className="progress-detail-stack">
+        <summary><span><b>Detailed progress</b><small>Strength, volume, trends & workout history</small></span></summary>
+        <div className="progress-detail-body">
+          <section className="simple-card">
+            <div className="section-heading"><div><span className="card-label">STRENGTH PROGRESS</span><h3>Estimated 1RM</h3></div></div>
+            <div className="strength-list">{lifts.map(name=>{
+              const stat=progress.strength[name]
+              const flexBest=Math.max(0,...flexSessions.filter(r=>r.primary_lift===name).map(r=>Number(r.estimated_1rm||0)))
+              const shown=Math.max(stat?.latest||0,flexBest)
+              return <div className="strength-row" key={name}><div><strong>{name}</strong><span>{stat?.bestSet?'Best set '+stat.bestSet.weight+' × '+stat.bestSet.reps:flexBest?'Workout estimate':'No completed data yet'}</span></div><div className="strength-number"><strong>{shown?formatWeight(shown)+' lb':'—'}</strong>{stat&&<span className={stat.delta>=0?'positive':'negative'}>{stat.delta>=0?'+':''}{formatWeight(stat.delta)} since first log</span>}</div></div>
+            })}</div>
+          </section>
 
-      <section className="simple-card">
-        <div className="section-heading"><div><span className="card-label">VOLUME TREND</span><h3>Last 8 weeks</h3></div></div>
-        <div className="volume-chart">{progress.weekly.map(item=><div className="volume-bar-row" key={item.label}>
-          <span>{item.label}</span><div className="bar-track"><div className="bar-fill" style={{width:(item.volume/maxWeeklyVolume*100)+'%'}}/></div><strong>{formatWeight(item.volume)}</strong>
-        </div>)}</div>
-        <p className="helper-text">The legacy trend chart uses four-lift logs; flexible/archive sessions are included in totals and recent history. The chart will move fully to session-first data as more archive workouts are completed.</p>
-      </section>
+          <section className="simple-card">
+            <div className="section-heading"><div><span className="card-label">VOLUME BY LIFT</span><h3>Where your work is going</h3></div></div>
+            <div className="volume-chart">{lifts.map(name=><div className="volume-bar-row" key={name}><span>{name}</span><div className="bar-track"><div className="bar-fill" style={{width:(volumeByLift[name]/maxLiftVolume*100)+'%'}}/></div><strong>{formatWeight(volumeByLift[name])}</strong></div>)}</div>
+          </section>
 
-      <section className="simple-card">
-        <div className="section-heading"><div><span className="card-label">RECENT WORKOUTS</span><h3>All completed sessions</h3></div></div>
-        <div className="history-list">{recentCombined.map(row=><article className="progress-workout" key={row.id}>
-          <div><strong>{new Date(row.date).toLocaleDateString(undefined,{month:'short',day:'numeric'})} · {row.title}</strong><span>{row.subtitle}</span></div>
-          <div><strong>{formatWeight(row.volume)} lb</strong><span>{row.e1rm?'e1RM '+formatWeight(row.e1rm):''}</span></div>
-        </article>)}
-        {!recentCombined.length&&<div className="empty-state">Your progress summary fills in as you finish workouts.</div>}</div>
-        <p className="helper-text progress-note">Tracked volume includes four-lift work plus flexible/archive exercise results entered as weight × reps × sets.</p>
-      </section>
+          <section className="simple-card">
+            <div className="section-heading"><div><span className="card-label">VOLUME TREND</span><h3>Last 8 weeks</h3></div></div>
+            <div className="volume-chart">{progress.weekly.map(item=><div className="volume-bar-row" key={item.label}><span>{item.label}</span><div className="bar-track"><div className="bar-fill" style={{width:(item.volume/maxWeeklyVolume*100)+'%'}}/></div><strong>{formatWeight(item.volume)}</strong></div>)}</div>
+          </section>
+
+          <section className="simple-card">
+            <div className="section-heading"><div><span className="card-label">RECENT WORKOUTS</span><h3>Completed workouts</h3></div></div>
+            <div className="history-list">{recentCombined.map(row=><article className="progress-workout" key={row.id}><div><strong>{new Date(row.date).toLocaleDateString(undefined,{month:'short',day:'numeric'})} · {row.title}</strong><span>{row.subtitle}</span></div><div><strong>{formatWeight(row.volume)} lb</strong><span>{row.e1rm?'e1RM '+formatWeight(row.e1rm):''}</span></div></article>)}
+            {!recentCombined.length&&<div className="empty-state action-empty"><strong>No completed workouts yet.</strong><span>Finish a workout and it will show here.</span></div>}</div>
+          </section>
+        </div>
+      </details>
 
       <ProgressToolbox
         session={session}
@@ -204,8 +221,7 @@ export function PlatformProgress({
         flexSessions={flexSessions}
         formatWeight={formatWeight}
       />
-      <AdvancedProgressCenter session={session} />
-    </>:<>
+      <AdvancedProgressCenter session={session} />    </>:<>
       {ready===false?<div className="setup-needed"><span className="card-label">PLATFORM UPDATE NEEDED</span><h2>Community is ready in the app</h2><p>Run the platform-foundation SQL migration once to enable it.</p></div>:<>
         <section className="community-control">
           <div><span className="card-label">PRIVACY</span><h3>{profile?.community_opt_in?'Community sharing is ON':'Community sharing is OFF'}</h3><p>Off is the default. Turning it on shares future workout summaries, not your email.</p></div>
@@ -217,7 +233,7 @@ export function PlatformProgress({
           <div className="community-card-head"><strong>{item.display_name}</strong><span>{new Date(item.created_at).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span></div>
           <h3>{item.title}</h3><div className="community-stats"><span>{item.summary?.volume?Number(item.summary.volume).toLocaleString()+' lb volume':'Workout complete'}</span>{item.summary?.estimated_1rm?<span>e1RM {Math.round(item.summary.estimated_1rm)} lb</span>:null}{item.summary?.bodyweight?<span>BW {item.summary.bodyweight} lb</span>:null}</div>
         </article>)}
-        {!community.length&&<div className="empty-state">No community workouts yet. Community is opt-in.</div>}</div>
+        {!community.length&&<div className="empty-state">No community workouts yet. Opt in above if you want to share completed workout summaries.</div>}</div>
       </>}
     </>}
   </section>
@@ -432,7 +448,7 @@ export function PlanPage({
       user_id:session.user.id,
       scheduled_date:form.scheduled_date,
       title:form.title.trim() || form.lift + ' workout',
-      source_program_name:form.scheme === '531-fsl' ? 'Flexible 5/3/1' : 'Flexible',
+      source_program_name:form.scheme === '531-fsl' ? 'Custom 5/3/1' : 'Custom workout',
       source_day:form.lift,
       workout:quickWorkoutPayload(form.lift,form.scheme,form.notes),
       status:'planned',
