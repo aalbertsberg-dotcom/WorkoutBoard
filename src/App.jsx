@@ -4,7 +4,7 @@ import { PlatformProgress, PlanPage, AdminPanel } from './platform'
 import { PlannedWorkoutRunner, ExerciseHistoryStrip, InstallAppButton, ExportDataButton, SharedTimer } from './productFeatures'
 import { WhiteboardPage } from './whiteboard'
 import { TrainingTimer } from './trainingTools'
-import { WorkoutCoach, MetconTracker, AccountSecurityPanel, BackupRestorePanel } from './advancedFeatures'
+import { WorkoutCoach, MetconTracker, AccountSecurityPanel, BackupRestorePanel, WorkoutSettingsPanel } from './advancedFeatures'
 
 const lifts = ['Squat', 'Bench', 'Deadlift', 'Press']
 const repeatSets = (count, pct, reps, pctLabel) =>
@@ -410,6 +410,7 @@ function makeLog(programId, week, lift, tm) {
     backoffSets:prescribedSetProgress(plan.secondary?.title),
     assistance:plan.assistance.map(name => ({name,result:'',setProgress:prescribedSetProgress(name)})),
     conditioning:'',
+    conditioningEnabled:false,
     metcon:{name:'',format:'For time',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx'},
     sleep:'',
     energy:'',
@@ -1341,6 +1342,13 @@ function App() {
   const ownSessionResult = sessionResults.find(result => result.user_id === session?.user?.id)
   const combinedSessionVolume = sessionResults.reduce((sum,result) => sum + Number(result.total_volume || 0),0)
   const maxWeeklyVolume = Math.max(1,...progress.weekly.map(item => item.volume))
+  const nextMainIndex = log.main?.findIndex(set=>!set.done) ?? -1
+  const mainSetsComplete = Boolean(log.main?.length) && log.main.every(set=>set.done)
+  const nextBackoffIndex = log.backoffSets?.findIndex(set=>!set.done) ?? -1
+  const backoffSetsComplete = !log.backoffSets?.length || log.backoffSets.every(set=>set.done)
+  const nextAssistanceIndex = log.assistance?.findIndex(item=>item.setProgress?.length ? item.setProgress.some(set=>!set.done) : !String(item.result||'').trim()) ?? -1
+  const conditioningSuggested = Boolean(plan.conditioning && plan.conditioning !== 'None')
+  const conditioningHasData = Boolean(log.conditioning || log.metcon?.name || log.metcon?.time || log.metcon?.rounds || log.metcon?.reps || log.metcon?.distance || log.metcon?.calories)
 
   if (authLoading) return <div className="loading-screen">Loading WorkoutBoard…</div>
   if (passwordRecovery) return <RecoveryScreen onDone={() => setPasswordRecovery(false)} />
@@ -1352,7 +1360,7 @@ function App() {
         <header className="app-header">
           <div>
             <div className="eyebrow">WORKOUTBOARD</div>
-            <h1>{activeTab === 'today' ? 'Today' : activeTab === 'together' ? 'Together' : activeTab === 'progress' ? 'Progress' : activeTab === 'program' ? 'Plan' : activeTab === 'whiteboard' ? 'Whiteboard' : activeTab === 'admin' ? 'Admin' : 'Account'}</h1>
+            <h1>{activeTab === 'today' ? 'Today' : activeTab === 'together' ? 'Together' : activeTab === 'progress' ? 'Progress' : activeTab === 'program' ? 'Plan' : activeTab === 'whiteboard' ? 'Whiteboard' : activeTab === 'admin' ? 'Admin' : 'Me'}</h1>
           </div>
           <button className={'account-chip ' + (isAdmin ? 'admin' : '')} onClick={() => setActiveTab('me')}>
             <span>{displayName}</span>
@@ -1366,6 +1374,15 @@ function App() {
           <button className={activeTab === 'progress' ? 'active' : ''} onClick={() => setActiveTab('progress')}><b>↗</b><span>Progress</span></button>
           <button className={activeTab === 'program' ? 'active' : ''} onClick={() => setActiveTab('program')}><b>▦</b><span>Plan</span></button>
           <button className={activeTab === 'whiteboard' ? 'active' : ''} onClick={() => setActiveTab('whiteboard')}><b>□</b><span>Board</span></button>
+        </nav>
+
+        <nav className="mobile-bottom-nav" aria-label="WorkoutBoard mobile navigation">
+          <button className={activeTab==='today'?'active':''} onClick={async()=>{await refreshPlannedToday();setActiveTab('today')}}><b>●</b><span>Today</span></button>
+          <button className={activeTab==='together'?'active':''} onClick={()=>setActiveTab('together')}><b>⇄</b><span>Together</span></button>
+          <button className={activeTab==='progress'?'active':''} onClick={()=>setActiveTab('progress')}><b>↗</b><span>Progress</span></button>
+          <button className={activeTab==='program'?'active':''} onClick={()=>setActiveTab('program')}><b>▦</b><span>Plan</span></button>
+          <button className={activeTab==='whiteboard'?'active':''} onClick={()=>setActiveTab('whiteboard')}><b>□</b><span>Board</span></button>
+          <button className={activeTab==='me'?'active':''} onClick={()=>setActiveTab('me')}><b>◎</b><span>Me</span></button>
         </nav>
 
         {activeTab === 'today' && <TrainingTimer />}
@@ -1420,7 +1437,10 @@ function App() {
             {!tm && <div className="hint"><strong>No {lift} training max yet.</strong><span>Add it under Me → Training Maxes, or type working weights directly.</span></div>}
 
             <ExerciseHistoryStrip history={history} lift={lift} formatWeight={formatWeight} />
-            <WorkoutCoach session={session} lift={lift} log={log} history={history} tm={tm} plan={plan} />
+            <details className="today-collapsible">
+              <summary><span><b>Workout Coach</b><small>Last performance, suggested load, warm-ups & PRs</small></span></summary>
+              <WorkoutCoach session={session} lift={lift} log={log} history={history} tm={tm} plan={plan} />
+            </details>
 
             <section className="exercise-card">
               <div className="exercise-title">
@@ -1433,7 +1453,7 @@ function App() {
                 const target = targetWeight(tm,set.pct,workoutProgram.basis)
                 const prev = previousWorkout?.main?.[i]
                 return (
-                  <div className={'set-row ' + (set.done ? 'completed' : '')} key={i}>
+                  <div className={'set-row ' + (set.done ? 'completed ' : '') + (!set.done && i===nextMainIndex ? 'current-set' : '')} key={i}>
                     <div className="set-meta">
                       <strong>Set {i+1}</strong>
                       <span>{set.pctLabel || (set.pct != null ? set.pct + '%' : '')} × {set.reps}</span>
@@ -1469,7 +1489,7 @@ function App() {
                   {log.backoffSets.map((set,i)=><button
                     type="button"
                     key={i}
-                    className={'set-progress-button '+(set.done?'done':'')}
+                    className={'set-progress-button '+(set.done?'done ':'')+(mainSetsComplete&&!set.done&&i===nextBackoffIndex?'current-set':'')}
                     onClick={()=>{
                       const next=!set.done
                       setSaveState('Unsaved')
@@ -1490,7 +1510,7 @@ function App() {
             <section className="simple-card">
               <div className="section-heading"><div><span className="card-label">ASSISTANCE</span><h3>Log assistance work</h3></div></div>
               {log.assistance.map((item,i) => (
-                <div className="assist assist-with-progress" key={item.name}>
+                <div className={'assist assist-with-progress '+(mainSetsComplete&&backoffSetsComplete&&i===nextAssistanceIndex?'current-exercise':'')} key={item.name}>
                   <div className="assist-title-row">
                     <span>{item.name}<small className="assistance-rest-label"> · {plan.rest.assistance(item.name) < 120 ? plan.rest.assistance(item.name)+' sec' : plan.rest.assistance(item.name)/60+' min'} rest</small></span>
                     {item.setProgress?.length>0&&<b>{item.setProgress.filter(x=>x.done).length}/{item.setProgress.length}</b>}
@@ -1501,7 +1521,7 @@ function App() {
                     {item.setProgress.map((set,j)=><button
                       type="button"
                       key={j}
-                      className={'set-progress-button '+(set.done?'done':'')}
+                      className={'set-progress-button '+(set.done?'done ':'')+(mainSetsComplete&&backoffSetsComplete&&i===nextAssistanceIndex&&!set.done&&j===item.setProgress.findIndex(x=>!x.done)?'current-set':'')}
                       onClick={()=>{
                         const next=!set.done
                         setSaveState('Unsaved')
@@ -1515,30 +1535,38 @@ function App() {
               ))}
             </section>
 
-            <section className="simple-card">
-              <div className="section-heading"><div><span className="card-label">CONDITIONING</span><h3>{plan.conditioning}</h3></div></div>
-              <input className="text-input" placeholder="Time / rounds / distance" value={log.conditioning}
-                onChange={e => {setSaveState('Unsaved');setLog(v => ({...v,complete:false,conditioning:e.target.value}))}} />
-            </section>
+            {(conditioningSuggested || log.conditioningEnabled || conditioningHasData) ? (
+              <details className="today-collapsible conditioning-tools" open={Boolean(log.conditioningEnabled || conditioningHasData)}>
+                <summary><span><b>Conditioning</b><small>{conditioningSuggested?plan.conditioning:'Optional'}</small></span></summary>
+                <section className="simple-card embedded-tool-card">
+                  <input className="text-input" placeholder="Time / rounds / distance" value={log.conditioning}
+                    onChange={e => {setSaveState('Unsaved');setLog(v => ({...v,complete:false,conditioning:e.target.value,conditioningEnabled:true}))}} />
+                  <MetconTracker value={log.metcon} onChange={metcon => {setSaveState('Unsaved');setLog(v=>({...v,complete:false,metcon,conditioningEnabled:true}))}} />
+                </section>
+              </details>
+            ) : (
+              <button className="context-add-button" type="button" onClick={()=>{setSaveState('Unsaved');setLog(v=>({...v,conditioningEnabled:true}))}}>+ Conditioning</button>
+            )}
 
-            <MetconTracker value={log.metcon} onChange={metcon => {setSaveState('Unsaved');setLog(v=>({...v,complete:false,metcon}))}} />
-
-            <section className="metrics readiness-metrics">
-              <label><span>Sleep</span><input type="number" min="1" max="10" inputMode="numeric" placeholder="1-10" value={log.sleep || ''}
-                onChange={e => {setSaveState('Unsaved');setLog(v => ({...v,complete:false,sleep:e.target.value}))}} /></label>
-              <label><span>Energy</span><input type="number" min="1" max="10" inputMode="numeric" placeholder="1-10" value={log.energy || ''}
-                onChange={e => {setSaveState('Unsaved');setLog(v => ({...v,complete:false,energy:e.target.value}))}} /></label>
-              <label><span>Workout RPE</span><input type="number" inputMode="decimal" placeholder="1-10" value={log.rpe}
-                onChange={e => {setSaveState('Unsaved');setLog(v => ({...v,complete:false,rpe:e.target.value}))}} /></label>
-              <label><span>Bodyweight</span><input type="number" inputMode="decimal" placeholder="lb" value={log.bodyweight}
-                onChange={e => {setSaveState('Unsaved');setLog(v => ({...v,complete:false,bodyweight:e.target.value}))}} /></label>
-            </section>
-
-            <input className="text-input pain-input" placeholder="Pain / injury (optional)" value={log.pain || ''}
-              onChange={e => {setSaveState('Unsaved');setLog(v => ({...v,complete:false,pain:e.target.value}))}} />
-
-            <textarea className="notes" placeholder="Quick workout note…" value={log.note}
-              onChange={e => {setSaveState('Unsaved');setLog(v => ({...v,complete:false,note:e.target.value}))}} />
+            <details className="today-collapsible workout-details" open={Boolean(log.sleep||log.energy||log.rpe||log.bodyweight||log.pain||log.note)}>
+              <summary><span><b>Workout details</b><small>Readiness, bodyweight, pain & notes</small></span></summary>
+              <div className="today-details-body">
+                <section className="metrics readiness-metrics">
+                  <label><span>Sleep</span><input type="number" min="1" max="10" inputMode="numeric" placeholder="1-10" value={log.sleep || ''}
+                    onChange={e => {setSaveState('Unsaved');setLog(v => ({...v,complete:false,sleep:e.target.value}))}} /></label>
+                  <label><span>Energy</span><input type="number" min="1" max="10" inputMode="numeric" placeholder="1-10" value={log.energy || ''}
+                    onChange={e => {setSaveState('Unsaved');setLog(v => ({...v,complete:false,energy:e.target.value}))}} /></label>
+                  <label><span>Workout RPE</span><input type="number" inputMode="decimal" placeholder="1-10" value={log.rpe}
+                    onChange={e => {setSaveState('Unsaved');setLog(v => ({...v,complete:false,rpe:e.target.value}))}} /></label>
+                  <label><span>Bodyweight</span><input type="number" inputMode="decimal" placeholder="lb" value={log.bodyweight}
+                    onChange={e => {setSaveState('Unsaved');setLog(v => ({...v,complete:false,bodyweight:e.target.value}))}} /></label>
+                </section>
+                <input className="text-input pain-input" placeholder="Pain / injury (optional)" value={log.pain || ''}
+                  onChange={e => {setSaveState('Unsaved');setLog(v => ({...v,complete:false,pain:e.target.value}))}} />
+                <textarea className="notes" placeholder="Quick workout note…" value={log.note}
+                  onChange={e => {setSaveState('Unsaved');setLog(v => ({...v,complete:false,note:e.target.value}))}} />
+              </div>
+            </details>
 
             <div className="save-line">● {saveState}</div>
             <div className="finish-wrap">
@@ -1750,6 +1778,7 @@ function App() {
               <ExportDataButton userId={session.user.id} />
             </section>
 
+            <WorkoutSettingsPanel session={session} />
             <AccountSecurityPanel session={session} appUrl={appUrl()} />
             <BackupRestorePanel session={session} />
 
