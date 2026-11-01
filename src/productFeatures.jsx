@@ -159,7 +159,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss}) {
       const programRest=Number(item.rest_seconds||fallbackRest)
       const rest=timerPresets[key]||programRest
       const sub=substitutions[key]?.[0]
-      const nextExerciseIndex=(workout.exercises||[]).findIndex(x=>!x.done)
+      const nextExerciseIndex=(workout.exercises||[]).findIndex(x=>!(x.done||(x.setProgress?.length&&x.setProgress.every(s=>s.done))))
       return <article className={'flex-exercise '+(item.done?'done ':'')+(item.group?'grouped ':'')+(!item.done&&i===nextExerciseIndex?'current-exercise':'')} key={item.id||i}>
         <div className="flex-exercise-title"><div><div className="exercise-name-line">{item.group&&<b className="group-badge">{item.group}</b>}<strong>{item.name}</strong>{isPR&&<b className="pr-mini">PR</b>}</div><span>{item.prescription}</span>{item.note&&<small>{item.note}</small>}{hist?.last&&<small className="flex-history">Last: {hist.last}{current&&hist?.last?` · Suggested ${Math.round((current.weight||0)+5)} lb`:''}</small>}{sub&&<small className="sub-suggestion">Substitute: {sub.substitute}{sub.reason?' · '+sub.reason:''}</small>}</div><button type="button" className={'check '+(item.done?'checked':'')} onClick={()=>{ const next=!item.done; changeExercise(i,{done:next}); if(next) window.dispatchEvent(new CustomEvent('workoutboard:rest-timer',{detail:{seconds:rest}})) }}>✓</button></div>
         <div className="flex-exercise-inputs">
@@ -188,7 +188,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss}) {
       <MetconTracker value={workout.metcon} onChange={value=>{change('conditioningEnabled',true);change('metcon',value)}} />
     </details> : <button className="context-add-button" type="button" onClick={()=>change('conditioningEnabled',true)}>+ Conditioning</button>}
 
-    <details className="today-collapsible workout-details" open={Boolean(workout.sleep||workout.energy||workout.rpe||workout.bodyweight||workout.pain||workout.note)}>
+    <details className="today-collapsible workout-details">
       <summary><span><b>Workout details</b><small>Readiness, bodyweight, pain & notes</small></span></summary>
       <section className="simple-card readiness-card embedded-tool-card">
         <div className="metrics compact-metrics">
