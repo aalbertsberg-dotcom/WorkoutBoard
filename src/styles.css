@@ -2213,3 +2213,54 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   font-size:8px;
   font-weight:800;
 }
+
+
+/* Program catalog cleanup */
+.program-card-badges {
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+.runnable-badge,
+.source-file-badge {
+  display:inline-flex;
+  align-items:center;
+  min-height:24px;
+  padding:0 7px;
+  border-radius:999px;
+  font-size:8px;
+  font-weight:950;
+  letter-spacing:.08em;
+  white-space:nowrap;
+}
+.runnable-badge {
+  border:1px solid #65a30d;
+  background:#20350f;
+  color:#d9f99d;
+}
+.source-file-badge {
+  border:1px solid #52627c;
+  background:#172338;
+  color:#cbd5e1;
+}
+.archive-card.source-only {
+  border-style:dashed;
+}
+.archive-card.source-only > p {
+  color:#8f9db1;
+}
+.source-program-notice {
+  display:grid;
+  gap:7px;
+  margin-top:10px;
+  padding:13px;
+  border:1px dashed #52627c;
+  border-radius:12px;
+  background:#0d1728;
+}
+.source-program-notice h3 { margin:0; }
+.source-program-notice p {
+  margin:0;
+  color:#9aa8bd;
+  line-height:1.45;
+}
