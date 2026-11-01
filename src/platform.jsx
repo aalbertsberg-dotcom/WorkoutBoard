@@ -250,6 +250,8 @@ export function PlanPage({
   })
   const [submission,setSubmission] = useState({name:'',description:'',source_url:'',visibility:'private'})
   const [message,setMessage] = useState('')
+  const [planMode,setPlanMode] = useState('programs')
+  const [undoAction,setUndoAction] = useState(null)
   const [category,setCategory] = useState('All')
   const [search,setSearch] = useState('')
   const [previewKey,setPreviewKey] = useState('archive:squatober')
@@ -395,6 +397,16 @@ export function PlanPage({
 
   const categories = useMemo(() => ['All','Favorites',...Array.from(new Set(allPrograms.map(p=>p.category))).sort()],[allPrograms])
 
+  const recentProgramKeys = useMemo(()=>{
+    const keys=[]
+    for(const row of sessions){
+      const match=allPrograms.find(p=>(p.kind==='classic'&&p.dbName===row.program)||p.name===row.program)
+      if(match&&!keys.includes(match.key))keys.push(match.key)
+      if(keys.length>=6)break
+    }
+    return keys
+  },[sessions,allPrograms])
+
   const availablePrograms = useMemo(() => {
     const q=search.trim().toLowerCase()
     return allPrograms.filter(p => {
@@ -403,11 +415,16 @@ export function PlanPage({
       const searchOk = !q || [p.name,p.category,p.description,p.source].some(v=>String(v||'').toLowerCase().includes(q))
       return categoryOk && searchOk
     }).sort((a,b)=>{
-      const aRun=a.transcriptionStatus==='full'?0:1
-      const bRun=b.transcriptionStatus==='full'?0:1
-      return aRun-bRun || String(a.name).localeCompare(String(b.name))
+      const ar=recentProgramKeys.indexOf(a.key), br=recentProgramKeys.indexOf(b.key)
+      if(ar>=0||br>=0){
+        if(ar<0)return 1
+        if(br<0)return -1
+        return ar-br
+      }
+      const af=favorites.includes(a.key)?0:1, bf=favorites.includes(b.key)?0:1
+      return af-bf || String(a.name).localeCompare(String(b.name))
     })
-  },[allPrograms,category,search,favorites,tracking])
+  },[allPrograms,category,search,favorites,tracking,recentProgramKeys])
 
   const addWorkout = async e => {
     e.preventDefault()
@@ -427,7 +444,9 @@ export function PlanPage({
   }
 
   const removePlanned = async id => {
+    const row=planned.find(x=>x.id===id)
     await supabase.from('planned_workouts').delete().eq('id',id)
+    if(row)setUndoAction({label:'Workout removed',run:async()=>{const copy={...row};delete copy.id;await supabase.from('planned_workouts').insert(copy);setUndoAction(null);await load()}})
     await load()
   }
 
@@ -522,7 +541,8 @@ export function PlanPage({
   const markComplete = async track => {
     const {error}=await supabase.rpc('complete_program_tracking',{target_tracking_id:track.id})
     if(error){setMessage(error.message);return}
-    setMessage(track.program_name+' moved to Completed Programs.')
+    setMessage('')
+    setUndoAction({label:track.program_name+' marked complete',run:async()=>{await supabase.from('user_program_tracking').update({status:'tracking',completed_at:null,updated_at:new Date().toISOString()}).eq('id',track.id);setUndoAction(null);await load()}})
     await load()
   }
 
@@ -575,168 +595,141 @@ export function PlanPage({
     await load()
   }
 
-  const ProgramCard=({p,statusAction,statusLabel})=>{
-    const runnable=p.transcriptionStatus==='full'
-    const length=p.durationLabel || (p.weeksCount?(`${p.weeksCount} weeks`):'Duration in source')
-    const frequency=p.daysPerWeek?(`${p.daysPerWeek} day${p.daysPerWeek===1?'':'s'}/wk`):'Frequency in source'
-    return <article className={'archive-card '+(previewKey===p.key?'selected':'')+(runnable?'':' source-only')}>
+  const ProgramCard=({p})=>{
+    const length=p.durationLabel || (p.weeksCount?(`${p.weeksCount} weeks`):'Program')
+    const frequency=p.daysPerWeek?(`${p.daysPerWeek} day${p.daysPerWeek===1?'':'s'}/wk`):''
+    return <article className={'archive-card simplified-program-card '+(previewKey===p.key?'selected':'')}>
       <div className="archive-card-head">
-        <span className="program-length">{length} · {frequency}</span>
-        <div className="program-card-badges"><button className={'favorite-button '+(favorites.includes(p.key)?'active':'')} onClick={()=>toggleFavorite(p.key)} title="Favorite">{favorites.includes(p.key)?'★':'☆'}</button></div>
+        <span className="program-length">{length}{frequency?' · '+frequency:''}</span>
+        <button className={'favorite-button '+(favorites.includes(p.key)?'active':'')} onClick={()=>toggleFavorite(p.key)} title="Favorite">{favorites.includes(p.key)?'★':'☆'}</button>
       </div>
       <h3>{p.name}</h3>
-      <p>{p.description}</p>
-      <div className="program-meta"><span>{p.category}</span><span>{p.difficulty}</span></div>
-      <div className="program-card-actions">
-        <button className="wide-button" onClick={()=>openPreview(p.key)}>{runnable?'Preview':'View source info'}</button>
-        {runnable&&statusAction&&<button className="primary-action compact" onClick={statusAction}>{statusLabel}</button>}
-      </div>
+      <div className="program-meta"><span>{p.category}</span></div>
+      <button className="wide-button" onClick={()=>openPreview(p.key)}>Preview</button>
     </article>
   }
 
   if(ready===false){
-    return <section className="page-section"><div className="setup-needed">
-      <span className="card-label">PLATFORM UPDATE NEEDED</span><h2>Flexible planning is ready</h2>
-      <p>Run the platform-foundation SQL migration once, then refresh.</p>
-    </div></section>
-  }
-
-  return <section className="page-section">
-    <section className="program-summary">
-      <span className="card-label">PROGRAMS</span>
-      <h2>Everything in one place</h2>
-      <p>Track a program, preview any week/day, schedule workouts, and keep completed program runs without losing them.</p>
+    return <section className="page-section">
+    <section className="program-summary compact-plan-summary">
+      <span className="card-label">PLAN</span>
+      <h2>Programs & scheduling</h2>
+      <p>Pick a program first. Scheduling and advanced tools stay out of the way until you need them.</p>
     </section>
+
+    <div className="segmented plan-mode-tabs">
+      <button className={planMode==='programs'?'active':''} onClick={()=>setPlanMode('programs')}>Programs</button>
+      <button className={planMode==='tools'?'active':''} onClick={()=>setPlanMode('tools')}>Schedule & tools</button>
+    </div>
 
     {!trackingReady&&<div className="setup-needed">
       <span className="card-label">ONE DATABASE UPDATE NEEDED</span>
-      <h3>Enable Tracked + Completed Programs</h3>
-      <p>{trackingError || 'Run 20261101_unified_program_tracking.sql in Supabase. The rest of Plan still works now.'}</p>
+      <h3>Enable tracked programs</h3>
+      <p>{trackingError || 'Run 20261101_unified_program_tracking.sql in Supabase. Program browsing still works.'}</p>
     </div>}
 
-    {tracked.length>0&&<section className="program-state-section">
-      <div className="section-heading"><div><span className="card-label">TRACKED PROGRAMS</span><h3>Currently training</h3></div></div>
-      <div className="archive-grid">{tracked.map(track=>{
-        const p=programByKey[track.program_key]
-        if(!p)return null
-        const done=matchingSessions(track).length
-        const expected=expectedSessions(track)
-        return <article className="archive-card tracked-program-card" key={track.id}>
-          <div className="archive-card-head"><span className="program-length">Run {track.run_number} · started {new Date(track.started_at).toLocaleDateString()}</span><span className="tracking-badge">TRACKING</span></div>
-          <h3>{p.name}</h3>
-          <p>{done} of {expected || '—'} expected workouts completed.</p>
-          <div className="program-progress-track"><div style={{width:(expected ? Math.min(100,done/expected*100) : 0)+'%'}} /></div>
-          <div className="program-card-actions">
-            <button className="wide-button" onClick={()=>openPreview(p.key)}>Preview / schedule</button>
-            <button className="secondary-action" onClick={()=>markComplete(track)}>Mark complete</button>
-          </div>
-        </article>
-      })}</div>
-    </section>}
-
-    {completed.length>0&&<details className="completed-programs" open>
-      <summary><span><b>Completed Programs</b><small>{completed.length} completed run{completed.length===1?'':'s'}</small></span></summary>
-      <div className="archive-grid">{completed.map(track=>{
-        const p=programByKey[track.program_key]
-        if(!p)return null
-        return <article className="archive-card completed-program-card" key={track.id}>
-          <div className="archive-card-head"><span className="program-length">Run {track.run_number}</span><span className="completed-badge">COMPLETED</span></div>
-          <h3>{p.name}</h3>
-          <p>{track.completed_at?'Completed '+new Date(track.completed_at).toLocaleDateString():p.description}</p>
-          <div className="program-card-actions">
-            <button className="wide-button" onClick={()=>openPreview(p.key)}>Preview</button>
-            <button className="primary-action compact" onClick={()=>startTracking(p)}>Track again</button>
-          </div>
-        </article>
-      })}</div>
-    </details>}
-
-    <section className="simple-card weekly-schedule-card">
-      <div className="section-heading"><div><span className="card-label">THIS WEEK</span><h3>Scheduled workouts</h3></div></div>
-      <div className="weekly-plan">{days.map(calendarDay=>{
-        const date=isoDate(calendarDay)
-        const rows=planned.filter(item=>item.scheduled_date===date)
-        return <article className="day-plan" key={date}>
-          <div className="day-plan-head"><div><strong>{calendarDay.toLocaleDateString(undefined,{weekday:'short'})}</strong><span>{calendarDay.toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span></div>{date===isoDate(new Date())&&<b>Today</b>}</div>
-          {rows.map(row=><div className="planned-item" key={row.id}><div><strong>{row.title}</strong><span>{row.source_program_name||row.workout?.scheme||'Workout'} · {row.status}</span></div><button onClick={()=>removePlanned(row.id)}>×</button></div>)}
-          {!rows.length&&<span className="rest-label">Open / rest</span>}
-        </article>
-      })}</div>
-      <button className="primary-action" onClick={()=>setShowAdd(v=>!v)}>{showAdd?'Close':'+ Add one-off workout'}</button>
-    </section>
-
-    {showAdd&&<form className="builder-card" onSubmit={addWorkout}>
-      <h3>Quick workout</h3>
-      <label>Date<input type="date" value={form.scheduled_date} onChange={e=>setForm(v=>({...v,scheduled_date:e.target.value}))}/></label>
-      <label>Name<input value={form.title} onChange={e=>setForm(v=>({...v,title:e.target.value}))}/></label>
-      <div className="builder-two">
-        <label>Primary lift<select value={form.lift} onChange={e=>setForm(v=>({...v,lift:e.target.value}))}>{lifts.map(x=><option key={x}>{x}</option>)}</select></label>
-        <label>Scheme<select value={form.scheme} onChange={e=>setForm(v=>({...v,scheme:e.target.value}))}><option value="3x10">3 × 10</option><option value="5x5">5 × 5</option><option value="531-fsl">5/3/1 + FSL 5×5</option><option value="custom">Custom</option></select></label>
-      </div>
-      <label>Notes<textarea value={form.notes} onChange={e=>setForm(v=>({...v,notes:e.target.value}))}/></label>
-      <button className="primary-action">Add to calendar</button>
-    </form>}
-
-    <section className="library-toolbar simple-card">
-      <div className="section-heading"><div><span className="card-label">ALL PROGRAMS</span><h3>Program library</h3></div><button className="mini-action" onClick={()=>setShowSubmit(v=>!v)}>Add your own</button></div>
-      <input className="text-input" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search all programs…"/>
-      <div className="category-chips">{categories.map(c=><button key={c} className={category===c?'active':''} onClick={()=>setCategory(c)}>{c}</button>)}</div>
-    </section>
-
-    {showSubmit&&<form className="builder-card" onSubmit={submitPlan}>
-      <div className="segmented"><button type="button" className={submitMode==='build'?'active':''} onClick={()=>setSubmitMode('build')}>Build</button><button type="button" className={submitMode==='link'?'active':''} onClick={()=>setSubmitMode('link')}>Link</button></div>
-      <label>Plan name<input value={submission.name} onChange={e=>setSubmission(v=>({...v,name:e.target.value}))}/></label>
-      {submitMode==='link'&&<label>Source URL<input type="url" required value={submission.source_url} onChange={e=>setSubmission(v=>({...v,source_url:e.target.value}))}/></label>}
-      <label>{submitMode==='build'?'Plan outline':'Notes'}<textarea value={submission.description} onChange={e=>setSubmission(v=>({...v,description:e.target.value}))}/></label>
-      <label>Visibility<select value={submission.visibility} onChange={e=>setSubmission(v=>({...v,visibility:e.target.value}))}><option value="private">Private</option><option value="community">Community</option></select></label>
-      <button className="primary-action">Save draft</button>
-    </form>}
-
+    {undoAction&&<div className="undo-toast"><span>{undoAction.label}</span><button onClick={undoAction.run}>Undo</button></div>}
     {message&&<div className="status-message">{message}</div>}
 
-    <div className="archive-grid">
-      {availablePrograms.map(p=><ProgramCard key={p.key} p={p} statusAction={trackingReady&&p.transcriptionStatus==='full'?()=>startTracking(p):null} statusLabel="Track program"/>)}
-      {!availablePrograms.length&&<div className="empty-state">No untracked programs match this filter.</div>}
-    </div>
+    {planMode==='programs'?<>
+      {tracked.length>0&&<section className="program-state-section current-program-section">
+        <div className="section-heading"><div><span className="card-label">CURRENT</span><h3>Programs you’re training</h3></div></div>
+        <div className="archive-grid">{tracked.map(track=>{
+          const p=programByKey[track.program_key]
+          if(!p)return null
+          const done=matchingSessions(track).length
+          const expected=expectedSessions(track)
+          return <article className="archive-card tracked-program-card" key={track.id}>
+            <div className="archive-card-head"><span className="program-length">Run {track.run_number}</span><span className="tracking-badge">CURRENT</span></div>
+            <h3>{p.name}</h3>
+            <div className="program-progress-track"><div style={{width:(expected ? Math.min(100,done/expected*100) : 0)+'%'}} /></div>
+            <small>{done} of {expected||'—'} workouts</small>
+            <div className="program-card-actions"><button className="wide-button" onClick={()=>openPreview(p.key)}>Preview</button><button className="secondary-action" onClick={()=>markComplete(track)}>Complete</button></div>
+          </article>
+        })}</div>
+      </section>}
 
-    {preview&&<section className="program-preview-card">
-      <div className="preview-head">
-        <div><span className="card-label">PROGRAM PREVIEW</span><h2>{preview.name}</h2><p>{preview.description}</p></div>
-        <button className={'favorite-button large '+(favorites.includes(preview.key)?'active':'')} onClick={()=>toggleFavorite(preview.key)}>{favorites.includes(preview.key)?'★':'☆'}</button>
+      <section className="library-toolbar simple-card program-picker-toolbar">
+        <div className="section-heading"><div><span className="card-label">PROGRAM LIBRARY</span><h3>Find your next program</h3></div><button className="mini-action" onClick={()=>setShowSubmit(v=>!v)}>Add your own</button></div>
+        <input className="text-input program-search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search 5/3/1, Squatober, powerbuilding…"/>
+        <div className="category-chips">{categories.map(c=><button key={c} className={category===c?'active':''} onClick={()=>setCategory(c)}>{c}</button>)}</div>
+        {recentProgramKeys.length>0&&<div className="recent-programs-row"><span>Recent</span>{recentProgramKeys.slice(0,4).map(key=>{const p=programByKey[key];return p?<button key={key} onClick={()=>openPreview(key)}>{p.name}</button>:null})}</div>}
+      </section>
+
+      {showSubmit&&<form className="builder-card" onSubmit={submitPlan}>
+        <div className="segmented"><button type="button" className={submitMode==='build'?'active':''} onClick={()=>setSubmitMode('build')}>Build</button><button type="button" className={submitMode==='link'?'active':''} onClick={()=>setSubmitMode('link')}>Link</button></div>
+        <label>Program name<input value={submission.name} onChange={e=>setSubmission(v=>({...v,name:e.target.value}))}/></label>
+        {submitMode==='link'&&<label>Source URL<input type="url" required value={submission.source_url} onChange={e=>setSubmission(v=>({...v,source_url:e.target.value}))}/></label>}
+        <label>{submitMode==='build'?'Program outline':'Notes'}<textarea value={submission.description} onChange={e=>setSubmission(v=>({...v,description:e.target.value}))}/></label>
+        <label>Visibility<select value={submission.visibility} onChange={e=>setSubmission(v=>({...v,visibility:e.target.value}))}><option value="private">Private</option><option value="community">Community</option></select></label>
+        <button className="primary-action">Save draft</button>
+      </form>}
+
+      <div className="archive-grid">
+        {availablePrograms.map(p=><ProgramCard key={p.key} p={p}/>)}
+        {!availablePrograms.length&&<div className="empty-state action-empty"><strong>No programs match.</strong><button onClick={()=>{setSearch('');setCategory('All')}}>Clear filters</button></div>}
       </div>
-      <div className="preview-facts">
-        <div><span>Category</span><strong>{preview.category}</strong></div>
-        <div><span>Difficulty</span><strong>{preview.difficulty}</strong></div>
-        <div><span>Length</span><strong>{preview.durationLabel || (preview.weeksCount?preview.weeksCount+' weeks':'See source')}</strong></div>
-        <div><span>Frequency</span><strong>{preview.daysPerWeek?preview.daysPerWeek+' days/week':'See source'}</strong></div>
-      </div>
-      <div className="source-pill">Source: {preview.source}</div>
-      {previewRunnable ? <>
+
+      {preview&&<section className="program-preview-card">
+        <div className="preview-head">
+          <div><span className="card-label">PROGRAM PREVIEW</span><h2>{preview.name}</h2><p>{preview.description}</p></div>
+          <button className={'favorite-button large '+(favorites.includes(preview.key)?'active':'')} onClick={()=>toggleFavorite(preview.key)}>{favorites.includes(preview.key)?'★':'☆'}</button>
+        </div>
+        <div className="preview-facts">
+          <div><span>Category</span><strong>{preview.category}</strong></div>
+          <div><span>Difficulty</span><strong>{preview.difficulty}</strong></div>
+          <div><span>Length</span><strong>{preview.durationLabel || preview.weeksCount+' weeks'}</strong></div>
+          <div><span>Frequency</span><strong>{preview.daysPerWeek+' days/week'}</strong></div>
+        </div>
+        <div className="source-pill">Source: {preview.source}</div>
         <div className="builder-two preview-controls">
           <label>Week<select value={previewWeek} onChange={e=>{setPreviewWeek(Number(e.target.value));setPreviewDay(0)}}>{Array.from({length:preview.weeksCount},(_,i)=>i+1).map(n=><option key={n} value={n}>Week {n}</option>)}</select></label>
           <label>Workout<select value={previewDay} onChange={e=>setPreviewDay(Number(e.target.value))}>{previewDays.map((d,i)=><option key={i} value={i}>{d.title}</option>)}</select></label>
         </div>
         <div className="sample-workout"><h3>{previewDays[previewDay]?.title}</h3>{previewDays[previewDay]?.exercises?.map((x,i)=><div className="sample-exercise" key={i}><strong>{x.name}</strong><span>{x.prescription}</span>{x.note&&<small>{x.note}</small>}</div>)}</div>
         <div className="program-preview-actions">
-          <div className="schedule-row"><input type="date" value={scheduleDate} onChange={e=>setScheduleDate(e.target.value)}/><button className="primary-action" onClick={scheduleProgramWorkout}>Add this workout</button></div>
+          <div className="schedule-row"><input type="date" value={scheduleDate} onChange={e=>setScheduleDate(e.target.value)}/><button className="primary-action" onClick={scheduleProgramWorkout}>Add workout</button></div>
           <button className="wide-button" onClick={()=>shareProgram(preview)}>Share program code</button>
           {trackingReady&&!trackedKeys.has(preview.key)&&<button className="wide-button" onClick={()=>startTracking(preview)}>{completedKeys.has(preview.key)?'Track this program again':'Track this program'}</button>}
         </div>
-      </> : <div className="source-program-notice">
-        <span className="source-file-badge">SOURCE FILE</span>
-        <h3>Cataloged, not transcribed</h3>
-        <p>This program came from your original workout archive. Its source is preserved here, but the actual week/day prescription is not currently available in the app. WorkoutBoard will not invent a routine for it.</p>
-      </div>}
-    </section>}
+      </section>}
 
-    <PlannedWorkoutTools session={session} />
-    <ShareImportPanel session={session} />
-    <WorkoutTemplates session={session} />
+      {completed.length>0&&<details className="completed-programs">
+        <summary><span><b>Completed programs</b><small>{completed.length} run{completed.length===1?'':'s'}</small></span></summary>
+        <div className="archive-grid">{completed.map(track=>{const p=programByKey[track.program_key];if(!p)return null;return <article className="archive-card completed-program-card" key={track.id}><h3>{p.name}</h3><p>{track.completed_at?'Completed '+new Date(track.completed_at).toLocaleDateString():'Completed'}</p><button className="wide-button" onClick={()=>startTracking(p)}>Track again</button></article>})}</div>
+      </details>}
+    </>:<>
+      <section className="simple-card weekly-schedule-card">
+        <div className="section-heading"><div><span className="card-label">THIS WEEK</span><h3>Scheduled workouts</h3></div></div>
+        <div className="weekly-plan">{days.map(calendarDay=>{
+          const date=isoDate(calendarDay),rows=planned.filter(item=>item.scheduled_date===date)
+          return <article className="day-plan" key={date}>
+            <div className="day-plan-head"><div><strong>{calendarDay.toLocaleDateString(undefined,{weekday:'short'})}</strong><span>{calendarDay.toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span></div>{date===isoDate(new Date())&&<b>Today</b>}</div>
+            {rows.map(row=><div className="planned-item" key={row.id}><div><strong>{row.title}</strong><span>{row.source_program_name||row.workout?.scheme||'Workout'} · {row.status}</span></div><button onClick={()=>removePlanned(row.id)}>×</button></div>)}
+            {!rows.length&&<span className="rest-label">No workout planned</span>}
+          </article>
+        })}</div>
+        <button className="primary-action" onClick={()=>setShowAdd(v=>!v)}>{showAdd?'Close':'+ Add one-off workout'}</button>
+      </section>
 
-        {library.filter(item=>item.owner_user_id===session.user.id).length>0&&<section className="simple-card">
-      <div className="section-heading"><div><span className="card-label">YOUR SUBMISSIONS</span><h3>Drafts & links</h3></div></div>
-      {library.filter(item=>item.owner_user_id===session.user.id).map(item=><div className="library-row" key={item.id}><div><strong>{item.name}</strong><span>{item.source_type==='url'?'Link · '+item.status:'Build · '+item.status}</span></div><span>{item.visibility}</span></div>)}
-    </section>}
+      {showAdd&&<form className="builder-card" onSubmit={addWorkout}>
+        <h3>Quick workout</h3>
+        <label>Date<input type="date" value={form.scheduled_date} onChange={e=>setForm(v=>({...v,scheduled_date:e.target.value}))}/></label>
+        <label>Name<input value={form.title} onChange={e=>setForm(v=>({...v,title:e.target.value}))}/></label>
+        <div className="builder-two"><label>Primary lift<select value={form.lift} onChange={e=>setForm(v=>({...v,lift:e.target.value}))}>{lifts.map(x=><option key={x}>{x}</option>)}</select></label><label>Scheme<select value={form.scheme} onChange={e=>setForm(v=>({...v,scheme:e.target.value}))}><option value="3x10">3 × 10</option><option value="5x5">5 × 5</option><option value="531-fsl">5/3/1 + FSL 5×5</option><option value="custom">Custom</option></select></label></div>
+        <label>Notes<textarea value={form.notes} onChange={e=>setForm(v=>({...v,notes:e.target.value}))}/></label>
+        <button className="primary-action">Add to calendar</button>
+      </form>}
+
+      <PlannedWorkoutTools session={session} />
+      <ShareImportPanel session={session} />
+      <WorkoutTemplates session={session} />
+
+      {library.filter(item=>item.owner_user_id===session.user.id).length>0&&<section className="simple-card">
+        <div className="section-heading"><div><span className="card-label">YOUR PROGRAM DRAFTS</span><h3>Drafts & links</h3></div></div>
+        {library.filter(item=>item.owner_user_id===session.user.id).map(item=><div className="library-row" key={item.id}><div><strong>{item.name}</strong><span>{item.source_type==='url'?'Link · '+item.status:'Program · '+item.status}</span></div><span>{item.visibility}</span></div>)}
+      </section>}
+    </>}
   </section>
 }
 
