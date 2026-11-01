@@ -162,7 +162,7 @@ export function CompletedWorkoutCenter({session}) {
         <div><strong>{r.title}</strong><span>{new Date(r.completed_at).toLocaleDateString()} · {r.program||'Workout'} · {Number(r.total_volume||0).toLocaleString()} lb</span></div>
         <div><button onClick={()=>setEditing(r)}>Edit</button><button onClick={()=>saveTemplate(r)}>Template</button><button onClick={()=>share(r)}>Share</button></div>
       </article>)}</div>
-      {!filtered.length&&<div className="empty-state">No workouts match.</div>}
+      {!filtered.length&&<div className="empty-state">No workouts match. Clear the search or try an exercise/program name.</div>}
       {message&&<div className="status-message">{message}</div>}
     </section>
     {editing&&<EditableWorkout sessionRow={editing} onCancel={()=>setEditing(null)} onSaved={async()=>{setEditing(null);setMessage('Workout updated and metrics recalculated.');await load()}}/>}
@@ -255,7 +255,7 @@ export function AdvancedProgressCenter({session}) {
     {tab==='History'&&<CompletedWorkoutCenter session={session}/>}
     {tab==='Records'&&<section className="simple-card"><div className="section-heading"><div><span className="card-label">PERSONAL RECORDS</span><h3>Rep PR table</h3></div></div><div className="rep-pr-table"><div className="rep-pr-head"><b>Exercise</b>{[1,3,5,8,10].map(r=><b key={r}>{r}RM</b>)}</div>{Object.entries(prs).sort().map(([name,v])=><div key={name}><strong>{name}</strong>{[1,3,5,8,10].map(r=><span key={r}>{v[r]?v[r]+' lb':'—'}</span>)}</div>)}</div></section>}
     {tab==='Month'&&<section className="simple-card"><div className="month-head"><button onClick={()=>setMonth(new Date(month.getFullYear(),month.getMonth()-1,1))}>‹</button><h3>{month.toLocaleDateString(undefined,{month:'long',year:'numeric'})}</h3><button onClick={()=>setMonth(new Date(month.getFullYear(),month.getMonth()+1,1))}>›</button></div><div className="month-grid">{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(x=><b key={x}>{x}</b>)}{cells.map(d=>{const key=d.toISOString().slice(0,10),done=doneByDate[key]?.length||0,pl=scheduleByDateSafe(scheduledByDate,key),same=d.getMonth()===month.getMonth();return <div className={(same?'':'muted')+(done?' has-done':'')+(pl?' has-plan':'')} key={key}><span>{d.getDate()}</span>{done>0&&<i>{done}✓</i>}{pl>0&&!done&&<i>{pl} plan</i>}</div>})}</div></section>}
-    {tab==='Milestones'&&<section className="simple-card"><div className="section-heading"><div><span className="card-label">MILESTONES</span><h3>Earned from your actual training</h3></div></div><div className="milestone-grid">{achievements.map(x=><div key={x}>✓ {x}</div>)}</div>{!achievements.length&&<div className="empty-state">Keep logging. Milestones appear automatically.</div>}</section>}
+    {tab==='Milestones'&&<section className="simple-card"><div className="section-heading"><div><span className="card-label">MILESTONES</span><h3>Earned from your actual training</h3></div></div><div className="milestone-grid">{achievements.map(x=><div key={x}>✓ {x}</div>)}</div>{!achievements.length&&<div className="empty-state">No milestones yet. Keep logging workouts and they will appear automatically.</div>}</section>}
     {tab==='Equipment'&&<section className="equipment-stack"><section className="simple-card"><div className="section-heading"><div><span className="card-label">EQUIPMENT PROFILES</span><h3>Home / commercial / travel</h3></div></div><div className="equipment-form"><input value={equipmentDraft.name} onChange={e=>setEquipmentDraft(v=>({...v,name:e.target.value}))}/><input value={equipmentDraft.equipment} onChange={e=>setEquipmentDraft(v=>({...v,equipment:e.target.value}))} placeholder="Equipment, comma separated"/><input value={equipmentDraft.plates} onChange={e=>setEquipmentDraft(v=>({...v,plates:e.target.value}))} placeholder="Plates"/><button onClick={saveEquipment}>Save profile</button></div><div className="equipment-list">{profiles.map(p=><div key={p.id}><div><strong>{p.name}</strong><span>{(p.equipment||[]).join(', ')}</span></div><button className={p.is_active?'active':''} onClick={()=>activate(p.id)}>{p.is_active?'Active':'Use'}</button></div>)}</div></section><section className="simple-card"><div className="section-heading"><div><span className="card-label">SUBSTITUTIONS</span><h3>Exercise swaps</h3></div></div><div className="sub-form"><input value={subDraft.exercise} onChange={e=>setSubDraft(v=>({...v,exercise:e.target.value}))}/><span>→</span><input value={subDraft.substitute} onChange={e=>setSubDraft(v=>({...v,substitute:e.target.value}))}/><input value={subDraft.reason} onChange={e=>setSubDraft(v=>({...v,reason:e.target.value}))} placeholder="Reason / equipment"/><button onClick={addSub}>Add</button></div>{subs.map(s=><div className="sub-row" key={s.id}><strong>{s.exercise}</strong><span>→ {s.substitute}</span><small>{s.reason}</small></div>)}</section></section>}
     {tab==='Photos'&&<section className="simple-card"><div className="section-heading"><div><span className="card-label">PRIVATE PROGRESS PHOTOS</span><h3>Only your account can access these</h3></div><label className="photo-upload">+ Add photo<input type="file" accept="image/jpeg,image/png,image/webp" onChange={uploadPhoto}/></label></div><div className="photo-grid">{photos.map(p=><figure key={p.id}>{photoUrls[p.id]?<img src={photoUrls[p.id]} alt="Progress"/>:<div/>}<figcaption>{new Date(p.taken_on+'T12:00:00').toLocaleDateString()}</figcaption></figure>)}</div></section>}
     {message&&<div className="status-message">{message}</div>}
@@ -264,12 +264,27 @@ export function AdvancedProgressCenter({session}) {
 function scheduleByDateSafe(map,key){return map[key]?.length||0}
 
 export function PlannedWorkoutTools({session}) {
-  const [rows,setRows]=useState([]),[message,setMessage]=useState('')
+  const [rows,setRows]=useState([]),[message,setMessage]=useState(''),[undo,setUndo]=useState(null)
   const load=async()=>{const {data}=await supabase.from('planned_workouts').select('*').eq('user_id',session.user.id).in('status',['planned','started']).order('scheduled_date');setRows(data||[])}
   useEffect(()=>{if(session?.user)load()},[session?.user?.id])
-  const move=async(row,delta)=>{const d=new Date(row.scheduled_date+'T12:00:00');d.setDate(d.getDate()+delta);await supabase.from('planned_workouts').update({scheduled_date:d.toISOString().slice(0,10),updated_at:new Date().toISOString()}).eq('id',row.id);setMessage('Workout moved.');await load()}
-  const duplicate=async row=>{const d=new Date(row.scheduled_date+'T12:00:00');d.setDate(d.getDate()+1);const copy={...row};delete copy.id;delete copy.created_at;delete copy.updated_at;copy.scheduled_date=d.toISOString().slice(0,10);copy.status='planned';await supabase.from('planned_workouts').insert(copy);setMessage('Workout duplicated to next day.');await load()}
-  return <section className="simple-card"><div className="section-heading"><div><span className="card-label">SCHEDULE TOOLS</span><h3>Move or duplicate planned workouts</h3></div></div><div className="schedule-tool-list">{rows.slice(0,20).map(r=><div key={r.id}><div><strong>{r.title}</strong><span>{r.scheduled_date}</span></div><div><button onClick={()=>move(r,-1)}>← Day</button><button onClick={()=>move(r,1)}>Day →</button><button onClick={()=>duplicate(r)}>Duplicate</button></div></div>)}</div>{message&&<div className="status-message">{message}</div>}</section>
+  const move=async(row,delta)=>{
+    const oldDate=row.scheduled_date,d=new Date(oldDate+'T12:00:00');d.setDate(d.getDate()+delta)
+    await supabase.from('planned_workouts').update({scheduled_date:d.toISOString().slice(0,10),updated_at:new Date().toISOString()}).eq('id',row.id)
+    setMessage('');setUndo({label:'Workout moved',run:async()=>{await supabase.from('planned_workouts').update({scheduled_date:oldDate,updated_at:new Date().toISOString()}).eq('id',row.id);setUndo(null);await load()}});await load()
+  }
+  const duplicate=async row=>{
+    const d=new Date(row.scheduled_date+'T12:00:00');d.setDate(d.getDate()+1)
+    const copy={...row};delete copy.id;delete copy.created_at;delete copy.updated_at;copy.scheduled_date=d.toISOString().slice(0,10);copy.status='planned'
+    const {data}=await supabase.from('planned_workouts').insert(copy).select('id').single()
+    setMessage('');if(data?.id)setUndo({label:'Workout duplicated',run:async()=>{await supabase.from('planned_workouts').delete().eq('id',data.id);setUndo(null);await load()}});await load()
+  }
+  return <section className="simple-card">
+    <div className="section-heading"><div><span className="card-label">SCHEDULE TOOLS</span><h3>Move or duplicate workouts</h3></div></div>
+    <div className="schedule-tool-list">{rows.slice(0,20).map(r=><div key={r.id}><div><strong>{r.title}</strong><span>{r.scheduled_date}</span></div><div><button onClick={()=>move(r,-1)}>← Day</button><button onClick={()=>move(r,1)}>Day →</button><button onClick={()=>duplicate(r)}>Duplicate</button></div></div>)}</div>
+    {!rows.length&&<div className="empty-state action-empty"><strong>No planned workouts.</strong><span>Add one from a program preview or the weekly calendar above.</span></div>}
+    {undo&&<div className="undo-toast"><span>{undo.label}</span><button onClick={undo.run}>Undo</button></div>}
+    {message&&<div className="status-message">{message}</div>}
+  </section>
 }
 
 export function ShareImportPanel({session}) {
