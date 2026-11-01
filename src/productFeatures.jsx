@@ -41,7 +41,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss}) {
   const [workout,setWorkout]=useState(()=>{
     let cached=null
     try { cached=planned?.id ? JSON.parse(localStorage.getItem('wb-planned-draft-'+planned.id) || 'null') : null } catch {}
-    return withSetProgress({exercises:[],sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',circuit_rounds:'',metcon:{name:'',format:'For time',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx'},...(planned?.workout||{}),...(cached||{})})
+    return withSetProgress({exercises:[],sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',circuit_rounds:'',conditioningEnabled:false,metcon:{name:'',format:'For time',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx'},...(planned?.workout||{}),...(cached||{})})
   })
   const [saveState,setSaveState]=useState('Saved')
   const [finishing,setFinishing]=useState(false)
@@ -52,7 +52,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss}) {
   useEffect(()=>{
     let cached=null
     try { cached=planned?.id ? JSON.parse(localStorage.getItem('wb-planned-draft-'+planned.id) || 'null') : null } catch {}
-    setWorkout(withSetProgress({exercises:[],sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',circuit_rounds:'',metcon:{name:'',format:'For time',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx'},...(planned?.workout||{}),...(cached||{})}))
+    setWorkout(withSetProgress({exercises:[],sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',circuit_rounds:'',conditioningEnabled:false,metcon:{name:'',format:'For time',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx'},...(planned?.workout||{}),...(cached||{})}))
   },[planned?.id])
 
   useEffect(()=>{
@@ -115,7 +115,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss}) {
     let error=null
     if (existing.data?.id) {
       ;({error}=await supabase.from('training_sessions').update({
-        title:planned.title,program:planned.source_program_name||'Flexible',week:planned.source_week||null,
+        title:planned.title,program:planned.source_program_name||'Custom workout',week:planned.source_week||null,
         primary_lift:planned.source_day||null,session_date:planned.scheduled_date,workout:finalWorkout,
         total_volume:Math.round(totalVolume),bodyweight:Number(workout.bodyweight||0)||null,
         completed_at:now,updated_at:now
@@ -123,7 +123,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss}) {
     } else {
       ;({error}=await supabase.from('training_sessions').insert({
         user_id:planned.user_id,planned_workout_id:planned.id,title:planned.title,
-        program:planned.source_program_name||'Flexible',week:planned.source_week||null,
+        program:planned.source_program_name||'Custom workout',week:planned.source_week||null,
         primary_lift:planned.source_day||null,session_date:planned.scheduled_date,workout:finalWorkout,
         total_volume:Math.round(totalVolume),bodyweight:Number(workout.bodyweight||0)||null,
         started_at:planned.created_at||now,completed_at:now,updated_at:now
@@ -141,7 +141,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss}) {
 
   return <section className="flex-runner">
     <div className="flex-runner-head">
-      <div><span className="card-label">PLANNED WORKOUT</span><h2>{planned.title}</h2><p>{planned.source_program_name||'Flexible workout'}{planned.source_week?` · Week ${planned.source_week}`:''}</p></div>
+      <div><span className="card-label">PLANNED WORKOUT</span><h2>{planned.title}</h2><p>{planned.source_program_name||'Custom workout'}{planned.source_week?` · Week ${planned.source_week}`:''}</p></div>
       <span className="save-pill">{saveState}</span>
     </div>
     {planned.workout?.source && <div className="source-pill">Source: {planned.workout.source}</div>}
@@ -155,11 +155,12 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss}) {
       const m=String(item.result||'').replace(/[×X]/g,'x').match(/(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/i)
       const current=m?{weight:Number(m[1]),reps:Number(m[2]),e1rm:Number(m[1])*(1+Number(m[2])/30)}:null
       const isPR=Boolean(current&&hist&&(current.weight>(hist.bestWeight||0)||current.e1rm>(hist.bestE||0)+.5))
-      const fallbackRest=/squat|deadlift|bench|press|clean|snatch/i.test(item.name||'')?180:90
+      const fallbackRest=/squat|deadlift|bench|press|clean|snatch/i.test(item.name||'')?Number(localStorage.getItem('wb-setting-compound-rest')||180):Number(localStorage.getItem('wb-setting-accessory-rest')||90)
       const programRest=Number(item.rest_seconds||fallbackRest)
       const rest=timerPresets[key]||programRest
       const sub=substitutions[key]?.[0]
-      return <article className={'flex-exercise '+(item.done?'done':'')+(item.group?' grouped':'')} key={item.id||i}>
+      const nextExerciseIndex=(workout.exercises||[]).findIndex(x=>!x.done)
+      return <article className={'flex-exercise '+(item.done?'done ':'')+(item.group?'grouped ':'')+(!item.done&&i===nextExerciseIndex?'current-exercise':'')} key={item.id||i}>
         <div className="flex-exercise-title"><div><div className="exercise-name-line">{item.group&&<b className="group-badge">{item.group}</b>}<strong>{item.name}</strong>{isPR&&<b className="pr-mini">PR</b>}</div><span>{item.prescription}</span>{item.note&&<small>{item.note}</small>}{hist?.last&&<small className="flex-history">Last: {hist.last}{current&&hist?.last?` · Suggested ${Math.round((current.weight||0)+5)} lb`:''}</small>}{sub&&<small className="sub-suggestion">Substitute: {sub.substitute}{sub.reason?' · '+sub.reason:''}</small>}</div><button type="button" className={'check '+(item.done?'checked':'')} onClick={()=>{ const next=!item.done; changeExercise(i,{done:next}); if(next) window.dispatchEvent(new CustomEvent('workoutboard:rest-timer',{detail:{seconds:rest}})) }}>✓</button></div>
         <div className="flex-exercise-inputs">
           <select value={item.group||''} onChange={e=>changeExercise(i,{group:e.target.value})}><option value="">Straight set</option><option>A1</option><option>A2</option><option>B1</option><option>B2</option><option>C1</option><option>C2</option><option>Circuit</option></select>
@@ -170,7 +171,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss}) {
           {item.setProgress.map((set,j)=><button
             type="button"
             key={j}
-            className={'set-progress-button '+(set.done?'done':'')}
+            className={'set-progress-button '+(set.done?'done ':'')+(!set.done&&i===(workout.exercises||[]).findIndex(x=>!x.done)&&j===item.setProgress.findIndex(x=>!x.done)?'current-set':'')}
             onClick={()=>{
               const next=!set.done
               changeExercise(i,{setProgress:item.setProgress.map((sp,k)=>k===j?{...sp,done:next}:sp)})
@@ -182,22 +183,27 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss}) {
       </article>
     })}
 
-    <MetconTracker value={workout.metcon} onChange={value=>change('metcon',value)} />
+    {(workout.conditioningEnabled || workout.metcon?.name || workout.metcon?.time || workout.metcon?.rounds || workout.metcon?.reps || workout.metcon?.distance || workout.metcon?.calories) ? <details className="today-collapsible conditioning-tools" open>
+      <summary><span><b>Conditioning</b><small>Metcon / intervals / result</small></span></summary>
+      <MetconTracker value={workout.metcon} onChange={value=>{change('conditioningEnabled',true);change('metcon',value)}} />
+    </details> : <button className="context-add-button" type="button" onClick={()=>change('conditioningEnabled',true)}>+ Conditioning</button>}
 
-    <section className="simple-card readiness-card">
-      <div className="section-heading"><div><span className="card-label">HOW YOU FELT</span><h3>Session notes</h3></div></div>
-      <div className="metrics compact-metrics">
-        <label><span>Sleep</span><input type="number" min="1" max="10" inputMode="numeric" value={workout.sleep||''} onChange={e=>change('sleep',e.target.value)} placeholder="1-10" /></label>
-        <label><span>Energy</span><input type="number" min="1" max="10" inputMode="numeric" value={workout.energy||''} onChange={e=>change('energy',e.target.value)} placeholder="1-10" /></label>
-        <label><span>RPE</span><input type="number" min="1" max="10" step="0.5" inputMode="decimal" value={workout.rpe||''} onChange={e=>change('rpe',e.target.value)} placeholder="1-10" /></label>
-        <label><span>Bodyweight</span><input type="number" inputMode="decimal" value={workout.bodyweight||''} onChange={e=>change('bodyweight',e.target.value)} placeholder="lb" /></label>
-      </div>
-      <label className="field-label"><span>Pain / injury</span><input className="text-input" value={workout.pain||''} onChange={e=>change('pain',e.target.value)} placeholder="Optional" /></label>
-      <label className="field-label"><span>Notes</span><textarea value={workout.note||''} onChange={e=>change('note',e.target.value)} placeholder="Anything worth remembering next time…" /></label>
-    </section>
+    <details className="today-collapsible workout-details" open={Boolean(workout.sleep||workout.energy||workout.rpe||workout.bodyweight||workout.pain||workout.note)}>
+      <summary><span><b>Workout details</b><small>Readiness, bodyweight, pain & notes</small></span></summary>
+      <section className="simple-card readiness-card embedded-tool-card">
+        <div className="metrics compact-metrics">
+          <label><span>Sleep</span><input type="number" min="1" max="10" inputMode="numeric" value={workout.sleep||''} onChange={e=>change('sleep',e.target.value)} placeholder="1-10" /></label>
+          <label><span>Energy</span><input type="number" min="1" max="10" inputMode="numeric" value={workout.energy||''} onChange={e=>change('energy',e.target.value)} placeholder="1-10" /></label>
+          <label><span>RPE</span><input type="number" min="1" max="10" step="0.5" inputMode="decimal" value={workout.rpe||''} onChange={e=>change('rpe',e.target.value)} placeholder="1-10" /></label>
+          <label><span>Bodyweight</span><input type="number" inputMode="decimal" value={workout.bodyweight||''} onChange={e=>change('bodyweight',e.target.value)} placeholder="lb" /></label>
+        </div>
+        <label className="field-label"><span>Pain / injury</span><input className="text-input" value={workout.pain||''} onChange={e=>change('pain',e.target.value)} placeholder="Optional" /></label>
+        <label className="field-label"><span>Notes</span><textarea value={workout.note||''} onChange={e=>change('note',e.target.value)} placeholder="Anything worth remembering next time…" /></label>
+      </section>
+    </details>
 
     <div className="finish-row">
-      {onDismiss&&<button className="secondary-action" onClick={onDismiss}>Use regular workout</button>}
+      {onDismiss&&<button className="secondary-action" onClick={onDismiss}>Use program workout</button>}
       <button className="finish-button" onClick={finish} disabled={finishing}>{finishing?'Finishing…':'FINISH WORKOUT'}</button>
     </div>
   </section>
