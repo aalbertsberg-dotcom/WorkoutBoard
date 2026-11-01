@@ -2221,28 +2221,6 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   align-items:center;
   gap:6px;
 }
-.runnable-badge,
-.source-file-badge {
-  display:inline-flex;
-  align-items:center;
-  min-height:24px;
-  padding:0 7px;
-  border-radius:999px;
-  font-size:8px;
-  font-weight:950;
-  letter-spacing:.08em;
-  white-space:nowrap;
-}
-.runnable-badge {
-  border:1px solid #65a30d;
-  background:#20350f;
-  color:#d9f99d;
-}
-.source-file-badge {
-  border:1px solid #52627c;
-  background:#172338;
-  color:#cbd5e1;
-}
 .archive-card.source-only {
   border-style:dashed;
 }
