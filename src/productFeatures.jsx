@@ -174,7 +174,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss,sharedSession
           const parsed=bestSet&&!isDistanceExercise(item.name)&&bestSet.reps?{weight:bestSet.weight,reps:bestSet.reps,e1rm:bestSet.weight*(1+bestSet.reps/30)}:null
           if(!key||(!bestSet&&!item.result))continue
           const lastText=loadedSets.length ? loadedSets.map((set,idx)=>'S'+(idx+1)+' '+set.weight+' lb').join(' · ') : String(item.result||'')
-          if(!map[key])map[key]={last:lastText,bestE:parsed?.e1rm||0,bestWeight:parsed?.weight||0}
+          if(!map[key])map[key]={last:lastText,lastWeights:loadedSets.map(set=>set.weight),bestE:parsed?.e1rm||0,bestWeight:parsed?.weight||0}
           else if(parsed){map[key].bestE=Math.max(map[key].bestE||0,parsed.e1rm);map[key].bestWeight=Math.max(map[key].bestWeight||0,parsed.weight)}
         }
       }
@@ -330,43 +330,60 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss,sharedSession
             <div className="exercise-name-line"><strong>{item.name}</strong>{isPR&&<b className="pr-mini">PR</b>}<PlannedAlternatives name={item.name}/>{item.custom_added&&<button type="button" className="remove-added-exercise" onClick={()=>removeAddedExercise(i)}>Remove</button>}</div>
             <span className="exercise-plan-line">{humanPrescription(item.prescription)}{rest?' · '+(rest<120?rest+' sec':rest/60+' min')+' rest':''}</span>
             {item.note&&<details className="exercise-cue"><summary>Cue</summary><small>{item.note}</small></details>}
-            {hist?.last&&<small className="flex-history">Last: {hist.last}{current&&hist?.last?` · Suggested ${Math.round((current.weight||0)+5)} lb`:''}</small>}
+            {hist?.last&&<small className="flex-history"><strong>Last time:</strong> {hist.last}</small>}
             {sub&&<small className="sub-suggestion">Saved substitute: {sub.substitute}{sub.reason?' · '+sub.reason:''}</small>}
           </div>
           {!item.setProgress?.length&&<button type="button" className={'check '+(item.done?'checked':'')} onClick={()=>{ const next=!item.done; changeExercise(i,{done:next}); if(next) window.dispatchEvent(new CustomEvent('workoutboard:rest-timer',{detail:{seconds:rest}})) }}>✓</button>}
         </div>
-        {loadField&&item.setProgress?.length>0&&<label className="exercise-load-field">
-          <span>{loadField.label}{loadField.optional?' (optional)':''}</span>
-          <div>
-            <input type="number" inputMode="decimal" className="text-input"
-              value={item.load??''}
-              onFocus={e=>e.currentTarget.select()}
-              onChange={e=>changeExercise(i,{load:e.target.value===''?'':Number(e.target.value),result:''})}
-              onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur()}}
-              placeholder={loadField.placeholder}/>
-            <b>lb</b>
-          </div>
-        </label>}
-        {item.setProgress?.length>0&&<div className="set-progress-grid compact flexible-set-progress">
-          {item.setProgress.map((set,j)=>{
-            const isCurrent=!set.done&&i===nextExerciseIndex&&j===item.setProgress.findIndex(x=>!x.done)
-            const recordedWeight=set.weight!==undefined&&set.weight!=='' ? Number(set.weight)||0 : 0
-            return <button
-              type="button"
-              key={j}
-              className={'set-progress-button '+(set.done?'done ':'')+(isCurrent?'current-set':'')}
-              onClick={()=>{
-                const next=!set.done
-                const currentWeight=loadField ? (Number(item.load)||recordedWeight||0) : recordedWeight
-                changeExercise(i,{setProgress:item.setProgress.map((sp,k)=>k===j?{...sp,done:next,weight:next&&currentWeight?currentWeight:sp.weight}:sp)})
-                if(next)window.dispatchEvent(new CustomEvent('workoutboard:rest-timer',{detail:{seconds:rest}}))
-              }}>
-              <strong>Set {j+1}</strong>
-              <span>{set.label || (set.reps?set.reps+' reps':'Done')}{recordedWeight?' · '+recordedWeight+' lb':''}</span>
-              <b>{set.done?'✓':'○'}</b>
-            </button>
-          })}
-        </div>}
+        {item.setProgress?.length>0&&(()=>{
+          const activeIndex=item.setProgress.findIndex(set=>!set.done)
+          const activeSet=activeIndex>=0?item.setProgress[activeIndex]:null
+          const previousWeight=activeIndex>0 ? Number(item.setProgress[activeIndex-1]?.weight||0) : 0
+          const lastTimeWeight=activeIndex>=0 ? Number(hist?.lastWeights?.[Math.min(activeIndex,(hist?.lastWeights?.length||1)-1)]||0) : 0
+          const shownWeight=item.load!==undefined&&item.load!=='' ? item.load : (previousWeight||lastTimeWeight||'')
+          return <>
+            {activeSet&&i===nextExerciseIndex&&<section className="current-set-panel">
+              <div className="current-set-panel-head">
+                <div><span className="card-label">CURRENT SET</span><h3>Set {activeIndex+1} of {item.setProgress.length}</h3></div>
+                <strong>{activeSet.label || (activeSet.reps?activeSet.reps+' reps':'Complete')}</strong>
+              </div>
+              {loadField&&<label className="current-set-weight">
+                <span>{loadField.label}{loadField.optional?' (optional)':''}</span>
+                <div>
+                  <input type="number" inputMode="decimal" value={shownWeight}
+                    onFocus={e=>e.currentTarget.select()}
+                    onChange={e=>changeExercise(i,{load:e.target.value===''?'':Number(e.target.value),result:''})}
+                    onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur()}}
+                    placeholder={loadField.placeholder}/>
+                  <b>lb</b>
+                </div>
+                {hist?.lastWeights?.length>0&&<small>Last time: {hist.lastWeights.map((w,idx)=>'S'+(idx+1)+' '+w+' lb').join(' · ')}</small>}
+              </label>}
+              <button type="button" className="primary-action complete-current-set" onClick={()=>{
+                const currentWeight=loadField ? Number(shownWeight||0) : 0
+                changeExercise(i,{load:shownWeight,setProgress:item.setProgress.map((sp,k)=>k===activeIndex?{...sp,done:true,weight:currentWeight||sp.weight}:sp)})
+                window.dispatchEvent(new CustomEvent('workoutboard:rest-timer',{detail:{seconds:rest}}))
+              }}>Complete Set {activeIndex+1}</button>
+            </section>}
+            <div className="set-progress-grid compact flexible-set-progress">
+              {item.setProgress.map((set,j)=>{
+                const recordedWeight=set.weight!==undefined&&set.weight!=='' ? Number(set.weight)||0 : 0
+                return <button
+                  type="button"
+                  key={j}
+                  className={'set-progress-button '+(set.done?'done ':'')}
+                  onClick={()=>{
+                    if(!set.done)return
+                    changeExercise(i,{setProgress:item.setProgress.map((sp,k)=>k===j?{...sp,done:false}:sp)})
+                  }}>
+                  <strong>Set {j+1}</strong>
+                  <span>{set.label || (set.reps?set.reps+' reps':'Done')}{recordedWeight?' · '+recordedWeight+' lb':''}</span>
+                  <b>{set.done?'✓':'○'}</b>
+                </button>
+              })}
+            </div>
+          </>
+        })()}
       </article>
     })}
 
