@@ -2823,3 +2823,61 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   color:#94a3b8;
   font-size:12px;
 }
+
+
+/* Universal conditioning module */
+.universal-conditioning {
+  display:grid;
+  gap:12px;
+}
+.conditioning-field {
+  display:grid;
+  gap:5px;
+  min-width:0;
+}
+.conditioning-field > span {
+  color:#91a1b8;
+  font-size:9px;
+  font-weight:900;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+.conditioning-field input,
+.conditioning-field select {
+  width:100%;
+  min-width:0;
+  min-height:46px;
+  box-sizing:border-box;
+  border:1px solid #354762;
+  border-radius:10px;
+  background:#0b1525;
+  color:#fff;
+  padding:9px 11px;
+  font:inherit;
+}
+.conditioning-fields {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:9px;
+}
+.conditioning-help,
+.conditioning-suggestion {
+  margin:0;
+  color:#94a3b8;
+  font-size:10px;
+  line-height:1.45;
+}
+.conditioning-suggestion strong { color:#d8e1ef; }
+.conditioning-remove {
+  min-height:32px;
+  border:1px solid #40526e;
+  border-radius:9px;
+  background:#111d31;
+  color:#aab6c9;
+  padding:0 10px;
+  font-size:9px;
+  font-weight:900;
+}
+@media (max-width:700px) {
+  .conditioning-fields { grid-template-columns:1fr; }
+}

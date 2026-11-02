@@ -110,7 +110,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss,sharedSession
   const [workout,setWorkout]=useState(()=>{
     let cached=null
     try { cached=planned?.id ? JSON.parse(localStorage.getItem('wb-planned-draft-'+planned.id) || 'null') : null } catch {}
-    return withSetProgress({exercises:[],sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',circuit_rounds:'',conditioningEnabled:false,metcon:{name:'',format:'For time',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx'},...(planned?.workout||{}),...(cached||{})})
+    return withSetProgress({exercises:[],sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',circuit_rounds:'',conditioningEnabled:false,metcon:{name:'',format:'',activity:'',duration:'',workTime:'',restTime:'',interval:'',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx',intensity:'Easy'},...(planned?.workout||{}),...(cached||{})})
   })
   const [saveState,setSaveState]=useState('Saved')
   const [finishing,setFinishing]=useState(false)
@@ -121,7 +121,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss,sharedSession
   useEffect(()=>{
     let cached=null
     try { cached=planned?.id ? JSON.parse(localStorage.getItem('wb-planned-draft-'+planned.id) || 'null') : null } catch {}
-    setWorkout(withSetProgress({exercises:[],sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',circuit_rounds:'',conditioningEnabled:false,metcon:{name:'',format:'For time',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx'},...(planned?.workout||{}),...(cached||{})}))
+    setWorkout(withSetProgress({exercises:[],sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',circuit_rounds:'',conditioningEnabled:false,metcon:{name:'',format:'',activity:'',duration:'',workTime:'',restTime:'',interval:'',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx',intensity:'Easy'},...(planned?.workout||{}),...(cached||{})}))
   },[planned?.id])
 
   useEffect(()=>{
@@ -287,9 +287,13 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss,sharedSession
       </article>
     })}
 
-    {(workout.conditioningEnabled || workout.metcon?.name || workout.metcon?.time || workout.metcon?.rounds || workout.metcon?.reps || workout.metcon?.distance || workout.metcon?.calories) ? <details className="today-collapsible conditioning-tools" open>
-      <summary><span><b>Conditioning</b><small>Metcon / intervals / result</small></span></summary>
-      <MetconTracker value={workout.metcon} onChange={value=>{change('conditioningEnabled',true);change('metcon',value)}} />
+    {(workout.conditioningEnabled || workout.metcon?.format || workout.metcon?.name || workout.metcon?.activity || workout.metcon?.duration || workout.metcon?.time || workout.metcon?.rounds || workout.metcon?.reps || workout.metcon?.distance || workout.metcon?.calories) ? <details className="today-collapsible conditioning-tools" open>
+      <summary><span><b>Conditioning</b><small>{workout.metcon?.format || 'Choose type'}</small></span></summary>
+      <MetconTracker
+        value={workout.metcon}
+        onChange={value=>{change('conditioningEnabled',true);change('metcon',value)}}
+        onRemove={()=>{change('conditioningEnabled',false);change('metcon',{name:'',format:'',activity:'',duration:'',workTime:'',restTime:'',interval:'',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx',intensity:'Easy'})}}
+      />
     </details> : <button className="context-add-button" type="button" onClick={()=>change('conditioningEnabled',true)}>+ Conditioning</button>}
 
     <details className="today-collapsible workout-details">

@@ -96,21 +96,81 @@ export function WorkoutCoach({session,lift,log,history=[],tm,plan}) {
   </section>
 }
 
-export function MetconTracker({value,onChange}) {
-  const v={name:'',format:'For time',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx',...(value||{})}
+export function MetconTracker({value,onChange,onRemove}) {
+  const v={
+    name:'',format:'',activity:'',duration:'',workTime:'',restTime:'',interval:'',
+    rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx',intensity:'Easy',
+    ...(value||{})
+  }
   const set=(k,x)=>onChange?.({...v,[k]:x})
-  return <section className="simple-card metcon-tracker">
-    <div className="section-heading"><div><span className="card-label">METCON</span><h3>Conditioning result</h3></div></div>
-    <div className="metcon-grid">
-      <input value={v.name} onChange={e=>set('name',e.target.value)} placeholder="Benchmark / workout name"/>
-      <select value={v.format} onChange={e=>set('format',e.target.value)}><option>For time</option><option>AMRAP</option><option>EMOM</option><option>Intervals</option><option>Distance</option></select>
-      <select value={v.scale} onChange={e=>set('scale',e.target.value)}><option>Rx</option><option>Scaled</option><option>Modified</option></select>
-      <input value={v.time} onChange={e=>set('time',e.target.value)} placeholder="Time e.g. 12:34"/>
-      <input type="number" value={v.rounds} onChange={e=>set('rounds',e.target.value)} placeholder="Rounds"/>
-      <input type="number" value={v.reps} onChange={e=>set('reps',e.target.value)} placeholder="Extra reps"/>
-      <input value={v.distance} onChange={e=>set('distance',e.target.value)} placeholder="Distance"/>
-      <input type="number" value={v.calories} onChange={e=>set('calories',e.target.value)} placeholder="Calories"/>
+  const field=(label,control)=><label className="conditioning-field"><span>{label}</span>{control}</label>
+
+  return <section className="simple-card metcon-tracker universal-conditioning">
+    <div className="section-heading">
+      <div><span className="card-label">CONDITIONING</span><h3>Log conditioning</h3></div>
+      {onRemove&&<button type="button" className="conditioning-remove" onClick={onRemove}>Remove</button>}
     </div>
+
+    {field('Type',
+      <select value={v.format} onChange={e=>set('format',e.target.value)}>
+        <option value="">Choose type…</option>
+        <option>Easy cardio</option>
+        <option>Intervals</option>
+        <option>For time</option>
+        <option>AMRAP</option>
+        <option>EMOM</option>
+        <option>Distance</option>
+        <option>Calories</option>
+      </select>
+    )}
+
+    {!v.format&&<p className="conditioning-help">Choose how you’re conditioning and only the fields you need will appear.</p>}
+
+    {v.format==='Easy cardio'&&<div className="conditioning-fields">
+      {field('Activity',<input value={v.activity} onChange={e=>set('activity',e.target.value)} placeholder="Row, bike, walk, sled…"/>)}
+      {field('Duration',<input value={v.duration} onChange={e=>set('duration',e.target.value)} placeholder="e.g. 15 min"/>)}
+      {field('Intensity',<select value={v.intensity} onChange={e=>set('intensity',e.target.value)}><option>Easy</option><option>Moderate</option><option>Hard</option></select>)}
+      {field('Distance (optional)',<input value={v.distance} onChange={e=>set('distance',e.target.value)} placeholder="e.g. 2 mi or 2500 m"/>)}
+      {field('Calories (optional)',<input type="number" inputMode="numeric" value={v.calories} onChange={e=>set('calories',e.target.value)} placeholder="Calories"/>)}
+    </div>}
+
+    {v.format==='Intervals'&&<div className="conditioning-fields">
+      {field('Activity',<input value={v.activity} onChange={e=>set('activity',e.target.value)} placeholder="Bike, row, run, sled…"/>)}
+      {field('Work',<input value={v.workTime} onChange={e=>set('workTime',e.target.value)} placeholder="e.g. 30 sec"/>)}
+      {field('Rest',<input value={v.restTime} onChange={e=>set('restTime',e.target.value)} placeholder="e.g. 60 sec"/>)}
+      {field('Rounds',<input type="number" inputMode="numeric" value={v.rounds} onChange={e=>set('rounds',e.target.value)} placeholder="Rounds"/>)}
+    </div>}
+
+    {v.format==='For time'&&<div className="conditioning-fields">
+      {field('Workout / movements',<input value={v.name} onChange={e=>set('name',e.target.value)} placeholder="What are you doing?"/>)}
+      {field('Result',<input value={v.time} onChange={e=>set('time',e.target.value)} placeholder="Time e.g. 12:34"/>)}
+      {field('Version',<select value={v.scale} onChange={e=>set('scale',e.target.value)}><option>Rx</option><option>Scaled</option><option>Modified</option></select>)}
+    </div>}
+
+    {v.format==='AMRAP'&&<div className="conditioning-fields">
+      {field('Workout / movements',<input value={v.name} onChange={e=>set('name',e.target.value)} placeholder="What are you doing?"/>)}
+      {field('Duration',<input value={v.duration} onChange={e=>set('duration',e.target.value)} placeholder="e.g. 12 min"/>)}
+      {field('Rounds',<input type="number" inputMode="numeric" value={v.rounds} onChange={e=>set('rounds',e.target.value)} placeholder="Completed rounds"/>)}
+      {field('Extra reps',<input type="number" inputMode="numeric" value={v.reps} onChange={e=>set('reps',e.target.value)} placeholder="Extra reps"/>)}
+    </div>}
+
+    {v.format==='EMOM'&&<div className="conditioning-fields">
+      {field('Movements',<input value={v.name} onChange={e=>set('name',e.target.value)} placeholder="Movement(s) each interval"/>)}
+      {field('Duration',<input value={v.duration} onChange={e=>set('duration',e.target.value)} placeholder="e.g. 12 min"/>)}
+      {field('Interval',<input value={v.interval} onChange={e=>set('interval',e.target.value)} placeholder="e.g. Every 1 min"/>)}
+    </div>}
+
+    {v.format==='Distance'&&<div className="conditioning-fields">
+      {field('Activity',<input value={v.activity} onChange={e=>set('activity',e.target.value)} placeholder="Run, row, bike…"/>)}
+      {field('Distance',<input value={v.distance} onChange={e=>set('distance',e.target.value)} placeholder="e.g. 1 mi or 2000 m"/>)}
+      {field('Time',<input value={v.time} onChange={e=>set('time',e.target.value)} placeholder="e.g. 8:42"/>)}
+    </div>}
+
+    {v.format==='Calories'&&<div className="conditioning-fields">
+      {field('Activity',<input value={v.activity} onChange={e=>set('activity',e.target.value)} placeholder="Bike, row, ski…"/>)}
+      {field('Calories',<input type="number" inputMode="numeric" value={v.calories} onChange={e=>set('calories',e.target.value)} placeholder="Calories"/>)}
+      {field('Time',<input value={v.time} onChange={e=>set('time',e.target.value)} placeholder="e.g. 10:00"/>)}
+    </div>}
   </section>
 }
 
