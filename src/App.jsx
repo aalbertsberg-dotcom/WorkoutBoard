@@ -775,7 +775,7 @@ function App() {
   const [authLoading,setAuthLoading] = useState(true)
   const [passwordRecovery,setPasswordRecovery] = useState(false)
   const [dataLoading,setDataLoading] = useState(true)
-  const [activeTab,setActiveTab] = useState('today')
+  const [activeTab,setActiveTab] = useState(() => new URLSearchParams(window.location.search).has('program') ? 'program' : 'today')
   const [profile,setProfile] = useState(null)
   const [activeProgram,setActiveProgram] = useState('andy-hybrid-12')
   const [week,setWeek] = useState(1)

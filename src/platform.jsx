@@ -376,6 +376,8 @@ export function PlanPage({
   const [submission,setSubmission] = useState({name:'',description:'',source_url:'',visibility:'private'})
   const [message,setMessage] = useState('')
   const [shareCode,setShareCode] = useState('')
+  const [shareLink,setShareLink] = useState('')
+  const [sharedPreview,setSharedPreview] = useState(null)
   const [planMode,setPlanMode] = useState('programs')
   const [undoAction,setUndoAction] = useState(null)
   const [category,setCategory] = useState('All')
@@ -444,7 +446,7 @@ export function PlanPage({
 
   const allPrograms = useMemo(() => [...classicCatalog,...archiveCatalog],[classicCatalog,archiveCatalog])
   const programByKey = useMemo(() => Object.fromEntries(allPrograms.map(p=>[p.key,p])),[allPrograms])
-  const preview = programByKey[previewKey] || allPrograms[0]
+  const preview = sharedPreview || programByKey[previewKey] || allPrograms[0]
   const previewRunnable = Boolean(preview?.getWeek)
   const previewDays = previewRunnable ? preview.getWeek(previewWeek) : []
 
@@ -483,6 +485,47 @@ export function PlanPage({
   }
 
   useEffect(() => { load() },[session?.user?.id])
+
+  useEffect(() => {
+    if(!session?.user)return
+    const code=new URLSearchParams(window.location.search).get('program')?.trim().toUpperCase()
+    if(!code)return
+    let cancelled=false
+    const loadSharedProgram=async()=>{
+      const {data,error}=await supabase.from('shared_library_items').select('*').eq('share_code',code).eq('item_type','program').maybeSingle()
+      if(cancelled)return
+      if(error||!data){
+        setMessage(error?.message||'Shared program link was not found.')
+        return
+      }
+      const snap=data.payload||{}
+      const shared={
+        key:'shared:'+code,
+        kind:'shared',
+        name:snap.name||data.title||'Shared program',
+        shortName:snap.name||data.title||'Shared program',
+        source:snap.source||'Shared WorkoutBoard link',
+        description:snap.description||'Shared WorkoutBoard program.',
+        category:snap.category||'Shared',
+        difficulty:snap.difficulty||'',
+        weeksCount:Number(snap.weeksCount||snap.weeks?.length||1),
+        daysPerWeek:Number(snap.daysPerWeek||snap.weeks?.[0]?.days?.length||0),
+        durationLabel:snap.durationLabel||null,
+        getWeek:(targetWeek)=>snap.weeks?.find(w=>Number(w.week)===Number(targetWeek))?.days||[],
+      }
+      setSharedPreview(shared)
+      setPreviewKey(shared.key)
+      setPreviewWeek(1)
+      setPreviewDay(0)
+      setPlanMode('programs')
+      setSearch('')
+      setCategory('All')
+      setMessage('Shared program loaded from link.')
+      setTimeout(()=>document.getElementById('program-preview')?.scrollIntoView({behavior:'smooth',block:'start'}),120)
+    }
+    loadSharedProgram()
+    return()=>{cancelled=true}
+  },[session?.user?.id])
 
   const matchingSessions = track => {
     const p=programByKey[track.program_key]
@@ -587,9 +630,12 @@ export function PlanPage({
   }
 
   const openPreview = key => {
+    if(document.activeElement instanceof HTMLElement)document.activeElement.blur()
+    setSharedPreview(null)
     setPreviewKey(key)
     setPreviewWeek(1)
     setPreviewDay(0)
+    setTimeout(()=>document.getElementById('program-preview')?.scrollIntoView({behavior:'smooth',block:'start'}),80)
   }
 
   const snapshotProgram = p => ({
@@ -626,8 +672,9 @@ export function PlanPage({
 
   const shareProgram = async p => {
     if(!session?.user||!p)return
-    setMessage('Creating share code…')
+    setMessage('Creating share link…')
     setShareCode('')
+    setShareLink('')
     const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
     const code=Array.from({length:8},()=>chars[Math.floor(Math.random()*chars.length)]).join('')
     const {error}=await supabase.from('shared_library_items').insert({
@@ -637,11 +684,17 @@ export function PlanPage({
       title:p.name,
       payload:snapshotProgram(p)
     })
-    if(error){setMessage('Could not create share code: '+error.message);return}
+    if(error){setMessage('Could not create share link: '+error.message);return}
+    const url=new URL(window.location.href)
+    url.search=''
+    url.hash=''
+    url.searchParams.set('program',code)
+    const link=url.toString()
     setShareCode(code)
+    setShareLink(link)
     let copied=false
-    try{await navigator.clipboard.writeText(code);copied=true}catch{}
-    setMessage(copied?'Share code copied to clipboard.':'Share code created. Tap Copy code below.')
+    try{await navigator.clipboard.writeText(link);copied=true}catch{}
+    setMessage(copied?'Program link copied to clipboard.':'Share link created. Tap Copy link below.')
   }
 
   const copyShareCode = async () => {
@@ -652,6 +705,21 @@ export function PlanPage({
     }catch{
       setMessage('Copy was blocked by the browser. Select the code and copy it manually.')
     }
+  }
+
+  const copyShareLink = async () => {
+    if(!shareLink)return
+    try{
+      await navigator.clipboard.writeText(shareLink)
+      setMessage('Program link copied to clipboard.')
+    }catch{
+      setMessage('Copy was blocked by the browser. Select the link and copy it manually.')
+    }
+  }
+
+  const nativeShareProgram = async () => {
+    if(!shareLink||!navigator.share)return
+    try{await navigator.share({title:preview?.name||'WorkoutBoard program',text:'WorkoutBoard program',url:shareLink})}catch{}
   }
 
   const startTracking = async p => {
@@ -776,7 +844,7 @@ export function PlanPage({
     </div>}
 
     {undoAction&&<div className="undo-toast"><span>{undoAction.label}</span><button onClick={undoAction.run}>Undo</button></div>}
-    {message&&<div className="status-message">{message}</div>}
+    {planMode!=='programs'&&message&&<div className="status-message">{message}</div>}
 
     {planMode==='programs'?<>
       {tracked.length>0&&<section className="program-state-section current-program-section">
@@ -798,7 +866,7 @@ export function PlanPage({
 
       <section className="library-toolbar simple-card program-picker-toolbar">
         <div className="section-heading"><div><span className="card-label">PROGRAM LIBRARY</span><h3>Find your next program</h3></div><button className="mini-action" onClick={()=>setShowSubmit(v=>!v)}>Add your own</button></div>
-        <input className="text-input program-search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search 5/3/1, Squatober, powerbuilding…"/>
+        <input className="text-input program-search" value={search} onChange={e=>setSearch(e.target.value)} enterKeyHint="search" onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();e.currentTarget.blur()}}} placeholder="Search 5/3/1, Squatober, powerbuilding…"/>
         <div className="category-chips">{categories.map(c=><button key={c} className={category===c?'active':''} onClick={()=>setCategory(c)}>{c}</button>)}</div>
         {recentProgramKeys.length>0&&<div className="recent-programs-row"><span>Recent</span>{recentProgramKeys.slice(0,4).map(key=>{const p=programByKey[key];return p?<button key={key} onClick={()=>openPreview(key)}>{p.name}</button>:null})}</div>}
       </section>
@@ -817,7 +885,7 @@ export function PlanPage({
         {!availablePrograms.length&&<div className="empty-state action-empty"><strong>No programs match.</strong><button onClick={()=>{setSearch('');setCategory('All')}}>Clear filters</button></div>}
       </div>
 
-      {preview&&<section className="program-preview-card">
+      {preview&&<section className="program-preview-card" id="program-preview">
         <div className="preview-head">
           <div><span className="card-label">PROGRAM PREVIEW</span><h2>{preview.name}</h2><p>{preview.description}</p></div>
           <button className={'favorite-button large '+(favorites.includes(preview.key)?'active':'')} onClick={()=>toggleFavorite(preview.key)}>{favorites.includes(preview.key)?'★':'☆'}</button>
@@ -836,9 +904,13 @@ export function PlanPage({
         <div className="sample-workout"><h3>{previewDays[previewDay]?.title}</h3>{previewDays[previewDay]?.exercises?.map((x,i)=><div className="sample-exercise" key={i}><strong>{x.name}</strong><span>{x.prescription}</span>{x.note&&<small>{x.note}</small>}</div>)}</div>
         <div className="program-preview-actions">
           <div className="schedule-row"><input type="date" value={scheduleDate} onChange={e=>setScheduleDate(e.target.value)}/><button className="primary-action" onClick={scheduleProgramWorkout}>Add workout</button></div>
-          <button className="wide-button" onClick={()=>shareProgram(preview)}>Share program code</button>
+          <button className="wide-button" onClick={()=>shareProgram(preview)}>Share program</button>
+          {shareLink&&<div className="share-link-inline">
+            <span>{shareLink}</span>
+            <div><button type="button" onClick={copyShareLink}>Copy link</button>{navigator.share&&<button type="button" onClick={nativeShareProgram}>Share</button>}</div>
+          </div>}
           {shareCode&&<div className="share-code-inline"><strong>{shareCode}</strong><button type="button" onClick={copyShareCode}>Copy code</button></div>}
-          {trackingReady&&!trackedKeys.has(preview.key)&&<button className="wide-button" onClick={()=>startTracking(preview)}>{completedKeys.has(preview.key)?'Track this program again':'Track this program'}</button>}
+          {trackingReady&&!trackedKeys.has(preview.key)&&preview.kind!=='shared'&&<button className="wide-button" onClick={()=>startTracking(preview)}>{completedKeys.has(preview.key)?'Track this program again':'Track this program'}</button>}
           {message&&<div className="status-message preview-action-status">{message}</div>}
         </div>
       </section>}
