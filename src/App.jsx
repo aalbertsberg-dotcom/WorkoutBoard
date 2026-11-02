@@ -852,6 +852,8 @@ function App() {
   const [extraWorkoutOpen,setExtraWorkoutOpen] = useState(false)
   const [nextDayPreviewOpen,setNextDayPreviewOpen] = useState(false)
   const [pendingWorkoutStart,setPendingWorkoutStart] = useState(null)
+  const [todayCompletedWorkouts,setTodayCompletedWorkouts] = useState([])
+  const [workoutStartError,setWorkoutStartError] = useState('')
 
   const personalProgram = programs[activeProgram]
   const sharedProgramId = activeSession ? (dbNameToProgram[activeSession.program] || activeProgram) : activeProgram
@@ -990,6 +992,7 @@ function App() {
 
       setPlannedToday(resolvedTodayPlan)
       setTrackedTodayInfo(nextTrackedInfo)
+      setTodayCompletedWorkouts((flexCompleted||[]).filter(row=>String(row.completed_at||'').slice(0,10)===today))
       setShowRegularToday(false)
       setTogetherTracking(trackingData || [])
 
@@ -1015,6 +1018,7 @@ function App() {
   },[session?.user?.id])
 
   const activatePlannedWorkout = data => {
+    setWorkoutStartError('')
     setCompletionSummary(null)
     setExtraWorkoutOpen(false)
     setNextDayPreviewOpen(false)
@@ -1037,7 +1041,7 @@ function App() {
     const plannedPayload=makePlannedFromArchive(program,next.week,next.dayIndex,today)
     plannedPayload.workout={...plannedPayload.workout,tracking_program_key:trackedTodayInfo.key}
     const {data,error}=await supabase.from('planned_workouts').insert({...plannedPayload,user_id:session.user.id}).select().single()
-    if(error)return
+    if(error){setWorkoutStartError(error.message);return}
     activatePlannedWorkout(data)
   }
 
@@ -1069,7 +1073,7 @@ function App() {
       status:'started',
     }
     const {data,error}=await supabase.from('planned_workouts').insert(payload).select().single()
-    if(error)return
+    if(error){setWorkoutStartError(error.message);return}
     activatePlannedWorkout(data)
   }
 
@@ -1083,12 +1087,25 @@ function App() {
   const refreshPlannedToday = async () => {
     if (!session?.user) return
     const today = new Date().toISOString().slice(0,10)
-    const {data}=await supabase.from('planned_workouts').select('*')
-      .eq('user_id',session.user.id).eq('scheduled_date',today)
-      .in('status',['planned','started']).order('created_at').limit(1)
+    const [{data},{data:completedRows}]=await Promise.all([
+      supabase.from('planned_workouts').select('*')
+        .eq('user_id',session.user.id).eq('scheduled_date',today)
+        .in('status',['planned','started']).order('created_at').limit(1),
+      supabase.from('training_sessions').select('id,title,program,week,total_volume,completed_at,workout')
+        .eq('user_id',session.user.id).not('completed_at','is',null)
+        .gte('completed_at',today+'T00:00:00').lte('completed_at',today+'T23:59:59.999')
+        .order('completed_at',{ascending:false})
+    ])
     setPlannedToday(data?.[0] || null)
+    setTodayCompletedWorkouts(completedRows||[])
     setShowRegularToday(false)
   }
+
+  useEffect(() => {
+    if(activeTab==='whiteboard'){
+      requestAnimationFrame(()=>window.scrollTo({top:0,left:0,behavior:'auto'}))
+    }
+  },[activeTab])
 
   const personalRows = useMemo(
     () => history.filter(row => row.program === personalProgram.dbName),
@@ -1758,6 +1775,16 @@ function App() {
                   setActiveTab('together')
                 }else{
                   setCompletionSummary(summary||null)
+                  if(summary){
+                    setTodayCompletedWorkouts(rows=>[{
+                      id:'just-finished-'+Date.now(),
+                      title:summary.title,
+                      program:summary.program,
+                      total_volume:summary.volume||0,
+                      completed_at:new Date().toISOString(),
+                      workout:{exercises:[]},
+                    },...rows])
+                  }
                   setTrackedTodayInfo(v=>{
                     if(!v)return v
                     const workoutsToday=(v.workoutsToday||0)+1
@@ -1773,6 +1800,14 @@ function App() {
             />
           ) : trackedTodayInfo ? (
             <section className="page-section tracked-today-state">
+              {todayCompletedWorkouts.length>0&&<details className="today-completed-workouts" open>
+                <summary><span><b>Today’s workouts</b><small>{todayCompletedWorkouts.length} completed</small></span></summary>
+                <div className="today-completed-list">{todayCompletedWorkouts.map(row=><article key={row.id}>
+                  <div><strong>{row.title||'Workout'}</strong><span>{row.program||'Workout'}{row.completed_at?' · '+new Date(row.completed_at).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):''}</span></div>
+                  <b>{Number(row.total_volume||0)>0?Number(row.total_volume).toLocaleString()+' lb':'Completed'}</b>
+                  {row.workout?.exercises?.length>0&&<details><summary>Exercises</summary><p>{row.workout.exercises.map(x=>x.name).filter(Boolean).join(' · ')}</p></details>}
+                </article>)}</div>
+              </details>
               {completionSummary&&<section className="workout-complete-summary">
                 <div className="completion-check">✓</div>
                 <div><span className="card-label">WORKOUT COMPLETE</span><h2>{completionSummary.title||'Workout complete'}</h2><p>{completionSummary.program||trackedTodayInfo.name}</p></div>
@@ -1816,11 +1851,7 @@ function App() {
 
               <button className="secondary-action" onClick={()=>setActiveTab('program')}>View full program / plan ahead</button>
 
-              {pendingWorkoutStart&&<section className="same-day-confirm">
-                <strong>You already completed {trackedTodayInfo.workoutsToday||1} workout{(trackedTodayInfo.workoutsToday||1)===1?'':'s'} today.</strong>
-                <p>Start {pendingWorkoutStart.label} anyway?</p>
-                <div><button className="secondary-action" onClick={()=>setPendingWorkoutStart(null)}>Cancel</button><button className="primary-action" onClick={confirmPendingWorkout}>Yes, start it</button></div>
-              </section>}
+              {workoutStartError&&<div className="status-message">{workoutStartError}</div>}
             </section>
           ) : (
           <>
@@ -2272,6 +2303,14 @@ function App() {
         <div className="bottom-space" />
       </main>
 
+      {pendingWorkoutStart&&<div className="same-day-sheet-backdrop" onClick={()=>setPendingWorkoutStart(null)}>
+        <section className="same-day-sheet" onClick={e=>e.stopPropagation()}>
+          <span className="card-label">ANOTHER WORKOUT TODAY</span>
+          <h3>You already completed {todayCompletedWorkouts.length||trackedTodayInfo?.workoutsToday||1} workout{(todayCompletedWorkouts.length||trackedTodayInfo?.workoutsToday||1)===1?'':'s'} today.</h3>
+          <p>Start <strong>{pendingWorkoutStart.label}</strong> anyway?</p>
+          <div><button className="secondary-action" onClick={()=>setPendingWorkoutStart(null)}>Cancel</button><button className="primary-action" onClick={confirmPendingWorkout}>Yes, start it</button></div>
+        </section>
+      </div>}
     </>
   )
 }
