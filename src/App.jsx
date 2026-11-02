@@ -775,7 +775,10 @@ function App() {
   const [authLoading,setAuthLoading] = useState(true)
   const [passwordRecovery,setPasswordRecovery] = useState(false)
   const [dataLoading,setDataLoading] = useState(true)
-  const [activeTab,setActiveTab] = useState(() => new URLSearchParams(window.location.search).has('program') ? 'program' : 'today')
+  const [activeTab,setActiveTab] = useState(() => {
+    const params=new URLSearchParams(window.location.search)
+    return params.has('join') ? 'together' : params.has('program') ? 'program' : 'today'
+  })
   const [profile,setProfile] = useState(null)
   const [activeProgram,setActiveProgram] = useState('andy-hybrid-12')
   const [week,setWeek] = useState(1)
@@ -953,6 +956,49 @@ function App() {
     const rows = workoutRows.filter(r => r.lift === lift && r.completed_at).sort((a,b) => String(b.completed_at).localeCompare(String(a.completed_at)))
     return rows.find(r => !(r.week === week && r.lift === lift))?.workout || null
   },[workoutRows,lift,week])
+
+  useEffect(() => {
+    if(!session?.user || !profile || togetherReady===false)return
+    const code=new URLSearchParams(window.location.search).get('join')?.trim().toUpperCase()
+    if(!code)return
+    let cancelled=false
+    const joinFromUrl=async()=>{
+      setJoinCode(code)
+      setTogetherMessage('Joining…')
+      const {data:found,error}=await supabase
+        .from('shared_sessions')
+        .select('*')
+        .eq('join_code',code)
+        .eq('status','open')
+        .single()
+      if(cancelled)return
+      if(error||!found){
+        setTogetherMessage('No open session found with that code.')
+        return
+      }
+      const displayName=profile?.display_name||session.user.email?.split('@')[0]||'You'
+      const {error:joinError}=await supabase.from('session_participants').upsert({
+        session_id:found.id,
+        user_id:session.user.id,
+        display_name:displayName,
+      },{onConflict:'session_id,user_id'})
+      if(cancelled)return
+      if(joinError){
+        setTogetherMessage(joinError.message)
+        return
+      }
+      setActiveSession(found)
+      setJoinCode('')
+      setTogetherMessage('')
+      setActiveTab('together')
+      const url=new URL(window.location.href)
+      url.searchParams.delete('join')
+      window.history.replaceState({},'',url.pathname+url.search+url.hash)
+      await refreshTogether(found.id)
+    }
+    joinFromUrl()
+    return()=>{cancelled=true}
+  },[session?.user?.id,profile?.id,togetherReady])
 
   const refreshTogether = async sessionId => {
     if (!sessionId) return
@@ -1278,15 +1324,18 @@ function App() {
 
   const shareSession = async () => {
     if (!activeSession) return
-    const text = 'Join my WorkoutBoard session with code ' + activeSession.join_code
+    const url=new URL(appUrl())
+    url.searchParams.set('join',activeSession.join_code)
+    const shareUrl=url.toString()
+    const text='Join my WorkoutBoard session'
     try {
-      if (navigator.share) await navigator.share({title:'WorkoutBoard Together',text,url:appUrl()})
+      if (navigator.share) await navigator.share({title:'WorkoutBoard Together',text,url:shareUrl})
       else {
-        await navigator.clipboard.writeText(text + ' — ' + appUrl())
-        setTogetherMessage('Session code and link copied.')
+        await navigator.clipboard.writeText(shareUrl)
+        setTogetherMessage('Join link copied.')
       }
     } catch {
-      setTogetherMessage(text)
+      setTogetherMessage(shareUrl)
     }
   }
 
@@ -1586,7 +1635,7 @@ function App() {
                 <section className="together-start-card">
                   <span className="card-label">HOST A WORKOUT</span>
                   <h2>1. Create a session code</h2>
-                  <p>You create the code here. Send that 6-character code to Tracey/Myra. They enter it in the Join box below.</p>
+                  <p>Create a 6-character code, then share the join link or code with anyone you want to train with.</p>
                   <div className="together-workout-preview"><strong>{personalProgram.shortName}</strong><span>Week {profile?.current_week || week} · {lift} Day</span></div>
                   <button className="primary-action" onClick={createTogetherSession}>Create my 6-character code</button>
                 </section>
@@ -1594,7 +1643,7 @@ function App() {
                 <section className="together-start-card">
                   <span className="card-label">JOIN A WORKOUT</span>
                   <h2>2. Enter the host's code</h2>
-                  <p>If someone else is hosting, they send you their 6-character code. Enter it here.</p>
+                  <p>If someone else is hosting, open their join link or enter the 6-character code here.</p>
                   <div className="join-row">
                     <input value={joinCode} onChange={e => setJoinCode(e.target.value.toUpperCase())} maxLength="6" placeholder="ABC123" />
                     <button onClick={joinTogetherSession}>Join</button>
