@@ -2553,3 +2553,30 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   .analytics-chart-wide { grid-column:auto; }
   .analytics-line-chart svg { min-height:160px; }
 }
+
+
+.share-code-inline {
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:8px;
+  align-items:center;
+  padding:9px 10px;
+  border:1px solid #40526e;
+  border-radius:10px;
+  background:#0d1728;
+}
+.share-code-inline strong {
+  font-size:16px;
+  letter-spacing:.16em;
+  color:#d9f99d;
+}
+.share-code-inline button {
+  min-height:36px;
+  border:1px solid #65a30d;
+  border-radius:8px;
+  background:#20350f;
+  color:#d9f99d;
+  padding:0 10px;
+  font-weight:900;
+}
+.preview-action-status { margin:0; }
