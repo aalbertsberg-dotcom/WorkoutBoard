@@ -2775,9 +2775,9 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   display:inline-flex;
 }
 .planned-finish-wrap {
-  position:sticky;
-  bottom:max(8px,env(safe-area-inset-bottom));
-  z-index:20;
+  position:static;
+  z-index:auto;
+  margin-top:8px;
 }
 .regular-workout-fallback {
   width:100%;
@@ -2786,7 +2786,7 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
 @media (max-width:700px) {
   .flex-exercise-title { align-items:flex-start; }
   .exercise-name-line { gap:7px; }
-  .planned-finish-wrap { bottom:76px; }
+  .planned-finish-wrap { bottom:auto; }
 }
 
 
