@@ -1780,13 +1780,6 @@ function App() {
           <button className={activeTab === 'whiteboard' ? 'active' : ''} onClick={() => setActiveTab('whiteboard')}><b>□</b><span>Board</span></button>
         </nav>
 
-        <nav className="mobile-bottom-nav" aria-label="WorkoutBoard mobile navigation">
-          <button className={activeTab==='today'?'active':''} onClick={async()=>{await refreshPlannedToday();setActiveTab('today')}}><b>●</b><span>Today</span></button>
-          <button className={activeTab==='together'?'active':''} onClick={()=>setActiveTab('together')}><b>⇄</b><span>Together</span></button>
-          <button className={activeTab==='program'?'active':''} onClick={()=>setActiveTab('program')}><b>▦</b><span>Plan</span></button>
-          <button className={activeTab==='whiteboard'?'active':''} onClick={()=>setActiveTab('whiteboard')}><b>□</b><span>Board</span></button>
-        </nav>
-
         {activeTab === 'today' && <TrainingTimer />}
 
         {dataLoading ? (
@@ -2349,6 +2342,13 @@ function App() {
 
         <div className="bottom-space" />
       </main>
+
+      <nav className="mobile-bottom-nav app-level-mobile-nav" aria-label="WorkoutBoard mobile navigation">
+        <button className={activeTab==='today'?'active':''} onClick={async()=>{await refreshPlannedToday();setActiveTab('today')}}><b>●</b><span>Today</span></button>
+        <button className={activeTab==='together'?'active':''} onClick={()=>setActiveTab('together')}><b>⇄</b><span>Together</span></button>
+        <button className={activeTab==='program'?'active':''} onClick={()=>setActiveTab('program')}><b>▦</b><span>Plan</span></button>
+        <button className={activeTab==='whiteboard'?'active':''} onClick={()=>setActiveTab('whiteboard')}><b>□</b><span>Board</span></button>
+      </nav>
 
       {pendingWorkoutStart&&<div className="same-day-sheet-backdrop" onClick={()=>setPendingWorkoutStart(null)}>
         <section className="same-day-sheet" onClick={e=>e.stopPropagation()}>
