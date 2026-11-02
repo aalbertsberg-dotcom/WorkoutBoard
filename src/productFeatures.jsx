@@ -299,7 +299,14 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss,sharedSession
         },{onConflict:'session_id,user_id'})
       }
       try { localStorage.removeItem('wb-planned-draft-'+planned.id) } catch {}
-      onFinished?.()
+      const completedSets=(finalWorkout.exercises||[]).reduce((sum,item)=>sum+(item.setProgress||[]).filter(set=>set.done).length,0)
+      onFinished?.({
+        title:planned.title,
+        program:planned.source_program_name||'Custom workout',
+        exercises:(finalWorkout.exercises||[]).filter(item=>item.done||(item.setProgress||[]).some(set=>set.done)).length,
+        sets:completedSets,
+        volume:Math.round(totalVolume),
+      })
     } else {
       setSaveState('Finish failed: '+error.message)
     }

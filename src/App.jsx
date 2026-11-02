@@ -848,6 +848,8 @@ function App() {
   const [trackedTodayInfo,setTrackedTodayInfo] = useState(null)
   const [togetherView,setTogetherView] = useState('live')
   const [conditioningOpen,setConditioningOpen] = useState(false)
+  const [completionSummary,setCompletionSummary] = useState(null)
+  const [sameDayConfirm,setSameDayConfirm] = useState(false)
 
   const personalProgram = programs[activeProgram]
   const sharedProgramId = activeSession ? (dbNameToProgram[activeSession.program] || activeProgram) : activeProgram
@@ -951,8 +953,18 @@ function App() {
           const nextWeek=Math.min(Number(trackedProgram.weeksCount),Math.floor(nextIndex/Number(trackedProgram.daysPerWeek))+1)
           const nextDayIndex=nextIndex%Number(trackedProgram.daysPerWeek)
           const nextDay=nextIndex<total ? trackedProgram.getWeek(nextWeek)?.[nextDayIndex] : null
+          const upcoming=[]
+          for(let offset=0;offset<3;offset++){
+            const idx=nextIndex+offset
+            if(idx>=total)break
+            const w=Math.floor(idx/Number(trackedProgram.daysPerWeek))+1
+            const di=idx%Number(trackedProgram.daysPerWeek)
+            const d=trackedProgram.getWeek(w)?.[di]
+            if(d)upcoming.push({week:w,dayIndex:di,title:d.title})
+          }
           nextTrackedInfo={
             key:activeArchiveTrack.program_key,
+            archiveId,
             name:trackedProgram.name,
             completed:completedCount,
             total,
@@ -960,6 +972,7 @@ function App() {
             nextWeek,
             nextDayIndex,
             nextTitle:nextDay?.title||'',
+            upcoming,
             complete:completedCount>=total,
           }
           if(!resolvedTodayPlan && !completedToday && completedCount<total && nextDay){
@@ -996,6 +1009,28 @@ function App() {
     load()
     return () => { cancelled = true }
   },[session?.user?.id])
+
+  const startTrackedWorkout = async ({confirmSameDay=false}={}) => {
+    if(!session?.user || !trackedTodayInfo || trackedTodayInfo.complete)return
+    if(trackedTodayInfo.completedToday && !confirmSameDay){
+      setSameDayConfirm(true)
+      return
+    }
+    const program=archiveProgramById[trackedTodayInfo.archiveId]
+    const next=trackedTodayInfo.upcoming?.[0]
+    if(!program?.getWeek || !next)return
+    const today=new Date().toISOString().slice(0,10)
+    const plannedPayload=makePlannedFromArchive(program,next.week,next.dayIndex,today)
+    plannedPayload.workout={...plannedPayload.workout,tracking_program_key:trackedTodayInfo.key}
+    const {data,error}=await supabase.from('planned_workouts').insert({...plannedPayload,user_id:session.user.id}).select().single()
+    if(error)return
+    setCompletionSummary(null)
+    setSameDayConfirm(false)
+    setPlannedToday(data)
+    setTrackedTodayInfo(v=>v?{...v,completedToday:false}:v)
+    setShowRegularToday(false)
+    window.scrollTo({top:0,behavior:'smooth'})
+  }
 
   const refreshPlannedToday = async () => {
     if (!session?.user) return
@@ -1666,26 +1701,60 @@ function App() {
             <PlannedWorkoutRunner
               planned={plannedToday}
               sharedSessionId={sharedWorkoutActive&&activeSession ? activeSession.id : null}
-              onFinished={async() => {
+              onFinished={async(summary) => {
                 setPlannedToday(null)
                 setShowRegularToday(false)
                 if(sharedWorkoutActive&&activeSession){
                   await refreshTogether(activeSession.id)
                   setActiveTab('together')
                 }else{
-                  setTrackedTodayInfo(v=>v?{...v,completedToday:true,completed:Math.min(v.total,v.completed+1)}:v)
+                  setCompletionSummary(summary||null)
+                  setTrackedTodayInfo(v=>{
+                    if(!v)return v
+                    const completed=Math.min(v.total,v.completed+1)
+                    const next=v.upcoming?.slice(1)||[]
+                    const first=next[0]
+                    return {...v,completedToday:true,completed,upcoming:next,nextWeek:first?.week||v.nextWeek,nextDayIndex:first?.dayIndex??v.nextDayIndex,nextTitle:first?.title||'',complete:completed>=v.total}
+                  })
                 }
               }}
               onDismiss={sharedWorkoutActive || trackedTodayInfo ? undefined : () => setShowRegularToday(true)}
             />
           ) : trackedTodayInfo ? (
             <section className="page-section tracked-today-state">
-              <section className="today-card">
-                <div><span className="card-label">TRACKED PROGRAM</span><h2>{trackedTodayInfo.name}</h2><p>{trackedTodayInfo.complete?'Program complete':trackedTodayInfo.completedToday?'Today’s workout is complete':'Your next tracked workout is ready from Plan'}</p></div>
+              {completionSummary&&<section className="workout-complete-summary">
+                <div className="completion-check">✓</div>
+                <div><span className="card-label">WORKOUT COMPLETE</span><h2>{completionSummary.title||'Workout complete'}</h2><p>{completionSummary.program||trackedTodayInfo.name}</p></div>
+                <div className="completion-stats">
+                  <div><span>Exercises</span><strong>{completionSummary.exercises||0}</strong></div>
+                  <div><span>Sets</span><strong>{completionSummary.sets||0}</strong></div>
+                  <div><span>Volume</span><strong>{Number(completionSummary.volume||0).toLocaleString()} lb</strong></div>
+                </div>
+              </section>}
+
+              {!completionSummary&&<section className="today-card">
+                <div><span className="card-label">TRACKED PROGRAM</span><h2>{trackedTodayInfo.name}</h2><p>{trackedTodayInfo.complete?'Program complete':trackedTodayInfo.completedToday?'Workout already tracked today':'Your next tracked workout is ready'}</p></div>
                 <div className="progress-badge">{trackedTodayInfo.completed}/{trackedTodayInfo.total}</div>
-              </section>
-              {!trackedTodayInfo.complete&&<section className="simple-card"><span className="card-label">NEXT</span><h3>Week {trackedTodayInfo.nextWeek} · {trackedTodayInfo.nextTitle||'Next workout'}</h3><p>{trackedTodayInfo.completedToday?'You’re done for today. This is the next session in sequence.':'Open Plan if you want to schedule it manually.'}</p></section>}
-              <button className="primary-action" onClick={()=>setActiveTab('program')}>View tracked program</button>
+              </section>}
+
+              {!trackedTodayInfo.complete&&<section className="simple-card upcoming-workouts-card">
+                <span className="card-label">UP NEXT</span>
+                <h3>Continue {trackedTodayInfo.name}</h3>
+                <div className="upcoming-workout-list">{(trackedTodayInfo.upcoming||[]).map((item,index)=><div className={index===0?'next':''} key={item.week+'-'+item.dayIndex}>
+                  <div><strong>Week {item.week}</strong><span>{item.title}</span></div>
+                  {index===0&&<b>NEXT</b>}
+                </div>)}</div>
+              </section>}
+
+              {!trackedTodayInfo.complete&&!sameDayConfirm&&<button className="primary-action" onClick={()=>startTrackedWorkout()}>{trackedTodayInfo.completedToday?'Start another workout today':'Start next workout'}</button>}
+
+              {sameDayConfirm&&<section className="same-day-confirm">
+                <strong>You already completed a workout today.</strong>
+                <p>Start {trackedTodayInfo.upcoming?.[0]?.title||'the next workout'} anyway?</p>
+                <div><button className="secondary-action" onClick={()=>setSameDayConfirm(false)}>Cancel</button><button className="primary-action" onClick={()=>startTrackedWorkout({confirmSameDay:true})}>Yes, start it</button></div>
+              </section>}
+
+              <button className="secondary-action" onClick={()=>setActiveTab('program')}>View full program / plan ahead</button>
             </section>
           ) : (
           <>
