@@ -3380,3 +3380,23 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
     padding-bottom:116px;
   }
 }
+
+
+/* Keep fixed nav above canvas compositing layer */
+@media (max-width:700px) {
+  .mobile-bottom-nav {
+    z-index:1000 !important;
+    isolation:isolate;
+    transform:translateZ(0);
+    -webkit-transform:translateZ(0);
+  }
+  .draw-board-wrap,
+  .draw-board-wrap canvas {
+    position:relative;
+    z-index:0;
+  }
+  .draw-board-section {
+    isolation:isolate;
+    z-index:0;
+  }
+}

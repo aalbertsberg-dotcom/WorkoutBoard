@@ -1780,7 +1780,7 @@ function App() {
           <button className={activeTab === 'whiteboard' ? 'active' : ''} onClick={() => setActiveTab('whiteboard')}><b>□</b><span>Board</span></button>
         </nav>
 
-        <nav className={'mobile-bottom-nav '+(activeTab==='whiteboard'?'board-mobile-nav':'')} aria-label="WorkoutBoard mobile navigation">
+        <nav className="mobile-bottom-nav" aria-label="WorkoutBoard mobile navigation">
           <button className={activeTab==='today'?'active':''} onClick={async()=>{await refreshPlannedToday();setActiveTab('today')}}><b>●</b><span>Today</span></button>
           <button className={activeTab==='together'?'active':''} onClick={()=>setActiveTab('together')}><b>⇄</b><span>Together</span></button>
           <button className={activeTab==='program'?'active':''} onClick={()=>setActiveTab('program')}><b>▦</b><span>Plan</span></button>
