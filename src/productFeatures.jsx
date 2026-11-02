@@ -34,7 +34,6 @@ function withSetProgress(workout) {
   return {
     ...workout,
     exercises:(workout?.exercises||[]).map(item=>{
-      const legacyLoad=item?.load!==undefined&&item?.load!=='' ? Number(item.load)||'' : ''
       const generated=prescribedSetProgress(item.prescription||item.name)
       const existing=Array.isArray(item.setProgress)&&item.setProgress.length ? item.setProgress : generated
       return {
@@ -42,7 +41,7 @@ function withSetProgress(workout) {
         setProgress:existing.map((set,i)=>({
           ...set,
           label:set.label || generated[i]?.label || (set.reps?set.reps+' reps':'Done'),
-          weight:set.weight!==undefined&&set.weight!=='' ? set.weight : legacyLoad,
+          weight:set.weight!==undefined ? set.weight : '',
         }))
       }
     })
@@ -302,34 +301,36 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss,sharedSession
           </div>
           {!item.setProgress?.length&&<button type="button" className={'check '+(item.done?'checked':'')} onClick={()=>{ const next=!item.done; changeExercise(i,{done:next}); if(next) window.dispatchEvent(new CustomEvent('workoutboard:rest-timer',{detail:{seconds:rest}})) }}>✓</button>}
         </div>
-        {item.setProgress?.length>0&&<div className="planned-set-table">
-          <div className="planned-set-table-head">
-            <span>SET / TARGET</span><span>WEIGHT</span><span>REPS</span><span>DONE</span>
+        {loadField&&item.setProgress?.length>0&&<label className="exercise-load-field">
+          <span>{loadField.label}{loadField.optional?' (optional)':''}</span>
+          <div>
+            <input type="number" inputMode="decimal" className="text-input"
+              value={item.load??''}
+              onFocus={e=>e.currentTarget.select()}
+              onChange={e=>changeExercise(i,{load:e.target.value===''?'':Number(e.target.value),result:''})}
+              onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur()}}
+              placeholder={loadField.placeholder}/>
+            <b>lb</b>
           </div>
+        </label>}
+        {item.setProgress?.length>0&&<div className="set-progress-grid compact flexible-set-progress">
           {item.setProgress.map((set,j)=>{
             const isCurrent=!set.done&&i===nextExerciseIndex&&j===item.setProgress.findIndex(x=>!x.done)
-            return <div key={j} className={'planned-set-row '+(set.done?'completed ':'')+(isCurrent?'current-set':'')}>
-              <div className="planned-set-meta">
-                <strong>Set {j+1}</strong>
-                <span>{set.label || (set.reps?set.reps+' reps':'Done')}</span>
-              </div>
-              {loadField ? <div className="planned-set-weight">
-                <input type="number" inputMode="decimal" value={set.weight??''}
-                  onFocus={e=>e.currentTarget.select()}
-                  onChange={e=>{
-                    const value=e.target.value===''?'':Number(e.target.value)
-                    changeExercise(i,{setProgress:item.setProgress.map((sp,k)=>k===j?{...sp,weight:value}:sp),load:'',result:''})
-                  }}
-                  onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur()}}
-                  placeholder={loadField.optional?'optional':'lb'} />
-              </div> : <span className="planned-set-na">—</span>}
-              <div className="planned-set-reps">{set.reps || '—'}</div>
-              <button type="button" className={'check '+(set.done?'checked':'')} onClick={()=>{
+            const recordedWeight=set.weight!==undefined&&set.weight!=='' ? Number(set.weight)||0 : 0
+            return <button
+              type="button"
+              key={j}
+              className={'set-progress-button '+(set.done?'done ':'')+(isCurrent?'current-set':'')}
+              onClick={()=>{
                 const next=!set.done
-                changeExercise(i,{setProgress:item.setProgress.map((sp,k)=>k===j?{...sp,done:next}:sp)})
+                const currentWeight=loadField ? (Number(item.load)||recordedWeight||0) : recordedWeight
+                changeExercise(i,{setProgress:item.setProgress.map((sp,k)=>k===j?{...sp,done:next,weight:next&&currentWeight?currentWeight:sp.weight}:sp)})
                 if(next)window.dispatchEvent(new CustomEvent('workoutboard:rest-timer',{detail:{seconds:rest}}))
-              }}>✓</button>
-            </div>
+              }}>
+              <strong>Set {j+1}</strong>
+              <span>{set.label || (set.reps?set.reps+' reps':'Done')}{recordedWeight?' · '+recordedWeight+' lb':''}</span>
+              <b>{set.done?'✓':'○'}</b>
+            </button>
           })}
         </div>}
       </article>
