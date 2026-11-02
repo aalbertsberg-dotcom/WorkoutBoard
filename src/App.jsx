@@ -5,6 +5,7 @@ import { PlannedWorkoutRunner, ExerciseHistoryStrip, InstallAppButton, ExportDat
 import { WhiteboardPage } from './whiteboard'
 import { TrainingTimer } from './trainingTools'
 import { WorkoutCoach, MetconTracker, AccountSecurityPanel, BackupRestorePanel, WorkoutSettingsPanel } from './advancedFeatures'
+import { archiveProgramById, makePlannedFromArchive } from './archivePrograms'
 
 const lifts = ['Squat', 'Bench', 'Deadlift', 'Press']
 const repeatSets = (count, pct, reps, pctLabel) =>
@@ -799,6 +800,10 @@ function App() {
   const [isAdmin,setIsAdmin] = useState(false)
   const [plannedToday,setPlannedToday] = useState(null)
   const [showRegularToday,setShowRegularToday] = useState(false)
+  const [togetherTracking,setTogetherTracking] = useState([])
+  const [togetherProgramKey,setTogetherProgramKey] = useState('')
+  const [togetherWeek,setTogetherWeek] = useState(1)
+  const [togetherWorkoutIndex,setTogetherWorkoutIndex] = useState(0)
 
   const personalProgram = programs[activeProgram]
   const sharedProgramId = activeSession ? (dbNameToProgram[activeSession.program] || activeProgram) : activeProgram
@@ -855,11 +860,12 @@ function App() {
       setDataLoading(true)
       const userId = session.user.id
       const today = new Date().toISOString().slice(0,10)
-      const [{data:profileData},{data:tmData},{data:logsData},{data:todayPlans}] = await Promise.all([
+      const [{data:profileData},{data:tmData},{data:logsData},{data:todayPlans},{data:trackingData}] = await Promise.all([
         supabase.from('profiles').select('*').eq('id',userId).single(),
         supabase.from('training_maxes').select('*').eq('user_id',userId).single(),
         supabase.from('workout_logs').select('*').eq('user_id',userId).order('updated_at',{ascending:false}),
         supabase.from('planned_workouts').select('*').eq('user_id',userId).eq('scheduled_date',today).in('status',['planned','started']).order('created_at').limit(1),
+        supabase.from('user_program_tracking').select('*').eq('user_id',userId).eq('status','tracking').order('updated_at',{ascending:false}),
       ])
 
       if (cancelled) return
@@ -878,6 +884,7 @@ function App() {
       setHistory(rows)
       setPlannedToday(todayPlans?.[0] || null)
       setShowRegularToday(false)
+      setTogetherTracking(trackingData || [])
 
       if (tmData) {
         setTrainingMaxes({
@@ -951,6 +958,42 @@ function App() {
   )
 
   const progress = useMemo(() => buildProgress(history),[history])
+
+  const togetherProgramOptions = useMemo(() => {
+    const options=[]
+    for(const track of togetherTracking){
+      if(String(track.program_key||'').startsWith('classic:')){
+        const id=String(track.program_key).slice(8)
+        const p=programs[id]
+        if(p) options.push({key:track.program_key,kind:'classic',id,name:p.name,shortName:p.shortName,weeksCount:p.weeksCount,program:p})
+      } else if(String(track.program_key||'').startsWith('archive:')){
+        const id=String(track.program_key).slice(8)
+        const p=archiveProgramById[id]
+        if(p?.getWeek) options.push({key:track.program_key,kind:'archive',id,name:p.name,shortName:p.name,weeksCount:p.weeksCount,program:p})
+      }
+    }
+    if(!options.length && programs[activeProgram]){
+      const p=programs[activeProgram]
+      options.push({key:'classic:'+activeProgram,kind:'classic',id:activeProgram,name:p.name,shortName:p.shortName,weeksCount:p.weeksCount,program:p})
+    }
+    return options
+  },[togetherTracking,activeProgram])
+
+  useEffect(() => {
+    if(!togetherProgramOptions.length)return
+    if(!togetherProgramOptions.some(p=>p.key===togetherProgramKey)){
+      setTogetherProgramKey(togetherProgramOptions[0].key)
+      setTogetherWeek(1)
+      setTogetherWorkoutIndex(0)
+    }
+  },[togetherProgramOptions,togetherProgramKey])
+
+  const togetherProgramChoice = togetherProgramOptions.find(p=>p.key===togetherProgramKey) || togetherProgramOptions[0] || null
+  const togetherWorkoutChoices = useMemo(() => {
+    if(!togetherProgramChoice)return []
+    if(togetherProgramChoice.kind==='classic') return lifts.map(name=>({title:name+' Day',lift:name}))
+    return togetherProgramChoice.program.getWeek(Math.max(1,Math.min(Number(togetherWeek||1),Number(togetherProgramChoice.weeksCount||1)))) || []
+  },[togetherProgramChoice,togetherWeek])
 
   const previousWorkout = useMemo(() => {
     const rows = workoutRows.filter(r => r.lift === lift && r.completed_at).sort((a,b) => String(b.completed_at).localeCompare(String(a.completed_at)))
@@ -1240,8 +1283,35 @@ function App() {
   }
 
   const createTogetherSession = async () => {
-    if (!session?.user || togetherReady === false) return
+    if (!session?.user || togetherReady === false || !togetherProgramChoice) return
     setTogetherMessage('Creating session…')
+
+    const selectedWeek=Math.max(1,Math.min(Number(togetherWeek||1),Number(togetherProgramChoice.weeksCount||1)))
+    const selectedIndex=Math.max(0,Math.min(Number(togetherWorkoutIndex||0),Math.max(0,togetherWorkoutChoices.length-1)))
+    const selectedWorkout=togetherWorkoutChoices[selectedIndex]
+    if(!selectedWorkout){setTogetherMessage('Choose a workout first.');return}
+
+    let sessionProgram=''
+    let sessionLift='Squat'
+    let sharedTemplate=null
+    let sharedMeta=null
+
+    if(togetherProgramChoice.kind==='classic'){
+      sessionProgram=togetherProgramChoice.program.dbName
+      sessionLift=selectedWorkout.lift||lifts[selectedIndex]||'Squat'
+    }else{
+      const planned=makePlannedFromArchive(togetherProgramChoice.program,selectedWeek,selectedIndex,new Date().toISOString().slice(0,10))
+      sessionProgram=togetherProgramChoice.key
+      sessionLift=lifts[Math.min(selectedIndex,lifts.length-1)]||'Squat'
+      sharedTemplate=planned.workout
+      sharedMeta={
+        program_key:togetherProgramChoice.key,
+        program_name:togetherProgramChoice.name,
+        week:selectedWeek,
+        workout_index:selectedIndex,
+        workout_title:planned.title,
+      }
+    }
 
     let created = null
     for (let attempt=0; attempt<4 && !created; attempt++) {
@@ -1249,9 +1319,9 @@ function App() {
       const {data,error} = await supabase.from('shared_sessions').insert({
         join_code:code,
         host_user_id:session.user.id,
-        program:personalProgram.dbName,
-        week:Math.min(profile?.current_week || week,personalProgram.weeksCount),
-        lift,
+        program:sessionProgram,
+        week:Math.min(selectedWeek,12),
+        lift:sessionLift,
         status:'open',
       }).select().single()
       if (!error) created = data
@@ -1268,6 +1338,18 @@ function App() {
       user_id:session.user.id,
       display_name:displayName,
     })
+
+    if(sharedTemplate){
+      await supabase.from('session_results').upsert({
+        session_id:created.id,
+        user_id:session.user.id,
+        workout:{shared_template:sharedTemplate,shared_meta:sharedMeta},
+        total_volume:0,
+        estimated_1rm:null,
+        completed_at:null,
+        updated_at:new Date().toISOString(),
+      },{onConflict:'session_id,user_id'})
+    }
 
     setTogetherReady(true)
     setActiveSession(created)
@@ -1310,8 +1392,51 @@ function App() {
     await refreshTogether(found.id)
   }
 
-  const openSharedWorkout = () => {
-    if (!activeSession) return
+  const openSharedWorkout = async () => {
+    if (!activeSession || !session?.user) return
+    const hostResult=sessionResults.find(result=>result.user_id===activeSession.host_user_id)
+    const sharedTemplate=hostResult?.workout?.shared_template
+    const sharedMeta=hostResult?.workout?.shared_meta
+
+    if(sharedTemplate){
+      const marker='Together:'+activeSession.id
+      let {data:planned}=await supabase.from('planned_workouts').select('*')
+        .eq('user_id',session.user.id).eq('source_day',marker).maybeSingle()
+
+      if(!planned){
+        const payload={
+          user_id:session.user.id,
+          scheduled_date:new Date().toISOString().slice(0,10),
+          title:sharedMeta?.workout_title||'Shared workout',
+          source_program_name:sharedMeta?.program_name||'Workout Together',
+          source_week:Number(sharedMeta?.week||1),
+          source_day:marker,
+          workout:{...sharedTemplate,shared_session_id:activeSession.id,shared_meta:sharedMeta,shared_template:sharedTemplate},
+          status:'started',
+        }
+        const inserted=await supabase.from('planned_workouts').insert(payload).select().single()
+        if(inserted.error){setTogetherMessage(inserted.error.message);return}
+        planned=inserted.data
+      }
+
+      await supabase.from('session_results').upsert({
+        session_id:activeSession.id,
+        user_id:session.user.id,
+        workout:{shared_template:sharedTemplate,shared_meta:sharedMeta},
+        total_volume:0,
+        estimated_1rm:null,
+        completed_at:null,
+        updated_at:new Date().toISOString(),
+      },{onConflict:'session_id,user_id'})
+
+      setSharedWorkoutActive(true)
+      setPlannedToday(planned)
+      setShowRegularToday(false)
+      setActiveTab('today')
+      await refreshTogether(activeSession.id)
+      return
+    }
+
     const programId = dbNameToProgram[activeSession.program] || 'andy-hybrid-12'
     setSharedWorkoutActive(true)
     setWeek(activeSession.week)
@@ -1373,6 +1498,14 @@ function App() {
     if(!created){setTogetherMessage('Could not create repeat session. Try again.');return}
     const displayName=profile?.display_name||session.user.email?.split('@')[0]||'You'
     await supabase.from('session_participants').insert({session_id:created.id,user_id:session.user.id,display_name:displayName})
+    const priorHostResult=sessionResults.find(result=>result.user_id===activeSession.host_user_id)
+    if(priorHostResult?.workout?.shared_template){
+      await supabase.from('session_results').upsert({
+        session_id:created.id,user_id:session.user.id,
+        workout:{shared_template:priorHostResult.workout.shared_template,shared_meta:priorHostResult.workout.shared_meta||null},
+        total_volume:0,estimated_1rm:null,completed_at:null,updated_at:new Date().toISOString()
+      },{onConflict:'session_id,user_id'})
+    }
     setActiveSession(created);setSessionResults([]);setTogetherMessage('')
     await refreshTogether(created.id)
   }
@@ -1389,6 +1522,8 @@ function App() {
   const secondaryTarget = secondary?.pct != null ? targetWeight(tm,secondary.pct,workoutProgram.basis) : null
   const displayName = profile?.display_name || session?.user?.email?.split('@')[0] || 'You'
   const ownSessionResult = sessionResults.find(result => result.user_id === session?.user?.id)
+  const sharedHostResult = activeSession ? sessionResults.find(result => result.user_id === activeSession.host_user_id) : null
+  const sharedMeta = sharedHostResult?.workout?.shared_meta || null
   const combinedSessionVolume = sessionResults.reduce((sum,result) => sum + Number(result.total_volume || 0),0)
   const maxWeeklyVolume = Math.max(1,...progress.weekly.map(item => item.volume))
   const nextMainIndex = log.main?.findIndex(set=>!set.done) ?? -1
@@ -1439,8 +1574,16 @@ function App() {
           plannedToday && !showRegularToday ? (
             <PlannedWorkoutRunner
               planned={plannedToday}
-              onFinished={() => { setPlannedToday(null); setShowRegularToday(false) }}
-              onDismiss={() => setShowRegularToday(true)}
+              sharedSessionId={sharedWorkoutActive&&activeSession ? activeSession.id : null}
+              onFinished={async() => {
+                setPlannedToday(null)
+                setShowRegularToday(false)
+                if(sharedWorkoutActive&&activeSession){
+                  await refreshTogether(activeSession.id)
+                  setActiveTab('together')
+                }
+              }}
+              onDismiss={sharedWorkoutActive ? undefined : () => setShowRegularToday(true)}
             />
           ) : (
           <>
@@ -1635,9 +1778,14 @@ function App() {
                 <section className="together-start-card">
                   <span className="card-label">HOST A WORKOUT</span>
                   <h2>1. Create a session code</h2>
-                  <p>Create a 6-character code, then share the join link or code with anyone you want to train with.</p>
-                  <div className="together-workout-preview"><strong>{personalProgram.shortName}</strong><span>Week {profile?.current_week || week} · {lift} Day</span></div>
-                  <button className="primary-action" onClick={createTogetherSession}>Create my 6-character code</button>
+                  <p>Together shares one workout at a time. Choose the tracked program, week, and workout you want everyone to run.</p>
+                  <div className="together-host-picker">
+                    <label><span>Program</span><select value={togetherProgramChoice?.key||''} onChange={e=>{setTogetherProgramKey(e.target.value);setTogetherWeek(1);setTogetherWorkoutIndex(0)}}>{togetherProgramOptions.map(p=><option key={p.key} value={p.key}>{p.name}</option>)}</select></label>
+                    <label><span>Week</span><select value={togetherWeek} onChange={e=>{setTogetherWeek(Number(e.target.value));setTogetherWorkoutIndex(0)}}>{Array.from({length:Number(togetherProgramChoice?.weeksCount||1)},(_,i)=>i+1).map(n=><option key={n} value={n}>Week {n}</option>)}</select></label>
+                    <label><span>Workout</span><select value={togetherWorkoutIndex} onChange={e=>setTogetherWorkoutIndex(Number(e.target.value))}>{togetherWorkoutChoices.map((d,i)=><option key={i} value={i}>{d.title}</option>)}</select></label>
+                  </div>
+                  <div className="together-workout-preview"><strong>{togetherProgramChoice?.shortName||'Choose a program'}</strong><span>Week {togetherWeek} · {togetherWorkoutChoices[togetherWorkoutIndex]?.title||'Choose workout'}</span></div>
+                  <button className="primary-action" disabled={!togetherProgramChoice||!togetherWorkoutChoices.length} onClick={createTogetherSession}>Create my 6-character code</button>
                 </section>
 
                 <section className="together-start-card">
@@ -1657,10 +1805,10 @@ function App() {
                   <span className="card-label">{activeSession.status === 'open' ? 'LIVE SESSION' : 'SESSION SUMMARY'}</span>
                   <div className="session-code">{activeSession.join_code}</div>
                   <div className="code-help">This is the code your workout partners enter.</div>
-                  <h2>{programs[sharedProgramId]?.shortName || activeSession.program}</h2>
-                  <p>Week {activeSession.week} · {activeSession.lift}</p>
+                  <h2>{sharedMeta?.program_name || programs[sharedProgramId]?.shortName || activeSession.program}</h2>
+                  <p>{sharedMeta ? 'Week '+sharedMeta.week+' · '+sharedMeta.workout_title : 'Week '+activeSession.week+' · '+activeSession.lift}</p>
                   <div className="session-actions">
-                    {activeSession.status === 'open' && <button onClick={shareSession}>Share code</button>}
+                    {activeSession.status === 'open' && <button onClick={shareSession}>Share join link</button>}
                     <button onClick={() => refreshTogether(activeSession.id)}>Refresh</button>
                   </div>
                 </section>

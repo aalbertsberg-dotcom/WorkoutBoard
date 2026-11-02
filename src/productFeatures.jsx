@@ -37,7 +37,7 @@ function withSetProgress(workout) {
   }
 }
 
-export function PlannedWorkoutRunner({planned,onFinished,onDismiss}) {
+export function PlannedWorkoutRunner({planned,onFinished,onDismiss,sharedSessionId=null}) {
   const [workout,setWorkout]=useState(()=>{
     let cached=null
     try { cached=planned?.id ? JSON.parse(localStorage.getItem('wb-planned-draft-'+planned.id) || 'null') : null } catch {}
@@ -105,6 +105,16 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss}) {
   }
   const change=(key,value)=>{ setSaveState('Unsaved'); setWorkout(v=>({...v,[key]:value})) }
   const totalVolume=useMemo(()=> (workout.exercises||[]).reduce((sum,x)=>sum+parseVolume(x.result),0),[workout.exercises])
+  const bestEstimated1rm=useMemo(()=>{
+    let best=0
+    for(const item of workout.exercises||[]){
+      const m=String(item.result||'').replace(/[×X]/g,'x').match(/(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/i)
+      if(!m)continue
+      const weight=Number(m[1]),reps=Number(m[2])
+      best=Math.max(best,weight*(1+reps/30))
+    }
+    return best
+  },[workout.exercises])
 
   const finish=async()=>{
     if (!planned?.id || finishing) return
@@ -118,6 +128,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss}) {
         title:planned.title,program:planned.source_program_name||'Custom workout',week:planned.source_week||null,
         primary_lift:planned.source_day||null,session_date:planned.scheduled_date,workout:finalWorkout,
         total_volume:Math.round(totalVolume),bodyweight:Number(workout.bodyweight||0)||null,
+        shared_session_id:sharedSessionId||null,
         completed_at:now,updated_at:now
       }).eq('id',existing.data.id))
     } else {
@@ -126,11 +137,27 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss}) {
         program:planned.source_program_name||'Custom workout',week:planned.source_week||null,
         primary_lift:planned.source_day||null,session_date:planned.scheduled_date,workout:finalWorkout,
         total_volume:Math.round(totalVolume),bodyweight:Number(workout.bodyweight||0)||null,
+        shared_session_id:sharedSessionId||null,
         started_at:planned.created_at||now,completed_at:now,updated_at:now
       }))
     }
     if (!error) {
       await supabase.from('planned_workouts').update({status:'completed',workout:finalWorkout,updated_at:now}).eq('id',planned.id)
+      if(sharedSessionId){
+        await supabase.from('session_results').upsert({
+          session_id:sharedSessionId,
+          user_id:planned.user_id,
+          workout:{
+            ...finalWorkout,
+            shared_template:planned.workout?.shared_template||planned.workout,
+            shared_meta:planned.workout?.shared_meta||null,
+          },
+          total_volume:Math.round(totalVolume),
+          estimated_1rm:bestEstimated1rm||null,
+          completed_at:now,
+          updated_at:now,
+        },{onConflict:'session_id,user_id'})
+      }
       try { localStorage.removeItem('wb-planned-draft-'+planned.id) } catch {}
       onFinished?.()
     } else {
