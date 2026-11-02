@@ -2991,3 +2991,34 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
 .flexible-set-progress .set-progress-button span {
   white-space:normal;
 }
+
+
+/* Mid-workout exercise adder */
+.add-exercise-card {
+  display:grid;
+  gap:10px;
+  margin:0;
+}
+.add-exercise-grid {
+  display:grid;
+  grid-template-columns:.55fr 1.1fr .8fr;
+  gap:8px;
+}
+.remove-added-exercise {
+  min-height:26px;
+  border:1px solid #40526e;
+  border-radius:999px;
+  background:#111d31;
+  color:#94a3b8;
+  padding:0 8px;
+  font-size:8px;
+  font-weight:900;
+}
+.add-exercise-button {
+  margin-top:0;
+}
+@media (max-width:700px) {
+  .add-exercise-grid {
+    grid-template-columns:.6fr 1.25fr .85fr;
+  }
+}

@@ -139,12 +139,16 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss,sharedSession
   const [substitutions,setSubstitutions]=useState({})
   const [timerPresets,setTimerPresets]=useState({})
   const [conditioningOpen,setConditioningOpen]=useState(()=>Boolean(planned?.workout?.conditioning_prescribed))
+  const [exerciseAdderOpen,setExerciseAdderOpen]=useState(false)
+  const [newExercise,setNewExercise]=useState({name:'',sets:3,target:'10',rest:90})
 
   useEffect(()=>{
     let cached=null
     try { cached=planned?.id ? JSON.parse(localStorage.getItem('wb-planned-draft-'+planned.id) || 'null') : null } catch {}
     setWorkout(withSetProgress({exercises:[],sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',circuit_rounds:'',conditioningEnabled:false,metcon:{name:'',format:'',activity:'',duration:'',workTime:'',restTime:'',interval:'',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx',intensity:'Easy'},...(planned?.workout||{}),...(cached||{})}))
     setConditioningOpen(Boolean(planned?.workout?.conditioning_prescribed))
+    setExerciseAdderOpen(false)
+    setNewExercise({name:'',sets:3,target:'10',rest:90})
   },[planned?.id])
 
   useEffect(()=>{
@@ -198,6 +202,36 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss,sharedSession
     setWorkout(v=>({...v,exercises:(v.exercises||[]).map((item,i)=>i===index?{...item,...patch}:item)}))
   }
   const change=(key,value)=>{ setSaveState('Unsaved'); setWorkout(v=>({...v,[key]:value})) }
+
+  const addExercise=()=>{
+    const name=String(newExercise.name||'').trim()
+    const sets=Math.max(1,Math.min(20,Number(newExercise.sets)||1))
+    const target=String(newExercise.target||'').trim() || '10'
+    const rest=Math.max(0,Number(newExercise.rest)||0)
+    if(!name)return
+    const prescription=sets+'x'+target
+    const item={
+      id:'added-'+Date.now(),
+      name,
+      prescription,
+      rest_seconds:rest,
+      result:'',
+      load:'',
+      done:false,
+      custom_added:true,
+      setProgress:prescribedSetProgress(prescription),
+    }
+    setSaveState('Unsaved')
+    setWorkout(v=>({...v,exercises:[...(v.exercises||[]),item]}))
+    setNewExercise({name:'',sets:3,target:'10',rest:90})
+    setExerciseAdderOpen(false)
+  }
+
+  const removeAddedExercise=index=>{
+    setSaveState('Unsaved')
+    setWorkout(v=>({...v,exercises:(v.exercises||[]).filter((_,i)=>i!==index)}))
+  }
+
   const totalVolume=useMemo(()=> (workout.exercises||[]).reduce((sum,item)=>{
     if(Array.isArray(item.setProgress)&&item.setProgress.length){
       if(isDistanceExercise(item.name))return sum
@@ -293,7 +327,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss,sharedSession
       return <article className={'flex-exercise '+(item.done?'done ':'')+(item.group?'grouped ':'')+(!item.done&&i===nextExerciseIndex?'current-exercise':'')} key={item.id||i}>
         <div className="flex-exercise-title">
           <div>
-            <div className="exercise-name-line"><strong>{item.name}</strong>{isPR&&<b className="pr-mini">PR</b>}<PlannedAlternatives name={item.name}/></div>
+            <div className="exercise-name-line"><strong>{item.name}</strong>{isPR&&<b className="pr-mini">PR</b>}<PlannedAlternatives name={item.name}/>{item.custom_added&&<button type="button" className="remove-added-exercise" onClick={()=>removeAddedExercise(i)}>Remove</button>}</div>
             <span className="exercise-plan-line">{humanPrescription(item.prescription)}{rest?' · '+(rest<120?rest+' sec':rest/60+' min')+' rest':''}</span>
             {item.note&&<details className="exercise-cue"><summary>Cue</summary><small>{item.note}</small></details>}
             {hist?.last&&<small className="flex-history">Last: {hist.last}{current&&hist?.last?` · Suggested ${Math.round((current.weight||0)+5)} lb`:''}</small>}
@@ -335,6 +369,20 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss,sharedSession
         </div>}
       </article>
     })}
+
+    {exerciseAdderOpen ? <section className="simple-card add-exercise-card">
+      <div className="section-heading">
+        <div><span className="card-label">ADD EXERCISE</span><h3>Add to this workout</h3></div>
+        <button type="button" className="conditioning-remove" onClick={()=>setExerciseAdderOpen(false)}>Cancel</button>
+      </div>
+      <label className="conditioning-field"><span>Movement</span><input autoFocus value={newExercise.name} onChange={e=>setNewExercise(v=>({...v,name:e.target.value}))} placeholder="e.g. Lat Pulldown"/></label>
+      <div className="add-exercise-grid">
+        <label className="conditioning-field"><span>Sets</span><input type="number" inputMode="numeric" min="1" max="20" value={newExercise.sets} onChange={e=>setNewExercise(v=>({...v,sets:e.target.value}))}/></label>
+        <label className="conditioning-field"><span>Reps / target</span><input value={newExercise.target} onChange={e=>setNewExercise(v=>({...v,target:e.target.value}))} placeholder="10 or 40 yd/side"/></label>
+        <label className="conditioning-field"><span>Rest (sec)</span><input type="number" inputMode="numeric" min="0" value={newExercise.rest} onChange={e=>setNewExercise(v=>({...v,rest:e.target.value}))}/></label>
+      </div>
+      <button type="button" className="primary-action" disabled={!String(newExercise.name||'').trim()} onClick={addExercise}>Add exercise</button>
+    </section> : <button className="context-add-button add-exercise-button" type="button" onClick={()=>setExerciseAdderOpen(true)}>+ Exercise</button>}
 
     {(workout.conditioningEnabled || workout.metcon?.format || workout.metcon?.name || workout.metcon?.activity || workout.metcon?.duration || workout.metcon?.time || workout.metcon?.rounds || workout.metcon?.reps || workout.metcon?.distance || workout.metcon?.calories) ? <details className="today-collapsible conditioning-tools" open={conditioningOpen} onToggle={e=>setConditioningOpen(e.currentTarget.open)}>
       <summary><span><b>Conditioning</b><small>{workout.metcon?.format || 'Optional'}</small></span></summary>
