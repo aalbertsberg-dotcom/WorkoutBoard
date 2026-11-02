@@ -847,6 +847,7 @@ function App() {
   const [togetherWorkoutIndex,setTogetherWorkoutIndex] = useState(0)
   const [trackedTodayInfo,setTrackedTodayInfo] = useState(null)
   const [togetherView,setTogetherView] = useState('live')
+  const [conditioningOpen,setConditioningOpen] = useState(false)
 
   const personalProgram = programs[activeProgram]
   const sharedProgramId = activeSession ? (dbNameToProgram[activeSession.program] || activeProgram) : activeProgram
@@ -854,6 +855,11 @@ function App() {
   const workoutProgram = programs[workoutProgramId]
   const plan = getProgramWeek(workoutProgramId,week,lift)
   const tm = Number(trainingMaxes[lift] || 0)
+
+  useEffect(() => {
+    const prescribed=Boolean(plan.conditioning && plan.conditioning !== 'None' && !/^optional\b/i.test(String(plan.conditioning).trim()))
+    setConditioningOpen(prescribed)
+  },[workoutProgramId,week,lift])
 
   useEffect(() => {
     supabase.auth.getSession().then(({data}) => {
@@ -1616,6 +1622,7 @@ function App() {
   const backoffSetsComplete = !log.backoffSets?.length || log.backoffSets.every(set=>set.done)
   const nextAssistanceIndex = log.assistance?.findIndex(item=>item.setProgress?.length ? item.setProgress.some(set=>!set.done) : !String(item.result||'').trim()) ?? -1
   const conditioningSuggested = Boolean(plan.conditioning && plan.conditioning !== 'None')
+  const conditioningPrescribed = Boolean(conditioningSuggested && !/^optional\b/i.test(String(plan.conditioning).trim()))
   const conditioningHasData = Boolean(log.metcon?.format || log.metcon?.name || log.metcon?.activity || log.metcon?.duration || log.metcon?.workTime || log.metcon?.restTime || log.metcon?.interval || log.metcon?.time || log.metcon?.rounds || log.metcon?.reps || log.metcon?.distance || log.metcon?.calories)
 
   if (authLoading) return <div className="loading-screen">Loading WorkoutBoard…</div>
@@ -1836,19 +1843,19 @@ function App() {
             </section>
 
             {(conditioningSuggested || log.conditioningEnabled || conditioningHasData) ? (
-              <details className="today-collapsible conditioning-tools" open={Boolean(log.conditioningEnabled || conditioningHasData)}>
+              <details className="today-collapsible conditioning-tools" open={conditioningOpen} onToggle={e=>setConditioningOpen(e.currentTarget.open)}>
                 <summary><span><b>Conditioning</b><small>{conditioningSuggested?plan.conditioning:'Optional'}</small></span></summary>
                 <section className="simple-card embedded-tool-card">
-                  {conditioningSuggested&&<p className="conditioning-suggestion"><strong>Program suggestion:</strong> {plan.conditioning}</p>}
+                  {conditioningSuggested&&<p className="conditioning-suggestion"><strong>{conditioningPrescribed?'Program conditioning:':'Program suggestion:'}</strong> {plan.conditioning}</p>}
                   <MetconTracker
                     value={log.metcon}
                     onChange={metcon => {setSaveState('Unsaved');setLog(v=>({...v,complete:false,metcon,conditioningEnabled:true}))}}
-                    onRemove={()=>{setSaveState('Unsaved');setLog(v=>({...v,complete:false,conditioningEnabled:false,conditioning:'',metcon:{name:'',format:'',activity:'',duration:'',workTime:'',restTime:'',interval:'',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx',intensity:'Easy'}}))}}
+                    onRemove={()=>{setConditioningOpen(false);setSaveState('Unsaved');setLog(v=>({...v,complete:false,conditioningEnabled:false,conditioning:'',metcon:{name:'',format:'',activity:'',duration:'',workTime:'',restTime:'',interval:'',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx',intensity:'Easy'}}))}}
                   />
                 </section>
               </details>
             ) : (
-              <button className="context-add-button" type="button" onClick={()=>{setSaveState('Unsaved');setLog(v=>({...v,conditioningEnabled:true}))}}>+ Conditioning</button>
+              <button className="context-add-button" type="button" onClick={()=>{setConditioningOpen(true);setSaveState('Unsaved');setLog(v=>({...v,conditioningEnabled:true}))}}>+ Conditioning</button>
             )}
 
             <details className="today-collapsible workout-details">

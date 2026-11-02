@@ -117,11 +117,13 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss,sharedSession
   const [historyByExercise,setHistoryByExercise]=useState({})
   const [substitutions,setSubstitutions]=useState({})
   const [timerPresets,setTimerPresets]=useState({})
+  const [conditioningOpen,setConditioningOpen]=useState(()=>Boolean(planned?.workout?.conditioning_prescribed))
 
   useEffect(()=>{
     let cached=null
     try { cached=planned?.id ? JSON.parse(localStorage.getItem('wb-planned-draft-'+planned.id) || 'null') : null } catch {}
     setWorkout(withSetProgress({exercises:[],sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',circuit_rounds:'',conditioningEnabled:false,metcon:{name:'',format:'',activity:'',duration:'',workTime:'',restTime:'',interval:'',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx',intensity:'Easy'},...(planned?.workout||{}),...(cached||{})}))
+    setConditioningOpen(Boolean(planned?.workout?.conditioning_prescribed))
   },[planned?.id])
 
   useEffect(()=>{
@@ -287,14 +289,14 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss,sharedSession
       </article>
     })}
 
-    {(workout.conditioningEnabled || workout.metcon?.format || workout.metcon?.name || workout.metcon?.activity || workout.metcon?.duration || workout.metcon?.time || workout.metcon?.rounds || workout.metcon?.reps || workout.metcon?.distance || workout.metcon?.calories) ? <details className="today-collapsible conditioning-tools" open>
-      <summary><span><b>Conditioning</b><small>{workout.metcon?.format || 'Choose type'}</small></span></summary>
+    {(workout.conditioningEnabled || workout.metcon?.format || workout.metcon?.name || workout.metcon?.activity || workout.metcon?.duration || workout.metcon?.time || workout.metcon?.rounds || workout.metcon?.reps || workout.metcon?.distance || workout.metcon?.calories) ? <details className="today-collapsible conditioning-tools" open={conditioningOpen} onToggle={e=>setConditioningOpen(e.currentTarget.open)}>
+      <summary><span><b>Conditioning</b><small>{workout.metcon?.format || 'Optional'}</small></span></summary>
       <MetconTracker
         value={workout.metcon}
         onChange={value=>{change('conditioningEnabled',true);change('metcon',value)}}
-        onRemove={()=>{change('conditioningEnabled',false);change('metcon',{name:'',format:'',activity:'',duration:'',workTime:'',restTime:'',interval:'',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx',intensity:'Easy'})}}
+        onRemove={()=>{setConditioningOpen(false);change('conditioningEnabled',false);change('metcon',{name:'',format:'',activity:'',duration:'',workTime:'',restTime:'',interval:'',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx',intensity:'Easy'})}}
       />
-    </details> : <button className="context-add-button" type="button" onClick={()=>change('conditioningEnabled',true)}>+ Conditioning</button>}
+    </details> : <button className="context-add-button" type="button" onClick={()=>{setConditioningOpen(true);change('conditioningEnabled',true)}}>+ Conditioning</button>}
 
     <details className="today-collapsible workout-details">
       <summary><span><b>Workout details</b><small>Readiness, bodyweight, pain & notes</small></span></summary>
