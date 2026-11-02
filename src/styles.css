@@ -3371,3 +3371,23 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
 .danger-action:disabled {
   opacity:.55;
 }
+
+
+/* Board mobile navigation clearance */
+@media (max-width:700px) {
+  .mobile-bottom-nav.board-mobile-nav {
+    min-height:102px !important;
+    padding-top:7px !important;
+    padding-right:7px !important;
+    padding-bottom:max(28px, env(safe-area-inset-bottom)) !important;
+    padding-left:7px !important;
+  }
+  .mobile-bottom-nav.board-mobile-nav button {
+    min-height:58px !important;
+    align-self:start;
+  }
+  .whiteboard-page,
+  .draw-board-section {
+    padding-bottom:32px;
+  }
+}
