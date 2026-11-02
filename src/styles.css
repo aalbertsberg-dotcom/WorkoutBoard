@@ -2881,3 +2881,105 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
 @media (max-width:700px) {
   .conditioning-fields { grid-template-columns:1fr; }
 }
+
+
+/* Per-set weight logging */
+.weighted-set-progress {
+  grid-template-columns:repeat(auto-fit,minmax(150px,1fr)) !important;
+}
+.set-progress-card {
+  display:grid;
+  gap:8px;
+  min-width:0;
+  padding:9px;
+  border:1px solid #3a4d69;
+  border-radius:11px;
+  background:#111d31;
+}
+.set-progress-card.current-set {
+  border-color:#65a30d;
+  box-shadow:0 0 0 1px rgba(101,163,13,.35);
+  background:#17240f;
+}
+.set-progress-card.done {
+  border-color:#4d7c0f;
+  background:#18290f;
+}
+.set-progress-card-head {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+}
+.set-progress-card-head > div {
+  display:grid;
+  gap:2px;
+}
+.set-progress-card-head strong {
+  color:#dbe4ef;
+  font-size:10px;
+}
+.set-progress-card-head span {
+  color:#8fa0b8;
+  font-size:9px;
+}
+.set-complete-button {
+  display:grid;
+  place-items:center;
+  flex:0 0 32px;
+  width:32px;
+  height:32px;
+  border:1px solid #52647d;
+  border-radius:50%;
+  background:transparent;
+  color:#8fa0b8;
+  font-size:15px;
+}
+.set-complete-button.done {
+  border-color:#65a30d;
+  background:#2b4216;
+  color:#d9f99d;
+}
+.set-weight-field {
+  display:grid;
+  gap:4px;
+}
+.set-weight-field > span {
+  color:#91a1b8;
+  font-size:8px;
+  font-weight:900;
+  text-transform:uppercase;
+  letter-spacing:.06em;
+}
+.set-weight-field > div {
+  display:grid;
+  grid-template-columns:1fr auto;
+  align-items:center;
+  overflow:hidden;
+  border:1px solid #354762;
+  border-radius:8px;
+  background:#0b1525;
+}
+.set-weight-field input {
+  width:100%;
+  min-width:0;
+  min-height:40px;
+  box-sizing:border-box;
+  border:0;
+  outline:0;
+  background:transparent;
+  color:#fff;
+  padding:7px 9px;
+  font:inherit;
+  font-weight:800;
+}
+.set-weight-field b {
+  padding:0 9px;
+  color:#94a3b8;
+  font-size:10px;
+}
+@media (max-width:700px) {
+  .weighted-set-progress {
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  }
+}
