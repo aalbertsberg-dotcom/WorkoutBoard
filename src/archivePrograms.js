@@ -255,7 +255,162 @@ const plOly6 = {
   ],
 }
 
+
+const beginnerCoreStabilityWeeks = {
+  1:[
+    day('Day 1 - Brace + Single-Leg Control',[
+      ex('Front Squat','3x8 light','Smooth reps; stop with 3-4 reps in reserve'),
+      ex('Bulgarian Split Squat','3x8/leg','Use bodyweight or light DBs; own the bottom position'),
+      ex('Chest-Supported DB Row','3x10','Controlled pull; ribs down'),
+      ex('Dead Bug','3x6/side','Exhale fully and keep low back quiet'),
+      ex('Suitcase Carry','4x40 yd/side','Walk tall; do not lean toward or away from the load'),
+    ],'Beginner stability day. Quality before load.'),
+    day('Day 2 - Hinge + Anti-Rotation',[
+      ex('Romanian Deadlift','3x8 light-moderate','3-second lowering; keep the bar close'),
+      ex('Reverse Lunge','3x8/leg','Controlled step; keep hips and knee steady'),
+      ex('Strict Press','3x8 light','Stay stacked; no back lean'),
+      ex('Pallof Press','3x8/side','Pause 2 seconds fully extended'),
+      ex('Side Plank','3x20 sec/side','Straight line from shoulder to ankle'),
+      ex('Easy Sled / Carry','10 min easy','Continuous easy work; nasal-breathing pace'),
+    ],'Brace during every standing movement.'),
+    day('Day 3 - Posterior Chain + Carry',[
+      ex('Hamstring Curl','3x12','Controlled tempo'),
+      ex('Ring Row / Inverted Row','3x8','Keep the body rigid from shoulders to heels'),
+      ex('Glute Bridge','3x10','Pause 2 seconds at the top'),
+      ex('Bird Dog','3x6/side','Reach long without rotating the hips'),
+      ex('Farmer Carry','4x40 yd','Moderate load; tall posture and even steps'),
+      ex('Zone 2 Row / Walk','10-15 min easy','Optional easy conditioning'),
+    ],'Keep this day easy enough to finish feeling better than you started.'),
+  ],
+  2:[
+    day('Day 1 - Brace + Single-Leg Control',[
+      ex('Front Squat','3x8','Add a small amount only if Week 1 stayed <= RPE 8'),
+      ex('Bulgarian Split Squat','3x10/leg','Same control; add reps before load'),
+      ex('Chest-Supported DB Row','3x10','Pause briefly at the top'),
+      ex('Dead Bug','3x8/side','Slow exhale on every rep'),
+      ex('Suitcase Carry','4x40 yd/side','Slightly heavier if posture stays perfect'),
+    ]),
+    day('Day 2 - Hinge + Anti-Rotation',[
+      ex('Romanian Deadlift','3x8','Add load only if position stays solid'),
+      ex('Reverse Lunge','3x10/leg','Control the lowering phase'),
+      ex('Strict Press','3x8','Small load increase only if no back lean'),
+      ex('Pallof Press','3x10/side','Pause 2 seconds'),
+      ex('Side Plank','3x25 sec/side','Do not let the hips rotate'),
+      ex('Easy Sled / Carry','10 min easy','Steady pace'),
+    ]),
+    day('Day 3 - Posterior Chain + Carry',[
+      ex('Hamstring Curl','3x12'),
+      ex('Ring Row / Inverted Row','3x10','Keep full-body tension'),
+      ex('Glute Bridge','3x12','Pause 2 seconds'),
+      ex('Bird Dog','3x8/side','Slow and controlled'),
+      ex('Farmer Carry','4x40 yd','Slightly heavier if grip and posture are solid'),
+      ex('Zone 2 Row / Walk','15 min easy','Optional'),
+    ]),
+  ],
+  3:[
+    day('Day 1 - Brace + Single-Leg Strength',[
+      ex('Front Squat','4x6','Moderate load; last set <= RPE 8'),
+      ex('Bulgarian Split Squat','3x10/leg','Add light load if balance is solid'),
+      ex('Chest-Supported DB Row','4x8'),
+      ex('Dead Bug','3x8/side','3-second exhale'),
+      ex('Suitcase Carry','4x40 yd/side','Moderate-heavy without leaning'),
+    ]),
+    day('Day 2 - Hinge + Anti-Rotation',[
+      ex('Romanian Deadlift','4x6','Moderate; perfect hinge position'),
+      ex('Reverse Lunge','3x10/leg','Light-moderate load'),
+      ex('Strict Press','3x8','Stay stacked'),
+      ex('Pallof Press','3x10/side','Use slightly more resistance'),
+      ex('Side Plank','3x30 sec/side'),
+      ex('Sled Push / Drag','8-10 min easy','Short trips; smooth effort'),
+    ]),
+    day('Day 3 - Posterior Chain + Carry',[
+      ex('Hamstring Curl','3x12'),
+      ex('Ring Row / Inverted Row','4x8'),
+      ex('Glute Bridge','3x12','Add light load if easy'),
+      ex('Bird Dog','3x8/side','Pause fully extended'),
+      ex('Farmer Carry','4x40 yd','Moderate-heavy'),
+      ex('Zone 2 Row / Walk','15-20 min easy','Optional'),
+    ]),
+  ],
+  4:[
+    day('Day 1 - Brace + Single-Leg Strength',[
+      ex('Front Squat','4x6','Add a small amount only if Week 3 stayed <= RPE 8'),
+      ex('Bulgarian Split Squat','3x10/leg','Keep pelvis level'),
+      ex('Chest-Supported DB Row','4x8'),
+      ex('Dead Bug','3x10/side','Slow and strict'),
+      ex('Suitcase Carry','5x40 yd/side','Same posture on every trip'),
+    ]),
+    day('Day 2 - Hinge + Anti-Rotation',[
+      ex('Romanian Deadlift','4x6','Small load increase if form is unchanged'),
+      ex('Reverse Lunge','3x10/leg'),
+      ex('Strict Press','4x6','No back lean'),
+      ex('Pallof Press','3x12/side','Controlled return'),
+      ex('Side Plank','3x35 sec/side'),
+      ex('Sled Push / Drag','10 min easy-moderate','Stay well short of failure'),
+    ]),
+    day('Day 3 - Posterior Chain + Carry',[
+      ex('Hamstring Curl','3x12'),
+      ex('Ring Row / Inverted Row','4x10'),
+      ex('Glute Bridge','3x15'),
+      ex('Bird Dog','3x10/side'),
+      ex('Farmer Carry','5x40 yd','Moderate-heavy'),
+      ex('Zone 2 Row / Walk','20 min easy','Optional'),
+    ]),
+  ],
+  5:[
+    day('Day 1 - Strength + Stability',[
+      ex('Front Squat','5x5','Controlled strength work; final set <= RPE 8'),
+      ex('Bulgarian Split Squat','3x8/leg','Moderate load; no wobble'),
+      ex('Chest-Supported DB Row','4x8'),
+      ex('Dead Bug','3x10/side','Add a light band only if perfect'),
+      ex('Suitcase Carry','5x40 yd/side','Challenging but no lean'),
+    ]),
+    day('Day 2 - Hinge + Anti-Rotation',[
+      ex('Romanian Deadlift','5x5','Controlled strength work; final set <= RPE 8'),
+      ex('Reverse Lunge','3x8/leg','Moderate load'),
+      ex('Strict Press','4x6','Brace before every rep'),
+      ex('Pallof Press','4x10/side','Pause 2 seconds'),
+      ex('Side Plank','3x40 sec/side'),
+      ex('Sled Push / Drag','8-12 min','Moderate; stop before technique fades'),
+    ]),
+    day('Day 3 - Posterior Chain + Carry',[
+      ex('Hamstring Curl','3x12'),
+      ex('Ring Row / Inverted Row','4x10'),
+      ex('Glute Bridge','4x10','Moderate load; 2-second pause'),
+      ex('Bird Dog','3x10/side','Pause fully extended'),
+      ex('Farmer Carry','5x40 yd','Challenging but smooth'),
+      ex('Zone 2 Row / Walk','20-25 min easy','Optional'),
+    ]),
+  ],
+  6:[
+    day('Day 1 - Deload + Control',[
+      ex('Front Squat','3x5 light','Move perfectly; no grinding'),
+      ex('Bulgarian Split Squat','2x8/leg','Easy and controlled'),
+      ex('Chest-Supported DB Row','3x8 light'),
+      ex('Dead Bug','2x8/side','Slow exhale'),
+      ex('Suitcase Carry','3x40 yd/side','Easy-moderate'),
+    ],'Deload week: leave the gym fresh.'),
+    day('Day 2 - Deload + Anti-Rotation',[
+      ex('Romanian Deadlift','3x5 light','Easy hinge practice'),
+      ex('Reverse Lunge','2x8/leg'),
+      ex('Strict Press','3x5 light'),
+      ex('Pallof Press','2x8/side'),
+      ex('Side Plank','2x25 sec/side'),
+      ex('Easy Sled / Carry','8-10 min easy','Recovery pace'),
+    ]),
+    day('Day 3 - Deload + Movement Quality',[
+      ex('Hamstring Curl','2x10 light'),
+      ex('Ring Row / Inverted Row','3x8 easy'),
+      ex('Glute Bridge','2x10'),
+      ex('Bird Dog','2x8/side'),
+      ex('Farmer Carry','3x40 yd','Easy-moderate'),
+      ex('Zone 2 Row / Walk','10-15 min easy','Optional'),
+    ]),
+  ],
+}
+
 export const archivePrograms = [
+  {id:'beginner-core-stability',name:'Beginner Core & Stability',category:'Core + Stability',difficulty:'Beginner',weeksCount:6,daysPerWeek:3,source:'WorkoutBoard custom - based on Andy training history',description:'Six-week beginner stability block using familiar unilateral leg work, hinges, rows, presses, carries, core bracing and easy conditioning.',getWeek:w=>beginnerCoreStabilityWeeks[Math.max(1,Math.min(6,w))]},
   {id:'squatober',name:'Squatober',category:'Specialization',difficulty:'Intermediate',weeksCount:3,daysPerWeek:2,source:'FEB SQUATOBER.pdf',description:'Squat-focused block with bench, deadlift, pulling, and accessories.',getWeek:w=>squatoberWeeks[Math.max(1,Math.min(3,w))]},
   {id:'phat',name:'PHAT - Power Hypertrophy Adaptive Training',category:'Powerbuilding',difficulty:'Intermediate',weeksCount:12,daysPerWeek:5,source:'phat_ebook.pdf',description:'Two power days plus three hypertrophy days.',getWeek:()=>phatDays},
   {id:'wild20',name:'Wild 20 Powerbuilding',category:'Powerbuilding',difficulty:'Intermediate',weeksCount:20,daysPerWeek:4,source:'wild20powerbuilding.pdf',description:'Four-day powerbuilding split using the Wild 20 method on the lead movement.',getWeek:()=>wild20Days},
