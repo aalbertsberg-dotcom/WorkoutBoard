@@ -1669,7 +1669,7 @@ function App() {
                   setTrackedTodayInfo(v=>v?{...v,completedToday:true,completed:Math.min(v.total,v.completed+1)}:v)
                 }
               }}
-              onDismiss={sharedWorkoutActive ? undefined : () => setShowRegularToday(true)}
+              onDismiss={sharedWorkoutActive || trackedTodayInfo ? undefined : () => setShowRegularToday(true)}
             />
           ) : trackedTodayInfo ? (
             <section className="page-section tracked-today-state">

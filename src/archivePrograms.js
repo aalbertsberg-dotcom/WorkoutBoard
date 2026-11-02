@@ -410,7 +410,7 @@ const beginnerCoreStabilityWeeks = {
 }
 
 export const archivePrograms = [
-  {id:'beginner-core-stability',name:'Beginner Core & Stability',category:'Core + Stability',difficulty:'Beginner',weeksCount:6,daysPerWeek:3,source:'WorkoutBoard custom - based on Andy training history',description:'Six-week beginner stability block using familiar unilateral leg work, hinges, rows, presses, carries, core bracing and easy conditioning.',getWeek:w=>beginnerCoreStabilityWeeks[Math.max(1,Math.min(6,w))]},
+  {id:'beginner-core-stability',name:'Beginner Core & Stability',category:'Core + Stability',difficulty:'Beginner',weeksCount:6,daysPerWeek:3,source:'WorkoutBoard custom program',description:'Six-week beginner stability block using familiar unilateral leg work, hinges, rows, presses, carries, core bracing and easy conditioning.',getWeek:w=>beginnerCoreStabilityWeeks[Math.max(1,Math.min(6,w))]},
   {id:'squatober',name:'Squatober',category:'Specialization',difficulty:'Intermediate',weeksCount:3,daysPerWeek:2,source:'FEB SQUATOBER.pdf',description:'Squat-focused block with bench, deadlift, pulling, and accessories.',getWeek:w=>squatoberWeeks[Math.max(1,Math.min(3,w))]},
   {id:'phat',name:'PHAT - Power Hypertrophy Adaptive Training',category:'Powerbuilding',difficulty:'Intermediate',weeksCount:12,daysPerWeek:5,source:'phat_ebook.pdf',description:'Two power days plus three hypertrophy days.',getWeek:()=>phatDays},
   {id:'wild20',name:'Wild 20 Powerbuilding',category:'Powerbuilding',difficulty:'Intermediate',weeksCount:20,daysPerWeek:4,source:'wild20powerbuilding.pdf',description:'Four-day powerbuilding split using the Wild 20 method on the lead movement.',getWeek:()=>wild20Days},

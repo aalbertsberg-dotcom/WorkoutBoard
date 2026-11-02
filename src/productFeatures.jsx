@@ -37,6 +37,32 @@ function withSetProgress(workout) {
   }
 }
 
+function plannedAlternatives(name) {
+  const value=String(name||'').toLowerCase()
+  if(/front squat|\bsquat\b/.test(value)) return ['Goblet Squat','Safety-Bar Squat','Leg Press','Box Squat']
+  if(/bulgarian split squat|split squat|lunge/.test(value)) return ['Reverse Lunge','Step-Up','Goblet Split Squat','Single-Leg Press']
+  if(/chest-supported.*row|\brow\b/.test(value)) return ['Cable Row','Ring Row','One-Arm DB Row','Lat Pulldown']
+  if(/dead bug/.test(value)) return ['Bird Dog','Pallof Press','Heel Tap','Plank']
+  if(/suitcase carry/.test(value)) return ['Farmer Carry','Front-Rack Carry','Offset Carry','Pallof Walkout']
+  if(/romanian deadlift|rdl/.test(value)) return ['DB Romanian Deadlift','Cable Pull-Through','Hip Hinge','Trap-Bar RDL']
+  if(/strict press|shoulder press/.test(value)) return ['DB Shoulder Press','Landmine Press','Machine Shoulder Press','Incline DB Press']
+  if(/side plank/.test(value)) return ['Pallof Press','Suitcase Hold','Dead Bug','Bird Dog']
+  if(/glute bridge/.test(value)) return ['Hip Thrust','Cable Pull-Through','Bodyweight Bridge','Single-Leg Bridge']
+  if(/bird dog/.test(value)) return ['Dead Bug','Pallof Press','Plank','Bear Hold']
+  if(/farmer carry/.test(value)) return ['Suitcase Carry','Front-Rack Carry','Trap-Bar Carry','Sled Drag']
+  return []
+}
+
+function PlannedAlternatives({name}) {
+  const [open,setOpen]=useState(false)
+  const items=plannedAlternatives(name)
+  if(!items.length)return null
+  return <span className="planned-alternatives">
+    <button type="button" className="movement-alt-button" onClick={()=>setOpen(v=>!v)}>Alternatives</button>
+    {open&&<span className="movement-alt-popover"><b>Alternative movements</b>{items.map(item=><span key={item}>{item}</span>)}</span>}
+  </span>
+}
+
 export function PlannedWorkoutRunner({planned,onFinished,onDismiss,sharedSessionId=null}) {
   const [workout,setWorkout]=useState(()=>{
     let cached=null
@@ -171,11 +197,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss,sharedSession
       <div><span className="card-label">PLANNED WORKOUT</span><h2>{planned.title}</h2><p>{planned.source_program_name||'Custom workout'}{planned.source_week?` · Week ${planned.source_week}`:''}</p></div>
       <span className="save-pill">{saveState}</span>
     </div>
-    {planned.workout?.source && <div className="source-pill">Source: {planned.workout.source}</div>}
-    <section className="simple-card circuit-controls">
-      <div className="section-heading"><div><span className="card-label">SUPERSETS / CIRCUITS</span><h3>Group work when it belongs together</h3></div></div>
-      <label className="field-label"><span>Circuit rounds (optional)</span><input className="text-input" type="number" min="1" value={workout.circuit_rounds||''} onChange={e=>change('circuit_rounds',e.target.value)} placeholder="e.g. 4"/></label>
-    </section>
+
     {(workout.exercises||[]).map((item,i)=>{
       const key=String(item.name||'').trim().toLowerCase()
       const hist=historyByExercise[key]
@@ -188,11 +210,18 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss,sharedSession
       const sub=substitutions[key]?.[0]
       const nextExerciseIndex=(workout.exercises||[]).findIndex(x=>!(x.done||(x.setProgress?.length&&x.setProgress.every(s=>s.done))))
       return <article className={'flex-exercise '+(item.done?'done ':'')+(item.group?'grouped ':'')+(!item.done&&i===nextExerciseIndex?'current-exercise':'')} key={item.id||i}>
-        <div className="flex-exercise-title"><div><div className="exercise-name-line">{item.group&&<b className="group-badge">{item.group}</b>}<strong>{item.name}</strong>{isPR&&<b className="pr-mini">PR</b>}</div><span>{item.prescription}</span>{item.note&&<small>{item.note}</small>}{hist?.last&&<small className="flex-history">Last: {hist.last}{current&&hist?.last?` · Suggested ${Math.round((current.weight||0)+5)} lb`:''}</small>}{sub&&<small className="sub-suggestion">Substitute: {sub.substitute}{sub.reason?' · '+sub.reason:''}</small>}</div><button type="button" className={'check '+(item.done?'checked':'')} onClick={()=>{ const next=!item.done; changeExercise(i,{done:next}); if(next) window.dispatchEvent(new CustomEvent('workoutboard:rest-timer',{detail:{seconds:rest}})) }}>✓</button></div>
-        <div className="flex-exercise-inputs">
-          <select value={item.group||''} onChange={e=>changeExercise(i,{group:e.target.value})}><option value="">Straight set</option><option>A1</option><option>A2</option><option>B1</option><option>B2</option><option>C1</option><option>C2</option><option>Circuit</option></select>
-          <input className="text-input" value={item.result||''} onChange={e=>changeExercise(i,{result:e.target.value})} placeholder="Result, e.g. 185 × 5 × 3 or completed" />
-          <span className="rest-chip">{rest<120?rest+'s':rest/60+'m'} rest</span>
+        <div className="flex-exercise-title">
+          <div>
+            <div className="exercise-name-line"><strong>{item.name}</strong>{isPR&&<b className="pr-mini">PR</b>}<PlannedAlternatives name={item.name}/></div>
+            <span className="exercise-plan-line">{item.prescription}{rest?' · '+(rest<120?rest+' sec':rest/60+' min')+' rest':''}</span>
+            {item.note&&<details className="exercise-cue"><summary>Cue</summary><small>{item.note}</small></details>}
+            {hist?.last&&<small className="flex-history">Last: {hist.last}{current&&hist?.last?` · Suggested ${Math.round((current.weight||0)+5)} lb`:''}</small>}
+            {sub&&<small className="sub-suggestion">Saved substitute: {sub.substitute}{sub.reason?' · '+sub.reason:''}</small>}
+          </div>
+          <button type="button" className={'check '+(item.done?'checked':'')} onClick={()=>{ const next=!item.done; changeExercise(i,{done:next}); if(next) window.dispatchEvent(new CustomEvent('workoutboard:rest-timer',{detail:{seconds:rest}})) }}>✓</button>
+        </div>
+        <div className="flex-exercise-inputs simplified">
+          <input className="text-input" value={item.result||''} onChange={e=>changeExercise(i,{result:e.target.value})} placeholder="Weight × reps × sets, or completed" />
         </div>
         {item.setProgress?.length>0&&<div className="set-progress-grid compact flexible-set-progress">
           {item.setProgress.map((set,j)=><button
@@ -229,9 +258,9 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss,sharedSession
       </section>
     </details>
 
-    <div className="finish-row">
-      {onDismiss&&<button className="secondary-action" onClick={onDismiss}>Use program workout</button>}
-      <button className="finish-button" onClick={finish} disabled={finishing}>{finishing?'Finishing…':'FINISH WORKOUT'}</button>
+    {onDismiss&&<button className="secondary-action regular-workout-fallback" onClick={onDismiss}>Use regular Today workout</button>}
+    <div className="finish-wrap planned-finish-wrap">
+      <button className="finish" onClick={finish} disabled={finishing}>{finishing?'FINISHING…':'FINISH WORKOUT'}</button>
     </div>
   </section>
 }

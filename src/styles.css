@@ -2739,3 +2739,52 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
     width:auto;
   }
 }
+
+
+/* Simplified planned workout gym view */
+.flex-exercise-inputs.simplified {
+  display:block;
+}
+.exercise-plan-line {
+  color:#b7c3d6 !important;
+  font-size:11px !important;
+  font-weight:800;
+}
+.exercise-cue {
+  width:max-content;
+  max-width:100%;
+}
+.exercise-cue summary {
+  cursor:pointer;
+  color:#91a1b8;
+  font-size:9px;
+  font-weight:900;
+  list-style:none;
+}
+.exercise-cue summary::-webkit-details-marker { display:none; }
+.exercise-cue summary::before { content:'› '; }
+.exercise-cue[open] summary::before { content:'⌄ '; }
+.exercise-cue small {
+  display:block;
+  margin-top:4px;
+  max-width:310px;
+  line-height:1.4;
+}
+.planned-alternatives {
+  position:relative;
+  display:inline-flex;
+}
+.planned-finish-wrap {
+  position:sticky;
+  bottom:max(8px,env(safe-area-inset-bottom));
+  z-index:20;
+}
+.regular-workout-fallback {
+  width:100%;
+  margin-top:2px;
+}
+@media (max-width:700px) {
+  .flex-exercise-title { align-items:flex-start; }
+  .exercise-name-line { gap:7px; }
+  .planned-finish-wrap { bottom:76px; }
+}
