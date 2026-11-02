@@ -2580,3 +2580,49 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   font-weight:900;
 }
 .preview-action-status { margin:0; }
+
+
+/* Mobile program preview/share polish */
+.program-preview-card {
+  scroll-margin-top:110px;
+  min-width:0;
+  overflow:hidden;
+}
+.program-preview-card .source-pill {
+  max-width:100%;
+  white-space:normal;
+  overflow-wrap:anywhere;
+}
+.share-link-inline {
+  display:grid;
+  gap:8px;
+  padding:10px;
+  border:1px solid #40526e;
+  border-radius:10px;
+  background:#0d1728;
+}
+.share-link-inline > span {
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:#9fb0c7;
+  font-size:9px;
+}
+.share-link-inline > div {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:7px;
+}
+.share-link-inline button {
+  min-height:38px;
+  border:1px solid #65a30d;
+  border-radius:8px;
+  background:#20350f;
+  color:#d9f99d;
+  font-weight:900;
+}
+@media (max-width:700px) {
+  .program-preview-card { scroll-margin-top:18px; }
+  .program-preview-card .preview-head h2 { overflow-wrap:anywhere; }
+}
