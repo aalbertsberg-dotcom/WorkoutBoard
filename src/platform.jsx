@@ -375,6 +375,7 @@ export function PlanPage({
   })
   const [submission,setSubmission] = useState({name:'',description:'',source_url:'',visibility:'private'})
   const [message,setMessage] = useState('')
+  const [shareCode,setShareCode] = useState('')
   const [planMode,setPlanMode] = useState('programs')
   const [undoAction,setUndoAction] = useState(null)
   const [category,setCategory] = useState('All')
@@ -625,6 +626,8 @@ export function PlanPage({
 
   const shareProgram = async p => {
     if(!session?.user||!p)return
+    setMessage('Creating share code…')
+    setShareCode('')
     const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
     const code=Array.from({length:8},()=>chars[Math.floor(Math.random()*chars.length)]).join('')
     const {error}=await supabase.from('shared_library_items').insert({
@@ -634,9 +637,21 @@ export function PlanPage({
       title:p.name,
       payload:snapshotProgram(p)
     })
-    if(error){setMessage(error.message);return}
-    try{await navigator.clipboard.writeText(code)}catch{}
-    setMessage('Program share code '+code+' copied.')
+    if(error){setMessage('Could not create share code: '+error.message);return}
+    setShareCode(code)
+    let copied=false
+    try{await navigator.clipboard.writeText(code);copied=true}catch{}
+    setMessage(copied?'Share code copied to clipboard.':'Share code created. Tap Copy code below.')
+  }
+
+  const copyShareCode = async () => {
+    if(!shareCode)return
+    try{
+      await navigator.clipboard.writeText(shareCode)
+      setMessage('Share code copied to clipboard.')
+    }catch{
+      setMessage('Copy was blocked by the browser. Select the code and copy it manually.')
+    }
   }
 
   const startTracking = async p => {
@@ -822,7 +837,9 @@ export function PlanPage({
         <div className="program-preview-actions">
           <div className="schedule-row"><input type="date" value={scheduleDate} onChange={e=>setScheduleDate(e.target.value)}/><button className="primary-action" onClick={scheduleProgramWorkout}>Add workout</button></div>
           <button className="wide-button" onClick={()=>shareProgram(preview)}>Share program code</button>
+          {shareCode&&<div className="share-code-inline"><strong>{shareCode}</strong><button type="button" onClick={copyShareCode}>Copy code</button></div>}
           {trackingReady&&!trackedKeys.has(preview.key)&&<button className="wide-button" onClick={()=>startTracking(preview)}>{completedKeys.has(preview.key)?'Track this program again':'Track this program'}</button>}
+          {message&&<div className="status-message preview-action-status">{message}</div>}
         </div>
       </section>}
 
