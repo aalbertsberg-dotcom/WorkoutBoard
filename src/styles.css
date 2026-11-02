@@ -3328,3 +3328,46 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   .floating-workout-timer { bottom:92px !important; }
   .draw-board-wrap { min-height:500px; }
 }
+
+
+/* Cancel active workout */
+.cancel-workout-button {
+  width:100%;
+  margin-top:4px;
+  border-color:#6a3e42 !important;
+  color:#e5b7bc !important;
+}
+.cancel-workout-confirm {
+  display:grid;
+  gap:8px;
+  padding:13px;
+  border:1px solid #8d3f48;
+  border-radius:12px;
+  background:#241116;
+}
+.cancel-workout-confirm strong {
+  color:#fecdd3;
+  font-size:12px;
+}
+.cancel-workout-confirm p {
+  margin:0;
+  color:#c7a5aa;
+  font-size:10px;
+  line-height:1.45;
+}
+.cancel-workout-confirm > div {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+.danger-action {
+  min-height:44px;
+  border:1px solid #a63f4b;
+  border-radius:10px;
+  background:#7f1d2d;
+  color:#fff1f2;
+  font-weight:900;
+}
+.danger-action:disabled {
+  opacity:.55;
+}

@@ -854,6 +854,8 @@ function App() {
   const [pendingWorkoutStart,setPendingWorkoutStart] = useState(null)
   const [todayCompletedWorkouts,setTodayCompletedWorkouts] = useState([])
   const [workoutStartError,setWorkoutStartError] = useState('')
+  const [classicCancelConfirm,setClassicCancelConfirm] = useState(false)
+  const [classicCancelling,setClassicCancelling] = useState(false)
 
   const personalProgram = programs[activeProgram]
   const sharedProgramId = activeSession ? (dbNameToProgram[activeSession.program] || activeProgram) : activeProgram
@@ -919,7 +921,7 @@ function App() {
         supabase.from('profiles').select('*').eq('id',userId).single(),
         supabase.from('training_maxes').select('*').eq('user_id',userId).single(),
         supabase.from('workout_logs').select('*').eq('user_id',userId).order('updated_at',{ascending:false}),
-        supabase.from('planned_workouts').select('*').eq('user_id',userId).eq('scheduled_date',today).in('status',['planned','started']).order('created_at').limit(1),
+        supabase.from('planned_workouts').select('*').eq('user_id',userId).eq('scheduled_date',today).in('status',['planned','started','skipped']).order('created_at'),
         supabase.from('user_program_tracking').select('*').eq('user_id',userId).eq('status','tracking').order('updated_at',{ascending:false}),
         supabase.from('training_sessions').select('id,program,workout,completed_at').eq('user_id',userId).not('completed_at','is',null).order('completed_at',{ascending:false}).limit(1000),
       ])
@@ -939,7 +941,7 @@ function App() {
       setWeek(currentWeek)
       setHistory(rows)
 
-      let resolvedTodayPlan=todayPlans?.[0] || null
+      let resolvedTodayPlan=(todayPlans||[]).find(row=>row.status==='planned'||row.status==='started') || null
       let nextTrackedInfo=null
       const activeArchiveTrack=(trackingData||[]).find(row=>String(row.program_key||'').startsWith('archive:'))
       if(activeArchiveTrack){
@@ -981,7 +983,8 @@ function App() {
             upcoming,
             complete:completedCount>=total,
           }
-          if(!resolvedTodayPlan && !completedToday && completedCount<total && nextDay){
+          const cancelledTrackedToday=(todayPlans||[]).some(row=>row.status==='skipped'&&row.workout?.tracking_program_key===activeArchiveTrack.program_key)
+          if(!resolvedTodayPlan && !completedToday && !cancelledTrackedToday && completedCount<total && nextDay){
             const plannedPayload=makePlannedFromArchive(trackedProgram,nextWeek,nextDayIndex,today)
             plannedPayload.workout={...plannedPayload.workout,tracking_program_key:activeArchiveTrack.program_key}
             const inserted=await supabase.from('planned_workouts').insert({...plannedPayload,user_id:userId}).select().single()
@@ -1412,6 +1415,33 @@ function App() {
     setLift(lifts.find(x => !completed.has(x)) || 'Press')
   }
 
+  const cancelClassicWorkout = async () => {
+    if(!session?.user || classicCancelling)return
+    setClassicCancelling(true)
+    const cacheKey=`wb-draft-${session.user.id}-${workoutProgramId}-${week}-${lift}`
+    try { localStorage.removeItem(cacheKey) } catch {}
+
+    const {data:existing}=await supabase.from('workout_logs').select('id,completed_at')
+      .eq('user_id',session.user.id).eq('program',workoutProgram.dbName).eq('week',week).eq('lift',lift).maybeSingle()
+
+    if(existing?.id && !existing.completed_at){
+      await supabase.from('training_sessions').delete().eq('legacy_log_id',existing.id).is('completed_at',null)
+      await supabase.from('workout_logs').delete().eq('id',existing.id).is('completed_at',null)
+      setHistory(rows=>rows.filter(row=>row.id!==existing.id))
+    }
+
+    setLog(makeLog(workoutProgramId,week,lift,tm))
+    setSaveState('Saved')
+    setClassicCancelConfirm(false)
+    setClassicCancelling(false)
+
+    if(sharedWorkoutActive&&activeSession){
+      restorePersonalWorkout()
+      await refreshTogether(activeSession.id)
+      setActiveTab('together')
+    }
+  }
+
   const finishWorkout = async () => {
     const saved = await saveWorkout(true)
     if (!saved) return
@@ -1766,6 +1796,17 @@ function App() {
             <PlannedWorkoutRunner
               planned={plannedToday}
               sharedSessionId={sharedWorkoutActive&&activeSession ? activeSession.id : null}
+              onCancelled={async() => {
+                setPlannedToday(null)
+                setShowRegularToday(false)
+                setCompletionSummary(null)
+                setWorkoutStartError('')
+                if(sharedWorkoutActive&&activeSession){
+                  setSharedWorkoutActive(false)
+                  await refreshTogether(activeSession.id)
+                  setActiveTab('together')
+                }
+              }}
               onFinished={async(summary) => {
                 const finishedTrackingKey=plannedToday?.workout?.tracking_program_key||null
                 setPlannedToday(null)
@@ -2045,8 +2086,14 @@ function App() {
             </details>
 
             <div className="save-line">● {saveState}</div>
+            {!log.complete&&<button type="button" className="secondary-action cancel-workout-button" onClick={()=>setClassicCancelConfirm(true)}>Cancel workout</button>}
+            {classicCancelConfirm&&<section className="cancel-workout-confirm">
+              <strong>Cancel this workout?</strong>
+              <p>Your in-progress entries will be discarded and will not count as a completed workout.</p>
+              <div><button type="button" className="secondary-action" onClick={()=>setClassicCancelConfirm(false)} disabled={classicCancelling}>Keep workout</button><button type="button" className="danger-action" onClick={cancelClassicWorkout} disabled={classicCancelling}>{classicCancelling?'Cancelling…':'Yes, cancel'}</button></div>
+            </section>}
             <div className="finish-wrap">
-              <button className={'finish ' + (log.complete ? 'done' : '')} onClick={finishWorkout}>
+              <button className={'finish ' + (log.complete ? 'done' : '')} onClick={finishWorkout} disabled={classicCancelling}>
                 {log.complete ? '✓ WORKOUT FINISHED' : sharedWorkoutActive ? 'FINISH MY SHARED WORKOUT' : 'FINISH WORKOUT'}
               </button>
             </div>

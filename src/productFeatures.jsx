@@ -127,7 +127,7 @@ function PlannedAlternatives({name}) {
   </span>
 }
 
-export function PlannedWorkoutRunner({planned,onFinished,onDismiss,sharedSessionId=null}) {
+export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,sharedSessionId=null}) {
   const [workout,setWorkout]=useState(()=>{
     let cached=null
     try { cached=planned?.id ? JSON.parse(localStorage.getItem('wb-planned-draft-'+planned.id) || 'null') : null } catch {}
@@ -135,6 +135,8 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss,sharedSession
   })
   const [saveState,setSaveState]=useState('Saved')
   const [finishing,setFinishing]=useState(false)
+  const [cancelConfirm,setCancelConfirm]=useState(false)
+  const [cancelling,setCancelling]=useState(false)
   const [historyByExercise,setHistoryByExercise]=useState({})
   const [substitutions,setSubstitutions]=useState({})
   const [timerPresets,setTimerPresets]=useState({})
@@ -255,6 +257,24 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss,sharedSession
     }
     return best
   },[workout.exercises])
+
+  const cancelWorkout=async()=>{
+    if(!planned?.id || cancelling)return
+    setCancelling(true)
+    const {error}=await supabase.from('planned_workouts').update({
+      status:'skipped',
+      updated_at:new Date().toISOString(),
+    }).eq('id',planned.id)
+    if(error){
+      setSaveState('Cancel failed: '+error.message)
+      setCancelling(false)
+      return
+    }
+    try { localStorage.removeItem('wb-planned-draft-'+planned.id) } catch {}
+    setCancelConfirm(false)
+    setCancelling(false)
+    onCancelled?.({planned,sharedSessionId})
+  }
 
   const finish=async()=>{
     if (!planned?.id || finishing) return
@@ -432,8 +452,14 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss,sharedSession
     </details>
 
     {onDismiss&&<button className="secondary-action regular-workout-fallback" onClick={onDismiss}>Use regular Today workout</button>}
+    <button type="button" className="secondary-action cancel-workout-button" onClick={()=>setCancelConfirm(true)}>Cancel workout</button>
+    {cancelConfirm&&<section className="cancel-workout-confirm">
+      <strong>Cancel this workout?</strong>
+      <p>Your in-progress entries will not count as a completed workout. This will not advance your program.</p>
+      <div><button type="button" className="secondary-action" onClick={()=>setCancelConfirm(false)} disabled={cancelling}>Keep workout</button><button type="button" className="danger-action" onClick={cancelWorkout} disabled={cancelling}>{cancelling?'Cancelling…':'Yes, cancel'}</button></div>
+    </section>}
     <div className="finish-wrap planned-finish-wrap">
-      <button className="finish" onClick={finish} disabled={finishing}>{finishing?'FINISHING…':'FINISH WORKOUT'}</button>
+      <button className="finish" onClick={finish} disabled={finishing||cancelling}>{finishing?'FINISHING…':'FINISH WORKOUT'}</button>
     </div>
   </section>
 }
