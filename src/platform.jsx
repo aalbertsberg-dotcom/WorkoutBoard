@@ -93,8 +93,10 @@ export function PlatformProgress({
   formatWeight,
   programs,
   dbNameToProgram,
+  view=null,
 }) {
   const [mode,setMode] = useState('mine')
+  const effectiveMode=view || mode
   const [community,setCommunity] = useState([])
   const [flexSessions,setFlexSessions] = useState([])
   const [measurements,setMeasurements] = useState([])
@@ -252,13 +254,13 @@ export function PlatformProgress({
     return events.sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,3)
   },[progress.completed,flexSessions])
 
-  return <section className="page-section">
-    <div className="segmented">
+  return <section className={'page-section '+(view==='community'?'community-page-panel':'')}>
+    {!view&&<div className="segmented">
       <button className={mode==='mine'?'active':''} onClick={()=>setMode('mine')}>Analytics</button>
       <button className={mode==='community'?'active':''} onClick={()=>setMode('community')}>Community</button>
-    </div>
+    </div>}
 
-    {mode==='mine'?<>
+    {effectiveMode==='mine'?<>
       <section className="summary-grid progress-home-kpis">
         <div><span>Workouts this month</span><strong>{thisMonth}</strong></div>
         <div><span>30-day volume</span><strong>{formatWeight(volume30)} lb</strong></div>

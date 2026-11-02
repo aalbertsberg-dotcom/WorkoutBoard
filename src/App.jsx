@@ -156,15 +156,15 @@ const programs = {
       1:{label:'FSL',title:'First Set Last 5x5',pct:65},
       2:{label:'FSL',title:'First Set Last 5x5',pct:70},
       3:{label:'FSL',title:'First Set Last 5x5',pct:75},
-      4:{label:'JOKERS + BACKOFF',title:'Joker sets + 1x5 first-set backoff',pct:65},
-      5:{label:'JOKERS + BACKOFF',title:'Joker sets + 1x5 first-set backoff',pct:70},
-      6:{label:'JOKERS + BACKOFF',title:'Joker sets + 1x5 first-set backoff',pct:75},
+      4:{label:'BACKOFF',title:'First-set backoff 1x5',pct:65},
+      5:{label:'BACKOFF',title:'First-set backoff 1x5',pct:70},
+      6:{label:'BACKOFF',title:'First-set backoff 1x5',pct:75},
     },
     assistance:{
-      Squat:['Joker set 1 (weeks 4-6)','Joker set 2 (weeks 4-6)','Leg / core assistance'],
-      Bench:['Joker set 1 (weeks 4-6)','Joker set 2 (weeks 4-6)','Pull / triceps assistance'],
-      Deadlift:['Joker set 1 (weeks 4-6)','Joker set 2 (weeks 4-6)','Back / core assistance'],
-      Press:['Joker set 1 (weeks 4-6)','Joker set 2 (weeks 4-6)','Pull / arms assistance'],
+      Squat:['Leg / core assistance'],
+      Bench:['Pull / triceps assistance'],
+      Deadlift:['Back / core assistance'],
+      Press:['Pull / arms assistance'],
     },
     conditioning:() => 'Optional / easy'
   },
@@ -381,11 +381,15 @@ function targetWeight(tm, pct, basis) {
 function getProgramWeek(programId, week, lift) {
   const program = programs[programId] || programs['andy-hybrid-12']
   const secondary=program.secondary?.[week] || program.secondaryByLift?.[lift] || null
+  const jokers=programId==='andy-531-original-6' && week>=4 && week<=6
+    ? [{label:'Joker 1'},{label:'Joker 2'}]
+    : []
   return {
     programId,
     phase:program.phases[week],
     main:program.main[week] || [],
     secondary,
+    jokers,
     assistance:program.assistance[lift] || [],
     conditioning:program.conditioning(week,lift),
     rule:program.rules?.[week] || '',
@@ -399,7 +403,7 @@ function makeLog(programId, week, lift, tm) {
   const secondaryTarget = plan.secondary?.pct != null ? targetWeight(tm,plan.secondary.pct,program.basis) : ''
 
   return {
-    version:7,
+    version:8,
     main:plan.main.map(set => ({
       ...set,
       weight:set.pct != null ? targetWeight(tm,set.pct,program.basis) : '',
@@ -409,6 +413,7 @@ function makeLog(programId, week, lift, tm) {
     backoffWeight:secondaryTarget || '',
     backoffNote:'',
     backoffSets:prescribedSetProgress(plan.secondary?.title),
+    jokerSets:(plan.jokers||[]).map((item,i)=>({...item,index:i,weight:'',reps:'',done:false})),
     assistance:plan.assistance.map(name => ({name,result:'',setProgress:prescribedSetProgress(name)})),
     conditioning:'',
     conditioningEnabled:false,
@@ -429,14 +434,16 @@ function normalizeLog(saved, programId, week, lift, tm) {
   return {
     ...base,
     ...saved,
-    version:7,
+    version:8,
     main:base.main.map((item,i) => ({...item,...(saved.main?.[i] || {})})),
     backoffSets:base.backoffSets.map((item,i)=>({...item,...(saved.backoffSets?.[i]||{})})),
-    assistance:base.assistance.map((item,i) => {
-      const prior=saved.assistance?.[i] || {}
+    jokerSets:base.jokerSets.map((item,i)=>({...item,...(saved.jokerSets?.[i]||{}),label:item.label,index:i})),
+    assistance:base.assistance.map(item => {
+      const prior=(saved.assistance||[]).find(x=>x?.name===item.name) || {}
       return {
         ...item,
         ...prior,
+        name:item.name,
         setProgress:item.setProgress.map((set,j)=>({...set,...(prior.setProgress?.[j]||{})}))
       }
     }),
@@ -509,6 +516,15 @@ function metricsForWorkout(workout, programId, week, lift) {
   } else {
     volume += parseLoggedVolume(workout.backoffNote)
   }
+
+  ;(workout.jokerSets || []).forEach(set => {
+    const weight=Number(set.weight||0),reps=Number(set.reps||0)
+    if(weight&&reps){
+      volume+=weight*reps
+      const estimate=e1rm(weight,reps)
+      if(estimate>estimated1rm){estimated1rm=estimate;bestSet={weight,reps}}
+    }
+  })
 
   ;(workout.assistance || []).forEach(item => {
     volume += parseLoggedVolume(item.result)
@@ -589,6 +605,31 @@ function randomJoinCode() {
   let code = ''
   for (let i=0;i<6;i++) code += chars[Math.floor(Math.random()*chars.length)]
   return code
+}
+
+function movementAlternativesFor(name) {
+  const value=String(name||'').toLowerCase()
+  if(value==='squat' || /\bsquat\b/.test(value)) return ['Front Squat','Safety-Bar Squat','Goblet Squat','Leg Press']
+  if(value==='bench' || /bench/.test(value)) return ['DB Bench Press','Incline DB Press','Pushup','Machine Chest Press']
+  if(value==='deadlift' || /deadlift/.test(value)) return ['Trap-Bar Deadlift','Romanian Deadlift','Rack Pull','Kettlebell Deadlift']
+  if(value==='press' || /strict press|overhead|shoulder press/.test(value)) return ['DB Shoulder Press','Landmine Press','Machine Shoulder Press','Incline DB Press']
+  if(/leg.*core|core.*leg/.test(value)) return ['Bulgarian Split Squat','Reverse Lunge','Pallof Press','Dead Bug']
+  if(/pull.*triceps/.test(value)) return ['Chest-Supported DB Row','Lat Pulldown','Cable Row','Triceps Pushdown']
+  if(/back.*core/.test(value)) return ['Chest-Supported DB Row','Ring Row','Dead Bug','Side Plank']
+  if(/pull.*arms/.test(value)) return ['Pullup / Assisted Pullup','Lat Pulldown','One-Arm DB Row','DB Curl']
+  if(/row/.test(value)) return ['Chest-Supported DB Row','Cable Row','Ring Row','Lat Pulldown']
+  if(/lunge|split squat/.test(value)) return ['Reverse Lunge','Step-Up','Goblet Split Squat','Single-Leg Press']
+  return []
+}
+
+function AlternativeMovements({name}) {
+  const [open,setOpen]=useState(false)
+  const items=movementAlternativesFor(name)
+  if(!items.length)return null
+  return <span className="alternative-movements">
+    <button type="button" className="movement-alt-button" onClick={()=>setOpen(v=>!v)}>Alternatives</button>
+    {open&&<span className="movement-alt-popover"><b>Alternative movements</b>{items.map(item=><span key={item}>{item}</span>)}</span>}
+  </span>
 }
 
 function NumericInput({value,onChange,placeholder,step=1}) {
@@ -804,6 +845,8 @@ function App() {
   const [togetherProgramKey,setTogetherProgramKey] = useState('')
   const [togetherWeek,setTogetherWeek] = useState(1)
   const [togetherWorkoutIndex,setTogetherWorkoutIndex] = useState(0)
+  const [trackedTodayInfo,setTrackedTodayInfo] = useState(null)
+  const [togetherView,setTogetherView] = useState('live')
 
   const personalProgram = programs[activeProgram]
   const sharedProgramId = activeSession ? (dbNameToProgram[activeSession.program] || activeProgram) : activeProgram
@@ -860,12 +903,13 @@ function App() {
       setDataLoading(true)
       const userId = session.user.id
       const today = new Date().toISOString().slice(0,10)
-      const [{data:profileData},{data:tmData},{data:logsData},{data:todayPlans},{data:trackingData}] = await Promise.all([
+      const [{data:profileData},{data:tmData},{data:logsData},{data:todayPlans},{data:trackingData},{data:flexCompleted}] = await Promise.all([
         supabase.from('profiles').select('*').eq('id',userId).single(),
         supabase.from('training_maxes').select('*').eq('user_id',userId).single(),
         supabase.from('workout_logs').select('*').eq('user_id',userId).order('updated_at',{ascending:false}),
         supabase.from('planned_workouts').select('*').eq('user_id',userId).eq('scheduled_date',today).in('status',['planned','started']).order('created_at').limit(1),
         supabase.from('user_program_tracking').select('*').eq('user_id',userId).eq('status','tracking').order('updated_at',{ascending:false}),
+        supabase.from('training_sessions').select('id,program,workout,completed_at').eq('user_id',userId).not('completed_at','is',null).order('completed_at',{ascending:false}).limit(1000),
       ])
 
       if (cancelled) return
@@ -882,7 +926,47 @@ function App() {
       setActiveProgram(chosenProgram)
       setWeek(currentWeek)
       setHistory(rows)
-      setPlannedToday(todayPlans?.[0] || null)
+
+      let resolvedTodayPlan=todayPlans?.[0] || null
+      let nextTrackedInfo=null
+      const activeArchiveTrack=(trackingData||[]).find(row=>String(row.program_key||'').startsWith('archive:'))
+      if(activeArchiveTrack){
+        const archiveId=String(activeArchiveTrack.program_key).slice(8)
+        const trackedProgram=archiveProgramById[archiveId]
+        if(trackedProgram?.getWeek && trackedProgram.weeksCount && trackedProgram.daysPerWeek){
+          const completedTracked=(flexCompleted||[]).filter(row=>{
+            if(new Date(row.completed_at).getTime()<new Date(activeArchiveTrack.started_at).getTime())return false
+            return row.workout?.tracking_program_key===activeArchiveTrack.program_key || row.program===trackedProgram.name
+          })
+          const completedCount=completedTracked.length
+          const total=Number(trackedProgram.weeksCount)*Number(trackedProgram.daysPerWeek)
+          const completedToday=completedTracked.some(row=>String(row.completed_at||'').slice(0,10)===today)
+          const nextIndex=Math.min(completedCount,total)
+          const nextWeek=Math.min(Number(trackedProgram.weeksCount),Math.floor(nextIndex/Number(trackedProgram.daysPerWeek))+1)
+          const nextDayIndex=nextIndex%Number(trackedProgram.daysPerWeek)
+          const nextDay=nextIndex<total ? trackedProgram.getWeek(nextWeek)?.[nextDayIndex] : null
+          nextTrackedInfo={
+            key:activeArchiveTrack.program_key,
+            name:trackedProgram.name,
+            completed:completedCount,
+            total,
+            completedToday,
+            nextWeek,
+            nextDayIndex,
+            nextTitle:nextDay?.title||'',
+            complete:completedCount>=total,
+          }
+          if(!resolvedTodayPlan && !completedToday && completedCount<total && nextDay){
+            const plannedPayload=makePlannedFromArchive(trackedProgram,nextWeek,nextDayIndex,today)
+            plannedPayload.workout={...plannedPayload.workout,tracking_program_key:activeArchiveTrack.program_key}
+            const inserted=await supabase.from('planned_workouts').insert({...plannedPayload,user_id:userId}).select().single()
+            if(!inserted.error)resolvedTodayPlan=inserted.data
+          }
+        }
+      }
+
+      setPlannedToday(resolvedTodayPlan)
+      setTrackedTodayInfo(nextTrackedInfo)
       setShowRegularToday(false)
       setTogetherTracking(trackingData || [])
 
@@ -1581,10 +1665,21 @@ function App() {
                 if(sharedWorkoutActive&&activeSession){
                   await refreshTogether(activeSession.id)
                   setActiveTab('together')
+                }else{
+                  setTrackedTodayInfo(v=>v?{...v,completedToday:true,completed:Math.min(v.total,v.completed+1)}:v)
                 }
               }}
               onDismiss={sharedWorkoutActive ? undefined : () => setShowRegularToday(true)}
             />
+          ) : trackedTodayInfo ? (
+            <section className="page-section tracked-today-state">
+              <section className="today-card">
+                <div><span className="card-label">TRACKED PROGRAM</span><h2>{trackedTodayInfo.name}</h2><p>{trackedTodayInfo.complete?'Program complete':trackedTodayInfo.completedToday?'Today’s workout is complete':'Your next tracked workout is ready from Plan'}</p></div>
+                <div className="progress-badge">{trackedTodayInfo.completed}/{trackedTodayInfo.total}</div>
+              </section>
+              {!trackedTodayInfo.complete&&<section className="simple-card"><span className="card-label">NEXT</span><h3>Week {trackedTodayInfo.nextWeek} · {trackedTodayInfo.nextTitle||'Next workout'}</h3><p>{trackedTodayInfo.completedToday?'You’re done for today. This is the next session in sequence.':'Open Plan if you want to schedule it manually.'}</p></section>}
+              <button className="primary-action" onClick={()=>setActiveTab('program')}>View tracked program</button>
+            </section>
           ) : (
           <>
             {sharedWorkoutActive && activeSession && (
@@ -1633,7 +1728,7 @@ function App() {
 
             <section className="exercise-card">
               <div className="exercise-title">
-                <div><span>MAIN LIFT</span><h2>{lift}</h2><small className="program-rest-label">Program rest: {plan.rest.main < 120 ? plan.rest.main+' sec' : plan.rest.main/60+' min'}</small></div>
+                <div><span>MAIN LIFT</span><div className="exercise-heading-line"><h2>{lift}</h2><AlternativeMovements name={lift}/></div><small className="program-rest-label">Program rest: {plan.rest.main < 120 ? plan.rest.main+' sec' : plan.rest.main/60+' min'}</small></div>
                 {previousWorkout && <small>Tap “Last” to reuse your previous set.</small>}
               </div>
               <div className="column-head"><span>SET / TARGET</span><span>WEIGHT</span><span>REPS</span><span>DONE</span></div>
@@ -1659,10 +1754,26 @@ function App() {
               })}
             </section>
 
+            {plan.jokers?.length>0 && (
+              <section className="simple-card joker-card">
+                <div className="section-heading">
+                  <div><span className="card-label">OPTIONAL JOKERS</span><h3>{lift} Joker sets</h3><small className="program-rest-label">Same main lift · only use these when the top set moved well</small></div>
+                  <AlternativeMovements name={lift}/>
+                </div>
+                <p className="helper-text">Jokers are optional heavier sets after your main 5/3/1 work. They are not separate assistance exercises.</p>
+                <div className="joker-set-list">{(log.jokerSets||[]).map((set,i)=><div className={'joker-set-row '+(set.done?'completed':'')} key={i}>
+                  <strong>{set.label}</strong>
+                  <NumericInput value={set.weight} placeholder="lb" step={5} onChange={value=>{setSaveState('Unsaved');setLog(v=>({...v,complete:false,jokerSets:v.jokerSets.map((x,idx)=>idx===i?{...x,weight:value}:x)}))}}/>
+                  <input className="reps-input" type="number" inputMode="numeric" placeholder="reps" value={set.reps} onChange={e=>{setSaveState('Unsaved');setLog(v=>({...v,complete:false,jokerSets:v.jokerSets.map((x,idx)=>idx===i?{...x,reps:e.target.value===''?'':Number(e.target.value)}:x)}))}}/>
+                  <button type="button" className={'check '+(set.done?'checked':'')} onClick={()=>{const next=!set.done;setSaveState('Unsaved');setLog(v=>({...v,complete:false,jokerSets:v.jokerSets.map((x,idx)=>idx===i?{...x,done:next}:x)}));if(next)window.dispatchEvent(new CustomEvent('workoutboard:rest-timer',{detail:{seconds:180}}))}}>✓</button>
+                </div>)}</div>
+              </section>
+            )}
+
             {secondary && (
               <section className="simple-card">
                 <div className="section-heading">
-                  <div><span className="card-label">{secondary.label}</span><h3>{secondary.title}</h3><small className="program-rest-label">Program rest: {plan.rest.secondary < 120 ? plan.rest.secondary+' sec' : plan.rest.secondary/60+' min'}</small></div>
+                  <div><span className="card-label">{secondary.label}</span><h3>{secondary.title}</h3><div className="supplemental-movement-line"><strong>Movement: {lift}</strong><AlternativeMovements name={lift}/></div><small className="program-rest-label">Program rest: {plan.rest.secondary < 120 ? plan.rest.secondary+' sec' : plan.rest.secondary/60+' min'}</small></div>
                   <div className="supplemental-head-right">
                     {secondaryTarget && <strong className="target-pill">{secondaryTarget} lb</strong>}
                     {log.backoffSets?.length>0&&<span className="set-count-pill">{log.backoffSets.filter(x=>x.done).length}/{log.backoffSets.length} done</span>}
@@ -1701,7 +1812,7 @@ function App() {
               {log.assistance.map((item,i) => (
                 <div className={'assist assist-with-progress '+(mainSetsComplete&&backoffSetsComplete&&i===nextAssistanceIndex?'current-exercise':'')} key={item.name}>
                   <div className="assist-title-row">
-                    <span>{item.name}<small className="assistance-rest-label"> · {plan.rest.assistance(item.name) < 120 ? plan.rest.assistance(item.name)+' sec' : plan.rest.assistance(item.name)/60+' min'} rest</small></span>
+                    <div className="assist-name-with-alt"><span>{item.name}<small className="assistance-rest-label"> · {plan.rest.assistance(item.name) < 120 ? plan.rest.assistance(item.name)+' sec' : plan.rest.assistance(item.name)/60+' min'} rest</small></span><AlternativeMovements name={item.name}/></div>
                     {item.setProgress?.length>0&&<b>{item.setProgress.filter(x=>x.done).length}/{item.setProgress.length}</b>}
                   </div>
                   <input placeholder="weight × reps × sets" value={item.result}
@@ -1767,6 +1878,23 @@ function App() {
           )
         ) : activeTab === 'together' ? (
           <section className="page-section">
+            <div className="segmented together-view-tabs">
+              <button className={togetherView==='live'?'active':''} onClick={()=>setTogetherView('live')}>Live</button>
+              <button className={togetherView==='community'?'active':''} onClick={()=>setTogetherView('community')}>Community</button>
+            </div>
+            {togetherView==='community' ? (
+              <PlatformProgress
+                view="community"
+                session={session}
+                profile={profile}
+                setProfile={setProfile}
+                progress={progress}
+                lifts={lifts}
+                formatWeight={formatWeight}
+                programs={programs}
+                dbNameToProgram={dbNameToProgram}
+              />
+            ) : <>
             {togetherReady === false ? (
               <div className="setup-needed">
                 <span className="card-label">ONE DATABASE UPDATE NEEDED</span>
@@ -1885,6 +2013,7 @@ function App() {
                 {togetherMessage && <p className="status-message">{togetherMessage}</p>}
               </>
             )}
+            </>}
           </section>
         ) : activeTab === 'program' ? (
           <PlanPage
@@ -1927,6 +2056,7 @@ function App() {
             </section>
 
             <PlatformProgress
+              view="mine"
               session={session}
               profile={profile}
               setProfile={setProfile}
