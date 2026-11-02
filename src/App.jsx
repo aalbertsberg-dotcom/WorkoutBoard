@@ -1813,7 +1813,7 @@ function App() {
 
             <section className="simple-card">
               <div className="section-heading"><div><span className="card-label">INVITE</span><h3>Invite someone</h3></div></div>
-              <p className="helper-text">Tracey, Myra, or anyone else gets their own account, program, maxes, history, and progress dashboard.</p>
+              <p className="helper-text">Anyone you invite gets their own account, program, maxes, history, and progress dashboard.</p>
               <button className="wide-button invite-button" onClick={shareInvite}>Share WorkoutBoard</button>
               {inviteState && <div className="invite-status">{inviteState}</div>}
             </section>
