@@ -11,16 +11,21 @@ function parseVolume(value) {
 }
 
 function prescribedSetProgress(text) {
-  const value=String(text||'')
-  const rx=value.match(/(\d+)\s*[x×]\s*(\d+)/i)
+  const value=String(text||'').trim()
+  const rx=value.match(/(\d+)\s*[x×]\s*(\d+(?:\.\d+)?)(?:\s*([^,;]+?))?(?:\s+(?:light|moderate|easy|hard|@|$))/i)
+    || value.match(/(\d+)\s*[x×]\s*(\d+(?:\.\d+)?)([^,;]*)/i)
   if(rx){
     const sets=Number(rx[1]),reps=Number(rx[2])
-    return Array.from({length:sets},(_,i)=>({set:i+1,reps,done:false}))
+    let suffix=String(rx[3]||'').trim()
+    suffix=suffix.replace(/^(?:reps?\s*)/i,'').replace(/\s+(?:light|moderate|easy|hard).*$/i,'').trim()
+    let label=suffix ? String(reps)+' '+suffix : String(reps)+' reps'
+    label=label.replace(/\s*\/\s*/g,'/')
+    return Array.from({length:sets},(_,i)=>({set:i+1,reps,label,done:false}))
   }
   const setsOnly=value.match(/(\d+)\s*sets?/i)
   if(setsOnly){
     const sets=Number(setsOnly[1])
-    return Array.from({length:sets},(_,i)=>({set:i+1,reps:null,done:false}))
+    return Array.from({length:sets},(_,i)=>({set:i+1,reps:null,label:'Done',done:false}))
   }
   return []
 }
@@ -35,6 +40,44 @@ function withSetProgress(workout) {
         : prescribedSetProgress(item.prescription||item.name)
     }))
   }
+}
+
+function humanPrescription(text) {
+  const value=String(text||'').trim()
+  const m=value.match(/^(\d+)\s*[x×]\s*([^\s]+)(?:\s+(.*))?$/i)
+  if(!m)return value
+  const sets=m[1],work=m[2],rest=String(m[3]||'').trim()
+  const workLabel=/\//.test(work)||/[a-z]/i.test(work) ? work : work+' reps'
+  return sets+' sets × '+workLabel+(rest?' · '+rest:'')
+}
+
+function loadFieldForExercise(name) {
+  const value=String(name||'').toLowerCase()
+  if(/dead bug|bird dog|side plank|plank|pallof press/.test(value)) return null
+  if(/suitcase carry/.test(value)) return {label:'Load carried',placeholder:'lb',optional:false}
+  if(/farmer carry/.test(value)) return {label:'Load carried',placeholder:'lb',optional:false}
+  if(/bulgarian split squat|reverse lunge|step-up|glute bridge/.test(value)) return {label:'Weight used',placeholder:'Optional lb',optional:true}
+  return {label:'Weight used',placeholder:'lb',optional:false}
+}
+
+function parseLoad(item) {
+  if(item?.load!==undefined && item?.load!=='') return Number(item.load)||0
+  const direct=String(item?.result||'').trim().match(/^\d+(?:\.\d+)?$/)
+  if(direct)return Number(direct[0])
+  const legacy=String(item?.result||'').replace(/,/g,'').replace(/[×X]/g,'x').match(/(\d+(?:\.\d+)?)\s*x/i)
+  return legacy?Number(legacy[1]):0
+}
+
+function completedSetCount(item) {
+  if(Array.isArray(item?.setProgress)&&item.setProgress.length) return item.setProgress.filter(x=>x.done).length
+  return item?.done?1:0
+}
+
+function repsPerSet(item) {
+  const first=item?.setProgress?.[0]
+  if(first?.reps)return Number(first.reps)||0
+  const m=String(item?.prescription||'').match(/\d+\s*[x×]\s*(\d+(?:\.\d+)?)/i)
+  return m?Number(m[1]):0
 }
 
 function plannedAlternatives(name) {
@@ -99,10 +142,12 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss,sharedSession
       for(const row of (sessions.data||[])){
         for(const item of (row.workout?.exercises||[])){
           const key=String(item.name||'').trim().toLowerCase()
-          if(!key||!item.result)continue
-          const m=String(item.result).replace(/[×X]/g,'x').match(/(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/i)
-          const parsed=m?{weight:Number(m[1]),reps:Number(m[2]),e1rm:Number(m[1])*(1+Number(m[2])/30)}:null
-          if(!map[key])map[key]={last:item.result,bestE:parsed?.e1rm||0,bestWeight:parsed?.weight||0}
+          const load=parseLoad(item)
+          const reps=repsPerSet(item)
+          if(!key||(!load&&!item.result))continue
+          const parsed=load&&reps?{weight:load,reps,e1rm:load*(1+reps/30)}:null
+          const lastText=load ? load+' lb' : String(item.result||'')
+          if(!map[key])map[key]={last:lastText,bestE:parsed?.e1rm||0,bestWeight:parsed?.weight||0}
           else if(parsed){map[key].bestE=Math.max(map[key].bestE||0,parsed.e1rm);map[key].bestWeight=Math.max(map[key].bestWeight||0,parsed.weight)}
         }
       }
@@ -130,13 +175,16 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss,sharedSession
     setWorkout(v=>({...v,exercises:(v.exercises||[]).map((item,i)=>i===index?{...item,...patch}:item)}))
   }
   const change=(key,value)=>{ setSaveState('Unsaved'); setWorkout(v=>({...v,[key]:value})) }
-  const totalVolume=useMemo(()=> (workout.exercises||[]).reduce((sum,x)=>sum+parseVolume(x.result),0),[workout.exercises])
+  const totalVolume=useMemo(()=> (workout.exercises||[]).reduce((sum,item)=>{
+    const load=parseLoad(item),reps=repsPerSet(item),sets=completedSetCount(item)
+    if(load&&reps&&sets)return sum+(load*reps*sets)
+    return sum+parseVolume(item.result)
+  },0),[workout.exercises])
   const bestEstimated1rm=useMemo(()=>{
     let best=0
     for(const item of workout.exercises||[]){
-      const m=String(item.result||'').replace(/[×X]/g,'x').match(/(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/i)
-      if(!m)continue
-      const weight=Number(m[1]),reps=Number(m[2])
+      const weight=parseLoad(item),reps=repsPerSet(item)
+      if(!weight||!reps)continue
       best=Math.max(best,weight*(1+reps/30))
     }
     return best
@@ -201,9 +249,11 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss,sharedSession
     {(workout.exercises||[]).map((item,i)=>{
       const key=String(item.name||'').trim().toLowerCase()
       const hist=historyByExercise[key]
-      const m=String(item.result||'').replace(/[×X]/g,'x').match(/(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/i)
-      const current=m?{weight:Number(m[1]),reps:Number(m[2]),e1rm:Number(m[1])*(1+Number(m[2])/30)}:null
+      const currentLoad=parseLoad(item)
+      const currentReps=repsPerSet(item)
+      const current=currentLoad&&currentReps?{weight:currentLoad,reps:currentReps,e1rm:currentLoad*(1+currentReps/30)}:null
       const isPR=Boolean(current&&hist&&(current.weight>(hist.bestWeight||0)||current.e1rm>(hist.bestE||0)+.5))
+      const loadField=loadFieldForExercise(item.name)
       const fallbackRest=/squat|deadlift|bench|press|clean|snatch/i.test(item.name||'')?Number(localStorage.getItem('wb-setting-compound-rest')||180):Number(localStorage.getItem('wb-setting-accessory-rest')||90)
       const programRest=Number(item.rest_seconds||fallbackRest)
       const rest=timerPresets[key]||programRest
@@ -213,16 +263,14 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss,sharedSession
         <div className="flex-exercise-title">
           <div>
             <div className="exercise-name-line"><strong>{item.name}</strong>{isPR&&<b className="pr-mini">PR</b>}<PlannedAlternatives name={item.name}/></div>
-            <span className="exercise-plan-line">{item.prescription}{rest?' · '+(rest<120?rest+' sec':rest/60+' min')+' rest':''}</span>
-            {item.note&&<details className="exercise-cue"><summary>Cue</summary><small>{item.note}</small></details>}
+            <span className="exercise-plan-line">{humanPrescription(item.prescription)}{rest?' · '+(rest<120?rest+' sec':rest/60+' min')+' rest':''}</span>
+            {item.note&&<details className="exercise-cue"><summary>Form tip</summary><small>{item.note}</small></details>}
             {hist?.last&&<small className="flex-history">Last: {hist.last}{current&&hist?.last?` · Suggested ${Math.round((current.weight||0)+5)} lb`:''}</small>}
             {sub&&<small className="sub-suggestion">Saved substitute: {sub.substitute}{sub.reason?' · '+sub.reason:''}</small>}
           </div>
-          <button type="button" className={'check '+(item.done?'checked':'')} onClick={()=>{ const next=!item.done; changeExercise(i,{done:next}); if(next) window.dispatchEvent(new CustomEvent('workoutboard:rest-timer',{detail:{seconds:rest}})) }}>✓</button>
+          {!item.setProgress?.length&&<button type="button" className={'check '+(item.done?'checked':'')} onClick={()=>{ const next=!item.done; changeExercise(i,{done:next}); if(next) window.dispatchEvent(new CustomEvent('workoutboard:rest-timer',{detail:{seconds:rest}})) }}>✓</button>}
         </div>
-        <div className="flex-exercise-inputs simplified">
-          <input className="text-input" value={item.result||''} onChange={e=>changeExercise(i,{result:e.target.value})} placeholder="Weight × reps × sets, or completed" />
-        </div>
+        {loadField&&<label className="exercise-load-field"><span>{loadField.label}{loadField.optional?' (optional)':''}</span><div><input type="number" inputMode="decimal" className="text-input" value={item.load??''} onFocus={e=>e.currentTarget.select()} onChange={e=>changeExercise(i,{load:e.target.value===''?'':Number(e.target.value),result:''})} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur()}} placeholder={loadField.placeholder}/><b>lb</b></div></label>}
         {item.setProgress?.length>0&&<div className="set-progress-grid compact flexible-set-progress">
           {item.setProgress.map((set,j)=><button
             type="button"
@@ -233,7 +281,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss,sharedSession
               changeExercise(i,{setProgress:item.setProgress.map((sp,k)=>k===j?{...sp,done:next}:sp)})
               if(next)window.dispatchEvent(new CustomEvent('workoutboard:rest-timer',{detail:{seconds:rest}}))
             }}>
-            <strong>Set {j+1}</strong><span>{set.reps?set.reps+' reps':'Done?'}</span><b>{set.done?'✓':'○'}</b>
+            <strong>Set {j+1}</strong><span>{set.label || (set.reps?set.reps+' reps':'Done')}</span><b>{set.done?'✓':'○'}</b>
           </button>)}
         </div>}
       </article>

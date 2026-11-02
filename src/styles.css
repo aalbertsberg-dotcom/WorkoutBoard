@@ -2788,3 +2788,38 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   .exercise-name-line { gap:7px; }
   .planned-finish-wrap { bottom:76px; }
 }
+
+
+/* Simple load entry */
+.exercise-load-field {
+  display:grid;
+  gap:5px;
+  margin:6px 0 8px;
+}
+.exercise-load-field > span {
+  color:#94a3b8;
+  font-size:9px;
+  font-weight:900;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+}
+.exercise-load-field > div {
+  display:grid;
+  grid-template-columns:1fr auto;
+  align-items:center;
+  border:1px solid #354762;
+  border-radius:10px;
+  background:#0b1525;
+  overflow:hidden;
+}
+.exercise-load-field input {
+  border:0 !important;
+  border-radius:0 !important;
+  min-height:48px;
+  background:transparent !important;
+}
+.exercise-load-field b {
+  padding:0 13px;
+  color:#94a3b8;
+  font-size:12px;
+}
