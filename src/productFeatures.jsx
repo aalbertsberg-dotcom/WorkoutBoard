@@ -302,27 +302,33 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss,sharedSession
           </div>
           {!item.setProgress?.length&&<button type="button" className={'check '+(item.done?'checked':'')} onClick={()=>{ const next=!item.done; changeExercise(i,{done:next}); if(next) window.dispatchEvent(new CustomEvent('workoutboard:rest-timer',{detail:{seconds:rest}})) }}>✓</button>}
         </div>
-        {item.setProgress?.length>0&&<div className="set-progress-grid compact flexible-set-progress weighted-set-progress">
+        {item.setProgress?.length>0&&<div className="planned-set-table">
+          <div className="planned-set-table-head">
+            <span>SET / TARGET</span><span>WEIGHT</span><span>REPS</span><span>DONE</span>
+          </div>
           {item.setProgress.map((set,j)=>{
             const isCurrent=!set.done&&i===nextExerciseIndex&&j===item.setProgress.findIndex(x=>!x.done)
-            return <div
-              key={j}
-              className={'set-progress-card '+(set.done?'done ':'')+(isCurrent?'current-set':'')}>
-              <div className="set-progress-card-head">
-                <div><strong>Set {j+1}</strong><span>{set.label || (set.reps?set.reps+' reps':'Done')}</span></div>
-                <button type="button" className={'set-complete-button '+(set.done?'done':'')} onClick={()=>{
-                  const next=!set.done
-                  changeExercise(i,{setProgress:item.setProgress.map((sp,k)=>k===j?{...sp,done:next}:sp)})
-                  if(next)window.dispatchEvent(new CustomEvent('workoutboard:rest-timer',{detail:{seconds:rest}}))
-                }}>{set.done?'✓':'○'}</button>
+            return <div key={j} className={'planned-set-row '+(set.done?'completed ':'')+(isCurrent?'current-set':'')}>
+              <div className="planned-set-meta">
+                <strong>Set {j+1}</strong>
+                <span>{set.label || (set.reps?set.reps+' reps':'Done')}</span>
               </div>
-              {loadField&&<label className="set-weight-field">
-                <span>{loadField.label}{loadField.optional?' (optional)':''}</span>
-                <div><input type="number" inputMode="decimal" value={set.weight??''} onFocus={e=>e.currentTarget.select()} onChange={e=>{
-                  const value=e.target.value===''?'':Number(e.target.value)
-                  changeExercise(i,{setProgress:item.setProgress.map((sp,k)=>k===j?{...sp,weight:value}:sp),load:'',result:''})
-                }} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur()}} placeholder="0"/><b>lb</b></div>
-              </label>}
+              {loadField ? <div className="planned-set-weight">
+                <input type="number" inputMode="decimal" value={set.weight??''}
+                  onFocus={e=>e.currentTarget.select()}
+                  onChange={e=>{
+                    const value=e.target.value===''?'':Number(e.target.value)
+                    changeExercise(i,{setProgress:item.setProgress.map((sp,k)=>k===j?{...sp,weight:value}:sp),load:'',result:''})
+                  }}
+                  onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur()}}
+                  placeholder={loadField.optional?'optional':'lb'} />
+              </div> : <span className="planned-set-na">—</span>}
+              <div className="planned-set-reps">{set.reps || '—'}</div>
+              <button type="button" className={'check '+(set.done?'checked':'')} onClick={()=>{
+                const next=!set.done
+                changeExercise(i,{setProgress:item.setProgress.map((sp,k)=>k===j?{...sp,done:next}:sp)})
+                if(next)window.dispatchEvent(new CustomEvent('workoutboard:rest-timer',{detail:{seconds:rest}}))
+              }}>✓</button>
             </div>
           })}
         </div>}
