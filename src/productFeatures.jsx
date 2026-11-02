@@ -264,7 +264,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onDismiss,sharedSession
           <div>
             <div className="exercise-name-line"><strong>{item.name}</strong>{isPR&&<b className="pr-mini">PR</b>}<PlannedAlternatives name={item.name}/></div>
             <span className="exercise-plan-line">{humanPrescription(item.prescription)}{rest?' · '+(rest<120?rest+' sec':rest/60+' min')+' rest':''}</span>
-            {item.note&&<details className="exercise-cue"><summary>Form tip</summary><small>{item.note}</small></details>}
+            {item.note&&<details className="exercise-cue"><summary>Cue</summary><small>{item.note}</small></details>}
             {hist?.last&&<small className="flex-history">Last: {hist.last}{current&&hist?.last?` · Suggested ${Math.round((current.weight||0)+5)} lb`:''}</small>}
             {sub&&<small className="sub-suggestion">Saved substitute: {sub.substitute}{sub.reason?' · '+sub.reason:''}</small>}
           </div>
