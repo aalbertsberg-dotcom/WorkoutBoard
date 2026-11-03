@@ -409,7 +409,132 @@ const beginnerCoreStabilityWeeks = {
   ],
 }
 
+
+const streetParkingPublicSampleWeek = [
+  day('Monday - Vault 4 FUCANGLONG (Program A)',[
+    ex('Dumbbell Squat','20-18-16-14-12-10-8-6-4-2 reps','Use the same load through the descending ladder.'),
+    ex('Wall Walk','3 reps after every squat set','Scale to pike walkout, inchworm, or push-up + taps as needed.'),
+  ],'For time. Public sample goal: 12-18 minutes.'),
+  day('Tuesday - Deadlift + Box Jump',[
+    ex('Dumbbell Deadlift','5-min AMRAP: 3, 6, 9, 12... reps','Add 3 deadlifts every round.'),
+    ex('Box Jump','9 reps every round','Choose a repeatable height.'),
+    ex('Rest','5 minutes'),
+    ex('Repeat Part 1','For time','Repeat the same work from Part 1.'),
+  ],'Two-part public daily sample.'),
+  day('Wednesday - Move for 25 Minutes',[
+    ex('Run','200 meters'),
+    ex('Alternating Dumbbell Farmer Step Up','18 reps'),
+    ex('Run','200 meters'),
+    ex('Barbell Shoulder Press','18 reps'),
+  ],'Move continuously for 25 minutes at an intentional, sustainable pace.'),
+  day('Thursday - 30/30 Intervals',[
+    ex('Double Under / Dumbbell Hop Over','5 rounds: 30 sec work / 30 sec off'),
+    ex('Wall Ball','5 rounds: 30 sec work / 30 sec off'),
+    ex('Barbell Hang Power Snatch','5 rounds: 30 sec work / 30 sec off'),
+  ],'Public Program B sample. Record total reps for each movement.'),
+  day('Friday - Run + Power Clean',[
+    ex('Run','2x800 meters'),
+    ex('Barbell Power Clean','2x25 reps','Perform 25 cleans after each 800m run.'),
+  ],'Score each round. Public sample goal: roughly 6-9 minutes per round.'),
+  day('Saturday - Chipper',[
+    ex('Toes to Bar','75 total reps','May be partitioned.'),
+    ex('Alternating Unweighted Lunge','200 total reps','May be partitioned.'),
+    ex('Barbell Bench Press','75 total reps','May be partitioned.'),
+  ],'Complete straight through or break the work into rounds. Public sample goal: 20-30 minutes.'),
+]
+
+const streetParkingPublicExtras = [
+  day('Dumbbell Strength - Session 4',[
+    ex('Supported Single-Leg Romanian Deadlift','4 rounds: 6/leg','Every 3 minutes for 12 minutes.'),
+    ex('Slow Dumbbell Deadlift','4 rounds: 6 reps','Every 3 minutes for 12 minutes.'),
+    ex('Alternating Bent-Over Row','4 rounds: 12 reps','Perform with the slow deadlifts in Part 2.'),
+  ],'Official Street Parking public Dumbbell Strength sample.'),
+  day('5K Program - Week 3 Run 2 (Threshold)',[
+    ex('Run','2 rounds: 1000m moderate','Rest 3 min.'),
+    ex('Run','2 rounds: 400m fast','Rest 3 min.'),
+    ex('Run','2 rounds: 600m fast','Rest 5 min before repeating.'),
+  ],'4000m total. Public threshold-session sample.'),
+  day('Bodyweight Strength - Session 1',[
+    ex('Feet-Elevated Inverted Row','3-4x10','Slow lowering.'),
+    ex('Slow-Lower Push-Up + Taps','3-4 rounds: 10 push-ups + 4 taps'),
+    ex('Standing Windmill','3-4x10/side'),
+    ex('Bar Hang','2-3x30 sec'),
+    ex('Pike Handstand Hold','2-3x30 sec'),
+    ex('Side Plank Hold','2-3x40 sec/side'),
+    ex('Face-Down Snow Angel','2-3x10','Slow reps.'),
+  ],'Official public Bodyweight Strength sample.'),
+  day('On Ramp - Session 1',[
+    ex('Dumbbell Shoulder Press','5x7'),
+    ex('Air Squat','5x10'),
+  ],'Five rounds for time. Public goal: 5-9 minutes.'),
+  day('On Ramp - Session 3',[
+    ex('Dumbbell Deadlift','9x6'),
+    ex('Burpee','9x3'),
+  ],'Nine rounds for time. Public goal: 6-10 minutes.'),
+  day('On Ramp - Session 6',[
+    ex('Dumbbell Hang Power Clean','10-min AMRAP: 7 reps'),
+    ex('Dumbbell Shoulder Press','10-min AMRAP: 7 reps'),
+    ex('Low Jump / Low Jump Over','10-min AMRAP: 7 reps'),
+  ],'Cycle 7/7/7 for 10 minutes. Public goal: 6-9 rounds.'),
+]
+
+const sofletePublicDailySamples = [
+  day('SOFLETE Public Sample - Meathead Friday',[
+    ex('Bench Press','10-min AMRAP @ bodyweight','Rest as needed while accumulating reps.'),
+    ex('Dumbbell Row','5x12/side','Superset with skull crushers.'),
+    ex('Skull Crusher','5x15','Rest 20 sec after rows; 90 sec between supersets.'),
+    ex('400m Sprint','Every 3 min for 18 min','Six starts total.'),
+  ],'Official SOFLETE public daily sample.'),
+  day('SOFLETE Public Sample - Bench / Deadlift EMOM',[
+    ex('Close-Grip Bench Press','14-min EMOM: 8 reps on odd minutes','Build weight each set.'),
+    ex('Deadlift','14-min EMOM: 4 reps on even minutes','Build weight each set.'),
+    ex('Bench Press','15-min AMRAP: 3 reps @ bodyweight'),
+    ex('Sandbag Ground to Shoulder','15-min AMRAP: 6 reps @ 95 lb'),
+    ex('Toes to Bar','15-min AMRAP: 9 reps'),
+  ],'Official SOFLETE public daily sample.'),
+  day('SOFLETE Public Sample - Bench / Curl / Sprint',[
+    ex('Bench Press','5x3','Superset with hammer curls.'),
+    ex('Hammer Curl','5x10'),
+    ex('Deadlift','4x4'),
+    ex('Push-Up','10-min EMOM: 10 reps'),
+    ex('Sprint','10-min EMOM: 50 meters','Perform after the push-ups each minute.'),
+  ],'Official SOFLETE public daily sample.'),
+  day('SOFLETE Public Sample - Clean / Bench / Stamina',[
+    ex('Hang Power Clean','5x2'),
+    ex('Bench Press','5,3,1,5,3,15','Increase load as reps fall; final 15-rep back-off set.'),
+    ex('Sandbag Ground to Shoulder','20-min EMOM: 5 reps on minute 1'),
+    ex('Dip','20-min EMOM: 12 reps on minute 2'),
+    ex('Toes to Bar','20-min EMOM: max reps on minute 3'),
+    ex('Rest','20-min EMOM: minute 4'),
+  ],'Official SOFLETE public daily sample.'),
+  day('SOFLETE Public Sample - Push Press / Squat / AMRAP',[
+    ex('Push Press + Jerk Complex','Build to heaviest: 2 push press + 3 jerks'),
+    ex('Back Squat Cluster','4x2.2.2.2 @ 77.5%','20 sec within clusters; 3 min between sets.'),
+    ex('Front Squat','9-min AMRAP: 5 reps @ 185 lb','Starts from the floor in the public sample.'),
+    ex('Chest-to-Bar Pull-Up','9-min AMRAP: 7 reps'),
+    ex('Shuttle Sprint','9-min AMRAP: 40m (4x10m)'),
+  ],'Official SOFLETE public daily sample.'),
+]
+
+const sofleteAssaulterPublicSample = [
+  day('Assaulter Demo - Upper-Body Strength',[
+    ex('Banded Shoulder Dislocate','3x10','Movement prep.'),
+    ex('Scap Push-Up','3x12','Movement prep.'),
+    ex('Ring Row','3xAMRAP','Movement prep.'),
+    ex('Bench Press','Build to a new 3RM','Public demo strength-build segment.'),
+    ex('Bench Press','5x5 @ 70% of 3RM','Public demo strength segment.'),
+    ex('Pull-Up','5 rounds during 15-min stamina EMOM','Public demo shows an 8-rep target with scaling.'),
+    ex('Push-Up','5 rounds during 15-min stamina EMOM','Public demo shows a 20-rep target with scaling.'),
+    ex('Cyclic Breathing','3x1 min','Recovery segment.'),
+    ex('Foam Roll','3x1 min','Recovery segment.'),
+  ],'SOFLETE Assaulter public app-demo session. The paid cycle contains additional programming not reproduced here.'),
+]
+
 export const archivePrograms = [
+  {id:'street-parking-public-week',name:'Street Parking - Public Sample Week',category:'Strength + Conditioning',difficulty:'Intermediate',weeksCount:1,daysPerWeek:6,source:'Street Parking official public Sample Workouts page',description:'Six publicly posted daily workouts from Street Parking\'s sample week. Source-backed; not the paid daily-program library.',getWeek:()=>streetParkingPublicSampleWeek},
+  {id:'street-parking-public-extras',name:'Street Parking - Public Extra Samples',category:'General + Conditioning',difficulty:'Beginner / Intermediate',weeksCount:1,daysPerWeek:6,source:'Street Parking official public Sample Workouts page',description:'Public samples from Dumbbell Strength, 5K, Bodyweight Strength, and On Ramp.',getWeek:()=>streetParkingPublicExtras},
+  {id:'soflete-public-dailies',name:'SOFLETE - Public Daily Samples',category:'Tactical + Strength + Conditioning',difficulty:'Intermediate / Advanced',weeksCount:1,daysPerWeek:5,source:'SOFLETE official public daily workout posts',description:'Five non-periodized public SOFLETE daily sample workouts. These are samples, not subscription programming.',getWeek:()=>sofletePublicDailySamples},
+  {id:'soflete-assaulter-public-sample',name:'SOFLETE - Assaulter Public Sample',category:'Tactical Strength',difficulty:'Advanced',weeksCount:1,daysPerWeek:1,source:'SOFLETE official training-app public demo',description:'One detailed upper-body Assaulter demo session publicly shown by SOFLETE; not the full paid cycle.',getWeek:()=>sofleteAssaulterPublicSample},
   {id:'beginner-core-stability',name:'Beginner Core & Stability',category:'Core + Stability',difficulty:'Beginner',weeksCount:6,daysPerWeek:3,source:'WorkoutBoard custom program',description:'Six-week beginner stability block using familiar unilateral leg work, hinges, rows, presses, carries, core bracing and easy conditioning.',getWeek:w=>beginnerCoreStabilityWeeks[Math.max(1,Math.min(6,w))]},
   {id:'squatober',name:'Squatober',category:'Specialization',difficulty:'Intermediate',weeksCount:3,daysPerWeek:2,source:'FEB SQUATOBER.pdf',description:'Squat-focused block with bench, deadlift, pulling, and accessories.',getWeek:w=>squatoberWeeks[Math.max(1,Math.min(3,w))]},
   {id:'phat',name:'PHAT - Power Hypertrophy Adaptive Training',category:'Powerbuilding',difficulty:'Intermediate',weeksCount:12,daysPerWeek:5,source:'phat_ebook.pdf',description:'Two power days plus three hypertrophy days.',getWeek:()=>phatDays},
