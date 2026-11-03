@@ -228,12 +228,24 @@ export function PlatformProgress({
     ]
   }],[measurements,progress.completed,flexSessions])
 
+  const measurementTotalInches=row=>{
+    const fields=['left_forearm','right_forearm','neck','left_arm','right_arm','waist','hips','left_thigh','right_thigh','left_calf','right_calf','chest']
+    return fields.reduce((sum,key)=>{
+      let value=Number(row?.[key]||0)
+      if(!value&&key==='left_arm')value=Number(row?.arm||0)
+      if(!value&&key==='right_arm')value=Number(row?.arm||0)
+      if(!value&&key==='left_thigh')value=Number(row?.thigh||0)
+      if(!value&&key==='right_thigh')value=Number(row?.thigh||0)
+      return sum+(Number.isFinite(value)?value:0)
+    },0)
+  }
+
   const measurementTrendSeries=useMemo(()=>[
-    ['Waist','waist'],['Chest','chest'],['Arm','arm'],['Thigh','thigh']
-  ].map(([name,key])=>({
-    name,
-    points:measurements.filter(r=>Number(r[key]||0)>0).map(r=>({date:r.measured_on,value:Number(r[key])}))
-  })).filter(series=>series.points.length),[measurements])
+    {name:'Waist',points:measurements.filter(r=>Number(r.waist||0)>0).map(r=>({date:r.measured_on,value:Number(r.waist)}))},
+    {name:'Chest',points:measurements.filter(r=>Number(r.chest||0)>0).map(r=>({date:r.measured_on,value:Number(r.chest)}))},
+    {name:'Hips',points:measurements.filter(r=>Number(r.hips||0)>0).map(r=>({date:r.measured_on,value:Number(r.hips)}))},
+    {name:'Total inches',points:measurements.map(r=>({date:r.measured_on,value:measurementTotalInches(r)})).filter(p=>p.value>0)},
+  ].filter(series=>series.points.length),[measurements])
 
   const recentCombined=[
     ...progress.completed.map(r=>({
@@ -276,9 +288,12 @@ export function PlatformProgress({
       return
     }
     setQuickWeightStatus('Saving…')
+    const date=localDateKey()
+    const {data:existing}=await supabase.from('body_measurements').select('*').eq('user_id',session.user.id).eq('measured_on',date).maybeSingle()
     const {error}=await supabase.from('body_measurements').upsert({
+      ...(existing||{}),
       user_id:session.user.id,
-      measured_on:localDateKey(),
+      measured_on:date,
       bodyweight:value,
     },{onConflict:'user_id,measured_on'})
     if(error){

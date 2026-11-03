@@ -207,6 +207,24 @@ export function TrainingTimer() {
   </>
 }
 
+const circumferenceFields=[
+  ['left_forearm','Left forearm'],['right_forearm','Right forearm'],['neck','Neck'],
+  ['left_arm','Left arm'],['right_arm','Right arm'],['waist','Waist'],['hips','Hips'],
+  ['left_thigh','Left thigh'],['right_thigh','Right thigh'],['left_calf','Left calf'],
+  ['right_calf','Right calf'],['chest','Chest'],
+]
+
+function totalInches(row={}) {
+  return circumferenceFields.reduce((sum,[key])=>{
+    let value=Number(row[key]||0)
+    if(!value && key==='left_arm') value=Number(row.arm||0)
+    if(!value && key==='right_arm') value=Number(row.arm||0)
+    if(!value && key==='left_thigh') value=Number(row.thigh||0)
+    if(!value && key==='right_thigh') value=Number(row.thigh||0)
+    return sum+(Number.isFinite(value)?value:0)
+  },0)
+}
+
 function parseResult(text){
   const m=String(text||'').replace(/[×X]/g,'x').match(/(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/i)
   return m?{weight:Number(m[1]),reps:Number(m[2]),e1rm:Number(m[1])*(1+Number(m[2])/30)}:null
@@ -219,7 +237,11 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
   const [planned,setPlanned]=useState([])
   const [tracking,setTracking]=useState([])
   const [newGoal,setNewGoal]=useState({label:'',goal_type:'Strength',target_value:'',unit:'lb',target_date:''})
-  const [measurement,setMeasurement]=useState({measured_on:today(),bodyweight:'',waist:'',chest:'',arm:'',thigh:'',body_fat:'',note:''})
+  const [measurement,setMeasurement]=useState({
+    measured_on:today(),bodyweight:'',left_forearm:'',right_forearm:'',neck:'',
+    left_arm:'',right_arm:'',waist:'',hips:'',left_thigh:'',right_thigh:'',
+    left_calf:'',right_calf:'',chest:'',body_fat:'',note:''
+  })
   const [message,setMessage]=useState('')
 
   const load=async()=>{
@@ -304,11 +326,24 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
   const completeGoal=async id=>{await supabase.from('training_goals').update({status:'completed',updated_at:new Date().toISOString()}).eq('id',id);await load()}
   const saveMeasurement=async e=>{
     e.preventDefault()
-    const payload={...measurement,user_id:session.user.id}
-    for(const k of ['bodyweight','waist','chest','arm','thigh','body_fat'])payload[k]=payload[k]===''?null:Number(payload[k])
+    const date=measurement.measured_on||today()
+    const numericKeys=['bodyweight',...circumferenceFields.map(([key])=>key),'body_fat']
+    const changes={user_id:session.user.id,measured_on:date}
+    for(const key of numericKeys){
+      if(measurement[key]!==''&&measurement[key]!=null)changes[key]=Number(measurement[key])
+    }
+    if(String(measurement.note||'').trim())changes.note=measurement.note.trim()
+    const {data:existing}=await supabase.from('body_measurements').select('*').eq('user_id',session.user.id).eq('measured_on',date).maybeSingle()
+    const payload=existing?{...existing,...changes}:{...changes}
     const {error}=await supabase.from('body_measurements').upsert(payload,{onConflict:'user_id,measured_on'})
     if(error){setMessage(error.message);return}
-    setMeasurement(v=>({...v,bodyweight:'',waist:'',chest:'',arm:'',thigh:'',body_fat:'',note:''}));await load()
+    setMessage('Measurements saved.')
+    setMeasurement({
+      measured_on:today(),bodyweight:'',left_forearm:'',right_forearm:'',neck:'',
+      left_arm:'',right_arm:'',waist:'',hips:'',left_thigh:'',right_thigh:'',
+      left_calf:'',right_calf:'',chest:'',body_fat:'',note:''
+    })
+    await load()
   }
 
   const latest=measurements[0]
@@ -357,15 +392,83 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
       })}</div>
     </section>}
 
-    {tab==='Measurements'&&<section className="simple-card">
-      <div className="section-heading"><div><span className="card-label">BODY MEASUREMENTS</span><h3>{latest?('Latest · '+new Date(latest.measured_on+'T12:00:00').toLocaleDateString()):'Add a baseline'}</h3></div></div>
-      {latest&&<div className="measurement-summary">{[['Weight',latest.bodyweight,'lb'],['Waist',latest.waist,'in'],['Chest',latest.chest,'in'],['Arm',latest.arm,'in'],['Thigh',latest.thigh,'in'],['Body fat',latest.body_fat,'%']].map(([label,value,unit])=><div key={label}><span>{label}</span><strong>{value??'—'}{value!=null?' '+unit:''}</strong></div>)}</div>}
-      <form className="measurement-form" onSubmit={saveMeasurement}>
-        <input type="date" value={measurement.measured_on} onChange={e=>setMeasurement(v=>({...v,measured_on:e.target.value}))}/>
-        {['bodyweight','waist','chest','arm','thigh','body_fat'].map(k=><input key={k} type="number" step="0.1" value={measurement[k]} onChange={e=>setMeasurement(v=>({...v,[k]:e.target.value}))} placeholder={k.replace('_',' ')}/>)}
-        <input value={measurement.note} onChange={e=>setMeasurement(v=>({...v,note:e.target.value}))} placeholder="Note"/>
-        <button className="primary-action">Save measurement</button>
-      </form>
+    {tab==='Measurements'&&<section className="measurement-workspace">
+      <section className="simple-card">
+        <div className="section-heading"><div><span className="card-label">BODY MEASUREMENTS</span><h3>{latest?('Latest · '+new Date(latest.measured_on+'T12:00:00').toLocaleDateString()):'Add a baseline'}</h3></div>{latest&&<b className="measurement-total-badge">{totalInches(latest)?totalInches(latest).toFixed(2)+' in total':''}</b>}</div>
+        {latest&&<div className="measurement-summary">
+          {[
+            ['Weight',latest.bodyweight,'lb'],['Waist',latest.waist,'in'],['Hips',latest.hips,'in'],
+            ['Chest',latest.chest,'in'],['Neck',latest.neck,'in'],['Body fat',latest.body_fat,'%']
+          ].map(([label,value,unit])=><div key={label}><span>{label}</span><strong>{value??'—'}{value!=null?' '+unit:''}</strong></div>)}
+        </div>}
+
+        <form className="measurement-form expanded-measurement-form" onSubmit={saveMeasurement}>
+          <label className="measurement-date-field"><span>Date</span><input type="date" value={measurement.measured_on} onChange={e=>setMeasurement(v=>({...v,measured_on:e.target.value}))}/></label>
+          <label><span>Weight</span><div className="input-with-unit"><input type="number" step="0.1" inputMode="decimal" value={measurement.bodyweight} onChange={e=>setMeasurement(v=>({...v,bodyweight:e.target.value}))} placeholder="Weight"/><b>lb</b></div></label>
+
+          <fieldset className="measurement-group">
+            <legend>Upper body</legend>
+            <div className="measurement-field-grid">
+              {[
+                ['left_forearm','Left forearm'],['right_forearm','Right forearm'],['neck','Neck'],
+                ['left_arm','Left arm'],['right_arm','Right arm'],['chest','Chest']
+              ].map(([key,label])=><label key={key}><span>{label}</span><div className="input-with-unit"><input type="number" step="0.01" inputMode="decimal" value={measurement[key]} onChange={e=>setMeasurement(v=>({...v,[key]:e.target.value}))}/><b>in</b></div></label>)}
+            </div>
+          </fieldset>
+
+          <fieldset className="measurement-group">
+            <legend>Midsection</legend>
+            <div className="measurement-field-grid">
+              {[['waist','Waist'],['hips','Hips']].map(([key,label])=><label key={key}><span>{label}</span><div className="input-with-unit"><input type="number" step="0.01" inputMode="decimal" value={measurement[key]} onChange={e=>setMeasurement(v=>({...v,[key]:e.target.value}))}/><b>in</b></div></label>)}
+            </div>
+          </fieldset>
+
+          <fieldset className="measurement-group">
+            <legend>Legs</legend>
+            <div className="measurement-field-grid">
+              {[
+                ['left_thigh','Left thigh'],['right_thigh','Right thigh'],
+                ['left_calf','Left calf'],['right_calf','Right calf']
+              ].map(([key,label])=><label key={key}><span>{label}</span><div className="input-with-unit"><input type="number" step="0.01" inputMode="decimal" value={measurement[key]} onChange={e=>setMeasurement(v=>({...v,[key]:e.target.value}))}/><b>in</b></div></label>)}
+            </div>
+          </fieldset>
+
+          <label><span>Body fat (optional)</span><div className="input-with-unit"><input type="number" step="0.1" inputMode="decimal" value={measurement.body_fat} onChange={e=>setMeasurement(v=>({...v,body_fat:e.target.value}))}/><b>%</b></div></label>
+          <label><span>Note</span><input value={measurement.note} onChange={e=>setMeasurement(v=>({...v,note:e.target.value}))} placeholder="Optional note"/></label>
+
+          <div className="measurement-total-preview">
+            <span>Total inches</span>
+            <strong>{totalInches(measurement)?totalInches(measurement).toFixed(2):'—'}</strong>
+            <small>Automatically sums forearms, neck, arms, waist, hips, thighs, calves and chest.</small>
+          </div>
+          <button className="primary-action">Save measurements</button>
+        </form>
+      </section>
+
+      <section className="simple-card">
+        <div className="section-heading"><div><span className="card-label">MEASUREMENT HISTORY</span><h3>Your measurement log</h3></div></div>
+        <div className="measurement-history-list">
+          {measurements.map(row=><details className="measurement-history-row" key={row.id}>
+            <summary>
+              <div><strong>{new Date(row.measured_on+'T12:00:00').toLocaleDateString()}</strong><span>{row.bodyweight!=null?row.bodyweight+' lb':'No weight'}</span></div>
+              <div><strong>{totalInches(row)?totalInches(row).toFixed(2)+' in':'—'}</strong><span>Total inches</span></div>
+            </summary>
+            <div className="measurement-history-detail">
+              {circumferenceFields.map(([key,label])=>{
+                let value=row[key]
+                if(value==null&&key==='left_arm')value=row.arm
+                if(value==null&&key==='right_arm')value=row.arm
+                if(value==null&&key==='left_thigh')value=row.thigh
+                if(value==null&&key==='right_thigh')value=row.thigh
+                return <div key={key}><span>{label}</span><strong>{value!=null?value+' in':'—'}</strong></div>
+              })}
+              {row.body_fat!=null&&<div><span>Body fat</span><strong>{row.body_fat}%</strong></div>}
+              {row.note&&<p>{row.note}</p>}
+            </div>
+          </details>)}
+          {!measurements.length&&<div className="empty-state">No measurements saved yet.</div>}
+        </div>
+      </section>
     </section>}
 
     {message&&<div className="status-message">{message}</div>}
