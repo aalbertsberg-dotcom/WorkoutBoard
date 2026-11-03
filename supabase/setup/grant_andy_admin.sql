@@ -6,14 +6,20 @@ declare
   target_id uuid;
   target_count integer;
 begin
-  select count(*), max(id)
-    into target_count, target_id
+  select count(*)
+    into target_count
   from auth.users
   where lower(email)=lower('a.aalbertsberg@gmail.com');
 
   if target_count <> 1 then
     raise exception 'Expected exactly one Andy account for a.aalbertsberg@gmail.com, found %', target_count;
   end if;
+
+  select id
+    into target_id
+  from auth.users
+  where lower(email)=lower('a.aalbertsberg@gmail.com')
+  limit 1;
 
   insert into public.admin_users (user_id, username)
   values (target_id, 'Andy')
