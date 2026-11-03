@@ -212,8 +212,8 @@ function parseResult(text){
   return m?{weight:Number(m[1]),reps:Number(m[2]),e1rm:Number(m[1])*(1+Number(m[2])/30)}:null
 }
 
-export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],formatWeight}) {
-  const [tab,setTab]=useState('PRs')
+export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],formatWeight,initialTab='PRs'}) {
+  const [tab,setTab]=useState(initialTab)
   const [goals,setGoals]=useState([])
   const [measurements,setMeasurements]=useState([])
   const [planned,setPlanned]=useState([])

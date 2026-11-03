@@ -3778,3 +3778,74 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
     grid-column:1 / -1;
   }
 }
+
+
+/* Progress page sections and bodyweight quick log */
+.progress-section-tabs {
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:6px;
+  position:sticky;
+  top:6px;
+  z-index:40;
+  padding:6px;
+  border:1px solid #31435e;
+  border-radius:13px;
+  background:rgba(9,16,29,.96);
+  backdrop-filter:blur(10px);
+}
+.progress-section-tabs button {
+  min-height:42px;
+  border:0;
+  border-radius:9px;
+  background:transparent;
+  color:#8fa0b8;
+  font-weight:900;
+  font-size:10px;
+}
+.progress-section-tabs button.active {
+  background:#263a5a;
+  color:#fff;
+}
+.quick-weight-card {
+  border-color:#4b6735;
+}
+.quick-weight-form {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:8px;
+  align-items:stretch;
+}
+.quick-weight-form .input-with-unit {
+  min-width:0;
+}
+.quick-weight-form input {
+  min-height:46px;
+  font-size:18px;
+  font-weight:900;
+}
+.progress-current-program .section-heading > b,
+.current-program-count {
+  color:#d9f99d;
+  font-size:12px;
+}
+.program-progress-track {
+  height:7px;
+  overflow:hidden;
+  border-radius:999px;
+  background:#1c2a3f;
+}
+.program-progress-track > div {
+  height:100%;
+  border-radius:inherit;
+  background:#65a30d;
+}
+@media (max-width:700px) {
+  .progress-section-tabs {
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    top:4px;
+  }
+  .quick-weight-form {
+    grid-template-columns:1fr;
+  }
+}

@@ -2324,6 +2324,7 @@ function App() {
               formatWeight={formatWeight}
               programs={programs}
               dbNameToProgram={dbNameToProgram}
+              trackedProgramInfo={trackedTodayInfo}
             />
           </section>
         ) : activeTab === 'admin' ? (
@@ -2377,7 +2378,8 @@ function App() {
             </section>
 
             <section className="simple-card">
-              <div className="section-heading"><div><span className="card-label">CURRENT PROGRAM</span><h3>{personalProgram.name}</h3></div></div>
+              <div className="section-heading"><div><span className="card-label">CURRENT PROGRAM</span><h3>{trackedTodayInfo?.name||personalProgram.name}</h3></div>{trackedTodayInfo&&<b className="current-program-count">{trackedTodayInfo.completed}/{trackedTodayInfo.total}</b>}</div>
+              {trackedTodayInfo&&<p className="helper-text">{trackedTodayInfo.complete?'Program complete':trackedTodayInfo.nextTitle?'Next: '+trackedTodayInfo.nextTitle:'Tracking in progress'}</p>}
               <button className="wide-button" onClick={() => setActiveTab('program')}>Plan & programs</button>
             </section>
 
