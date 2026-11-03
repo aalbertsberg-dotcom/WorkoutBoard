@@ -956,7 +956,12 @@ function App() {
           const total=Number(trackedProgram.weeksCount)*Number(trackedProgram.daysPerWeek)
           const completedToday=completedTracked.some(row=>String(row.completed_at||'').slice(0,10)===today)
           const workoutsToday=(flexCompleted||[]).filter(row=>String(row.completed_at||'').slice(0,10)===today).length
-          if(completedToday && resolvedTodayPlan?.status==='planned' && resolvedTodayPlan?.workout?.tracking_program_key===activeArchiveTrack.program_key){
+          const staleTrackedToday=completedToday &&
+            resolvedTodayPlan?.workout?.tracking_program_key===activeArchiveTrack.program_key &&
+            !resolvedTodayPlan?.workout?.started_explicitly &&
+            !plannedWorkoutHasProgress(resolvedTodayPlan)
+          if(staleTrackedToday){
+            await supabase.from('planned_workouts').update({status:'skipped',updated_at:new Date().toISOString()}).eq('id',resolvedTodayPlan.id)
             resolvedTodayPlan=null
           }
           const nextIndex=Math.min(completedCount,total)
@@ -1023,6 +1028,21 @@ function App() {
     return () => { cancelled = true }
   },[session?.user?.id])
 
+  const plannedWorkoutHasProgress = row => {
+    const workout=row?.workout||{}
+    const exerciseProgress=(workout.exercises||[]).some(item=>{
+      if(item.done || String(item.result||'').trim() || Number(item.load||0))return true
+      return (item.setProgress||[]).some(set=>set.done || Number(set.weight||0))
+    })
+    const conditioning=workout.metcon||{}
+    const conditioningProgress=Boolean(
+      conditioning.format || conditioning.name || conditioning.activity || conditioning.duration ||
+      conditioning.workTime || conditioning.restTime || conditioning.interval || conditioning.time ||
+      conditioning.rounds || conditioning.reps || conditioning.distance || conditioning.calories
+    )
+    return exerciseProgress || conditioningProgress || Boolean(String(workout.note||'').trim())
+  }
+
   const activatePlannedWorkout = data => {
     setWorkoutStartError('')
     setCompletionSummary(null)
@@ -1046,7 +1066,7 @@ function App() {
     const today=new Date().toISOString().slice(0,10)
     const plannedPayload=makePlannedFromArchive(program,next.week,next.dayIndex,today)
     plannedPayload.status='started'
-    plannedPayload.workout={...plannedPayload.workout,tracking_program_key:trackedTodayInfo.key}
+    plannedPayload.workout={...plannedPayload.workout,tracking_program_key:trackedTodayInfo.key,started_explicitly:true}
     const {data,error}=await supabase.from('planned_workouts').insert({...plannedPayload,user_id:session.user.id}).select().single()
     if(error){setWorkoutStartError(error.message);return}
     activatePlannedWorkout(data)
@@ -1062,7 +1082,7 @@ function App() {
     const today=new Date().toISOString().slice(0,10)
     const metconBase={name:'',format:'',activity:'',duration:'',workTime:'',restTime:'',interval:'',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx',intensity:'Easy'}
     const workout={
-      version:2,type:'flexible',standalone:true,
+      version:2,type:'flexible',standalone:true,started_explicitly:true,
       exercises:[],
       sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',
       conditioningEnabled:kind!=='free',
@@ -1104,7 +1124,12 @@ function App() {
         .order('completed_at',{ascending:false})
     ])
     let activePlan=(activePlans||[]).find(row=>row.status==='started') || (activePlans||[]).find(row=>row.status==='planned') || null
-    if((completedRows||[]).length>0 && activePlan?.status==='planned' && activePlan?.workout?.tracking_program_key===trackedTodayInfo?.key){
+    const staleTrackedPlan=(completedRows||[]).length>0 &&
+      activePlan?.workout?.tracking_program_key===trackedTodayInfo?.key &&
+      !activePlan?.workout?.started_explicitly &&
+      !plannedWorkoutHasProgress(activePlan)
+    if(staleTrackedPlan){
+      await supabase.from('planned_workouts').update({status:'skipped',updated_at:new Date().toISOString()}).eq('id',activePlan.id)
       activePlan=null
     }
     setPlannedToday(activePlan)
