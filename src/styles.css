@@ -3410,9 +3410,9 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
     right:0 !important;
     bottom:0 !important;
     width:100% !important;
-    height:calc(92px + env(safe-area-inset-bottom)) !important;
-    min-height:0 !important;
-    padding:7px 7px calc(7px + env(safe-area-inset-bottom)) !important;
+    height:120px !important;
+    min-height:120px !important;
+    padding:7px !important;
     display:grid !important;
     grid-template-columns:repeat(4,minmax(0,1fr)) !important;
     align-items:stretch !important;
@@ -3451,6 +3451,6 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
     white-space:nowrap !important;
   }
   .app {
-    padding-bottom:calc(118px + env(safe-area-inset-bottom)) !important;
+    padding-bottom:138px !important;
   }
 }
