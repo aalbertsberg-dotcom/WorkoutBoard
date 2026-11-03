@@ -7,6 +7,15 @@ import { TrainingTimer } from './trainingTools'
 import { WorkoutCoach, MetconTracker, AccountSecurityPanel, BackupRestorePanel, WorkoutSettingsPanel } from './advancedFeatures'
 import { archiveProgramById, makePlannedFromArchive } from './archivePrograms'
 
+const localDateKey=(value=new Date())=>{
+  const d=value instanceof Date ? value : new Date(value)
+  if(Number.isNaN(d.getTime()))return ''
+  const y=d.getFullYear()
+  const m=String(d.getMonth()+1).padStart(2,'0')
+  const day=String(d.getDate()).padStart(2,'0')
+  return `${y}-${m}-${day}`
+}
+
 const lifts = ['Squat', 'Bench', 'Deadlift', 'Press']
 const repeatSets = (count, pct, reps, pctLabel) =>
   Array.from({ length: count }, () => ({ pct, reps, pctLabel: pctLabel || (pct != null ? pct + '%' : '') }))
@@ -916,14 +925,14 @@ function App() {
     const load = async () => {
       setDataLoading(true)
       const userId = session.user.id
-      const today = new Date().toISOString().slice(0,10)
+      const today = localDateKey()
       const [{data:profileData},{data:tmData},{data:logsData},{data:todayPlans},{data:trackingData},{data:flexCompleted}] = await Promise.all([
         supabase.from('profiles').select('*').eq('id',userId).single(),
         supabase.from('training_maxes').select('*').eq('user_id',userId).single(),
         supabase.from('workout_logs').select('*').eq('user_id',userId).order('updated_at',{ascending:false}),
         supabase.from('planned_workouts').select('*').eq('user_id',userId).eq('scheduled_date',today).in('status',['planned','started','skipped']).order('created_at'),
         supabase.from('user_program_tracking').select('*').eq('user_id',userId).eq('status','tracking').order('updated_at',{ascending:false}),
-        supabase.from('training_sessions').select('id,program,workout,completed_at').eq('user_id',userId).not('completed_at','is',null).order('completed_at',{ascending:false}).limit(1000),
+        supabase.from('training_sessions').select('id,program,workout,session_date,completed_at').eq('user_id',userId).not('completed_at','is',null).order('completed_at',{ascending:false}).limit(1000),
       ])
 
       if (cancelled) return
@@ -954,8 +963,8 @@ function App() {
           })
           const completedCount=completedTracked.length
           const total=Number(trackedProgram.weeksCount)*Number(trackedProgram.daysPerWeek)
-          const completedToday=completedTracked.some(row=>String(row.completed_at||'').slice(0,10)===today)
-          const workoutsToday=(flexCompleted||[]).filter(row=>String(row.completed_at||'').slice(0,10)===today).length
+          const completedToday=completedTracked.some(row=>(row.session_date||localDateKey(row.completed_at))===today)
+          const workoutsToday=(flexCompleted||[]).filter(row=>(row.session_date||localDateKey(row.completed_at))===today).length
           const staleTrackedToday=workoutsToday>0 &&
             resolvedTodayPlan?.workout?.tracking_program_key===activeArchiveTrack.program_key &&
             !resolvedTodayPlan?.workout?.started_explicitly &&
@@ -1003,7 +1012,7 @@ function App() {
 
       setPlannedToday(resolvedTodayPlan)
       setTrackedTodayInfo(nextTrackedInfo)
-      setTodayCompletedWorkouts((flexCompleted||[]).filter(row=>String(row.completed_at||'').slice(0,10)===today))
+      setTodayCompletedWorkouts((flexCompleted||[]).filter(row=>(row.session_date||localDateKey(row.completed_at))===today))
       setShowRegularToday(false)
       setTogetherTracking(trackingData || [])
 
@@ -1063,7 +1072,7 @@ function App() {
     const program=archiveProgramById[trackedTodayInfo.archiveId]
     const next=trackedTodayInfo.upcoming?.[0]
     if(!program?.getWeek || !next)return
-    const today=new Date().toISOString().slice(0,10)
+    const today=localDateKey()
     const plannedPayload=makePlannedFromArchive(program,next.week,next.dayIndex,today)
     plannedPayload.status='started'
     plannedPayload.workout={...plannedPayload.workout,tracking_program_key:trackedTodayInfo.key,started_explicitly:true}
@@ -1079,7 +1088,7 @@ function App() {
       setPendingWorkoutStart({kind,label:labels[kind]||'another workout'})
       return
     }
-    const today=new Date().toISOString().slice(0,10)
+    const today=localDateKey()
     const metconBase={name:'',format:'',activity:'',duration:'',workTime:'',restTime:'',interval:'',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx',intensity:'Easy'}
     const workout={
       version:2,type:'flexible',standalone:true,started_explicitly:true,
@@ -1113,14 +1122,13 @@ function App() {
 
   const refreshPlannedToday = async () => {
     if (!session?.user) return
-    const today = new Date().toISOString().slice(0,10)
+    const today = localDateKey()
     const [{data:activePlans},{data:completedRows}]=await Promise.all([
       supabase.from('planned_workouts').select('*')
         .eq('user_id',session.user.id).eq('scheduled_date',today)
         .in('status',['planned','started']).order('created_at'),
-      supabase.from('training_sessions').select('id,title,program,week,total_volume,completed_at,workout')
-        .eq('user_id',session.user.id).not('completed_at','is',null)
-        .gte('completed_at',today+'T00:00:00').lte('completed_at',today+'T23:59:59.999')
+      supabase.from('training_sessions').select('id,title,program,week,total_volume,session_date,completed_at,workout')
+        .eq('user_id',session.user.id).eq('session_date',today).not('completed_at','is',null)
         .order('completed_at',{ascending:false})
     ])
     let activePlan=(activePlans||[]).find(row=>row.status==='started') || (activePlans||[]).find(row=>row.status==='planned') || null
@@ -1347,7 +1355,7 @@ function App() {
       program:workoutProgram.dbName,
       week,
       lift,
-      workout_date:new Date().toISOString().slice(0,10),
+      workout_date:localDateKey(),
       workout:payload,
       completed_at:complete ? now : null,
       updated_at:now,
@@ -1370,7 +1378,7 @@ function App() {
       program:workoutProgram.dbName,
       week,
       primary_lift:lift,
-      session_date:new Date().toISOString().slice(0,10),
+      session_date:localDateKey(),
       workout:payload,
       total_volume:Math.round(workoutMetrics.volume),
       estimated_1rm:workoutMetrics.estimated1rm || null,
@@ -1385,7 +1393,7 @@ function App() {
         user_id:session.user.id,
         training_session_id:durableSession.id,
         display_name:profile?.community_display_name || profile?.display_name || session.user.email?.split('@')[0] || 'Member',
-        activity_date:new Date().toISOString().slice(0,10),
+        activity_date:localDateKey(),
         title:lift + ' Day',
         summary:{
           lift,
@@ -1553,7 +1561,7 @@ function App() {
       sessionProgram=togetherProgramChoice.program.dbName
       sessionLift=selectedWorkout.lift||lifts[selectedIndex]||'Squat'
     }else{
-      const planned=makePlannedFromArchive(togetherProgramChoice.program,selectedWeek,selectedIndex,new Date().toISOString().slice(0,10))
+      const planned=makePlannedFromArchive(togetherProgramChoice.program,selectedWeek,selectedIndex,localDateKey())
       sessionProgram=togetherProgramChoice.key
       sessionLift=lifts[Math.min(selectedIndex,lifts.length-1)]||'Squat'
       sharedTemplate=planned.workout
@@ -1659,7 +1667,7 @@ function App() {
       if(!planned){
         const payload={
           user_id:session.user.id,
-          scheduled_date:new Date().toISOString().slice(0,10),
+          scheduled_date:localDateKey(),
           title:sharedMeta?.workout_title||'Shared workout',
           source_program_name:sharedMeta?.program_name||'Workout Together',
           source_week:Number(sharedMeta?.week||1),
