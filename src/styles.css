@@ -3609,3 +3609,48 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   text-overflow:ellipsis;
   white-space:nowrap;
 }
+
+
+/* Extra workout sets */
+.set-progress-wrap {
+  position:relative;
+  min-width:0;
+}
+.set-progress-wrap > .set-progress-button {
+  width:100%;
+  height:100%;
+}
+.set-progress-wrap.extra-set > .set-progress-button {
+  border-style:dashed;
+  padding-right:30px;
+}
+.remove-extra-set {
+  position:absolute;
+  top:6px;
+  right:6px;
+  z-index:2;
+  width:24px;
+  height:24px;
+  min-height:24px;
+  padding:0;
+  border:1px solid #53657d;
+  border-radius:50%;
+  background:#111c2e;
+  color:#aeb9ca;
+  font-size:15px;
+  line-height:1;
+  font-weight:800;
+}
+.add-extra-set-button {
+  width:100%;
+  min-height:40px;
+  margin-top:8px;
+  border:1px dashed #4a5f7e;
+  border-radius:10px;
+  background:#0d1728;
+  color:#cbd5e1;
+  font-weight:900;
+}
+.add-extra-set-button:active {
+  background:#13213a;
+}

@@ -234,6 +234,46 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
     setWorkout(v=>({...v,exercises:(v.exercises||[]).filter((_,i)=>i!==index)}))
   }
 
+  const addExtraSet=index=>{
+    setSaveState('Unsaved')
+    setWorkout(v=>({...v,exercises:(v.exercises||[]).map((item,i)=>{
+      if(i!==index)return item
+      const sets=Array.isArray(item.setProgress)?item.setProgress:[]
+      const previous=sets.at(-1)||{}
+      const reps=previous.reps ?? repsForSet(item,previous) ?? null
+      const label=previous.label || (reps?reps+' reps':'Done')
+      const previousWeight=previous.weight!==undefined&&previous.weight!=='' ? previous.weight : (item.load??'')
+      return {
+        ...item,
+        done:false,
+        setProgress:[
+          ...sets,
+          {
+            set:sets.length+1,
+            reps,
+            label,
+            done:false,
+            weight:previousWeight,
+            extra:true,
+          }
+        ]
+      }
+    })}))
+  }
+
+  const removeExtraSet=(exerciseIndex,setIndex)=>{
+    setSaveState('Unsaved')
+    setWorkout(v=>({...v,exercises:(v.exercises||[]).map((item,i)=>{
+      if(i!==exerciseIndex)return item
+      const target=item.setProgress?.[setIndex]
+      if(!target?.extra)return item
+      const next=(item.setProgress||[])
+        .filter((_,idx)=>idx!==setIndex)
+        .map((set,idx)=>({...set,set:idx+1}))
+      return {...item,setProgress:next}
+    })}))
+  }
+
   const totalVolume=useMemo(()=> (workout.exercises||[]).reduce((sum,item)=>{
     if(Array.isArray(item.setProgress)&&item.setProgress.length){
       if(isDistanceExercise(item.name))return sum
@@ -371,7 +411,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
           return <>
             {activeSet&&i===nextExerciseIndex&&<section className="current-set-panel">
               <div className="current-set-panel-head">
-                <div><span className="card-label">CURRENT SET</span><h3>Set {activeIndex+1} of {item.setProgress.length}</h3></div>
+                <div><span className="card-label">{activeSet.extra?'EXTRA SET':'CURRENT SET'}</span><h3>{activeSet.extra?'Extra set':'Set '+(activeIndex+1)+' of '+item.setProgress.length}</h3></div>
                 <strong>{activeSet.label || (activeSet.reps?activeSet.reps+' reps':'Complete')}</strong>
               </div>
               {loadField&&<label className="current-set-weight">
@@ -395,20 +435,23 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
             <div className="set-progress-grid compact flexible-set-progress">
               {item.setProgress.map((set,j)=>{
                 const recordedWeight=set.weight!==undefined&&set.weight!=='' ? Number(set.weight)||0 : 0
-                return <button
-                  type="button"
-                  key={j}
-                  className={'set-progress-button '+(set.done?'done ':'')}
-                  onClick={()=>{
-                    if(!set.done)return
-                    changeExercise(i,{setProgress:item.setProgress.map((sp,k)=>k===j?{...sp,done:false}:sp)})
-                  }}>
-                  <strong>Set {j+1}</strong>
-                  <span>{set.label || (set.reps?set.reps+' reps':'Done')}{recordedWeight?' · '+recordedWeight+' lb':''}</span>
-                  <b>{set.done?'✓':'○'}</b>
-                </button>
+                return <div className={'set-progress-wrap '+(set.extra?'extra-set':'')} key={j}>
+                  <button
+                    type="button"
+                    className={'set-progress-button '+(set.done?'done ':'')}
+                    onClick={()=>{
+                      if(!set.done)return
+                      changeExercise(i,{setProgress:item.setProgress.map((sp,k)=>k===j?{...sp,done:false}:sp)})
+                    }}>
+                    <strong>{set.extra?'Extra set':'Set '+(j+1)}</strong>
+                    <span>{set.label || (set.reps?set.reps+' reps':'Done')}{recordedWeight?' · '+recordedWeight+' lb':''}</span>
+                    <b>{set.done?'✓':'○'}</b>
+                  </button>
+                  {set.extra&&<button type="button" className="remove-extra-set" onClick={()=>removeExtraSet(i,j)} aria-label={'Remove extra set '+(j+1)}>×</button>}
+                </div>
               })}
             </div>
+            <button type="button" className="add-extra-set-button" onClick={()=>addExtraSet(i)}>+ Add set</button>
           </>
         })()}
       </article>
