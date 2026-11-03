@@ -877,6 +877,18 @@ function App() {
   const tm = Number(trainingMaxes[lift] || 0)
 
   useEffect(() => {
+    const dismissKeyboard = event => {
+      const target=event.target
+      if(!(target instanceof Element))return
+      if(target.closest('input, textarea, select, button, a, label, [contenteditable="true"]'))return
+      const active=document.activeElement
+      if(active && ['INPUT','TEXTAREA','SELECT'].includes(active.tagName))active.blur()
+    }
+    document.addEventListener('pointerdown',dismissKeyboard)
+    return ()=>document.removeEventListener('pointerdown',dismissKeyboard)
+  },[])
+
+  useEffect(() => {
     const prescribed=Boolean(plan.conditioning && plan.conditioning !== 'None' && !/^optional\b/i.test(String(plan.conditioning).trim()))
     setConditioningOpen(prescribed)
   },[workoutProgramId,week,lift])

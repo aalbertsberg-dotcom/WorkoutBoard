@@ -4017,3 +4017,89 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
     line-height:1.15;
   }
 }
+
+
+/* Mobile measurement entry readability */
+.expanded-measurement-form {
+  grid-template-columns:1fr !important;
+}
+.expanded-measurement-form > * {
+  grid-column:1 / -1 !important;
+  min-width:0;
+}
+.measurement-save-rule {
+  margin:0;
+  padding:10px 11px;
+  border:1px solid #32445f;
+  border-radius:10px;
+  background:#0c1728;
+  color:#98a8bd;
+  font-size:9px;
+  line-height:1.45;
+}
+.measurement-save-rule strong {
+  color:#e7edf5;
+}
+@media (max-width:700px) {
+  .expanded-measurement-form {
+    display:grid !important;
+    grid-template-columns:1fr !important;
+    gap:14px !important;
+  }
+  .measurement-group {
+    width:100%;
+    box-sizing:border-box;
+    padding:13px !important;
+  }
+  .measurement-group legend {
+    font-size:12px !important;
+  }
+  .measurement-field-grid {
+    grid-template-columns:1fr 1fr !important;
+    gap:12px 10px !important;
+  }
+  .measurement-field-grid label > span,
+  .expanded-measurement-form > label > span {
+    font-size:10px !important;
+    line-height:1.25;
+  }
+  .expanded-measurement-form .input-with-unit {
+    grid-template-columns:minmax(0,1fr) 38px !important;
+    min-height:52px;
+    border-radius:12px;
+  }
+  .expanded-measurement-form .input-with-unit input {
+    height:50px !important;
+    min-height:50px !important;
+    padding:0 12px !important;
+    font-size:18px !important;
+    font-weight:850 !important;
+  }
+  .expanded-measurement-form .input-with-unit b {
+    font-size:13px !important;
+    text-align:center;
+  }
+  .expanded-measurement-form > label > input,
+  .measurement-date-field input {
+    min-height:52px !important;
+    font-size:16px !important;
+  }
+  .measurement-summary {
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  }
+  .measurement-summary > div {
+    min-height:62px;
+    align-content:center;
+  }
+  .measurement-summary span {
+    font-size:10px !important;
+  }
+  .measurement-summary strong {
+    font-size:17px;
+  }
+}
+@media (max-width:390px) {
+  .measurement-field-grid {
+    grid-template-columns:1fr !important;
+  }
+}

@@ -407,6 +407,8 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
           <label className="measurement-date-field"><span>Date</span><input type="date" value={measurement.measured_on} onChange={e=>setMeasurement(v=>({...v,measured_on:e.target.value}))}/></label>
           <label><span>Weight</span><div className="input-with-unit"><input type="number" step="0.1" inputMode="decimal" value={measurement.bodyweight} onChange={e=>setMeasurement(v=>({...v,bodyweight:e.target.value}))} placeholder="Weight"/><b>lb</b></div></label>
 
+          <p className="measurement-save-rule"><strong>Same date = same entry.</strong> Saving again updates only the fields you enter. Blank fields keep whatever was already saved.</p>
+
           <fieldset className="measurement-group">
             <legend>Upper body</legend>
             <div className="measurement-field-grid">
