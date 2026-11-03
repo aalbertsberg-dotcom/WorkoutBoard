@@ -956,7 +956,7 @@ function App() {
           const total=Number(trackedProgram.weeksCount)*Number(trackedProgram.daysPerWeek)
           const completedToday=completedTracked.some(row=>String(row.completed_at||'').slice(0,10)===today)
           const workoutsToday=(flexCompleted||[]).filter(row=>String(row.completed_at||'').slice(0,10)===today).length
-          const staleTrackedToday=completedToday &&
+          const staleTrackedToday=workoutsToday>0 &&
             resolvedTodayPlan?.workout?.tracking_program_key===activeArchiveTrack.program_key &&
             !resolvedTodayPlan?.workout?.started_explicitly &&
             !plannedWorkoutHasProgress(resolvedTodayPlan)
@@ -1125,7 +1125,7 @@ function App() {
     ])
     let activePlan=(activePlans||[]).find(row=>row.status==='started') || (activePlans||[]).find(row=>row.status==='planned') || null
     const staleTrackedPlan=(completedRows||[]).length>0 &&
-      activePlan?.workout?.tracking_program_key===trackedTodayInfo?.key &&
+      Boolean(activePlan?.workout?.tracking_program_key) &&
       !activePlan?.workout?.started_explicitly &&
       !plannedWorkoutHasProgress(activePlan)
     if(staleTrackedPlan){
