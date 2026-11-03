@@ -351,7 +351,7 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
   return <section className="progress-toolbox">
     {!onlyTab&&<div className="segmented toolbox-tabs">
       {['PRs','Exercises','Calendar','Goals','Measurements'].map(x=><button key={x} className={tab===x?'active':''} onClick={()=>setTab(x)}>{x}</button>)}
-    </div>
+    </div>}
 
     {activeTab==='PRs'&&<section className="simple-card">
       <div className="section-heading"><div><span className="card-label">PR BOARD</span><h3>Your best estimated sets</h3></div></div>
