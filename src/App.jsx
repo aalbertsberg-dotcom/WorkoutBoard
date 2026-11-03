@@ -956,6 +956,9 @@ function App() {
           const total=Number(trackedProgram.weeksCount)*Number(trackedProgram.daysPerWeek)
           const completedToday=completedTracked.some(row=>String(row.completed_at||'').slice(0,10)===today)
           const workoutsToday=(flexCompleted||[]).filter(row=>String(row.completed_at||'').slice(0,10)===today).length
+          if(completedToday && resolvedTodayPlan?.status==='planned' && resolvedTodayPlan?.workout?.tracking_program_key===activeArchiveTrack.program_key){
+            resolvedTodayPlan=null
+          }
           const nextIndex=Math.min(completedCount,total)
           const nextWeek=Math.min(Number(trackedProgram.weeksCount),Math.floor(nextIndex/Number(trackedProgram.daysPerWeek))+1)
           const nextDayIndex=nextIndex%Number(trackedProgram.daysPerWeek)
@@ -1042,6 +1045,7 @@ function App() {
     if(!program?.getWeek || !next)return
     const today=new Date().toISOString().slice(0,10)
     const plannedPayload=makePlannedFromArchive(program,next.week,next.dayIndex,today)
+    plannedPayload.status='started'
     plannedPayload.workout={...plannedPayload.workout,tracking_program_key:trackedTodayInfo.key}
     const {data,error}=await supabase.from('planned_workouts').insert({...plannedPayload,user_id:session.user.id}).select().single()
     if(error){setWorkoutStartError(error.message);return}
@@ -1090,16 +1094,20 @@ function App() {
   const refreshPlannedToday = async () => {
     if (!session?.user) return
     const today = new Date().toISOString().slice(0,10)
-    const [{data},{data:completedRows}]=await Promise.all([
+    const [{data:activePlans},{data:completedRows}]=await Promise.all([
       supabase.from('planned_workouts').select('*')
         .eq('user_id',session.user.id).eq('scheduled_date',today)
-        .in('status',['planned','started']).order('created_at').limit(1),
+        .in('status',['planned','started']).order('created_at'),
       supabase.from('training_sessions').select('id,title,program,week,total_volume,completed_at,workout')
         .eq('user_id',session.user.id).not('completed_at','is',null)
         .gte('completed_at',today+'T00:00:00').lte('completed_at',today+'T23:59:59.999')
         .order('completed_at',{ascending:false})
     ])
-    setPlannedToday(data?.[0] || null)
+    let activePlan=(activePlans||[]).find(row=>row.status==='started') || (activePlans||[]).find(row=>row.status==='planned') || null
+    if((completedRows||[]).length>0 && activePlan?.status==='planned' && activePlan?.workout?.tracking_program_key===trackedTodayInfo?.key){
+      activePlan=null
+    }
+    setPlannedToday(activePlan)
     setTodayCompletedWorkouts(completedRows||[])
     setShowRegularToday(false)
   }
@@ -2343,7 +2351,7 @@ function App() {
         <div className="bottom-space" />
       </main>
 
-      <nav className="mobile-bottom-nav app-level-mobile-nav" aria-label="WorkoutBoard mobile navigation">
+      <nav className={'mobile-bottom-nav app-level-mobile-nav '+(activeTab==='whiteboard'?'board-bottom-offset':'')} aria-label="WorkoutBoard mobile navigation">
         <button className={activeTab==='today'?'active':''} onClick={async()=>{await refreshPlannedToday();setActiveTab('today')}}><b>●</b><span>Today</span></button>
         <button className={activeTab==='together'?'active':''} onClick={()=>setActiveTab('together')}><b>⇄</b><span>Together</span></button>
         <button className={activeTab==='program'?'active':''} onClick={()=>setActiveTab('program')}><b>▦</b><span>Plan</span></button>
