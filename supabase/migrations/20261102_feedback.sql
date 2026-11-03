@@ -48,3 +48,27 @@ begin
     alter publication supabase_realtime add table public.feedback_submissions;
   end if;
 end $$;
+
+
+-- Promote Andy's normal WorkoutBoard account to admin.
+-- Keeps the separate WorkoutAdmin account as a fallback.
+do $$
+declare
+  target_id uuid;
+  target_count integer;
+begin
+  select count(*), max(id)
+    into target_count, target_id
+  from auth.users
+  where lower(email)=lower('a.aalbertsberg@gmail.com');
+
+  if target_count <> 1 then
+    raise exception 'Expected exactly one Andy account for a.aalbertsberg@gmail.com, found %', target_count;
+  end if;
+
+  insert into public.admin_users (user_id, username)
+  values (target_id, 'Andy')
+  on conflict (user_id)
+  do update set username=excluded.username;
+end
+$$;
