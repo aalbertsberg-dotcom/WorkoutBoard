@@ -230,8 +230,9 @@ function parseResult(text){
   return m?{weight:Number(m[1]),reps:Number(m[2]),e1rm:Number(m[1])*(1+Number(m[2])/30)}:null
 }
 
-export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],formatWeight,initialTab='PRs'}) {
-  const [tab,setTab]=useState(initialTab)
+export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],formatWeight,initialTab='PRs',onlyTab=null}) {
+  const [tab,setTab]=useState(onlyTab||initialTab)
+  const activeTab=onlyTab||tab
   const [goals,setGoals]=useState([])
   const [measurements,setMeasurements]=useState([])
   const [planned,setPlanned]=useState([])
@@ -348,30 +349,30 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
 
   const latest=measurements[0]
   return <section className="progress-toolbox">
-    <div className="segmented toolbox-tabs">
+    {!onlyTab&&<div className="segmented toolbox-tabs">
       {['PRs','Exercises','Calendar','Goals','Measurements'].map(x=><button key={x} className={tab===x?'active':''} onClick={()=>setTab(x)}>{x}</button>)}
     </div>
 
-    {tab==='PRs'&&<section className="simple-card">
+    {activeTab==='PRs'&&<section className="simple-card">
       <div className="section-heading"><div><span className="card-label">PR BOARD</span><h3>Your best estimated sets</h3></div></div>
       <div className="pr-grid">{prs.slice(0,12).map(x=><div className="pr-card" key={x.name}><span>{x.name}</span><strong>{x.weight} × {x.reps}</strong><small>e1RM {formatWeight(x.e1rm)} lb</small></div>)}</div>
       {!prs.length&&<div className="empty-state">No PRs yet. Finish weighted sets and WorkoutBoard will add them automatically.</div>}
     </section>}
 
-    {tab==='Exercises'&&<section className="simple-card">
+    {activeTab==='Exercises'&&<section className="simple-card">
       <div className="section-heading"><div><span className="card-label">EXERCISE LIBRARY</span><h3>Everything you've trained</h3></div></div>
       <div className="exercise-library">{exerciseRows.map(x=><article key={x.name}><div><strong>{x.name}</strong><span>{x.count} logged session{x.count===1?'':'s'}</span></div><div><strong>{x.last?.result||'—'}</strong><span>{x.best?`Best e1RM ${formatWeight(x.best.e1rm)} lb`:'Latest result'}</span></div></article>)}</div>
       {!exerciseRows.length&&<div className="empty-state">No exercise history yet. Complete a workout and your exercise library will build itself.</div>}
     </section>}
 
-    {tab==='Calendar'&&<section className="simple-card">
+    {activeTab==='Calendar'&&<section className="simple-card">
       <div className="section-heading"><div><span className="card-label">CALENDAR HISTORY</span><h3>Planned vs completed</h3></div><div className="adherence-score"><strong>{adherence.pct==null?'—':adherence.pct+'%'}</strong><span>adherence</span></div></div>
       <div className="calendar-history">{calendar.map(([date,v])=><div key={date}><strong>{new Date(date+'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'})}</strong><span>{v.completed} completed · {v.planned} planned</span></div>)}</div>
       {!calendar.length&&<div className="empty-state">No calendar history yet. Schedule or complete a workout to get started.</div>}
       {tracking.filter(x=>x.status==='tracking').map(x=><div className="adherence-program" key={x.id}><strong>{x.program_name}</strong><span>Run {x.run_number} · tracking</span></div>)}
     </section>}
 
-    {tab==='Goals'&&<section className="simple-card">
+    {activeTab==='Goals'&&<section className="simple-card">
       <div className="section-heading"><div><span className="card-label">GOALS</span><h3>Targets worth chasing</h3></div></div>
       <form className="goal-form" onSubmit={addGoal}>
         <input value={newGoal.label} onChange={e=>setNewGoal(v=>({...v,label:e.target.value}))} placeholder="Goal, e.g. 405 deadlift"/>
@@ -392,7 +393,7 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
       })}</div>
     </section>}
 
-    {tab==='Measurements'&&<section className="measurement-workspace">
+    {activeTab==='Measurements'&&<section className="measurement-workspace">
       <section className="simple-card">
         <div className="section-heading"><div><span className="card-label">BODY MEASUREMENTS</span><h3>{latest?('Latest · '+new Date(latest.measured_on+'T12:00:00').toLocaleDateString()):'Add a baseline'}</h3></div>{latest&&<b className="measurement-total-badge">{totalInches(latest)?totalInches(latest).toFixed(2)+' in total':''}</b>}</div>
         {latest&&<div className="measurement-summary">

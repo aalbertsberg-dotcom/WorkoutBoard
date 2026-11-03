@@ -103,7 +103,9 @@ export function PlatformProgress({
   view=null,
   compact=false,
   onOpenProgress=null,
+  onOpenWeight=null,
   trackedProgramInfo=null,
+  initialSection='Overview',
 }) {
   const [mode,setMode] = useState('mine')
   const effectiveMode=view || mode
@@ -112,7 +114,7 @@ export function PlatformProgress({
   const [measurements,setMeasurements] = useState([])
   const [ready,setReady] = useState(null)
   const [message,setMessage] = useState('')
-  const [progressSection,setProgressSection] = useState('Overview')
+  const [progressSection,setProgressSection] = useState(initialSection)
   const [quickWeight,setQuickWeight] = useState('')
   const [quickWeightStatus,setQuickWeightStatus] = useState('')
 
@@ -315,8 +317,8 @@ export function PlatformProgress({
       <section className="summary-grid progress-home-kpis progress-summary-kpis">
         <div><span>Workouts this month</span><strong>{thisMonth}</strong></div>
         <div><span>30-day volume</span><strong>{formatWeight(volume30)} lb</strong></div>
-        <div><span>Current streak</span><strong>{activeWeekStreak} wk</strong></div>
-        <div><span>Bodyweight</span><strong>{latestBodyweight?latestBodyweight+' lb':'—'}</strong></div>
+        <div><span>Training streak</span><strong>{activeWeekStreak} wk</strong></div>
+        <div className="progress-weight-kpi"><span>Current weight</span><strong>{latestBodyweight?latestBodyweight+' lb':'—'}</strong><button type="button" onClick={onOpenWeight}>Log weight</button></div>
       </section>
       <div className="progress-summary-pr">
         <span>Latest PR</span>
@@ -334,15 +336,15 @@ export function PlatformProgress({
 
     {effectiveMode==='mine'?<>
       <div className="progress-section-tabs">
-        {['Overview','Strength','Body','History & Tools'].map(section=><button key={section} className={progressSection===section?'active':''} onClick={()=>{setProgressSection(section);window.scrollTo({top:0,behavior:'auto'})}}>{section}</button>)}
+        {['Overview','Strength','Weight & Measurements','History'].map(section=><button key={section} className={progressSection===section?'active':''} onClick={()=>{setProgressSection(section);window.scrollTo({top:0,behavior:'auto'})}}>{section}</button>)}
       </div>
 
       {progressSection==='Overview'&&<>
         <section className="summary-grid progress-home-kpis">
           <div><span>Workouts this month</span><strong>{thisMonth}</strong></div>
           <div><span>30-day volume</span><strong>{formatWeight(volume30)} lb</strong></div>
-          <div><span>Current streak</span><strong>{activeWeekStreak} wk</strong></div>
-          <div><span>Bodyweight</span><strong>{latestBodyweight?latestBodyweight+' lb':'—'}</strong></div>
+          <div><span>Training streak</span><strong>{activeWeekStreak} wk</strong></div>
+          <div><span>Current weight</span><strong>{latestBodyweight?latestBodyweight+' lb':'—'}</strong></div>
         </section>
 
         {trackedProgramInfo&&<section className="simple-card progress-current-program">
@@ -389,12 +391,12 @@ export function PlatformProgress({
           <div className="volume-chart">{lifts.map(name=><div className="volume-bar-row" key={name}><span>{name}</span><div className="bar-track"><div className="bar-fill" style={{width:(volumeByLift[name]/maxLiftVolume*100)+'%'}}/></div><strong>{formatWeight(volumeByLift[name])}</strong></div>)}</div>
         </section>
 
-        <ProgressToolbox session={session} legacyHistory={progress.completed} flexSessions={flexSessions} formatWeight={formatWeight} initialTab="PRs"/>
+        <ProgressToolbox session={session} legacyHistory={progress.completed} flexSessions={flexSessions} formatWeight={formatWeight} onlyTab="PRs"/>
       </>}
 
-      {progressSection==='Body'&&<>
+      {progressSection==='Weight & Measurements'&&<>
         <section className="simple-card quick-weight-card">
-          <div className="section-heading"><div><span className="card-label">BODYWEIGHT</span><h3>Log today's weight</h3></div><strong>{latestBodyweight?latestBodyweight+' lb':'No weight yet'}</strong></div>
+          <div className="section-heading"><div><span className="card-label">WEIGHT</span><h3>Log today's weight</h3></div><strong>{latestBodyweight?latestBodyweight+' lb':'No weight yet'}</strong></div>
           <form className="quick-weight-form" onSubmit={saveQuickWeight}>
             <div className="input-with-unit"><input type="number" step="0.1" inputMode="decimal" value={quickWeight} onChange={e=>setQuickWeight(e.target.value)} placeholder={latestBodyweight||'Weight'}/><b>lb</b></div>
             <button className="primary-action" disabled={!quickWeight}>Save weight</button>
@@ -405,19 +407,19 @@ export function PlatformProgress({
 
         <section className="analytics-dashboard-grid">
           <section className="simple-card analytics-chart-card">
-            <div className="section-heading"><div><span className="card-label">BODYWEIGHT</span><h3>Weight over time</h3></div></div>
+            <div className="section-heading"><div><span className="card-label">WEIGHT HISTORY</span><h3>Your weight over time</h3></div></div>
             <AnalyticsLineChart series={bodyweightTrendSeries} unit="lb" emptyText="Log your weight above to start this graph."/>
           </section>
           <section className="simple-card analytics-chart-card">
-            <div className="section-heading"><div><span className="card-label">MEASUREMENTS</span><h3>Body measurements over time</h3></div></div>
-            <AnalyticsLineChart series={measurementTrendSeries} unit="in" emptyText="Add waist, chest, arm or thigh measurements below to build these tracking lines."/>
+            <div className="section-heading"><div><span className="card-label">MEASUREMENT TRENDS</span><h3>Inches over time</h3></div></div>
+            <AnalyticsLineChart series={measurementTrendSeries} unit="in" emptyText="Save your new baseline below to start measurement trends."/>
           </section>
         </section>
 
-        <ProgressToolbox session={session} legacyHistory={progress.completed} flexSessions={flexSessions} formatWeight={formatWeight} initialTab="Measurements"/>
+        <ProgressToolbox session={session} legacyHistory={progress.completed} flexSessions={flexSessions} formatWeight={formatWeight} onlyTab="Measurements"/>
       </>}
 
-      {progressSection==='History & Tools'&&<>
+      {progressSection==='History'&&<>
         <section className="simple-card">
           <div className="section-heading"><div><span className="card-label">RECENT WORKOUTS</span><h3>Completed workouts</h3></div></div>
           <div className="history-list">{recentCombined.map(row=><article className="progress-workout" key={row.id}><div><strong>{new Date(row.date).toLocaleDateString(undefined,{month:'short',day:'numeric'})} · {row.title}</strong><span>{row.subtitle}</span></div><div><strong>{formatWeight(row.volume)} lb</strong><span>{row.e1rm?'e1RM '+formatWeight(row.e1rm):''}</span></div></article>)}

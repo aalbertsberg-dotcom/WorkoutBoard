@@ -867,6 +867,7 @@ function App() {
   const [classicCancelling,setClassicCancelling] = useState(false)
   const [feedbackUnread,setFeedbackUnread] = useState(0)
   const [feedbackToast,setFeedbackToast] = useState(null)
+  const [progressStartSection,setProgressStartSection] = useState('Overview')
 
   const personalProgram = programs[activeProgram]
   const sharedProgramId = activeSession ? (dbNameToProgram[activeSession.program] || activeProgram) : activeProgram
@@ -2307,7 +2308,7 @@ function App() {
         ) : activeTab === 'progress' ? (
           <section className="page-section progress-page">
             <div className="progress-page-top">
-              <button className="secondary-action progress-back-button" onClick={()=>setActiveTab('me')}>← Back to Me</button>
+              <button className="secondary-action progress-back-button" onClick={()=>{setProgressStartSection('Overview');setActiveTab('me')}}>← Back to Me</button>
               <div>
                 <span className="card-label">YOUR PROGRESS</span>
                 <h2>Progress & Analytics</h2>
@@ -2325,6 +2326,7 @@ function App() {
               programs={programs}
               dbNameToProgram={dbNameToProgram}
               trackedProgramInfo={trackedTodayInfo}
+              initialSection={progressStartSection}
             />
           </section>
         ) : activeTab === 'admin' ? (
@@ -2349,7 +2351,8 @@ function App() {
             <PlatformProgress
               view="mine"
               compact
-              onOpenProgress={()=>{setActiveTab('progress');window.scrollTo({top:0,behavior:'auto'})}}
+              onOpenProgress={()=>{setProgressStartSection('Overview');setActiveTab('progress');window.scrollTo({top:0,behavior:'auto'})}}
+              onOpenWeight={()=>{setProgressStartSection('Weight & Measurements');setActiveTab('progress');window.scrollTo({top:0,behavior:'auto'})}}
               session={session}
               profile={profile}
               setProfile={setProfile}

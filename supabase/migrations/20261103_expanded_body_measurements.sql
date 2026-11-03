@@ -12,14 +12,6 @@ alter table public.body_measurements
   add column if not exists left_calf numeric,
   add column if not exists right_calf numeric;
 
--- Preserve older single-side Arm/Thigh values by treating them as both sides
--- until a newer left/right measurement is recorded.
-update public.body_measurements
-set
-  left_arm=coalesce(left_arm,arm),
-  right_arm=coalesce(right_arm,arm),
-  left_thigh=coalesce(left_thigh,thigh),
-  right_thigh=coalesce(right_thigh,thigh)
-where arm is not null or thigh is not null;
+-- Existing rows are left unchanged. New measurements can start from a fresh baseline.
 
 notify pgrst, 'reload schema';

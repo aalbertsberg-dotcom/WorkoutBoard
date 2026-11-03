@@ -3990,3 +3990,30 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
     grid-template-columns:repeat(2,minmax(0,1fr));
   }
 }
+
+
+/* Easier progress labels and weight entry */
+.progress-weight-kpi {
+  position:relative;
+  padding-bottom:34px !important;
+}
+.progress-weight-kpi button {
+  position:absolute;
+  left:8px;
+  right:8px;
+  bottom:7px;
+  min-height:25px;
+  border:1px solid #4b6735;
+  border-radius:7px;
+  background:#18280f;
+  color:#d9f99d;
+  font-size:8px;
+  font-weight:900;
+}
+@media (max-width:700px) {
+  .progress-section-tabs button {
+    min-height:46px;
+    white-space:normal;
+    line-height:1.15;
+  }
+}
