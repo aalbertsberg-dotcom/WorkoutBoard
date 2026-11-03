@@ -4103,3 +4103,70 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
     grid-template-columns:1fr !important;
   }
 }
+
+
+/* RENPHO-inspired trend controls */
+.body-trend-stack {
+  display:grid;
+  gap:12px;
+}
+.trend-range-tabs {
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:5px;
+  margin-bottom:10px;
+}
+.trend-range-tabs button {
+  min-height:34px;
+  border:1px solid #344760;
+  border-radius:9px;
+  background:#0d1728;
+  color:#91a1b7;
+  font-size:9px;
+  font-weight:900;
+}
+.trend-range-tabs button.active {
+  border-color:#5f7f2b;
+  background:#1a2b10;
+  color:#d9f99d;
+}
+.trend-metric-scroll {
+  display:flex;
+  gap:6px;
+  overflow-x:auto;
+  padding:0 0 8px;
+  scrollbar-width:none;
+}
+.trend-metric-scroll::-webkit-scrollbar {
+  display:none;
+}
+.trend-metric-scroll button {
+  flex:0 0 auto;
+  min-height:34px;
+  padding:0 10px;
+  border:1px solid #344760;
+  border-radius:999px;
+  background:#0d1728;
+  color:#91a1b7;
+  font-size:9px;
+  font-weight:900;
+  white-space:nowrap;
+}
+.trend-metric-scroll button.active {
+  border-color:#5f7f2b;
+  background:#1a2b10;
+  color:#d9f99d;
+}
+.analytics-point-label {
+  fill:#cbd5e1;
+  font-size:9px;
+  font-weight:800;
+}
+.body-trend-card .analytics-line-chart svg {
+  min-height:220px;
+}
+@media (max-width:700px) {
+  .body-trend-card .analytics-line-chart svg {
+    min-height:245px;
+  }
+}

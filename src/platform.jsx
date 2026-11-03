@@ -49,7 +49,7 @@ function quickWorkoutPayload(lift, scheme, notes='') {
 }
 
 
-function AnalyticsLineChart({series=[],unit='lb',emptyText='Not enough data to draw this trend yet.'}) {
+function AnalyticsLineChart({series=[],unit='lb',emptyText='Not enough data to draw this trend yet.',showPointLabels=false}) {
   const cleaned=series.map(item=>({
     ...item,
     points:(item.points||[])
@@ -64,8 +64,10 @@ function AnalyticsLineChart({series=[],unit='lb',emptyText='Not enough data to d
   const minTime=Math.min(...times),maxTime=Math.max(...times)
   const minValue=Math.min(...values),maxValue=Math.max(...values)
   const width=720,height=230,left=34,right=18,top=18,bottom=26
-  const x=time=>left+((time-minTime)/Math.max(1,maxTime-minTime))*(width-left-right)
-  const y=value=>top+(1-(value-minValue)/Math.max(1,maxValue-minValue))*(height-top-bottom)
+  const x=time=>minTime===maxTime ? left+(width-left-right)/2 : left+((time-minTime)/(maxTime-minTime))*(width-left-right)
+  const paddedMin=minValue===maxValue?minValue-Math.max(1,Math.abs(minValue)*.05):minValue
+  const paddedMax=minValue===maxValue?maxValue+Math.max(1,Math.abs(maxValue)*.05):maxValue
+  const y=value=>top+(1-(value-paddedMin)/Math.max(1,paddedMax-paddedMin))*(height-top-bottom)
   const dateLabel=value=>new Date(value).toLocaleDateString(undefined,{month:'short',day:'numeric'})
 
   return <div className="analytics-line-chart">
@@ -79,7 +81,11 @@ function AnalyticsLineChart({series=[],unit='lb',emptyText='Not enough data to d
         const last=item.points.at(-1)
         return <g key={item.name} className={`analytics-series analytics-series-${index%4}`}>
           <path d={path}/>
-          {last&&<circle cx={x(new Date(last.date).getTime())} cy={y(Number(last.value))} r="4"/>}
+          {item.points.map((point,i)=>{
+            const px=x(new Date(point.date).getTime()),py=y(Number(point.value))
+            const label=Number(point.value).toLocaleString(undefined,{maximumFractionDigits:2})
+            return <g key={i}><circle cx={px} cy={py} r={i===item.points.length-1?4:3}/>{showPointLabels&&item.points.length<=12&&<text className="analytics-point-label" x={px} y={Math.max(12,py-8)} textAnchor="middle">{label}</text>}</g>
+          })}
         </g>
       })}
     </svg>
@@ -117,6 +123,8 @@ export function PlatformProgress({
   const [progressSection,setProgressSection] = useState(initialSection)
   const [quickWeight,setQuickWeight] = useState('')
   const [quickWeightStatus,setQuickWeightStatus] = useState('')
+  const [bodyTrendRange,setBodyTrendRange] = useState('3M')
+  const [bodyTrendMetric,setBodyTrendMetric] = useState('waist')
 
   const loadData = async () => {
     if (!session?.user) return
@@ -248,6 +256,46 @@ export function PlatformProgress({
     {name:'Hips',points:measurements.filter(r=>Number(r.hips||0)>0).map(r=>({date:r.measured_on,value:Number(r.hips)}))},
     {name:'Total inches',points:measurements.map(r=>({date:r.measured_on,value:measurementTotalInches(r)})).filter(p=>p.value>0)},
   ].filter(series=>series.points.length),[measurements])
+
+  const bodyTrendMetrics=[
+    {key:'waist',label:'Waist',unit:'in'},
+    {key:'hips',label:'Hips',unit:'in'},
+    {key:'chest',label:'Chest',unit:'in'},
+    {key:'neck',label:'Neck',unit:'in'},
+    {key:'left_arm',label:'L arm',unit:'in'},
+    {key:'right_arm',label:'R arm',unit:'in'},
+    {key:'left_thigh',label:'L thigh',unit:'in'},
+    {key:'right_thigh',label:'R thigh',unit:'in'},
+    {key:'left_calf',label:'L calf',unit:'in'},
+    {key:'right_calf',label:'R calf',unit:'in'},
+    {key:'left_forearm',label:'L forearm',unit:'in'},
+    {key:'right_forearm',label:'R forearm',unit:'in'},
+    {key:'total_inches',label:'Total inches',unit:'in'},
+    {key:'body_fat',label:'Body fat',unit:'%'},
+  ]
+
+  const rangeStart=range=>{
+    const now=new Date()
+    if(range==='30D'){const d=new Date(now);d.setDate(d.getDate()-30);return d}
+    if(range==='3M'){const d=new Date(now);d.setMonth(d.getMonth()-3);return d}
+    if(range==='1Y'){const d=new Date(now);d.setFullYear(d.getFullYear()-1);return d}
+    return null
+  }
+  const filterTrendSeries=(series,range)=>{
+    const start=rangeStart(range)
+    if(!start)return series
+    return series.map(item=>({...item,points:(item.points||[]).filter(point=>new Date(point.date)>=start)}))
+  }
+  const selectedBodyMetric=bodyTrendMetrics.find(item=>item.key===bodyTrendMetric)||bodyTrendMetrics[0]
+  const selectedMeasurementSeries=useMemo(()=>{
+    const points=measurements.map(row=>{
+      const value=bodyTrendMetric==='total_inches'?measurementTotalInches(row):Number(row[bodyTrendMetric]||0)
+      return {date:row.measured_on,value}
+    }).filter(point=>Number(point.value)>0)
+    return [{name:selectedBodyMetric.label,points}]
+  },[measurements,bodyTrendMetric])
+  const rangedWeightSeries=filterTrendSeries(bodyweightTrendSeries,bodyTrendRange)
+  const rangedMeasurementSeries=filterTrendSeries(selectedMeasurementSeries,bodyTrendRange)
 
   const recentCombined=[
     ...progress.completed.map(r=>({
@@ -405,14 +453,17 @@ export function PlatformProgress({
           {quickWeightStatus&&<div className="status-message">{quickWeightStatus}</div>}
         </section>
 
-        <section className="analytics-dashboard-grid">
-          <section className="simple-card analytics-chart-card">
-            <div className="section-heading"><div><span className="card-label">WEIGHT HISTORY</span><h3>Your weight over time</h3></div></div>
-            <AnalyticsLineChart series={bodyweightTrendSeries} unit="lb" emptyText="Log your weight above to start this graph."/>
+        <section className="body-trend-stack">
+          <section className="simple-card analytics-chart-card body-trend-card">
+            <div className="section-heading"><div><span className="card-label">WEIGHT TREND</span><h3>Your weight over time</h3></div></div>
+            <div className="trend-range-tabs">{['30D','3M','1Y','All'].map(range=><button type="button" key={range} className={bodyTrendRange===range?'active':''} onClick={()=>setBodyTrendRange(range)}>{range}</button>)}</div>
+            <AnalyticsLineChart series={rangedWeightSeries} unit="lb" showPointLabels emptyText="Log another weight on a different date and your trend line will grow here."/>
           </section>
-          <section className="simple-card analytics-chart-card">
-            <div className="section-heading"><div><span className="card-label">MEASUREMENT TRENDS</span><h3>Inches over time</h3></div></div>
-            <AnalyticsLineChart series={measurementTrendSeries} unit="in" emptyText="Save your new baseline below to start measurement trends."/>
+
+          <section className="simple-card analytics-chart-card body-trend-card">
+            <div className="section-heading"><div><span className="card-label">MEASUREMENT TREND</span><h3>{selectedBodyMetric.label} over time</h3></div></div>
+            <div className="trend-metric-scroll">{bodyTrendMetrics.map(metric=><button type="button" key={metric.key} className={bodyTrendMetric===metric.key?'active':''} onClick={()=>setBodyTrendMetric(metric.key)}>{metric.label}</button>)}</div>
+            <AnalyticsLineChart series={rangedMeasurementSeries} unit={selectedBodyMetric.unit} showPointLabels emptyText={'Save another '+selectedBodyMetric.label.toLowerCase()+' measurement on a different date and its trend will grow here.'}/>
           </section>
         </section>
 
