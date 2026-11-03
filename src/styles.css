@@ -3482,3 +3482,130 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
     background:#121a29;
   }
 }
+
+
+/* Feedback */
+.feedback-card {
+  border-color:#3f5777;
+}
+.feedback-plea {
+  margin:0;
+  color:#a9b5c8;
+  line-height:1.5;
+}
+.feedback-toggle {
+  min-height:36px;
+  border:1px solid #40526e;
+  border-radius:9px;
+  background:#121e32;
+  color:#dbe4ef;
+  padding:0 10px;
+  font-weight:800;
+}
+.feedback-form {
+  display:grid;
+  gap:10px;
+  margin-top:12px;
+}
+.feedback-form label {
+  display:grid;
+  gap:5px;
+  color:#aeb9ca;
+  font-size:10px;
+  font-weight:800;
+}
+.feedback-form select,
+.feedback-form textarea {
+  width:100%;
+  box-sizing:border-box;
+  border:1px solid #3a4d69;
+  border-radius:10px;
+  background:#0b1525;
+  color:#fff;
+  padding:10px;
+  font:inherit;
+}
+.feedback-form textarea {
+  min-height:120px;
+  resize:vertical;
+}
+.feedback-count {
+  display:grid;
+  place-items:center;
+  min-width:30px;
+  height:30px;
+  padding:0 8px;
+  border-radius:999px;
+  background:#2b4216;
+  color:#d9f99d;
+  font-size:11px;
+}
+.feedback-admin-list {
+  display:grid;
+  gap:8px;
+}
+.feedback-admin-item {
+  display:grid;
+  gap:7px;
+  padding:11px;
+  border:1px solid #334661;
+  border-radius:10px;
+  background:#0c1627;
+}
+.feedback-admin-item.resolved {
+  opacity:.58;
+}
+.feedback-admin-item p {
+  margin:0;
+  color:#e5edf7;
+  line-height:1.45;
+  white-space:pre-wrap;
+}
+.feedback-admin-item small {
+  color:#8494aa;
+}
+.feedback-admin-meta {
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  color:#8494aa;
+  font-size:9px;
+}
+.feedback-type {
+  padding:3px 7px;
+  border-radius:999px;
+  background:#1c2b42;
+  color:#cbd5e1;
+  font-weight:900;
+  text-transform:uppercase;
+}
+.feedback-type.bug { background:#481a22; color:#fecdd3; }
+.feedback-type.idea { background:#17351e; color:#bbf7d0; }
+.feedback-type.confusing { background:#453315; color:#fde68a; }
+.admin-feedback-toast {
+  position:fixed;
+  left:12px;
+  right:12px;
+  bottom:132px;
+  z-index:6500;
+  display:grid;
+  gap:3px;
+  padding:11px 13px;
+  border:1px solid #5f7f2b;
+  border-radius:12px;
+  background:#13200d;
+  color:#fff;
+  text-align:left;
+  box-shadow:0 12px 35px rgba(0,0,0,.4);
+}
+.admin-feedback-toast span {
+  color:#d9f99d;
+  font-size:9px;
+  font-weight:900;
+  text-transform:uppercase;
+}
+.admin-feedback-toast strong {
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}

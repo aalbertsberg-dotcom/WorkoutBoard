@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './supabase'
-import { PlatformProgress, PlanPage, AdminPanel } from './platform'
+import { PlatformProgress, PlanPage, AdminPanel, FeedbackPanel } from './platform'
 import { PlannedWorkoutRunner, ExerciseHistoryStrip, InstallAppButton, ExportDataButton, SharedTimer } from './productFeatures'
 import { WhiteboardPage } from './whiteboard'
 import { TrainingTimer } from './trainingTools'
@@ -865,6 +865,8 @@ function App() {
   const [workoutStartError,setWorkoutStartError] = useState('')
   const [classicCancelConfirm,setClassicCancelConfirm] = useState(false)
   const [classicCancelling,setClassicCancelling] = useState(false)
+  const [feedbackUnread,setFeedbackUnread] = useState(0)
+  const [feedbackToast,setFeedbackToast] = useState(null)
 
   const personalProgram = programs[activeProgram]
   const sharedProgramId = activeSession ? (dbNameToProgram[activeSession.program] || activeProgram) : activeProgram
@@ -889,6 +891,21 @@ function App() {
     })
     return () => listener.subscription.unsubscribe()
   },[])
+
+  useEffect(() => {
+    if(!session?.user||!isAdmin)return
+    let mounted=true
+    supabase.from('feedback_submissions').select('*',{count:'exact',head:true}).eq('status','new').then(({count,error})=>{
+      if(mounted&&!error)setFeedbackUnread(count||0)
+    })
+    const channel=supabase.channel('workoutboard-admin-feedback')
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'feedback_submissions'},payload=>{
+        const row=payload.new
+        setFeedbackUnread(v=>v+1)
+        setFeedbackToast(row)
+      }).subscribe()
+    return ()=>{mounted=false;supabase.removeChannel(channel)}
+  },[session?.user?.id,isAdmin])
 
   const loadOpenSession = async userId => {
     const {data:memberships,error} = await supabase
@@ -2353,6 +2370,8 @@ function App() {
               {inviteState && <div className="invite-status">{inviteState}</div>}
             </section>
 
+            <FeedbackPanel session={session} profile={profile} />
+
             <section className="simple-card">
               <div className="section-heading"><div><span className="card-label">APP</span><h3>Install WorkoutBoard</h3></div></div>
               <p className="helper-text">Install it on your phone or desktop for a full-screen app experience and faster reopening.</p>
@@ -2373,7 +2392,7 @@ function App() {
               <section className="simple-card admin-entry">
                 <div className="section-heading"><div><span className="card-label">WORKOUTADMIN</span><h3>Administration</h3></div></div>
                 <p className="helper-text">View users, workout history, progress totals, training maxes, and manage current programs.</p>
-                <button className="wide-button admin-button" onClick={() => setActiveTab('admin')}>Open Admin</button>
+                <button className="wide-button admin-button" onClick={() => {setFeedbackUnread(0);setActiveTab('admin')}}>Open Admin{feedbackUnread?` · ${feedbackUnread} feedback`:''}</button>
               </section>
             )}
 
@@ -2390,6 +2409,11 @@ function App() {
         <button className={activeTab==='program'?'active':''} onClick={()=>setActiveTab('program')}><b>▦</b><span>Plan</span></button>
         <button className={activeTab==='whiteboard'?'active':''} onClick={()=>setActiveTab('whiteboard')}><b>□</b><span>Board</span></button>
       </nav>
+
+      {feedbackToast&&isAdmin&&<button className="admin-feedback-toast" onClick={()=>{setFeedbackUnread(0);setFeedbackToast(null);setActiveTab('admin')}}>
+        <span>New feedback · {feedbackToast.category}</span>
+        <strong>{String(feedbackToast.message||'').slice(0,120)}</strong>
+      </button>}
 
       {pendingWorkoutStart&&<div className="same-day-sheet-backdrop" onClick={()=>setPendingWorkoutStart(null)}>
         <section className="same-day-sheet" onClick={e=>e.stopPropagation()}>

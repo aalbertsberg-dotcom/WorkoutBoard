@@ -956,6 +956,65 @@ export function PlanPage({
   </section>
 }
 
+
+export function FeedbackPanel({session,profile}) {
+  const [open,setOpen]=useState(false)
+  const [category,setCategory]=useState('idea')
+  const [message,setMessage]=useState('')
+  const [status,setStatus]=useState('')
+  const [busy,setBusy]=useState(false)
+
+  const submit=async e=>{
+    e.preventDefault()
+    const clean=message.trim()
+    if(!clean||!session?.user)return
+    setBusy(true);setStatus('')
+    const payload={
+      user_id:session.user.id,
+      email:session.user.email||null,
+      display_name:profile?.display_name||null,
+      category,
+      message:clean,
+      page:window.location.pathname+window.location.search,
+      user_agent:navigator.userAgent||null,
+    }
+    const {data,error}=await supabase.from('feedback_submissions').insert(payload).select('id').single()
+    if(error){
+      setStatus(error.code==='42P01'?'Feedback storage is not enabled yet.':'Could not send feedback: '+error.message)
+      setBusy(false);return
+    }
+    try{
+      await supabase.functions.invoke('feedback-notify',{body:{feedback_id:data.id}})
+    }catch{}
+    setMessage('')
+    setStatus('Thank you — feedback sent.')
+    setBusy(false)
+  }
+
+  return <section className="simple-card feedback-card">
+    <div className="section-heading">
+      <div><span className="card-label">FEEDBACK</span><h3>Help make WorkoutBoard better</h3></div>
+      <button type="button" className="feedback-toggle" onClick={()=>setOpen(v=>!v)}>{open?'Close':'Send feedback'}</button>
+    </div>
+    <p className="feedback-plea">WorkoutBoard is being built for you. If something feels confusing, broken, annoying, or missing, tell me. I can’t make it better without your help.</p>
+    {open&&<form className="feedback-form" onSubmit={submit}>
+      <label>What kind of feedback?
+        <select value={category} onChange={e=>setCategory(e.target.value)}>
+          <option value="bug">Something is broken</option>
+          <option value="confusing">Something is confusing</option>
+          <option value="idea">I have an idea</option>
+          <option value="other">Other</option>
+        </select>
+      </label>
+      <label>Tell me what happened or what you’d change
+        <textarea value={message} onChange={e=>setMessage(e.target.value)} placeholder="The more specific you are, the easier it is to improve." rows="5"/>
+      </label>
+      <button className="primary-action" disabled={busy||!message.trim()}>{busy?'Sending…':'Submit feedback'}</button>
+    </form>}
+    {status&&<div className="status-message">{status}</div>}
+  </section>
+}
+
 export function AdminPanel({ programs }) {
   const [users,setUsers] = useState([])
   const [selected,setSelected] = useState(null)
@@ -965,6 +1024,8 @@ export function AdminPanel({ programs }) {
   const [editSession,setEditSession] = useState(null)
   const [message,setMessage] = useState('')
   const [resetPassword,setResetPassword] = useState('')
+  const [feedback,setFeedback] = useState([])
+  const [feedbackMessage,setFeedbackMessage] = useState('')
 
   const loadUsers = async () => {
     let {data,error} = await supabase.rpc('admin_user_overview_v2')
@@ -972,7 +1033,17 @@ export function AdminPanel({ programs }) {
     if (error) { setMessage(error.message); return }
     setUsers(data || [])
   }
-  useEffect(() => { loadUsers() },[])
+  const loadFeedback=async()=>{
+    const {data,error}=await supabase.from('feedback_submissions').select('*').order('created_at',{ascending:false}).limit(100)
+    if(error){if(error.code!=='42P01')setFeedbackMessage(error.message);return}
+    setFeedback(data||[])
+    const unread=(data||[]).filter(row=>row.status==='new').map(row=>row.id)
+    if(unread.length){
+      await supabase.from('feedback_submissions').update({status:'read',read_at:new Date().toISOString()}).in('id',unread)
+      setFeedback(rows=>rows.map(row=>unread.includes(row.id)?{...row,status:'read'}:row))
+    }
+  }
+  useEffect(() => { loadUsers();loadFeedback() },[])
 
   const openUser = async user => {
     setSelected(user); setMessage(''); setEditSession(null)
@@ -1045,13 +1116,31 @@ export function AdminPanel({ programs }) {
     setSessions(rows=>rows.filter(r=>r.id!==row.id));setMessage('Session deleted.');await loadUsers()
   }
 
+  const resolveFeedback=async id=>{
+    const {error}=await supabase.from('feedback_submissions').update({status:'resolved',resolved_at:new Date().toISOString()}).eq('id',id)
+    if(error){setFeedbackMessage(error.message);return}
+    setFeedback(rows=>rows.map(row=>row.id===id?{...row,status:'resolved'}:row))
+  }
+
   const fmtDate=value=>value?new Date(value).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}):'Never'
+  const fmtFeedbackTime=value=>value?new Date(value).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):''
 
   if(!selected){
     const totalWorkouts=users.reduce((sum,u)=>sum+Number(u.workout_count||0),0)
     return <section className="page-section">
       <AdminDashboardSummary />
       <section className="summary-grid"><div><span>Users</span><strong>{users.length}</strong></div><div><span>Completed workouts</span><strong>{totalWorkouts}</strong></div></section>
+      <section className="simple-card admin-feedback-inbox">
+        <div className="section-heading"><div><span className="card-label">FEEDBACK INBOX</span><h3>User feedback</h3></div><b className="feedback-count">{feedback.filter(row=>row.status!=='resolved').length}</b></div>
+        {feedback.length?<div className="feedback-admin-list">{feedback.map(row=><article className={'feedback-admin-item '+(row.status==='resolved'?'resolved':'')} key={row.id}>
+          <div className="feedback-admin-meta"><span className={'feedback-type '+row.category}>{row.category}</span><span>{fmtFeedbackTime(row.created_at)}</span></div>
+          <strong>{row.display_name||row.email||'WorkoutBoard user'}</strong>
+          <p>{row.message}</p>
+          <small>{row.email||''}{row.page?' · '+row.page:''}</small>
+          {row.status!=='resolved'&&<button className="secondary-action" onClick={()=>resolveFeedback(row.id)}>Mark resolved</button>}
+        </article>)}</div>:<div className="empty-state">No feedback yet.</div>}
+        {feedbackMessage&&<div className="status-message">{feedbackMessage}</div>}
+      </section>
       <section className="simple-card">
         <div className="section-heading"><div><span className="card-label">ADMIN</span><h3>WorkoutBoard users</h3></div></div>
         <div className="admin-user-list">{users.map(user=><button className="admin-user-row" key={user.user_id} onClick={()=>openUser(user)}>
