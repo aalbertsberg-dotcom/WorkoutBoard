@@ -3654,3 +3654,127 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
 .add-extra-set-button:active {
   background:#13213a;
 }
+
+
+/* Dedicated Progress page */
+.progress-summary-card {
+  display:grid;
+  gap:12px;
+  padding:15px;
+  border:1px solid #31435e;
+  border-radius:16px;
+  background:linear-gradient(135deg,#111d31,#132218);
+}
+.progress-summary-head {
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:14px;
+}
+.progress-summary-head > div {
+  display:grid;
+  gap:3px;
+}
+.progress-summary-head h3 {
+  margin:0;
+  font-size:18px;
+}
+.progress-open-button {
+  flex:0 0 auto;
+  min-height:36px;
+  border:1px solid #4a6234;
+  border-radius:9px;
+  background:#17250f;
+  color:#d9f99d;
+  padding:0 11px;
+  font-weight:900;
+}
+.progress-summary-kpis {
+  margin:0;
+}
+.progress-summary-pr {
+  display:grid;
+  grid-template-columns:auto 1fr auto;
+  align-items:center;
+  gap:8px;
+  padding:10px 11px;
+  border:1px solid #30415b;
+  border-radius:10px;
+  background:#0d1728;
+}
+.progress-summary-pr > span {
+  color:#8fa0b8;
+  font-size:8px;
+  font-weight:900;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+.progress-summary-pr > strong {
+  font-size:11px;
+}
+.progress-summary-pr > b {
+  color:#d9f99d;
+  font-size:10px;
+  text-align:right;
+}
+.progress-summary-pr > small {
+  grid-column:2 / -1;
+  color:#8fa0b8;
+  font-size:9px;
+}
+.progress-open-wide {
+  display:none;
+}
+.progress-page {
+  gap:12px;
+}
+.progress-page-top {
+  display:grid;
+  gap:12px;
+  padding:15px;
+  border:1px solid #31435e;
+  border-radius:16px;
+  background:linear-gradient(135deg,#111d31,#132218);
+}
+.progress-page-top > div {
+  display:grid;
+  gap:4px;
+}
+.progress-page-top h2 {
+  margin:0;
+  font-size:22px;
+}
+.progress-page-top p {
+  margin:0;
+  color:#94a3b8;
+  font-size:11px;
+  line-height:1.45;
+}
+.progress-back-button {
+  justify-self:start;
+  min-height:36px;
+}
+.progress-page > .page-section {
+  padding:0;
+}
+
+@media (max-width:700px) {
+  .progress-summary-head {
+    display:grid;
+  }
+  .progress-open-button {
+    display:none;
+  }
+  .progress-open-wide {
+    display:block;
+  }
+  .progress-summary-pr {
+    grid-template-columns:1fr auto;
+  }
+  .progress-summary-pr > span {
+    grid-column:1 / -1;
+  }
+  .progress-summary-pr > small {
+    grid-column:1 / -1;
+  }
+}

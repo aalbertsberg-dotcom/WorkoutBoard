@@ -94,6 +94,8 @@ export function PlatformProgress({
   programs,
   dbNameToProgram,
   view=null,
+  compact=false,
+  onOpenProgress=null,
 }) {
   const [mode,setMode] = useState('mine')
   const effectiveMode=view || mode
@@ -253,6 +255,27 @@ export function PlatformProgress({
     }
     return events.sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,3)
   },[progress.completed,flexSessions])
+
+  if(compact){
+    const latestPr=recentPrs[0]
+    return <section className="progress-summary-card">
+      <div className="progress-summary-head">
+        <div><span className="card-label">PROGRESS & ANALYTICS</span><h3>Your training at a glance</h3></div>
+        <button type="button" className="progress-open-button" onClick={onOpenProgress}>Open Progress →</button>
+      </div>
+      <section className="summary-grid progress-home-kpis progress-summary-kpis">
+        <div><span>Workouts this month</span><strong>{thisMonth}</strong></div>
+        <div><span>30-day volume</span><strong>{formatWeight(volume30)} lb</strong></div>
+        <div><span>Current streak</span><strong>{activeWeekStreak} wk</strong></div>
+        <div><span>Bodyweight</span><strong>{latestBodyweight?latestBodyweight+' lb':'—'}</strong></div>
+      </section>
+      <div className="progress-summary-pr">
+        <span>Latest PR</span>
+        {latestPr?<><strong>{latestPr.label}</strong><b>{latestPr.set?latestPr.set.weight+' × '+latestPr.set.reps:'e1RM '+formatWeight(latestPr.e1rm)}</b></>:<small>No PRs yet — complete weighted sets and they’ll appear here.</small>}
+      </div>
+      <button type="button" className="wide-button progress-open-wide" onClick={onOpenProgress}>Open full Progress & Analytics</button>
+    </section>
+  }
 
   return <section className={'page-section '+(view==='community'?'community-page-panel':'')}>
     {!view&&<div className="segmented">

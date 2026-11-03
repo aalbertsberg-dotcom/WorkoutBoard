@@ -1823,7 +1823,7 @@ function App() {
         <header className="app-header">
           <div>
             <div className="eyebrow">WORKOUTBOARD</div>
-            <h1>{activeTab === 'today' ? 'Today' : activeTab === 'together' ? 'Together' : activeTab === 'program' ? 'Plan' : activeTab === 'whiteboard' ? 'Whiteboard' : activeTab === 'admin' ? 'Admin' : 'Me'}</h1>
+            <h1>{activeTab === 'today' ? 'Today' : activeTab === 'together' ? 'Together' : activeTab === 'program' ? 'Plan' : activeTab === 'whiteboard' ? 'Whiteboard' : activeTab === 'progress' ? 'Progress' : activeTab === 'admin' ? 'Admin' : 'Me'}</h1>
           </div>
           <button className={'account-chip ' + (isAdmin ? 'admin' : '')} onClick={() => setActiveTab('me')}>
             <span>{displayName}</span>
@@ -2304,6 +2304,28 @@ function App() {
           />
         ) : activeTab === 'whiteboard' ? (
           <WhiteboardPage session={session} />
+        ) : activeTab === 'progress' ? (
+          <section className="page-section progress-page">
+            <div className="progress-page-top">
+              <button className="secondary-action progress-back-button" onClick={()=>setActiveTab('me')}>← Back to Me</button>
+              <div>
+                <span className="card-label">YOUR PROGRESS</span>
+                <h2>Progress & Analytics</h2>
+                <p>Charts, PRs, strength trends, body metrics, goals, history, consistency and everything you track.</p>
+              </div>
+            </div>
+            <PlatformProgress
+              view="mine"
+              session={session}
+              profile={profile}
+              setProfile={setProfile}
+              progress={progress}
+              lifts={lifts}
+              formatWeight={formatWeight}
+              programs={programs}
+              dbNameToProgram={dbNameToProgram}
+            />
+          </section>
         ) : activeTab === 'admin' ? (
           <AdminPanel programs={programs} />
         ) : (
@@ -2323,14 +2345,10 @@ function App() {
               <label>Display name<input defaultValue={displayName} onBlur={e => saveDisplayName(e.target.value)} /></label>
             </section>
 
-            <section className="me-dashboard-heading">
-              <span className="card-label">YOUR DASHBOARD</span>
-              <h2>Analytics & tracking</h2>
-              <p>Strength, volume, bodyweight, PRs, goals, measurements, history, consistency and program tracking.</p>
-            </section>
-
             <PlatformProgress
               view="mine"
+              compact
+              onOpenProgress={()=>{setActiveTab('progress');window.scrollTo({top:0,behavior:'auto'})}}
               session={session}
               profile={profile}
               setProfile={setProfile}
