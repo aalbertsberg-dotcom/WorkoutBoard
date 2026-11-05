@@ -4254,3 +4254,43 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
 .multi-track-heading {
   border-color:#4b6735;
 }
+
+
+/* Three active program limit */
+.active-program-limit {
+  flex:0 0 auto;
+  padding:5px 8px;
+  border:1px solid #4b6735;
+  border-radius:999px;
+  background:#17250f;
+  color:#d9f99d;
+  font-size:9px;
+  font-weight:900;
+  white-space:nowrap;
+}
+.tracked-program-actions {
+  grid-template-columns:1fr 1fr 1fr;
+}
+.paused-program-section {
+  opacity:.94;
+}
+.paused-program-card {
+  border-style:dashed;
+}
+.paused-badge {
+  padding:4px 7px;
+  border:1px solid #59677a;
+  border-radius:999px;
+  background:#1b2432;
+  color:#aeb9ca;
+  font-size:8px;
+  font-weight:900;
+}
+@media (max-width:700px) {
+  .tracked-program-actions {
+    grid-template-columns:1fr 1fr;
+  }
+  .tracked-program-actions .wide-button {
+    grid-column:1 / -1;
+  }
+}

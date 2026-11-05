@@ -713,9 +713,12 @@ export function PlanPage({
   },[trackingReady,tracking.length,sessions.length])
 
   const tracked = tracking.filter(t=>t.status==='tracking')
+  const paused = tracking.filter(t=>t.status==='paused')
   const completed = tracking.filter(t=>t.status==='completed')
   const trackedKeys = new Set(tracked.map(t=>t.program_key))
+  const pausedKeys = new Set(paused.map(t=>t.program_key))
   const completedKeys = new Set(completed.map(t=>t.program_key))
+  const activeProgramLimit=3
 
   const categories = useMemo(() => ['All','Favorites',...Array.from(new Set(allPrograms.map(p=>p.category))).sort()],[allPrograms])
 
@@ -732,7 +735,7 @@ export function PlanPage({
   const availablePrograms = useMemo(() => {
     const q=search.trim().toLowerCase()
     return allPrograms.filter(p => {
-      if(trackedKeys.has(p.key) || completedKeys.has(p.key)) return false
+      if(trackedKeys.has(p.key) || pausedKeys.has(p.key) || completedKeys.has(p.key)) return false
       const categoryOk = category === 'All' || (category === 'Favorites' ? favorites.includes(p.key) : p.category === category)
       const searchOk = !q || [p.name,p.category,p.description,p.source].some(v=>String(v||'').toLowerCase().includes(q))
       return categoryOk && searchOk
@@ -877,6 +880,10 @@ export function PlanPage({
 
   const startTracking = async p => {
     if(!session?.user || !p)return
+    if(tracked.length>=activeProgramLimit){
+      setMessage('You already have 3 active programs. Pause or complete one before adding another.')
+      return
+    }
     if(!p.getWeek){
       setMessage(p.name+' is cataloged from your archive but still needs its source prescription transcribed before it can be tracked.')
       return
@@ -896,6 +903,32 @@ export function PlanPage({
     if(trackId&&versionId)await supabase.from('user_program_tracking').update({program_version_id:versionId}).eq('id',trackId)
     if(p.kind==='classic') await chooseProgram(p.id)
     setMessage(p.name+' is now in Tracked Programs. Version snapshot saved.')
+    await load()
+    await onTrackingChanged?.()
+  }
+
+  const pauseTracking = async track => {
+    const {error}=await supabase.rpc('pause_program_tracking',{target_tracking_id:track.id})
+    if(error){
+      setMessage(error.message.includes('function')?'Run the 3-program limit / pause migration in Supabase first.':error.message)
+      return
+    }
+    setMessage(track.program_name+' paused. Its progress is saved.')
+    await load()
+    await onTrackingChanged?.()
+  }
+
+  const resumeTracking = async track => {
+    if(tracked.length>=activeProgramLimit){
+      setMessage('You already have 3 active programs. Pause or complete one before resuming this program.')
+      return
+    }
+    const {error}=await supabase.rpc('resume_program_tracking',{target_tracking_id:track.id})
+    if(error){
+      setMessage(error.message.includes('function')?'Run the 3-program limit / pause migration in Supabase first.':error.message)
+      return
+    }
+    setMessage(track.program_name+' resumed.')
     await load()
     await onTrackingChanged?.()
   }
@@ -1003,7 +1036,7 @@ export function PlanPage({
 
     {planMode==='programs'?<>
       {tracked.length>0&&<section className="program-state-section current-program-section">
-        <div className="section-heading"><div><span className="card-label">CURRENT</span><h3>Programs you’re training</h3></div></div>
+        <div className="section-heading"><div><span className="card-label">CURRENT</span><h3>Programs you’re training</h3></div><b className="active-program-limit">{tracked.length}/{activeProgramLimit} active</b></div>
         <div className="archive-grid">{tracked.map(track=>{
           const p=programByKey[track.program_key]
           if(!p)return null
@@ -1014,7 +1047,24 @@ export function PlanPage({
             <h3>{p.name}</h3>
             <div className="program-progress-track"><div style={{width:(expected ? Math.min(100,done/expected*100) : 0)+'%'}} /></div>
             <small>{done} of {expected||'—'} workouts</small>
-            <div className="program-card-actions"><button className="wide-button" onClick={()=>openPreview(p.key)}>Preview</button><button className="secondary-action" onClick={()=>markComplete(track)}>Complete</button></div>
+            <div className="program-card-actions tracked-program-actions"><button className="wide-button" onClick={()=>openPreview(p.key)}>Preview</button><button className="secondary-action" onClick={()=>pauseTracking(track)}>Pause</button><button className="secondary-action" onClick={()=>markComplete(track)}>Complete</button></div>
+          </article>
+        })}</div>
+      </section>}
+
+      {paused.length>0&&<section className="program-state-section paused-program-section">
+        <div className="section-heading"><div><span className="card-label">PAUSED</span><h3>Paused programs</h3></div><span className="helper-text">Progress is saved</span></div>
+        <div className="archive-grid">{paused.map(track=>{
+          const p=programByKey[track.program_key]
+          if(!p)return null
+          const done=matchingSessions(track).length
+          const expected=expectedSessions(track)
+          return <article className="archive-card paused-program-card" key={track.id}>
+            <div className="archive-card-head"><span className="program-length">Run {track.run_number}</span><span className="paused-badge">PAUSED</span></div>
+            <h3>{p.name}</h3>
+            <div className="program-progress-track"><div style={{width:(expected ? Math.min(100,done/expected*100) : 0)+'%'}} /></div>
+            <small>{done} of {expected||'—'} workouts · progress saved</small>
+            <div className="program-card-actions"><button className="wide-button" onClick={()=>openPreview(p.key)}>Preview</button><button className="primary-action" disabled={tracked.length>=activeProgramLimit} onClick={()=>resumeTracking(track)}>{tracked.length>=activeProgramLimit?'3 active · pause one to resume':'Resume'}</button></div>
           </article>
         })}</div>
       </section>}
@@ -1065,14 +1115,14 @@ export function PlanPage({
             <div><button type="button" onClick={copyShareLink}>Copy link</button>{navigator.share&&<button type="button" onClick={nativeShareProgram}>Share</button>}</div>
           </div>}
           {shareCode&&<div className="share-code-inline"><strong>{shareCode}</strong><button type="button" onClick={copyShareCode}>Copy code</button></div>}
-          {trackingReady&&!trackedKeys.has(preview.key)&&preview.kind!=='shared'&&<button className="wide-button" onClick={()=>startTracking(preview)}>{completedKeys.has(preview.key)?'Track this program again':'Track this program'}</button>}
+          {trackingReady&&!trackedKeys.has(preview.key)&&!pausedKeys.has(preview.key)&&preview.kind!=='shared'&&<button className="wide-button" disabled={tracked.length>=activeProgramLimit} onClick={()=>startTracking(preview)}>{tracked.length>=activeProgramLimit?'3 active programs · pause one first':completedKeys.has(preview.key)?'Track this program again':'Track this program'}</button>}
           {message&&<div className="status-message preview-action-status">{message}</div>}
         </div>
       </section>}
 
       {completed.length>0&&<details className="completed-programs">
         <summary><span><b>Completed programs</b><small>{completed.length} run{completed.length===1?'':'s'}</small></span></summary>
-        <div className="archive-grid">{completed.map(track=>{const p=programByKey[track.program_key];if(!p)return null;return <article className="archive-card completed-program-card" key={track.id}><h3>{p.name}</h3><p>{track.completed_at?'Completed '+new Date(track.completed_at).toLocaleDateString():'Completed'}</p><button className="wide-button" onClick={()=>startTracking(p)}>Track again</button></article>})}</div>
+        <div className="archive-grid">{completed.map(track=>{const p=programByKey[track.program_key];if(!p)return null;return <article className="archive-card completed-program-card" key={track.id}><h3>{p.name}</h3><p>{track.completed_at?'Completed '+new Date(track.completed_at).toLocaleDateString():'Completed'}</p><button className="wide-button" disabled={tracked.length>=activeProgramLimit} onClick={()=>startTracking(p)}>{tracked.length>=activeProgramLimit?'3 active · pause one first':'Track again'}</button></article>})}</div>
       </details>}
     </>:<>
       <section className="simple-card weekly-schedule-card">
