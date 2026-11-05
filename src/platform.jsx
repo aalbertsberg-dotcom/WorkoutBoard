@@ -533,6 +533,8 @@ export function PlanPage({
   const [sharedPreview,setSharedPreview] = useState(null)
   const [planMode,setPlanMode] = useState('programs')
   const [undoAction,setUndoAction] = useState(null)
+  const [limitPrompt,setLimitPrompt] = useState(null)
+  const [resumePrompt,setResumePrompt] = useState(null)
   const [category,setCategory] = useState('All')
   const [search,setSearch] = useState('')
   const [previewKey,setPreviewKey] = useState('archive:squatober')
@@ -881,7 +883,7 @@ export function PlanPage({
   const startTracking = async p => {
     if(!session?.user || !p)return
     if(tracked.length>=activeProgramLimit){
-      setMessage('You already have 3 active programs. Pause or complete one before adding another.')
+      setLimitPrompt(p)
       return
     }
     if(!p.getWeek){
@@ -907,28 +909,58 @@ export function PlanPage({
     await onTrackingChanged?.()
   }
 
-  const pauseTracking = async track => {
+  const pauseTracking = async (track,{thenStart=null}={}) => {
     const {error}=await supabase.rpc('pause_program_tracking',{target_tracking_id:track.id})
     if(error){
       setMessage(error.message.includes('function')?'Run the 3-program limit / pause migration in Supabase first.':error.message)
-      return
+      return false
     }
-    setMessage(track.program_name+' paused. Its progress is saved.')
+    setLimitPrompt(null)
     await load()
     await onTrackingChanged?.()
+    if(thenStart){
+      const versionId=await createProgramVersion(thenStart)
+      const {data:startData,error:startError}=await supabase.rpc('start_program_tracking',{
+        target_program_key:thenStart.key,
+        target_program_name:thenStart.name,
+        target_program_kind:thenStart.kind,
+      })
+      if(startError){setMessage(startError.message);return false}
+      const trackId=Array.isArray(startData)?startData[0]?.id:startData?.id
+      if(trackId&&versionId)await supabase.from('user_program_tracking').update({program_version_id:versionId}).eq('id',trackId)
+      if(thenStart.kind==='classic')await chooseProgram(thenStart.id)
+      setMessage(track.program_name+' paused. '+thenStart.name+' is now active.')
+      await load()
+      await onTrackingChanged?.()
+      return true
+    }
+    setMessage(track.program_name+' paused. Its progress is saved.')
+    return true
   }
 
-  const resumeTracking = async track => {
+  const resumeTracking = track => {
     if(tracked.length>=activeProgramLimit){
       setMessage('You already have 3 active programs. Pause or complete one before resuming this program.')
       return
     }
-    const {error}=await supabase.rpc('resume_program_tracking',{target_tracking_id:track.id})
+    setResumePrompt(track)
+  }
+
+  const confirmResumeTracking = async restartFromBeginning => {
+    const track=resumePrompt
+    if(!track)return
+    const {error}=await supabase.rpc('resume_program_tracking_with_option',{
+      target_tracking_id:track.id,
+      restart_from_beginning:Boolean(restartFromBeginning),
+    })
     if(error){
-      setMessage(error.message.includes('function')?'Run the 3-program limit / pause migration in Supabase first.':error.message)
+      setMessage(error.message.includes('function')?'Run the follow-up pause/resume migration in Supabase first.':error.message)
       return
     }
-    setMessage(track.program_name+' resumed.')
+    setResumePrompt(null)
+    setMessage(restartFromBeginning
+      ? track.program_name+' restarted from the beginning. Previous workout history is still preserved.'
+      : track.program_name+' resumed where you left off.')
     await load()
     await onTrackingChanged?.()
   }
@@ -1064,7 +1096,7 @@ export function PlanPage({
             <h3>{p.name}</h3>
             <div className="program-progress-track"><div style={{width:(expected ? Math.min(100,done/expected*100) : 0)+'%'}} /></div>
             <small>{done} of {expected||'—'} workouts · progress saved</small>
-            <div className="program-card-actions"><button className="wide-button" onClick={()=>openPreview(p.key)}>Preview</button><button className="primary-action" disabled={tracked.length>=activeProgramLimit} onClick={()=>resumeTracking(track)}>{tracked.length>=activeProgramLimit?'3 active · pause one to resume':'Resume'}</button></div>
+            <div className="program-card-actions"><button className="wide-button" onClick={()=>openPreview(p.key)}>Preview</button><button className="primary-action" disabled={tracked.length>=activeProgramLimit} onClick={()=>resumeTracking(track)}>{tracked.length>=activeProgramLimit?'3 active · pause one first':'Resume'}</button></div>
           </article>
         })}</div>
       </section>}
@@ -1115,14 +1147,38 @@ export function PlanPage({
             <div><button type="button" onClick={copyShareLink}>Copy link</button>{navigator.share&&<button type="button" onClick={nativeShareProgram}>Share</button>}</div>
           </div>}
           {shareCode&&<div className="share-code-inline"><strong>{shareCode}</strong><button type="button" onClick={copyShareCode}>Copy code</button></div>}
-          {trackingReady&&!trackedKeys.has(preview.key)&&!pausedKeys.has(preview.key)&&preview.kind!=='shared'&&<button className="wide-button" disabled={tracked.length>=activeProgramLimit} onClick={()=>startTracking(preview)}>{tracked.length>=activeProgramLimit?'3 active programs · pause one first':completedKeys.has(preview.key)?'Track this program again':'Track this program'}</button>}
+          {trackingReady&&!trackedKeys.has(preview.key)&&!pausedKeys.has(preview.key)&&preview.kind!=='shared'&&<button className="wide-button" onClick={()=>startTracking(preview)}>{tracked.length>=activeProgramLimit?'3 active · choose one to pause':completedKeys.has(preview.key)?'Track this program again':'Track this program'}</button>}
           {message&&<div className="status-message preview-action-status">{message}</div>}
         </div>
       </section>}
 
+      {limitPrompt&&<div className="program-choice-backdrop" onClick={()=>setLimitPrompt(null)}>
+        <section className="program-choice-sheet" onClick={e=>e.stopPropagation()}>
+          <span className="card-label">3 ACTIVE PROGRAMS</span>
+          <h3>Pause one to start {limitPrompt.name}</h3>
+          <p>You can track up to 3 programs at once. Pausing saves that program's progress and frees a slot.</p>
+          <div className="program-pause-choices">{tracked.map(track=><button key={track.id} onClick={()=>pauseTracking(track,{thenStart:limitPrompt})}>
+            <span>Pause</span><strong>{track.program_name}</strong><small>and start {limitPrompt.name}</small>
+          </button>)}</div>
+          <button className="secondary-action" onClick={()=>setLimitPrompt(null)}>Cancel</button>
+        </section>
+      </div>}
+
+      {resumePrompt&&<div className="program-choice-backdrop" onClick={()=>setResumePrompt(null)}>
+        <section className="program-choice-sheet" onClick={e=>e.stopPropagation()}>
+          <span className="card-label">RESUME PROGRAM</span>
+          <h3>{resumePrompt.program_name}</h3>
+          <p>Do you want to continue from where you paused, or restart this program from the beginning?</p>
+          <button className="primary-action" onClick={()=>confirmResumeTracking(false)}>Continue where I left off</button>
+          <button className="secondary-action restart-program-button" onClick={()=>confirmResumeTracking(true)}>Restart from the beginning</button>
+          <small className="helper-text">Restarting resets this program's tracked progress to 0. Your previous workout history is not deleted.</small>
+          <button className="secondary-action" onClick={()=>setResumePrompt(null)}>Cancel</button>
+        </section>
+      </div>}
+
       {completed.length>0&&<details className="completed-programs">
         <summary><span><b>Completed programs</b><small>{completed.length} run{completed.length===1?'':'s'}</small></span></summary>
-        <div className="archive-grid">{completed.map(track=>{const p=programByKey[track.program_key];if(!p)return null;return <article className="archive-card completed-program-card" key={track.id}><h3>{p.name}</h3><p>{track.completed_at?'Completed '+new Date(track.completed_at).toLocaleDateString():'Completed'}</p><button className="wide-button" disabled={tracked.length>=activeProgramLimit} onClick={()=>startTracking(p)}>{tracked.length>=activeProgramLimit?'3 active · pause one first':'Track again'}</button></article>})}</div>
+        <div className="archive-grid">{completed.map(track=>{const p=programByKey[track.program_key];if(!p)return null;return <article className="archive-card completed-program-card" key={track.id}><h3>{p.name}</h3><p>{track.completed_at?'Completed '+new Date(track.completed_at).toLocaleDateString():'Completed'}</p><button className="wide-button" onClick={()=>startTracking(p)}>{tracked.length>=activeProgramLimit?'3 active · choose one to pause':'Track again'}</button></article>})}</div>
       </details>}
     </>:<>
       <section className="simple-card weekly-schedule-card">
