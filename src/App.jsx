@@ -988,14 +988,16 @@ function App() {
       const workoutsToday=(flexCompleted||[]).filter(row=>(row.session_date||localDateKey(row.completed_at))===today).length
       const activeTrackKeys=new Set(activeArchiveTracks.map(row=>row.program_key))
       let resolvedTodayPlan=multipleArchiveTracks
-        ? (todayPlans||[]).find(row=>row.status==='started'||row.workout?.started_explicitly||plannedWorkoutHasProgress(row))
-          || (todayPlans||[]).find(row=>row.status==='planned'&&!row.workout?.tracking_program_key)
-          || null
+        ? (todayPlans||[]).find(row=>
+            row.workout?.started_explicitly ||
+            plannedWorkoutHasProgress(row) ||
+            ((row.status==='started'||row.status==='planned')&&!row.workout?.tracking_program_key)
+          ) || null
         : (todayPlans||[]).find(row=>row.status==='planned'||row.status==='started') || null
 
       if(multipleArchiveTracks){
         const staleAutoRows=(todayPlans||[]).filter(row=>
-          row.status==='planned' &&
+          (row.status==='planned'||row.status==='started') &&
           activeTrackKeys.has(row.workout?.tracking_program_key) &&
           !row.workout?.started_explicitly &&
           !plannedWorkoutHasProgress(row)
@@ -1111,6 +1113,65 @@ function App() {
     return exerciseProgress || conditioningProgress || Boolean(String(workout.note||'').trim())
   }
 
+  const refreshTrackedProgramsInfo = async () => {
+    if(!session?.user)return []
+    const today=localDateKey()
+    const [{data:trackingRows},{data:completedRows}]=await Promise.all([
+      supabase.from('user_program_tracking').select('*')
+        .eq('user_id',session.user.id).eq('status','tracking').order('started_at'),
+      supabase.from('training_sessions').select('id,program,workout,session_date,completed_at')
+        .eq('user_id',session.user.id).not('completed_at','is',null)
+        .order('completed_at',{ascending:false}).limit(1000)
+    ])
+    const activeArchiveTracks=(trackingRows||[]).filter(row=>String(row.program_key||'').startsWith('archive:'))
+    const workoutsToday=(completedRows||[]).filter(row=>(row.session_date||localDateKey(row.completed_at))===today).length
+    const infos=[]
+    for(const track of activeArchiveTracks){
+      const archiveId=String(track.program_key).slice(8)
+      const program=archiveProgramById[archiveId]
+      if(!program?.getWeek||!program.weeksCount||!program.daysPerWeek)continue
+      const completed=(completedRows||[]).filter(row=>{
+        if(new Date(row.completed_at).getTime()<new Date(track.started_at).getTime())return false
+        return row.workout?.tracking_program_key===track.program_key || row.program===program.name
+      })
+      const completedCount=completed.length
+      const total=Number(program.weeksCount)*Number(program.daysPerWeek)
+      const nextIndex=Math.min(completedCount,total)
+      const nextWeek=Math.min(Number(program.weeksCount),Math.floor(nextIndex/Number(program.daysPerWeek))+1)
+      const nextDayIndex=nextIndex%Number(program.daysPerWeek)
+      const upcoming=[]
+      for(let offset=0;offset<3;offset++){
+        const idx=nextIndex+offset
+        if(idx>=total)break
+        const week=Math.floor(idx/Number(program.daysPerWeek))+1
+        const dayIndex=idx%Number(program.daysPerWeek)
+        const day=program.getWeek(week)?.[dayIndex]
+        if(day)upcoming.push({week,dayIndex,title:day.title,note:day.note||'',exercises:day.exercises||[]})
+      }
+      infos.push({
+        key:track.program_key,
+        trackingId:track.id,
+        archiveId,
+        name:program.name,
+        category:program.category||'Program',
+        durationLabel:program.durationLabel||'',
+        completed:completedCount,
+        total,
+        completedToday:completed.some(row=>(row.session_date||localDateKey(row.completed_at))===today),
+        workoutsToday,
+        nextWeek,
+        nextDayIndex,
+        nextTitle:upcoming[0]?.title||'',
+        upcoming,
+        complete:completedCount>=total,
+      })
+    }
+    setTrackedProgramsInfo(infos)
+    setTrackedTodayInfo(infos[0]||null)
+    setTogetherTracking(trackingRows||[])
+    return infos
+  }
+
   const activatePlannedWorkout = data => {
     setWorkoutStartError('')
     setCompletionSummary(null)
@@ -1186,20 +1247,32 @@ function App() {
   const refreshPlannedToday = async () => {
     if (!session?.user) return
     const today = localDateKey()
-    const [{data:activePlans},{data:completedRows}]=await Promise.all([
+    const [{data:activePlans},{data:completedRows},{data:activeTracking}]=await Promise.all([
       supabase.from('planned_workouts').select('*')
         .eq('user_id',session.user.id).eq('scheduled_date',today)
         .in('status',['planned','started']).order('created_at'),
       supabase.from('training_sessions').select('id,title,program,week,total_volume,session_date,completed_at,workout')
         .eq('user_id',session.user.id).eq('session_date',today).not('completed_at','is',null)
-        .order('completed_at',{ascending:false})
+        .order('completed_at',{ascending:false}),
+      supabase.from('user_program_tracking').select('program_key')
+        .eq('user_id',session.user.id).eq('status','tracking')
     ])
-    const multipleTracks=trackedProgramsInfo.length>1
-    let activePlan=(activePlans||[]).find(row=>row.status==='started'||row.workout?.started_explicitly||plannedWorkoutHasProgress(row))
-      || (!multipleTracks ? (activePlans||[]).find(row=>row.status==='planned') : (activePlans||[]).find(row=>row.status==='planned'&&!row.workout?.tracking_program_key))
-      || null
+    const multipleTracks=(activeTracking||[]).filter(row=>String(row.program_key||'').startsWith('archive:')).length>1
+    let activePlan=multipleTracks
+      ? (activePlans||[]).find(row=>
+          row.workout?.started_explicitly ||
+          plannedWorkoutHasProgress(row) ||
+          ((row.status==='started'||row.status==='planned')&&!row.workout?.tracking_program_key)
+        ) || null
+      : (activePlans||[]).find(row=>row.status==='started'||row.workout?.started_explicitly||plannedWorkoutHasProgress(row))
+        || (activePlans||[]).find(row=>row.status==='planned')
+        || null
     const staleAutoPlans=multipleTracks
-      ? (activePlans||[]).filter(row=>row.status==='planned'&&row.workout?.tracking_program_key&&!row.workout?.started_explicitly&&!plannedWorkoutHasProgress(row))
+      ? (activePlans||[]).filter(row=>
+          row.workout?.tracking_program_key &&
+          !row.workout?.started_explicitly &&
+          !plannedWorkoutHasProgress(row)
+        )
       : []
     if(staleAutoPlans.length)await Promise.all(staleAutoPlans.map(row=>supabase.from('planned_workouts').update({status:'skipped',updated_at:new Date().toISOString()}).eq('id',row.id)))
     const staleTrackedPlan=(completedRows||[]).length>0 &&
@@ -1215,15 +1288,30 @@ function App() {
     setShowRegularToday(false)
   }
 
+  const openToday = async () => {
+    await refreshTrackedProgramsInfo()
+    await refreshPlannedToday()
+    setActiveTab('today')
+  }
+
+  const openMe = async () => {
+    await refreshTrackedProgramsInfo()
+    setActiveTab('me')
+  }
+
   useEffect(() => {
-    // Each app section is a separate page. Do not carry the previous page's
-    // scroll position into the next one.
-    const frame=requestAnimationFrame(()=>{
+    // Treat each app section like a separate page. Mobile browsers can restore
+    // scroll after React paints, so reset immediately and once more after layout.
+    if('scrollRestoration' in history)history.scrollRestoration='manual'
+    const reset=()=>{
       window.scrollTo({top:0,left:0,behavior:'auto'})
       document.documentElement.scrollTop=0
       document.body.scrollTop=0
-    })
-    return ()=>cancelAnimationFrame(frame)
+    }
+    reset()
+    const frame=requestAnimationFrame(reset)
+    const timer=setTimeout(reset,80)
+    return ()=>{cancelAnimationFrame(frame);clearTimeout(timer)}
   },[activeTab])
 
   const personalRows = useMemo(
@@ -1883,14 +1971,14 @@ function App() {
             <div className="eyebrow">WORKOUTBOARD</div>
             <h1>{activeTab === 'today' ? 'Today' : activeTab === 'together' ? 'Together' : activeTab === 'program' ? 'Plan' : activeTab === 'whiteboard' ? 'Whiteboard' : activeTab === 'progress' ? 'Progress' : activeTab === 'admin' ? 'Admin' : 'Me'}</h1>
           </div>
-          <button className={'account-chip ' + (isAdmin ? 'admin' : '')} onClick={() => setActiveTab('me')}>
+          <button className={'account-chip ' + (isAdmin ? 'admin' : '')} onClick={openMe}>
             <span>{displayName}</span>
             {isAdmin && <b>ADMIN</b>}
           </button>
         </header>
 
         <nav className="primary-nav">
-          <button className={activeTab === 'today' ? 'active' : ''} onClick={async () => { await refreshPlannedToday(); setActiveTab('today') }}><b>●</b><span>Today</span></button>
+          <button className={activeTab === 'today' ? 'active' : ''} onClick={openToday}><b>●</b><span>Today</span></button>
           <button className={activeTab === 'together' ? 'active' : ''} onClick={() => setActiveTab('together')}><b>⇄</b><span>Together</span></button>
           <button className={activeTab === 'program' ? 'active' : ''} onClick={() => setActiveTab('program')}><b>▦</b><span>Plan</span></button>
           <button className={activeTab === 'whiteboard' ? 'active' : ''} onClick={() => setActiveTab('whiteboard')}><b>□</b><span>Board</span></button>
@@ -2361,6 +2449,7 @@ function App() {
             week={week}
             lifts={lifts}
             jumpToWorkout={jumpToWorkout}
+            onTrackingChanged={refreshTrackedProgramsInfo}
           />
         ) : activeTab === 'whiteboard' ? (
           <WhiteboardPage session={session} />
@@ -2490,7 +2579,7 @@ function App() {
       </main>
 
       <nav className={'mobile-bottom-nav app-level-mobile-nav '+(activeTab==='whiteboard'?'board-bottom-offset':'')} aria-label="WorkoutBoard mobile navigation">
-        <button className={activeTab==='today'?'active':''} onClick={async()=>{await refreshPlannedToday();setActiveTab('today')}}><b>●</b><span>Today</span></button>
+        <button className={activeTab==='today'?'active':''} onClick={openToday}><b>●</b><span>Today</span></button>
         <button className={activeTab==='together'?'active':''} onClick={()=>setActiveTab('together')}><b>⇄</b><span>Together</span></button>
         <button className={activeTab==='program'?'active':''} onClick={()=>setActiveTab('program')}><b>▦</b><span>Plan</span></button>
         <button className={activeTab==='whiteboard'?'active':''} onClick={()=>setActiveTab('whiteboard')}><b>□</b><span>Board</span></button>

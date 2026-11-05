@@ -511,6 +511,7 @@ export function PlanPage({
   week,
   lifts,
   jumpToWorkout,
+  onTrackingChanged,
 }) {
   const [ready,setReady] = useState(null)
   const [trackingReady,setTrackingReady] = useState(true)
@@ -896,14 +897,16 @@ export function PlanPage({
     if(p.kind==='classic') await chooseProgram(p.id)
     setMessage(p.name+' is now in Tracked Programs. Version snapshot saved.')
     await load()
+    await onTrackingChanged?.()
   }
 
   const markComplete = async track => {
     const {error}=await supabase.rpc('complete_program_tracking',{target_tracking_id:track.id})
     if(error){setMessage(error.message);return}
     setMessage('')
-    setUndoAction({label:track.program_name+' marked complete',run:async()=>{await supabase.from('user_program_tracking').update({status:'tracking',completed_at:null,updated_at:new Date().toISOString()}).eq('id',track.id);setUndoAction(null);await load()}})
+    setUndoAction({label:track.program_name+' marked complete',run:async()=>{await supabase.from('user_program_tracking').update({status:'tracking',completed_at:null,updated_at:new Date().toISOString()}).eq('id',track.id);setUndoAction(null);await load();await onTrackingChanged?.()}})
     await load()
+    await onTrackingChanged?.()
   }
 
   const scheduleProgramWorkout = async () => {
