@@ -1216,9 +1216,14 @@ function App() {
   }
 
   useEffect(() => {
-    if(activeTab==='whiteboard'){
-      requestAnimationFrame(()=>window.scrollTo({top:0,left:0,behavior:'auto'}))
-    }
+    // Each app section is a separate page. Do not carry the previous page's
+    // scroll position into the next one.
+    const frame=requestAnimationFrame(()=>{
+      window.scrollTo({top:0,left:0,behavior:'auto'})
+      document.documentElement.scrollTop=0
+      document.body.scrollTop=0
+    })
+    return ()=>cancelAnimationFrame(frame)
   },[activeTab])
 
   const personalRows = useMemo(
