@@ -111,6 +111,7 @@ export function PlatformProgress({
   onOpenProgress=null,
   onOpenWeight=null,
   trackedProgramInfo=null,
+  trackedProgramsInfo=[],
   initialSection='Overview',
 }) {
   const [mode,setMode] = useState('mine')
@@ -395,10 +396,12 @@ export function PlatformProgress({
           <div><span>Current weight</span><strong>{latestBodyweight?latestBodyweight+' lb':'—'}</strong></div>
         </section>
 
-        {trackedProgramInfo&&<section className="simple-card progress-current-program">
-          <div className="section-heading"><div><span className="card-label">CURRENT PROGRAM</span><h3>{trackedProgramInfo.name}</h3></div><b>{trackedProgramInfo.completed}/{trackedProgramInfo.total}</b></div>
-          <div className="program-progress-track"><div style={{width:(trackedProgramInfo.total?Math.min(100,trackedProgramInfo.completed/trackedProgramInfo.total*100):0)+'%'}}/></div>
-          <p className="helper-text">{trackedProgramInfo.complete?'Program complete':trackedProgramInfo.nextTitle?'Next: '+trackedProgramInfo.nextTitle:'Tracking in progress'}</p>
+        {(trackedProgramsInfo.length||trackedProgramInfo)&&<section className="simple-card progress-current-program">
+          <div className="section-heading"><div><span className="card-label">{trackedProgramsInfo.length>1?'TRACKED PROGRAMS':'CURRENT PROGRAM'}</span><h3>{trackedProgramsInfo.length>1?'Your active programs':(trackedProgramsInfo[0]||trackedProgramInfo)?.name}</h3></div></div>
+          <div className="progress-program-list">{(trackedProgramsInfo.length?trackedProgramsInfo:[trackedProgramInfo]).filter(Boolean).map(info=><div key={info.key||info.name}>
+            <div><strong>{info.name}</strong><span>{info.complete?'Program complete':info.nextTitle?'Next: '+info.nextTitle:'Tracking in progress'}</span></div>
+            <div><b>{info.completed}/{info.total}</b><div className="program-progress-track"><div style={{width:(info.total?Math.min(100,info.completed/info.total*100):0)+'%'}}/></div></div>
+          </div>)}</div>
         </section>}
 
         <section className="simple-card recent-pr-home">

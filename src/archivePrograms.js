@@ -410,6 +410,67 @@ const beginnerCoreStabilityWeeks = {
 }
 
 
+const hybridCalisthenicsQuickDays = [
+  day('Pushups + Leg Raises',[
+    ex('Pushup progression','2 sets','Choose a variation you can do cleanly; stop 1-2 reps before failure. Add a third set when you want more volume.'),
+    ex('Leg Raise progression','2 sets','Use a progression that stays controlled. Add a third set when you want more volume.'),
+  ],'WorkoutBoard quick track based on the free Hybrid Routine 2.0. Designed to fit the source routine\'s commonly stated 10-15 minute session window.'),
+  day('Pullups + Squats',[
+    ex('Pullup progression','2 sets','Wall, horizontal, jackknife or full pullups depending on your current level; stop 1-2 reps before failure.'),
+    ex('Squat progression','2 sets','Assisted through single-leg variations as appropriate; stop 1-2 reps before failure.'),
+  ]),
+  day('Bridges + Twists',[
+    ex('Bridge progression','2 sets','Choose the safest progression you can control.'),
+    ex('Twist progression','2 sets','Controlled reps; do not perform twists explosively.'),
+  ]),
+  day('Pushups + Leg Raises',[
+    ex('Pushup progression','2 sets','Stop 1-2 reps before failure.'),
+    ex('Leg Raise progression','2 sets','Controlled reps.'),
+  ]),
+  day('Pullups + Squats',[
+    ex('Pullup progression','2 sets','Stop 1-2 reps before failure.'),
+    ex('Squat progression','2 sets','Controlled reps.'),
+  ]),
+  day('Bridges + Twists',[
+    ex('Bridge progression','2 sets','Controlled progression.'),
+    ex('Twist progression','2 sets','Controlled reps; no explosive twisting.'),
+  ]),
+]
+
+const redditMinimalistDays = [
+  day('Minimalist Full Body',[
+    ex('Walking Lunge','3 sets','One circuit set; work 1-2 reps short of failure. Source allows 2-6 circuits, so use + Add set to scale volume.'),
+    ex('Pushup progression','3 sets','Work 1-2 reps short of failure. Progress the variation when it becomes easy.'),
+    ex('Row progression','3 sets','Use table, rings, low bar or another safe row setup.'),
+    ex('Plank Shoulder Tap','3 sets','Controlled alternating taps.'),
+  ],'Three-circuit WorkoutBoard default for the public r/bodyweightfitness Minimalist Routine. The source allows 2-6 circuits with little to no rest.'),
+]
+
+const redditRecommendedRoutineDays = [
+  day('Recommended Routine - Full Body',[
+    ex('Pullup progression','3x5-8','Pair with squat progression; ~90 sec between paired exercises.'),
+    ex('Squat progression','3x5-8','Pair with pullup progression.'),
+    ex('Dip progression','3x5-8','Pair with hinge progression.'),
+    ex('Hinge progression','3x5-8','Pair with dip progression.'),
+    ex('Row progression','3x5-8','Pair with pushup progression.'),
+    ex('Pushup progression','3x5-8','Pair with row progression.'),
+    ex('Anti-Extension progression','3x8-12','Core triplet; ~60 sec between movements.'),
+    ex('Anti-Rotation progression','3x8-12','Core triplet.'),
+    ex('Extension progression','3x8-12','Core triplet.'),
+  ],'Public r/bodyweightfitness Recommended Routine. Full session is typically much longer than the quick daily plan.'),
+]
+
+const nerdFitnessBeginnerDays = [
+  day('Beginner Bodyweight Circuit',[
+    ex('Bodyweight Squat','2x20','Assisted squat is fine when needed.'),
+    ex('Pushup','2x10','Use an elevated or knee variation if needed.'),
+    ex('Walking Lunge','2x10/side','Good mornings are an alternative if lunges bother your knees.'),
+    ex('Doorway Row','2x10/side','A dumbbell/backpack row is another option.'),
+    ex('Plank','2x15-30 sec','Elevate hands if floor planks are not comfortable.'),
+    ex('Jumping Jack','2x30','Walking jacks or marching can make this low impact.'),
+  ],'WorkoutBoard repeat track based on Nerd Fitness\' public Beginner Bodyweight Workout. The source recommends 2-4 sessions per week with rest between sessions.'),
+]
+
 const streetParkingPublicSampleWeek = [
   day('Monday - Vault 4 FUCANGLONG (Program A)',[
     ex('Dumbbell Squat','20-18-16-14-12-10-8-6-4-2 reps','Use the same load through the descending ladder.'),
@@ -531,6 +592,10 @@ const sofleteAssaulterPublicSample = [
 ]
 
 export const archivePrograms = [
+  {id:'hybrid-calisthenics-quick',name:'Hybrid Calisthenics 2.0 - Quick Daily Track',category:'Calisthenics',difficulty:'Beginner / Scalable',weeksCount:12,daysPerWeek:6,durationLabel:'5-15 min/day',source:'Hybrid Calisthenics public Hybrid Routine 2.0',description:'Short six-day bodyweight track: two movements per day. Uses two working sets by default with an optional third set so it can live beside a lifting program.',getWeek:()=>hybridCalisthenicsQuickDays},
+  {id:'reddit-bwf-minimalist',name:'r/bodyweightfitness - Minimalist Routine',category:'Calisthenics',difficulty:'Beginner / Scalable',weeksCount:8,daysPerWeek:3,durationLabel:'Minimalist',source:'r/bodyweightfitness public Minimalist Routine wiki',description:'Public minimalist full-body routine built around lunges, pushups, rows and plank shoulder taps. WorkoutBoard defaults to three circuits; add/remove sets to scale within the source\'s 2-6 circuit range.',getWeek:()=>redditMinimalistDays},
+  {id:'reddit-bwf-recommended',name:'r/bodyweightfitness - Recommended Routine',category:'Calisthenics',difficulty:'Beginner / Intermediate',weeksCount:8,daysPerWeek:3,durationLabel:'~60 min/session',source:'r/bodyweightfitness public Recommended Routine wiki',description:'Full public bodyweight strength routine with pull, squat, dip, hinge, row, push and three core progressions.',getWeek:()=>redditRecommendedRoutineDays},
+  {id:'nerd-fitness-beginner-bodyweight',name:'Nerd Fitness - Beginner Bodyweight Track',category:'Calisthenics',difficulty:'Beginner',weeksCount:6,daysPerWeek:3,durationLabel:'~20 min/session',source:'Nerd Fitness public Beginner Bodyweight Workout',description:'WorkoutBoard repeat track based on the public beginner circuit. Two circuits by default, three nonconsecutive days per week.',getWeek:()=>nerdFitnessBeginnerDays},
   {id:'street-parking-public-week',name:'Street Parking - Public Sample Week',category:'Strength + Conditioning',difficulty:'Intermediate',weeksCount:1,daysPerWeek:6,source:'Street Parking official public Sample Workouts page',description:'Six publicly posted daily workouts from Street Parking\'s sample week. Source-backed; not the paid daily-program library.',getWeek:()=>streetParkingPublicSampleWeek},
   {id:'street-parking-public-extras',name:'Street Parking - Public Extra Samples',category:'General + Conditioning',difficulty:'Beginner / Intermediate',weeksCount:1,daysPerWeek:6,source:'Street Parking official public Sample Workouts page',description:'Public samples from Dumbbell Strength, 5K, Bodyweight Strength, and On Ramp.',getWeek:()=>streetParkingPublicExtras},
   {id:'soflete-public-dailies',name:'SOFLETE - Public Daily Samples',category:'Tactical + Strength + Conditioning',difficulty:'Intermediate / Advanced',weeksCount:1,daysPerWeek:5,source:'SOFLETE official public daily workout posts',description:'Five non-periodized public SOFLETE daily sample workouts. These are samples, not subscription programming.',getWeek:()=>sofletePublicDailySamples},
