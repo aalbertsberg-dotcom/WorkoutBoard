@@ -256,6 +256,55 @@ const plOly6 = {
 }
 
 
+function strengthStabilityBuilderWeek(week) {
+  const w=Math.max(1,Math.min(6,Number(week)||1))
+  const main = w<=2 ? '3x8 @ RPE 6-7' : w<=4 ? '4x6 @ RPE 7-8' : w===5 ? '5x5 @ RPE 8' : '3x5 @ RPE 6-7'
+  const secondary = w<=2 ? '3x8' : w<=4 ? '4x6-8' : w===5 ? '4x6' : '2x8 light'
+  const accessory = w<=2 ? '3x10' : w<=4 ? '3x8-10' : w===5 ? '3x8' : '2x10 easy'
+  const unilateral = w<=2 ? '3x8/leg' : w<=4 ? '3x10/leg' : w===5 ? '3x8/leg moderate' : '2x8/leg easy'
+  const core = w<=2 ? '3x8/side' : w<=4 ? '3x10/side' : w===5 ? '4x8/side' : '2x8/side'
+  const carry = w<=2 ? '4x40 yd' : w<=4 ? '5x40 yd' : w===5 ? '5x50 yd' : '3x40 yd easy'
+
+  const weekNote = w===1 ? 'Start conservative. Finish every main lift with 2-3 reps still in reserve.'
+    : w===2 ? 'Add a small amount of weight only where Week 1 felt clean and controlled.'
+    : w===3 ? 'Volume increases. Keep the final work set around RPE 7-8.'
+    : w===4 ? 'Repeat the Week 3 structure with a small load increase where earned.'
+    : w===5 ? 'Strongest week. Work hard, but no grinding or ugly reps.'
+    : 'Deload week. Reduce load and volume so you finish fresh.'
+
+  return [
+    day('Day 1 - Squat + Push/Pull',[
+      ex('Front Squat',main,'Brace hard, control the descent, and keep the final set smooth.'),
+      ex('Bench Press',secondary,'Pause lightly on the chest; keep shoulder blades set.'),
+      ex('Chest-Supported DB Row',accessory,'Pull elbows back without shrugging.'),
+      ex('Bulgarian Split Squat',unilateral,'Stay balanced; use load only if control is solid.'),
+      ex('Dead Bug',core,'Long exhale; keep low back quiet.'),
+      ex('Suitcase Carry',carry+'/side','Walk tall and resist side-bending.'),
+      ex('Zone 2 Bike / Walk','8-12 min easy','Optional finisher; conversational pace.'),
+    ],weekNote),
+
+    day('Day 2 - Hinge + Press',[
+      ex('Romanian Deadlift',main,'Keep the bar close and own the stretch; no bouncing.'),
+      ex('Strict Press',secondary,'Ribs down and glutes tight; no back lean.'),
+      ex('Lat Pulldown / Assisted Pullup',accessory,'Use a grip that feels good on shoulders and elbows.'),
+      ex('Reverse Lunge',unilateral,'Controlled step and steady knee position.'),
+      ex('Pallof Press',core,'Pause fully extended for 1-2 seconds.'),
+      ex('Side Plank',w<=2?'3x25 sec/side':w<=4?'3x35 sec/side':w===5?'3x45 sec/side':'2x25 sec/side','Stay stacked; do not rotate.'),
+      ex('Sled Push / Bike Intervals',w===6?'6 min easy':'8-10 min moderate','Optional. Short repeatable efforts; stop before form or pace falls apart.'),
+    ],weekNote),
+
+    day('Day 3 - Full Body + Carry',[
+      ex('Trap Bar Deadlift',w<=2?'3x5 @ RPE 6-7':w<=4?'4x5 @ RPE 7':w===5?'5x3 @ RPE 8':'3x3 light','Treat every rep like a clean first rep; no grinding.'),
+      ex('Incline DB Bench',accessory,'Controlled lower; stop short of shoulder discomfort.'),
+      ex('One-Arm DB Row',accessory+'/side','Square the hips and pause at the top.'),
+      ex('Step-Up',unilateral,'Drive through the working leg; avoid pushing off the trailing foot.'),
+      ex('Hamstring Curl',accessory,'Smooth reps with a full range you can control.'),
+      ex('Farmer Carry',carry,'Heavy enough to challenge grip without changing posture.'),
+      ex('Zone 2 Row / Walk',w===6?'10 min easy':'12-20 min easy','Optional conditioning. Keep it truly easy.'),
+    ],weekNote),
+  ]
+}
+
 const beginnerCoreStabilityWeeks = {
   1:[
     day('Day 1 - Brace + Single-Leg Control',[
@@ -600,6 +649,7 @@ export const archivePrograms = [
   {id:'street-parking-public-extras',name:'Street Parking - Public Extra Samples',category:'General + Conditioning',difficulty:'Beginner / Intermediate',weeksCount:1,daysPerWeek:6,source:'Street Parking official public Sample Workouts page',description:'Public samples from Dumbbell Strength, 5K, Bodyweight Strength, and On Ramp.',getWeek:()=>streetParkingPublicExtras},
   {id:'soflete-public-dailies',name:'SOFLETE - Public Daily Samples',category:'Tactical + Strength + Conditioning',difficulty:'Intermediate / Advanced',weeksCount:1,daysPerWeek:5,source:'SOFLETE official public daily workout posts',description:'Five non-periodized public SOFLETE daily sample workouts. These are samples, not subscription programming.',getWeek:()=>sofletePublicDailySamples},
   {id:'soflete-assaulter-public-sample',name:'SOFLETE - Assaulter Public Sample',category:'Tactical Strength',difficulty:'Advanced',weeksCount:1,daysPerWeek:1,source:'SOFLETE official training-app public demo',description:'One detailed upper-body Assaulter demo session publicly shown by SOFLETE; not the full paid cycle.',getWeek:()=>sofleteAssaulterPublicSample},
+  {id:'strength-stability-builder',name:'Strength + Stability Builder',category:'Strength + Stability',difficulty:'Beginner / Intermediate',weeksCount:6,daysPerWeek:3,durationLabel:'35-50 min/session',source:'WorkoutBoard custom program',description:'A stronger step up from Beginner Core & Stability: three full-body lifting days with squat, hinge, press, pull, unilateral work, carries, core stability and optional conditioning. Six weeks with a progressive build and a final deload.',getWeek:strengthStabilityBuilderWeek},
   {id:'beginner-core-stability',name:'Beginner Core & Stability',category:'Core + Stability',difficulty:'Beginner',weeksCount:6,daysPerWeek:3,source:'WorkoutBoard custom program',description:'Six-week beginner stability block using familiar unilateral leg work, hinges, rows, presses, carries, core bracing and easy conditioning.',getWeek:w=>beginnerCoreStabilityWeeks[Math.max(1,Math.min(6,w))]},
   {id:'squatober',name:'Squatober',category:'Specialization',difficulty:'Intermediate',weeksCount:3,daysPerWeek:2,source:'FEB SQUATOBER.pdf',description:'Squat-focused block with bench, deadlift, pulling, and accessories.',getWeek:w=>squatoberWeeks[Math.max(1,Math.min(3,w))]},
   {id:'phat',name:'PHAT - Power Hypertrophy Adaptive Training',category:'Powerbuilding',difficulty:'Intermediate',weeksCount:12,daysPerWeek:5,source:'phat_ebook.pdf',description:'Two power days plus three hypertrophy days.',getWeek:()=>phatDays},
