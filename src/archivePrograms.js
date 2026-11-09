@@ -783,6 +783,97 @@ export const allArchivePrograms = [
 ]
 export const archiveProgramById = Object.fromEntries(allArchivePrograms.map(p=>[p.id,p]))
 
+const archiveRound5 = n => Math.round(Number(n||0)/5)*5
+
+function archiveLiftFromText(name,prescription='',note='') {
+  const text=(String(name||'')+' '+String(prescription||'')+' '+String(note||'')).toLowerCase()
+  if(/bench/.test(text)) return 'Bench'
+  if(/deadlift|rack pull|trap bar/.test(text)) return 'Deadlift'
+  if(/squat/.test(text)) return 'Squat'
+  if(/overhead press|strict press|barbell press|push press|military press/.test(text)) return 'Press'
+  return null
+}
+
+function archivePercentBasis(program,text) {
+  const value=String(text||'').toLowerCase()
+  if(/training max|\btm\b/.test(value)) return 'tm'
+  if(/e1rm|1rm/.test(value)) return 'e1rm'
+  if(/531|5\/3\/1/.test(String(program?.id||'')+' '+String(program?.name||''))) return 'tm'
+  return 'e1rm'
+}
+
+function archiveTargetWeight(oneRms,lift,pct,basis) {
+  const oneRm=Number(oneRms?.[lift]||0)
+  if(!oneRm||pct==null)return ''
+  const base=basis==='tm'?oneRm*.85:oneRm
+  return archiveRound5(base*Number(pct)/100)
+}
+
+function archiveSetProgressWithLoads(program,item,oneRms={}) {
+  const prescription=String(item?.prescription||'').trim()
+  const note=String(item?.note||'').trim()
+  const text=(prescription+' '+note).trim()
+  const lift=archiveLiftFromText(item?.name,prescription,note)
+  const allowAuto=Boolean(lift)&&(
+    /e1rm|1rm|training max|\btm\b/i.test(text) ||
+    ['andy-hybrid-rebuild','squatober','beach531'].includes(String(program?.id||''))
+  )
+  if(!allowAuto)return null
+
+  const basis=archivePercentBasis(program,text)
+  const build=(sets,reps,pct,pctHigh=null,labelPrefix='')=>{
+    const lowWeight=archiveTargetWeight(oneRms,lift,pct,basis)
+    const highWeight=pctHigh?archiveTargetWeight(oneRms,lift,pctHigh,basis):''
+    const pctLabel=pctHigh?pct+'-'+pctHigh+'%':pct+'%'
+    return Array.from({length:Number(sets)||1},(_,i)=>({
+      set:i+1,
+      reps:Number(reps)||null,
+      label:(labelPrefix?labelPrefix+' · ':'')+pctLabel+(reps?' × '+reps:''),
+      done:false,
+      weight:lowWeight||'',
+      weight_lift:lift,
+      weight_basis:basis,
+      pct:Number(pct),
+      pct_high:pctHigh?Number(pctHigh):null,
+      target_weight_range:highWeight&&highWeight!==lowWeight?lowWeight+'-'+highWeight+' lb':'',
+    }))
+  }
+
+  const top=prescription.match(/top\s+set\s*(\d+)\s*[-–]\s*(\d+).*?rpe\s*([0-9.]+)/i)
+  const backoff=prescription.match(/(?:then\s+)?(\d+)\s*[x×]\s*(\d+)\s*@\s*([0-9]+(?:\.[0-9]+)?)(?:\s*[-–]\s*([0-9]+(?:\.[0-9]+)?))?\s*%/i)
+  if(top&&backoff){
+    const result=[{
+      set:1,reps:Number(top[1]),label:'Top set '+top[1]+'-'+top[2]+' @ RPE '+top[3],
+      done:false,weight:'',editable_reps:true,weight_lift:lift,weight_basis:basis,
+    }]
+    const extra=build(Number(backoff[1]),Number(backoff[2]),Number(backoff[3]),backoff[4]?Number(backoff[4]):null,'Backoff')
+    return result.concat(extra.map((set,i)=>({...set,set:i+2})))
+  }
+
+  const blocks=[]
+  const blockRx=/(\d+)\s*[x×]\s*(\d+)\s*@\s*~?\s*([0-9]+(?:\.[0-9]+)?)(?:\s*[-–]\s*([0-9]+(?:\.[0-9]+)?))?\s*%/ig
+  let match
+  while((match=blockRx.exec(prescription))){
+    blocks.push(...build(Number(match[1]),Number(match[2]),Number(match[3]),match[4]?Number(match[4]):null))
+  }
+  if(blocks.length)return blocks.map((set,i)=>({...set,set:i+1}))
+
+  const singles=[]
+  const singleRx=/(\d+)\s*@\s*([0-9]+(?:\.[0-9]+)?)\s*%/ig
+  while((match=singleRx.exec(prescription))){
+    singles.push(...build(1,Number(match[1]),Number(match[2])))
+  }
+  if(singles.length)return singles.map((set,i)=>({...set,set:i+1}))
+
+  const baseSets=prescription.match(/(\d+)\s*[x×]\s*(\d+)/i)
+  const pctOnly=text.match(/(?:around\s*)?([0-9]+(?:\.[0-9]+)?)\s*%\s*(?:of\s*)?(?:bench|squat|deadlift|press)?\s*(?:1rm|e1rm|training max|tm)?/i)
+  if(baseSets&&pctOnly){
+    return build(Number(baseSets[1]),Number(baseSets[2]),Number(pctOnly[1]))
+  }
+
+  return null
+}
+
 function archiveExerciseRest(program,item) {
   const name=String(item?.name||'').toLowerCase()
   const rx=String(item?.prescription||'').toLowerCase()
@@ -801,7 +892,7 @@ function archiveExerciseRest(program,item) {
   return 90
 }
 
-export function makePlannedFromArchive(program, week, dayIndex, scheduledDate) {
+export function makePlannedFromArchive(program, week, dayIndex, scheduledDate, oneRms={}) {
   const days = program.getWeek ? program.getWeek(week) : [day(`Week ${week} - Source workout`,[
     ex('Source program session','Use the original program prescription for this day','Add/edit exercises below as needed.')
   ])]
@@ -818,7 +909,16 @@ export function makePlannedFromArchive(program, week, dayIndex, scheduledDate) {
       archive_program_id:program.id,
       source:program.source,
       notes:chosen.note || '',
-      exercises:(chosen.exercises || []).map((item,i)=>({...item,id:`e${i+1}`,rest_seconds:archiveExerciseRest(program,item),result:'',done:false})),
+      exercises:(chosen.exercises || []).map((item,i)=>{
+        const setProgress=archiveSetProgressWithLoads(program,item,oneRms)
+        return {
+          ...item,
+          id:`e${i+1}`,
+          rest_seconds:archiveExerciseRest(program,item),
+          result:'',done:false,
+          ...(setProgress?{setProgress}:{})
+        }
+      }),
       sleep:'', energy:'', pain:'', rpe:'', bodyweight:'', note:'',
     },
     status:'planned',

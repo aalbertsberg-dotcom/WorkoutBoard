@@ -406,6 +406,252 @@ function getProgramWeek(programId, week, lift) {
   }
 }
 
+const classicLiftExerciseNames = {
+  Squat:'Back Squat',
+  Bench:'Bench Press',
+  Deadlift:'Deadlift',
+  Press:'Overhead Press',
+}
+
+function classicSetProgressFromPrescription(text) {
+  const value=String(text||'').trim()
+  const multi=value.match(/(\d+)\s*[x×]\s*(\d+)(?:\s*[-–]\s*(\d+))?([^,;]*)/i)
+  if(multi){
+    const sets=Math.max(1,Number(multi[1])||1)
+    const reps=Math.max(1,Number(multi[2])||1)
+    const upper=Number(multi[3]||0)
+    const suffix=String(multi[4]||'').trim().replace(/^\s+/,'')
+    const repLabel=upper ? reps+'-'+upper+(suffix?' '+suffix:'') : reps+(suffix?' '+suffix:'')
+    return Array.from({length:sets},(_,i)=>({
+      set:i+1,reps,label:repLabel,done:false,weight:'',
+      editable_reps:Boolean(upper)||/amrap|max|rpe|as performed/i.test(value),
+    }))
+  }
+
+  const setsOnly=value.match(/(\d+)\s*sets?/i)
+  if(setsOnly){
+    const sets=Math.max(1,Number(setsOnly[1])||1)
+    return Array.from({length:sets},(_,i)=>({
+      set:i+1,reps:null,label:'As performed',done:false,weight:'',editable_reps:true,
+    }))
+  }
+
+  const repRange=value.match(/(\d+)\s*[-–]\s*(\d+)\s*reps?/i)
+  if(repRange){
+    return [{
+      set:1,reps:Number(repRange[1]),label:repRange[1]+'-'+repRange[2]+' reps',
+      done:false,weight:'',editable_reps:true,
+    }]
+  }
+
+  const xRange=value.match(/(?:^|\s)x\s*(\d+)\s*[-–]\s*(\d+)/i)
+  if(xRange){
+    return [{
+      set:1,reps:Number(xRange[1]),label:xRange[1]+'-'+xRange[2]+' reps',
+      done:false,weight:'',editable_reps:true,
+    }]
+  }
+
+  if(/single/i.test(value)){
+    return [{set:1,reps:1,label:'1 rep',done:false,weight:'',editable_reps:false}]
+  }
+
+  return [{set:1,reps:null,label:'As performed',done:false,weight:'',editable_reps:true}]
+}
+
+function classicAssistanceExercise(text,restSeconds,index) {
+  const value=String(text||'').trim()
+  let name=value||'Assistance'
+  let prescription='As performed'
+  const scheme=value.match(/\b\d+\s*(?:[x×]|sets?\b)/i)
+  const totalRange=value.match(/\b\d+\s*[-–]\s*\d+\s*reps?/i)
+  const split=scheme||totalRange
+  if(split&&split.index>0){
+    name=value.slice(0,split.index).trim()
+    prescription=value.slice(split.index).trim()
+  }
+  const setProgress=classicSetProgressFromPrescription(prescription)
+  return {
+    id:'assist-'+index,
+    name:name||'Assistance',
+    prescription,
+    rest_seconds:Number(restSeconds||75),
+    result:'',load:'',done:false,setProgress,
+  }
+}
+
+function classicSecondaryExercises(programId,week,lift,oneRms,plan) {
+  const secondary=plan.secondary
+  if(!secondary?.title)return []
+  const program=programs[programId]
+  const mainName=classicLiftExerciseNames[lift]||lift
+  const currentOneRm=Number(oneRms?.[lift]||0)
+  const parts=String(secondary.title).split(/\s+\+\s+/).map(x=>x.trim()).filter(Boolean)
+  const result=parts.map((part,index)=>{
+    const lower=part.toLowerCase()
+    let name
+    if(/widowmaker/.test(lower)) name=mainName+' — Widowmaker'
+    else if(/\bfsl\b|first[ -]?set/.test(lower)) name=mainName+' — FSL'
+    else if(/\bbbb\b/.test(lower)) name=mainName+' — BBB'
+    else if(/joker/.test(lower)) name=mainName+' — Joker'
+    else if(/tm test|training max|100% tm/.test(lower)) name=mainName+' — TM Test'
+    else if(/backoff|back-off/.test(lower)) name=mainName+' — Backoff'
+    else {
+      const movement=part.replace(/\s+\d+\s*[x×].*$/i,'').replace(/\s+@.*$/,'').trim()
+      name=movement||secondary.label||'Supplemental'
+    }
+
+    const setProgress=classicSetProgressFromPrescription(part)
+    const textLift=/bench/i.test(part)?'Bench'
+      : /deadlift/i.test(part)?'Deadlift'
+      : /squat/i.test(part)?'Squat'
+      : /press/i.test(part)?'Press'
+      : lift
+    const explicitPct=part.match(/@\s*([0-9]+(?:\.[0-9]+)?)(?:\s*[-–]\s*([0-9]+(?:\.[0-9]+)?))?\s*%/i)
+    const pct=explicitPct?Number(explicitPct[1]):secondary.pct
+    const autoWeight=pct!=null && (
+      Boolean(explicitPct) ||
+      parts.length===1 ||
+      /\bfsl\b|first[ -]?set|\bbbb\b|widowmaker|tm test|training max|100% tm|backoff|back-off/i.test(part)
+    ) && !(parts.length>1&&/joker/i.test(part)&&!explicitPct)
+    const sourceOneRm=Number(oneRms?.[textLift]||currentOneRm||0)
+    const prescribedWeight=autoWeight ? targetWeight(sourceOneRm,pct,program.basis) : ''
+    if(autoWeight)setProgress.forEach(set=>{
+      set.weight=prescribedWeight||''
+      set.weight_lift=textLift
+      set.weight_basis=program.basis
+      set.pct=pct!=null?Number(pct):null
+    })
+    if(explicitPct?.[2]&&sourceOneRm){
+      const upper=targetWeight(sourceOneRm,Number(explicitPct[2]),program.basis)
+      setProgress.forEach(set=>{set.target_weight_range=prescribedWeight+'-'+upper+' lb'})
+    }
+
+    return {
+      id:'secondary-'+index,
+      name,
+      prescription:part,
+      note:secondary.label||'Supplemental work',
+      rest_seconds:Number(plan.rest?.secondary||120),
+      result:'',load:'',done:false,setProgress,
+    }
+  })
+
+  if((plan.jokers||[]).length && !result.some(item=>/joker/i.test(item.name))){
+    result.unshift({
+      id:'joker-sets',
+      name:mainName+' — Joker Sets',
+      prescription:(plan.jokers||[]).length+' sets · choose load and reps as performed',
+      note:'Optional heavier work. Stop before a grinder.',
+      rest_seconds:Number(plan.rest?.secondary||180),
+      result:'',load:'',done:false,
+      setProgress:(plan.jokers||[]).map((item,index)=>({
+        set:index+1,reps:null,label:item.label||('Joker '+(index+1)),
+        done:false,weight:'',editable_reps:true,
+      })),
+    })
+  }
+  return result
+}
+
+function makePlannedFromClassic(programId,week,lift,scheduledDate,oneRms,trackingProgramKey='',trackingWorkoutKey='') {
+  const program=programs[programId] || programs['andy-hybrid-12']
+  const plan=getProgramWeek(programId,week,lift)
+  const mainName=classicLiftExerciseNames[lift]||lift
+  const oneRm=Number(oneRms?.[lift]||0)
+  const mainSets=(plan.main||[]).map((set,index)=>{
+    const repsText=String(set.reps??'')
+    const reps=Math.max(1,Number.parseInt(repsText,10)||1)
+    const pctText=set.pctLabel || (set.pct!=null?set.pct+'%':'RPE / manual load')
+    return {
+      set:index+1,
+      reps,
+      label:pctText+' × '+repsText,
+      done:false,
+      weight:set.pct!=null ? (targetWeight(oneRm,set.pct,program.basis)||'') : '',
+      weight_lift:lift,
+      weight_basis:program.basis,
+      pct:set.pct!=null?Number(set.pct):null,
+      editable_reps:/[+]|[-–]|rpe|amrap|max/i.test(repsText+' '+pctText),
+    }
+  })
+  const mainPrescription=(plan.main||[]).map(set=>{
+    const pctText=set.pctLabel || (set.pct!=null?set.pct+'%':'RPE / manual')
+    return pctText+' × '+set.reps
+  }).join(' · ')
+
+  const exercises=[
+    {
+      id:'main',
+      name:mainName,
+      prescription:mainPrescription||'Main work',
+      note:[plan.phase,plan.rule].filter(Boolean).join(' · '),
+      rest_seconds:Number(plan.rest?.main||180),
+      result:'',load:'',done:false,setProgress:mainSets,
+      primary_lift:lift,
+    },
+    ...classicSecondaryExercises(programId,week,lift,oneRms,plan),
+    ...(plan.assistance||[]).map((item,index)=>classicAssistanceExercise(
+      item,
+      typeof plan.rest?.assistance==='function' ? plan.rest.assistance(item) : plan.rest?.assistance,
+      index
+    )),
+  ]
+
+  const conditioning=String(plan.conditioning||'').trim()
+  const hasConditioning=Boolean(conditioning&&conditioning!=='None')
+  const conditioningPrescribed=Boolean(hasConditioning&&!/^optional\b/i.test(conditioning))
+
+  return {
+    scheduled_date:scheduledDate,
+    title:lift+' Day',
+    source_program_name:program.name,
+    source_week:Number(week),
+    source_day:lift,
+    workout:{
+      version:2,
+      type:'flexible',
+      classic_program_id:programId,
+      tracking_program_key:trackingProgramKey||undefined,
+      tracking_workout_key:trackingWorkoutKey||undefined,
+      started_explicitly:true,
+      source:'WorkoutBoard built-in',
+      phase:plan.phase||'',
+      rule:plan.rule||'',
+      exercises,
+      conditioning_plan:hasConditioning?conditioning:'',
+      conditioningEnabled:conditioningPrescribed,
+      conditioning_prescribed:conditioningPrescribed,
+      metcon:{name:hasConditioning?conditioning:'',format:'',activity:'',duration:'',workTime:'',restTime:'',interval:'',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx',intensity:'Easy'},
+      sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',
+    },
+    status:'started',
+  }
+}
+
+function personalizeWorkoutLoads(workout,maxes={}) {
+  return {
+    ...workout,
+    exercises:(workout?.exercises||[]).map(item=>({
+      ...item,
+      setProgress:(item.setProgress||[]).map(set=>{
+        const targetLift=set.weight_lift
+        const pct=set.pct
+        if(!targetLift||pct==null)return {...set}
+        const low=targetWeight(Number(maxes?.[targetLift]||0),Number(pct),set.weight_basis||'e1rm')
+        const high=set.pct_high!=null
+          ? targetWeight(Number(maxes?.[targetLift]||0),Number(set.pct_high),set.weight_basis||'e1rm')
+          : null
+        return {
+          ...set,
+          weight:low||'',
+          target_weight_range:high&&high!==low?low+'-'+high+' lb':set.target_weight_range||'',
+        }
+      })
+    }))
+  }
+}
+
 function makeLog(programId, week, lift, tm) {
   const program = programs[programId]
   const plan = getProgramWeek(programId,week,lift)
@@ -890,6 +1136,7 @@ function App() {
   const [activeSession,setActiveSession] = useState(null)
   const [participants,setParticipants] = useState([])
   const [sessionResults,setSessionResults] = useState([])
+  const [sessionOneRms,setSessionOneRms] = useState({})
   const [joinCode,setJoinCode] = useState('')
   const [togetherMessage,setTogetherMessage] = useState('')
   const [sharedWorkoutActive,setSharedWorkoutActive] = useState(false)
@@ -1119,14 +1366,33 @@ function App() {
       setDataLoading(true)
       const userId = session.user.id
       const today = localDateKey()
-      const [{data:profileData},{data:tmData},{data:logsData},{data:todayPlans},{data:trackingData},{data:flexCompleted}] = await Promise.all([
+      const [{data:profileData},{data:oneRmData},{data:tmData},{data:logsData},{data:todayPlans},{data:trackingData},{data:flexCompleted}] = await Promise.all([
         supabase.from('profiles').select('*').eq('id',userId).single(),
+        supabase.from('one_rep_maxes').select('*').eq('user_id',userId).maybeSingle(),
         supabase.from('training_maxes').select('*').eq('user_id',userId).single(),
         supabase.from('workout_logs').select('*').eq('user_id',userId).order('updated_at',{ascending:false}),
         supabase.from('planned_workouts').select('*').eq('user_id',userId).eq('scheduled_date',today).in('status',['planned','started','skipped']).order('created_at'),
         supabase.from('user_program_tracking').select('*').eq('user_id',userId).eq('status','tracking').order('updated_at',{ascending:false}),
         supabase.from('training_sessions').select('id,title,program,week,primary_lift,workout,session_date,completed_at').eq('user_id',userId).not('completed_at','is',null).order('completed_at',{ascending:false}).limit(1000),
       ])
+
+      const savedMetaOneRms=session.user.user_metadata?.one_rep_maxes
+      const loadedOneRms=oneRmData ? {
+        Squat:oneRmData.squat ?? '',
+        Bench:oneRmData.bench ?? '',
+        Deadlift:oneRmData.deadlift ?? '',
+        Press:oneRmData.press ?? '',
+      } : savedMetaOneRms&&typeof savedMetaOneRms==='object' ? {
+        Squat:savedMetaOneRms.Squat ?? '',
+        Bench:savedMetaOneRms.Bench ?? '',
+        Deadlift:savedMetaOneRms.Deadlift ?? '',
+        Press:savedMetaOneRms.Press ?? '',
+      } : tmData ? {
+        Squat:tmData.squat==null?'':round2(Number(tmData.squat)/.85),
+        Bench:tmData.bench==null?'':round2(Number(tmData.bench)/.85),
+        Deadlift:tmData.deadlift==null?'':round2(Number(tmData.deadlift)/.85),
+        Press:tmData.press==null?'':round2(Number(tmData.press)/.85),
+      } : defaultOneRms
 
       if (cancelled) return
 
@@ -1195,7 +1461,7 @@ function App() {
           }
           const cancelledTrackedToday=(todayPlans||[]).some(row=>row.status==='skipped'&&row.workout?.tracking_program_key===activeArchiveTrack.program_key)
           if(!resolvedTodayPlan && !completedToday && !cancelledTrackedToday && completedCount<total && nextDay){
-            const plannedPayload=makePlannedFromArchive(trackedProgram,nextWeek,nextDayIndex,today)
+            const plannedPayload=makePlannedFromArchive(trackedProgram,nextWeek,nextDayIndex,today,loadedOneRms)
             plannedPayload.workout={...plannedPayload.workout,tracking_program_key:activeArchiveTrack.program_key}
             const inserted=await supabase.from('planned_workouts').insert({...plannedPayload,user_id:userId}).select().single()
             if(!inserted.error)resolvedTodayPlan=inserted.data
@@ -1211,22 +1477,7 @@ function App() {
       setShowRegularToday(false)
       setTogetherTracking(trackingData || [])
 
-      const savedOneRms=session.user.user_metadata?.one_rep_maxes
-      if(savedOneRms&&typeof savedOneRms==='object'){
-        setOneRepMaxes({
-          Squat:savedOneRms.Squat ?? '',
-          Bench:savedOneRms.Bench ?? '',
-          Deadlift:savedOneRms.Deadlift ?? '',
-          Press:savedOneRms.Press ?? '',
-        })
-      }else if(tmData){
-        setOneRepMaxes({
-          Squat:tmData.squat==null?'':round2(Number(tmData.squat)/.85),
-          Bench:tmData.bench==null?'':round2(Number(tmData.bench)/.85),
-          Deadlift:tmData.deadlift==null?'':round2(Number(tmData.deadlift)/.85),
-          Press:tmData.press==null?'':round2(Number(tmData.press)/.85),
-        })
-      }
+      setOneRepMaxes(loadedOneRms)
 
       const completed = new Set(rows.filter(r => r.program === chosen.dbName && r.week === currentWeek && r.completed_at).map(r => r.lift))
       setLift(lifts.find(x => !completed.has(x)) || 'Press')
@@ -1244,7 +1495,7 @@ function App() {
     const workout=row?.workout||{}
     const exerciseProgress=(workout.exercises||[]).some(item=>{
       if(item.done || String(item.result||'').trim() || Number(item.load||0))return true
-      return (item.setProgress||[]).some(set=>set.done || Number(set.weight||0))
+      return (item.setProgress||[]).some(set=>set.done)
     })
     const conditioning=workout.metcon||{}
     const conditioningProgress=Boolean(
@@ -1294,28 +1545,62 @@ function App() {
     }
     if(trackInfo.kind==='classic'){
       const programId=trackInfo.programId
+      const nextWeek=chosenWorkout.week||trackInfo.nextWeek||1
       const nextLift=chosenWorkout.lift||trackInfo.nextLift||lifts[chosenWorkout.dayIndex]||'Squat'
+      const today=localDateKey()
+      const plannedPayload=makePlannedFromClassic(
+        programId,nextWeek,nextLift,today,oneRepMaxes,
+        trackInfo.key,chosenWorkout.trackingWorkoutKey
+      )
+      const {data,error}=await supabase.from('planned_workouts')
+        .insert({...plannedPayload,user_id:session.user.id}).select().single()
+      if(error){setWorkoutStartError(error.message);return}
       setActiveProgram(programId)
-      setWeek(chosenWorkout.week||trackInfo.nextWeek||1)
+      setWeek(nextWeek)
       setLift(nextLift)
       setTrackedTodayInfo(trackInfo)
-      setCompletionSummary(null)
-      setPlannedToday(null)
-      setShowRegularToday(true)
-      requestAnimationFrame(()=>window.scrollTo({top:0,left:0,behavior:'auto'}))
+      activatePlannedWorkout(data)
       return
     }
     const program=archiveProgramById[trackInfo.archiveId]
     const next=chosenWorkout
     if(!program?.getWeek || !next)return
     const today=localDateKey()
-    const plannedPayload=makePlannedFromArchive(program,next.week,next.dayIndex,today)
+    const plannedPayload=makePlannedFromArchive(program,next.week,next.dayIndex,today,oneRepMaxes)
     plannedPayload.status='started'
     plannedPayload.workout={...plannedPayload.workout,tracking_program_key:trackInfo.key,tracking_workout_key:next.trackingWorkoutKey,started_explicitly:true}
     const {data,error}=await supabase.from('planned_workouts').insert({...plannedPayload,user_id:session.user.id}).select().single()
     if(error){setWorkoutStartError(error.message);return}
     setTrackedTodayInfo(trackInfo)
     activatePlannedWorkout(data)
+  }
+
+  const scheduleClassicWorkoutFromPlan = async ({programId,week:targetWeek,lift:targetLift,scheduledDate}) => {
+    if(!session?.user)return {error:'Sign in to schedule a workout.'}
+    if(!programs[programId]||!lifts.includes(targetLift))return {error:'That workout could not be scheduled.'}
+
+    const activeTrack=trackedProgramsInfo.find(info=>info.kind==='classic'&&info.programId===programId)
+    const trackingKey=activeTrack?.key||''
+    const trackingWorkoutKey=trackingKey
+      ? `${trackingKey}|w${Number(targetWeek)}|${String(targetLift).toLowerCase()}`
+      : ''
+    const payload=makePlannedFromClassic(
+      programId,
+      Number(targetWeek),
+      targetLift,
+      scheduledDate,
+      oneRepMaxes,
+      trackingKey,
+      trackingWorkoutKey
+    )
+    payload.status='planned'
+    payload.workout={...payload.workout,started_explicitly:false}
+
+    const {data,error}=await supabase.from('planned_workouts')
+      .insert({...payload,user_id:session.user.id}).select().single()
+    if(error)return {error:error.message}
+    if(scheduledDate===localDateKey())await refreshPlannedToday()
+    return {data}
   }
 
   const startStrengthBaseline = async (path='full',{confirmed=false,liftName=null}={}) => {
@@ -1606,14 +1891,22 @@ function App() {
 
   const refreshTogether = async sessionId => {
     if (!sessionId) return
-    const [{data:sessionData},{data:people},{data:results}] = await Promise.all([
+    const [{data:sessionData},{data:people},{data:results},{data:maxRows}] = await Promise.all([
       supabase.from('shared_sessions').select('*').eq('id',sessionId).single(),
       supabase.from('session_participants').select('*').eq('session_id',sessionId).order('joined_at'),
       supabase.from('session_results').select('*').eq('session_id',sessionId).order('updated_at',{ascending:false}),
+      supabase.rpc('shared_session_one_rep_maxes',{target_session:sessionId}),
     ])
     if (sessionData) setActiveSession(sessionData)
     setParticipants(people || [])
     setSessionResults(results || [])
+    setSessionOneRms(Object.fromEntries((maxRows||[]).map(row=>[row.user_id,{
+      displayName:row.display_name,
+      Squat:row.squat??'',
+      Bench:row.bench??'',
+      Deadlift:row.deadlift??'',
+      Press:row.press??'',
+    }])))
   }
 
   useEffect(() => {
@@ -1634,6 +1927,14 @@ function App() {
     if (!session?.user) return
     await Promise.all([
       supabase.auth.updateUser({data:{...session.user.user_metadata,one_rep_maxes:cleaned}}),
+      supabase.from('one_rep_maxes').upsert({
+        user_id:session.user.id,
+        squat:cleaned.Squat === '' ? null : Number(cleaned.Squat),
+        bench:cleaned.Bench === '' ? null : Number(cleaned.Bench),
+        deadlift:cleaned.Deadlift === '' ? null : Number(cleaned.Deadlift),
+        press:cleaned.Press === '' ? null : Number(cleaned.Press),
+        updated_at:new Date().toISOString(),
+      }),
       supabase.from('training_maxes').upsert({
         user_id:session.user.id,
         squat:cleaned.Squat === '' ? null : round2(Number(cleaned.Squat)*.85),
@@ -1932,8 +2233,23 @@ function App() {
     if(togetherProgramChoice.kind==='classic'){
       sessionProgram=togetherProgramChoice.program.dbName
       sessionLift=selectedWorkout.lift||lifts[selectedIndex]||'Squat'
+      const planned=makePlannedFromClassic(
+        togetherProgramChoice.id,
+        selectedWeek,
+        sessionLift,
+        localDateKey(),
+        oneRepMaxes
+      )
+      sharedTemplate=planned.workout
+      sharedMeta={
+        program_key:togetherProgramChoice.key,
+        program_name:togetherProgramChoice.name,
+        week:selectedWeek,
+        workout_index:selectedIndex,
+        workout_title:planned.title,
+      }
     }else{
-      const planned=makePlannedFromArchive(togetherProgramChoice.program,selectedWeek,selectedIndex,localDateKey())
+      const planned=makePlannedFromArchive(togetherProgramChoice.program,selectedWeek,selectedIndex,localDateKey(),oneRepMaxes)
       sessionProgram=togetherProgramChoice.key
       sessionLift=lifts[Math.min(selectedIndex,lifts.length-1)]||'Squat'
       sharedTemplate=planned.workout
@@ -2044,7 +2360,7 @@ function App() {
           source_program_name:sharedMeta?.program_name||'Workout Together',
           source_week:Number(sharedMeta?.week||1),
           source_day:marker,
-          workout:{...sharedTemplate,shared_session_id:activeSession.id,shared_meta:sharedMeta,shared_template:sharedTemplate},
+          workout:{...personalizeWorkoutLoads(sharedTemplate,sessionOneRms[session.user.id]||oneRepMaxes),shared_session_id:activeSession.id,shared_meta:sharedMeta,shared_template:sharedTemplate},
           status:'started',
         }
         const inserted=await supabase.from('planned_workouts').insert(payload).select().single()
@@ -2202,6 +2518,7 @@ function App() {
             <PlannedWorkoutRunner
               planned={plannedToday}
               sharedSessionId={sharedWorkoutActive&&activeSession ? activeSession.id : null}
+              partnerOneRms={sharedWorkoutActive ? sessionOneRms : {}}
               onCancelled={async() => {
                 setPlannedToday(null)
                 setShowRegularToday(false)
@@ -2670,6 +2987,8 @@ function App() {
             onTrackingChanged={refreshTrackedProgramsInfo}
             onProgramCompleted={track=>setProgramCompletionPrompt({name:track?.program_name||'Program'})}
             onStartStrengthBaseline={startStrengthBaseline}
+            onScheduleClassicWorkout={scheduleClassicWorkoutFromPlan}
+            oneRepMaxes={oneRepMaxes}
           />
         ) : activeTab === 'whiteboard' ? (
           <WhiteboardPage session={session} />

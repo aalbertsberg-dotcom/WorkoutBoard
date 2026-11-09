@@ -514,6 +514,8 @@ export function PlanPage({
   onTrackingChanged,
   onProgramCompleted,
   onStartStrengthBaseline,
+  onScheduleClassicWorkout,
+  oneRepMaxes,
 }) {
   const [ready,setReady] = useState(null)
   const [trackingReady,setTrackingReady] = useState(true)
@@ -591,7 +593,7 @@ export function PlanPage({
         ;(p.assistance?.[liftName]||[]).forEach(name=>exercises.push({name,prescription:'Log as performed',note:''}))
         const conditioning=p.conditioning?.(targetWeek,liftName)
         if(conditioning && conditioning!=='None') exercises.push({name:'Conditioning',prescription:conditioning,note:''})
-        return {title:liftName+' Day',exercises}
+        return {title:liftName+' Day',lift:liftName,exercises}
       })
     }
   }),[programs,programOrder,lifts])
@@ -1023,9 +1025,24 @@ export function PlanPage({
       return
     }
     const chosen=previewDays[Math.max(0,Math.min(previewDays.length-1,previewDay))]
+
+    if(preview.kind==='classic'&&onScheduleClassicWorkout){
+      const targetLift=chosen?.lift||String(chosen?.title||'Squat').replace(/\s+Day$/i,'')
+      const result=await onScheduleClassicWorkout({
+        programId:preview.id,
+        week:previewWeek,
+        lift:targetLift,
+        scheduledDate:scheduleDate,
+      })
+      if(result?.error){setMessage(result.error);return}
+      setMessage(`${preview.name} · ${chosen.title} added to ${scheduleDate}.`)
+      await load()
+      return
+    }
+
     let payload
     if(preview.kind==='archive'){
-      payload=makePlannedFromArchive(preview,previewWeek,previewDay,scheduleDate)
+      payload=makePlannedFromArchive(preview,previewWeek,previewDay,scheduleDate,oneRepMaxes||{})
       payload.workout={...payload.workout,tracking_program_key:preview.key}
     } else {
       payload={
@@ -1347,6 +1364,7 @@ export function AdminPanel({ programs }) {
   const [selected,setSelected] = useState(null)
   const [maxes,setMaxes] = useState(null)
   const [maxDraft,setMaxDraft] = useState({squat:'',bench:'',deadlift:'',press:''})
+  const [displayNameDraft,setDisplayNameDraft] = useState('')
   const [sessions,setSessions] = useState([])
   const [editSession,setEditSession] = useState(null)
   const [message,setMessage] = useState('')
@@ -1373,12 +1391,18 @@ export function AdminPanel({ programs }) {
   useEffect(() => { loadUsers();loadFeedback() },[])
 
   const openUser = async user => {
-    setSelected(user); setMessage(''); setEditSession(null)
-    const [{data:tm},{data:rows}] = await Promise.all([
+    setSelected(user); setMessage(''); setEditSession(null);setDisplayNameDraft(user.display_name||'')
+    const [{data:oneRm},{data:tm},{data:rows}] = await Promise.all([
+      supabase.from('one_rep_maxes').select('*').eq('user_id',user.user_id).maybeSingle(),
       supabase.from('training_maxes').select('*').eq('user_id',user.user_id).maybeSingle(),
       supabase.from('training_sessions').select('*').eq('user_id',user.user_id).order('session_date',{ascending:false}).limit(50),
     ])
-    const next=tm||{squat:null,bench:null,deadlift:null,press:null}
+    const next=oneRm||{
+      squat:tm?.squat==null?null:Math.round((Number(tm.squat)/.85)*100)/100,
+      bench:tm?.bench==null?null:Math.round((Number(tm.bench)/.85)*100)/100,
+      deadlift:tm?.deadlift==null?null:Math.round((Number(tm.deadlift)/.85)*100)/100,
+      press:tm?.press==null?null:Math.round((Number(tm.press)/.85)*100)/100,
+    }
     setMaxes(next)
     setMaxDraft({squat:next.squat??'',bench:next.bench??'',deadlift:next.deadlift??'',press:next.press??''})
     setSessions(rows || [])
@@ -1402,27 +1426,38 @@ export function AdminPanel({ programs }) {
 
   const saveMaxes = async () => {
     if(!selected)return
-    const num=v=>v===''?null:Number(v)
-    const {error}=await supabase.rpc('admin_set_training_maxes',{
+    const num=v=>v===''?null:Math.round(Math.max(0,Number(v)||0)*100)/100
+    const {error}=await supabase.rpc('admin_set_one_rep_maxes',{
       target_user:selected.user_id,new_squat:num(maxDraft.squat),new_bench:num(maxDraft.bench),
       new_deadlift:num(maxDraft.deadlift),new_press:num(maxDraft.press)
     })
-    if(error){setMessage('Run the product-upgrades migration first: '+error.message);return}
+    if(error){setMessage('Run the coaching/1RM migration first: '+error.message);return}
     setMaxes({...maxDraft})
-    setMessage('Training maxes updated.')
+    setMessage('1 rep maxes updated. Program percentages will use these values.')
+  }
+
+  const saveUserProfile = async () => {
+    if(!selected)return
+    const clean=displayNameDraft.trim()
+    if(!clean){setMessage('Display name cannot be blank.');return}
+    const {error}=await supabase.rpc('admin_update_user_profile',{target_user:selected.user_id,new_display_name:clean})
+    if(error){setMessage('Run the coaching/1RM migration first: '+error.message);return}
+    setSelected(v=>v?{...v,display_name:clean}:v)
+    setUsers(rows=>rows.map(row=>row.user_id===selected.user_id?{...row,display_name:clean}:row))
+    setMessage('User profile updated.')
   }
 
   const resetUserTraining = async () => {
     if(!selected)return
     const label=selected.display_name||selected.email||'this user'
-    if(!window.confirm(`Reset ALL workouts and training maxes for ${label}? This cannot be undone.`))return
+    if(!window.confirm(`Reset ALL workouts and 1 rep maxes for ${label}? This cannot be undone.`))return
     setMessage('Resetting training data…')
     const {error}=await supabase.rpc('admin_reset_training',{target_user:selected.user_id})
     if(error){setMessage('Run the product-upgrades migration first: '+error.message);return}
     setMaxes({squat:null,bench:null,deadlift:null,press:null})
     setMaxDraft({squat:'',bench:'',deadlift:'',press:''});setSessions([])
     setSelected(v=>v?{...v,workout_count:0,total_volume:0,last_workout:null,current_week:1}:v)
-    await loadUsers();setMessage('Workout history and training maxes reset.')
+    await loadUsers();setMessage('Workout history and 1 rep maxes reset.')
   }
 
   const saveSessionEdit = async () => {
@@ -1483,8 +1518,14 @@ export function AdminPanel({ programs }) {
   return <section className="page-section">
     <button className="secondary-action" onClick={()=>{setSelected(null);setMaxes(null);setSessions([]);setEditSession(null)}}>← All users</button>
     <section className="profile-card">
-      <span className="card-label">USER</span><h2>{selected.display_name||'Unnamed user'}</h2><p>{selected.email}</p>
+      <span className="card-label">COACH MODE</span><h2>{selected.display_name||'Unnamed user'}</h2><p>{selected.email}</p>
       <div className="admin-meta"><span>{selected.workout_count||0} workouts</span><span>{Number(selected.total_volume||0).toLocaleString()} lb tracked volume</span><span>Last: {fmtDate(selected.last_workout)}</span></div>
+    </section>
+
+    <section className="simple-card">
+      <div className="section-heading"><div><span className="card-label">ATHLETE PROFILE</span><h3>Edit user information</h3></div></div>
+      <label className="admin-field">Display name<input value={displayNameDraft} onChange={e=>setDisplayNameDraft(e.target.value)} /></label>
+      <button className="wide-button" onClick={saveUserProfile}>Save profile</button>
     </section>
 
     <section className="simple-card">
@@ -1497,11 +1538,12 @@ export function AdminPanel({ programs }) {
     </section>
 
     <section className="simple-card">
-      <div className="section-heading"><div><span className="card-label">TRAINING MAXES</span><h3>Edit current numbers</h3></div></div>
+      <div className="section-heading"><div><span className="card-label">1 REP MAXES</span><h3>Coach training numbers</h3></div></div>
+      <p className="helper-text">These are the athlete's true saved 1RMs. WorkoutBoard calculates each program's training max and working percentages from them.</p>
       <div className="admin-edit-max-grid">
         {['squat','bench','deadlift','press'].map(name=><label key={name}><span>{name[0].toUpperCase()+name.slice(1)}</span><input type="number" inputMode="decimal" value={maxDraft[name]} onChange={e=>setMaxDraft(v=>({...v,[name]:e.target.value}))} placeholder="—"/></label>)}
       </div>
-      <button className="wide-button" onClick={saveMaxes}>Save training maxes</button>
+      <button className="wide-button" onClick={saveMaxes}>Save 1 rep maxes</button>
     </section>
 
     <section className="simple-card">
@@ -1512,8 +1554,8 @@ export function AdminPanel({ programs }) {
 
     <section className="simple-card danger-card">
       <div className="section-heading"><div><span className="card-label">RESET TRAINING DATA</span><h3>Start this user over</h3></div></div>
-      <p className="helper-text">Deletes workout history, planned workouts, shared results, community activity, and clears all training maxes. Account and program stay in place.</p>
-      <button className="danger-button" onClick={resetUserTraining}>Reset workouts + training maxes</button>
+      <p className="helper-text">Deletes workout history, planned workouts, shared results, community activity, and clears all saved 1 rep maxes. Account and program stay in place.</p>
+      <button className="danger-button" onClick={resetUserTraining}>Reset workouts + 1RMs</button>
     </section>
 
     {editSession&&<section className="builder-card session-editor">

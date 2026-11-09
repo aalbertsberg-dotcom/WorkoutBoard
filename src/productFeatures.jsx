@@ -2,6 +2,20 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './supabase'
 import { MetconTracker } from './advancedFeatures'
 
+function partnerSetTarget(maxes,set) {
+  const lift=set?.weight_lift
+  const pct=set?.pct
+  const oneRm=Number(maxes?.[lift]||0)
+  if(!lift||pct==null||!oneRm)return ''
+  const base=set.weight_basis==='tm'?oneRm*.85:oneRm
+  const low=Math.round((base*Number(pct)/100)/5)*5
+  if(set.pct_high!=null){
+    const high=Math.round((base*Number(set.pct_high)/100)/5)*5
+    if(high&&high!==low)return low+'-'+high+' lb'
+  }
+  return low?low+' lb':''
+}
+
 function parseVolume(value) {
   if (!value) return 0
   const text=String(value).replace(/,/g,'').replace(/[×X]/g,'x')
@@ -127,7 +141,7 @@ function PlannedAlternatives({name}) {
   </span>
 }
 
-export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,sharedSessionId=null}) {
+export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,sharedSessionId=null,partnerOneRms={}}) {
   const [workout,setWorkout]=useState(()=>{
     let cached=null
     try { cached=planned?.id ? JSON.parse(localStorage.getItem('wb-planned-draft-'+planned.id) || 'null') : null } catch {}
@@ -171,7 +185,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       for(const row of (sessions.data||[])){
         for(const item of (row.workout?.exercises||[])){
           const key=String(item.name||'').trim().toLowerCase()
-          const loadedSets=(item.setProgress||[]).map(set=>({weight:setWeight(item,set),reps:repsForSet(item,set),done:Boolean(set.done)})).filter(set=>set.weight)
+          const loadedSets=(item.setProgress||[]).map(set=>({weight:setWeight(item,set),reps:repsForSet(item,set),done:Boolean(set.done)})).filter(set=>set.weight&&set.done)
           const bestSet=loadedSets.reduce((best,set)=>!best||set.weight>best.weight?set:best,null)
           const parsed=bestSet&&!isDistanceExercise(item.name)&&bestSet.reps?{weight:bestSet.weight,reps:bestSet.reps,e1rm:bestSet.weight*(1+bestSet.reps/30)}:null
           if(!key||(!bestSet&&!item.result))continue
@@ -290,6 +304,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
     for(const item of workout.exercises||[]){
       if(isDistanceExercise(item.name))continue
       for(const set of item.setProgress||[]){
+        if(!set.done)continue
         const weight=setWeight(item,set),reps=repsForSet(item,set)
         if(!weight||!reps)continue
         best=Math.max(best,weight*(1+reps/30))
@@ -391,11 +406,18 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       const rest=timerPresets[key]||programRest
       const sub=substitutions[key]?.[0]
       const nextExerciseIndex=(workout.exercises||[]).findIndex(x=>!(x.done||(x.setProgress?.length&&x.setProgress.every(s=>s.done))))
+      const targetSet=(item.setProgress||[]).find(set=>!set.done)||(item.setProgress||[])[0]
+      const partnerTargets=Object.entries(partnerOneRms||{}).map(([userId,maxes])=>({
+        userId,
+        name:maxes?.displayName||'Partner',
+        target:partnerSetTarget(maxes,targetSet),
+      })).filter(x=>x.target)
       return <article className={'flex-exercise '+(item.done?'done ':'')+(item.group?'grouped ':'')+(!item.done&&i===nextExerciseIndex?'current-exercise':'')} key={item.id||i}>
         <div className="flex-exercise-title">
           <div>
             <div className="exercise-name-line"><strong>{item.name}</strong>{isPR&&<b className="pr-mini">PR</b>}<PlannedAlternatives name={item.name}/>{item.custom_added&&<button type="button" className="remove-added-exercise" onClick={()=>removeAddedExercise(i)}>Remove</button>}</div>
             <span className="exercise-plan-line">{humanPrescription(item.prescription)}{rest?' · '+(rest<120?rest+' sec':rest/60+' min')+' rest':''}</span>
+            {partnerTargets.length>0&&<small className="partner-targets"><strong>Targets:</strong> {partnerTargets.map(x=>x.name+' '+x.target).join(' · ')}</small>}
             {item.note&&<details className="exercise-cue"><summary>Cue</summary><small>{item.note}</small></details>}
             {hist?.last&&<small className="flex-history"><strong>Last time:</strong> {hist.last}</small>}
             {sub&&<small className="sub-suggestion">Saved substitute: {sub.substitute}{sub.reason?' · '+sub.reason:''}</small>}
@@ -405,26 +427,49 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
         {item.setProgress?.length>0&&(()=>{
           const activeIndex=item.setProgress.findIndex(set=>!set.done)
           const activeSet=activeIndex>=0?item.setProgress[activeIndex]:null
+          const activeWeight=activeSet?.weight!==undefined&&activeSet?.weight!=='' ? Number(activeSet.weight)||0 : 0
           const previousWeight=activeIndex>0 ? Number(item.setProgress[activeIndex-1]?.weight||0) : 0
           const lastTimeWeight=activeIndex>=0 ? Number(hist?.lastWeights?.[Math.min(activeIndex,(hist?.lastWeights?.length||1)-1)]||0) : 0
-          const shownWeight=item.load!==undefined&&item.load!=='' ? item.load : (previousWeight||lastTimeWeight||'')
+          const legacyWeight=item.load!==undefined&&item.load!=='' ? Number(item.load)||0 : 0
+          const shownWeight=activeWeight||previousWeight||lastTimeWeight||legacyWeight||''
           return <>
             {activeSet&&i===nextExerciseIndex&&<section className="current-set-panel">
               <div className="current-set-panel-head">
                 <div><span className="card-label">{activeSet.extra?'EXTRA SET':'CURRENT SET'}</span><h3>{activeSet.extra?'Extra set':'Set '+(activeIndex+1)+' of '+item.setProgress.length}</h3></div>
-                <strong>{activeSet.label || (activeSet.reps?activeSet.reps+' reps':'Complete')}</strong>
+                <strong>{activeSet.label || (activeSet.reps?activeSet.reps+' reps':'Complete')}{activeSet.target_weight_range?' · '+activeSet.target_weight_range:''}</strong>
               </div>
               {loadField&&<label className="current-set-weight">
                 <span>{loadField.label}{loadField.optional?' (optional)':''}</span>
                 <div>
                   <input type="number" inputMode="decimal" value={shownWeight}
                     onFocus={e=>e.currentTarget.select()}
-                    onChange={e=>changeExercise(i,{load:e.target.value===''?'':Number(e.target.value),result:''})}
+                    onChange={e=>{
+                      const value=e.target.value===''?'':Number(e.target.value)
+                      changeExercise(i,{
+                        load:value,
+                        result:'',
+                        setProgress:item.setProgress.map((sp,k)=>k===activeIndex?{...sp,weight:value}:sp)
+                      })
+                    }}
                     onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur()}}
                     placeholder={loadField.placeholder}/>
                   <b>lb</b>
                 </div>
                 {hist?.lastWeights?.length>0&&<small>Last time: {hist.lastWeights.map((w,idx)=>'S'+(idx+1)+' '+w+' lb').join(' · ')}</small>}
+              </label>}
+              {activeSet?.editable_reps&&<label className="current-set-weight current-set-reps">
+                <span>Reps performed</span>
+                <div>
+                  <input type="number" inputMode="numeric" min="0" value={activeSet.reps??''}
+                    onFocus={e=>e.currentTarget.select()}
+                    onChange={e=>{
+                      const value=e.target.value===''?'':Math.max(0,Number(e.target.value)||0)
+                      changeExercise(i,{setProgress:item.setProgress.map((sp,k)=>k===activeIndex?{...sp,reps:value}:sp)})
+                    }}
+                    onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur()}}
+                    placeholder="Reps"/>
+                  <b>reps</b>
+                </div>
               </label>}
               <button type="button" className="primary-action complete-current-set" onClick={()=>{
                 const currentWeight=loadField ? Number(shownWeight||0) : 0
@@ -444,7 +489,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
                       changeExercise(i,{setProgress:item.setProgress.map((sp,k)=>k===j?{...sp,done:false}:sp)})
                     }}>
                     <strong>{set.extra?'Extra set':'Set '+(j+1)}</strong>
-                    <span>{set.label || (set.reps?set.reps+' reps':'Done')}{recordedWeight?' · '+recordedWeight+' lb':''}</span>
+                    <span>{set.editable_reps&&set.done&&set.reps ? set.reps+' reps' : (set.label || (set.reps?set.reps+' reps':'Done'))}{recordedWeight?' · '+recordedWeight+' lb':''}</span>
                     <b>{set.done?'✓':'○'}</b>
                   </button>
                   {set.extra&&<button type="button" className="remove-extra-set" onClick={()=>removeExtraSet(i,j)} aria-label={'Remove extra set '+(j+1)}>×</button>}
@@ -473,6 +518,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
 
     {(workout.conditioningEnabled || workout.metcon?.format || workout.metcon?.name || workout.metcon?.activity || workout.metcon?.duration || workout.metcon?.time || workout.metcon?.rounds || workout.metcon?.reps || workout.metcon?.distance || workout.metcon?.calories) ? <details className="today-collapsible conditioning-tools" open={conditioningOpen} onToggle={e=>setConditioningOpen(e.currentTarget.open)}>
       <summary><span><b>Conditioning</b><small>{workout.metcon?.format || 'Optional'}</small></span></summary>
+      {workout.conditioning_plan&&<p className="helper-text"><strong>Program:</strong> {workout.conditioning_plan}</p>}
       <MetconTracker
         value={workout.metcon}
         onChange={value=>{change('conditioningEnabled',true);change('metcon',value)}}
