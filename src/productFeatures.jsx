@@ -516,24 +516,25 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
                 </div>
                 {hist?.lastWeights?.length>0&&<small>Last time: {hist.lastWeights.map((w,idx)=>'S'+(idx+1)+' '+w+' lb').join(' · ')}</small>}
               </label>}
-              {activeSet?.editable_reps&&<label className="current-set-weight current-set-reps">
+              {activeSet&&!isDistanceExercise(item.name)&&<label className="current-set-weight current-set-reps">
                 <span>Reps performed</span>
                 <div>
-                  <input type="number" inputMode="numeric" min="0" value={activeSet.reps??''}
+                  <input type="number" inputMode="numeric" min="0" step="1" value={activeSet.reps??''}
                     onFocus={e=>e.currentTarget.select()}
                     onChange={e=>{
-                      const value=e.target.value===''?'':Math.max(0,Number(e.target.value)||0)
-                      changeExercise(i,{setProgress:item.setProgress.map((sp,k)=>k===activeIndex?{...sp,reps:value}:sp)})
+                      const value=e.target.value===''?'':Math.max(0,Math.floor(Number(e.target.value)||0))
+                      changeExercise(i,{setProgress:item.setProgress.map((sp,k)=>k===activeIndex?{...sp,reps:value,actual_reps:value}:sp)})
                     }}
                     onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur()}}
                     placeholder="Reps"/>
                   <b>reps</b>
                 </div>
+                <small>Change this to what you actually performed. The programmed target stays above for reference.</small>
               </label>}
               <button type="button" className="primary-action complete-current-set" onClick={()=>{
                 const currentWeight=loadField ? Number(shownWeight||0) : 0
                 const nextSetIndex=item.setProgress.findIndex((sp,k)=>k!==activeIndex&&!sp.done)
-                changeExercise(i,{load:shownWeight,setProgress:item.setProgress.map((sp,k)=>k===activeIndex?{...sp,done:true,weight:currentWeight||sp.weight}:sp)})
+                changeExercise(i,{load:shownWeight,setProgress:item.setProgress.map((sp,k)=>k===activeIndex?{...sp,done:true,weight:currentWeight||sp.weight,actual_reps:sp.reps}:sp)})
                 if(nextSetIndex>=0){
                   setActiveSetByExercise(v=>({...v,[exerciseKey]:nextSetIndex}))
                 }else{
@@ -558,7 +559,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
                       activateExercise(i,j,{scroll:false})
                     }}>
                     <strong>{set.extra?'Extra set':'Set '+(j+1)}</strong>
-                    <span>{set.editable_reps&&set.done&&set.reps ? set.reps+' reps' : (set.label || (set.reps?set.reps+' reps':'Done'))}{recordedWeight?' · '+recordedWeight+' lb':''}</span>
+                    <span>{set.done&&set.reps!==null&&set.reps!=='' ? set.reps+' reps' : (set.label || (set.reps?set.reps+' reps':'Done'))}{recordedWeight?' · '+recordedWeight+' lb':''}</span>
                     <b>{set.done?'✓':'○'}</b>
                   </button>
                   {set.extra&&<button type="button" className="remove-extra-set" onClick={()=>removeExtraSet(i,j)} aria-label={'Remove extra set '+(j+1)}>×</button>}
