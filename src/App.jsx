@@ -1126,7 +1126,7 @@ function App() {
   const [oneRepMaxes,setOneRepMaxes] = useState(defaultOneRms)
   const [oneRmWeight,setOneRmWeight] = useState('')
   const [oneRmReps,setOneRmReps] = useState(5)
-  const [oneRmLift,setOneRmLift] = useState('Squat')
+  const [oneRmLift,setOneRmLift] = useState('')
   const [history,setHistory] = useState([])
   const [saveState,setSaveState] = useState('Saved')
   const [inviteState,setInviteState] = useState('')
@@ -3080,8 +3080,15 @@ function App() {
                 <div><span>85% training max</span><strong>{oneRmTrainingMax} lb</strong></div>
               </div>}
               {oneRmEstimate>0&&<div className="one-rm-apply">
-                <select value={oneRmLift} onChange={e=>setOneRmLift(e.target.value)}>{lifts.map(name=><option key={name}>{name}</option>)}</select>
-                <button className="wide-button" type="button" onClick={()=>setOneRm(oneRmLift,oneRmRounded)}>Use {oneRmRounded} lb as {oneRmLift} 1RM</button>
+                <label className="one-rm-add-to"><span>Add estimate to</span>
+                  <select value={oneRmLift} onChange={e=>setOneRmLift(e.target.value)}>
+                    <option value="">Choose lift…</option>
+                    {lifts.map(name=><option key={name} value={name}>{name}</option>)}
+                  </select>
+                </label>
+                <button className="wide-button" type="button" disabled={!oneRmLift||!oneRmRounded} onClick={()=>setOneRm(oneRmLift,oneRmRounded)}>
+                  {oneRmLift?`Add ${oneRmRounded} lb to ${oneRmLift} 1RM`:'Choose a lift to save this estimate'}
+                </button>
               </div>}
             </section>
 
