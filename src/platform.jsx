@@ -515,6 +515,7 @@ export function PlanPage({
   onProgramCompleted,
   onStartStrengthBaseline,
   onScheduleClassicWorkout,
+  oneRepMaxes,
 }) {
   const [ready,setReady] = useState(null)
   const [trackingReady,setTrackingReady] = useState(true)
@@ -1041,7 +1042,7 @@ export function PlanPage({
 
     let payload
     if(preview.kind==='archive'){
-      payload=makePlannedFromArchive(preview,previewWeek,previewDay,scheduleDate)
+      payload=makePlannedFromArchive(preview,previewWeek,previewDay,scheduleDate,oneRepMaxes||{})
       payload.workout={...payload.workout,tracking_program_key:preview.key}
     } else {
       payload={
