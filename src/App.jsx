@@ -1524,6 +1524,34 @@ function App() {
     activatePlannedWorkout(data)
   }
 
+  const scheduleClassicWorkoutFromPlan = async ({programId,week:targetWeek,lift:targetLift,scheduledDate}) => {
+    if(!session?.user)return {error:'Sign in to schedule a workout.'}
+    if(!programs[programId]||!lifts.includes(targetLift))return {error:'That workout could not be scheduled.'}
+
+    const activeTrack=trackedProgramsInfo.find(info=>info.kind==='classic'&&info.programId===programId)
+    const trackingKey=activeTrack?.key||''
+    const trackingWorkoutKey=trackingKey
+      ? `${trackingKey}|w${Number(targetWeek)}|${String(targetLift).toLowerCase()}`
+      : ''
+    const payload=makePlannedFromClassic(
+      programId,
+      Number(targetWeek),
+      targetLift,
+      scheduledDate,
+      Number(oneRepMaxes[targetLift]||0),
+      trackingKey,
+      trackingWorkoutKey
+    )
+    payload.status='planned'
+    payload.workout={...payload.workout,started_explicitly:false}
+
+    const {data,error}=await supabase.from('planned_workouts')
+      .insert({...payload,user_id:session.user.id}).select().single()
+    if(error)return {error:error.message}
+    if(scheduledDate===localDateKey())await refreshPlannedToday()
+    return {data}
+  }
+
   const startStrengthBaseline = async (path='full',{confirmed=false,liftName=null}={}) => {
     if(!session?.user)return
     const pathLifts=path==='upper' ? ['Bench','Press']
@@ -2876,6 +2904,7 @@ function App() {
             onTrackingChanged={refreshTrackedProgramsInfo}
             onProgramCompleted={track=>setProgramCompletionPrompt({name:track?.program_name||'Program'})}
             onStartStrengthBaseline={startStrengthBaseline}
+            onScheduleClassicWorkout={scheduleClassicWorkoutFromPlan}
           />
         ) : activeTab === 'whiteboard' ? (
           <WhiteboardPage session={session} />
