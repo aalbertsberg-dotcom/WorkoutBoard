@@ -405,9 +405,11 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
         {item.setProgress?.length>0&&(()=>{
           const activeIndex=item.setProgress.findIndex(set=>!set.done)
           const activeSet=activeIndex>=0?item.setProgress[activeIndex]:null
+          const activeWeight=activeSet?.weight!==undefined&&activeSet?.weight!=='' ? Number(activeSet.weight)||0 : 0
           const previousWeight=activeIndex>0 ? Number(item.setProgress[activeIndex-1]?.weight||0) : 0
           const lastTimeWeight=activeIndex>=0 ? Number(hist?.lastWeights?.[Math.min(activeIndex,(hist?.lastWeights?.length||1)-1)]||0) : 0
-          const shownWeight=item.load!==undefined&&item.load!=='' ? item.load : (previousWeight||lastTimeWeight||'')
+          const legacyWeight=item.load!==undefined&&item.load!=='' ? Number(item.load)||0 : 0
+          const shownWeight=activeWeight||previousWeight||lastTimeWeight||legacyWeight||''
           return <>
             {activeSet&&i===nextExerciseIndex&&<section className="current-set-panel">
               <div className="current-set-panel-head">
@@ -419,12 +421,33 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
                 <div>
                   <input type="number" inputMode="decimal" value={shownWeight}
                     onFocus={e=>e.currentTarget.select()}
-                    onChange={e=>changeExercise(i,{load:e.target.value===''?'':Number(e.target.value),result:''})}
+                    onChange={e=>{
+                      const value=e.target.value===''?'':Number(e.target.value)
+                      changeExercise(i,{
+                        load:value,
+                        result:'',
+                        setProgress:item.setProgress.map((sp,k)=>k===activeIndex?{...sp,weight:value}:sp)
+                      })
+                    }}
                     onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur()}}
                     placeholder={loadField.placeholder}/>
                   <b>lb</b>
                 </div>
                 {hist?.lastWeights?.length>0&&<small>Last time: {hist.lastWeights.map((w,idx)=>'S'+(idx+1)+' '+w+' lb').join(' · ')}</small>}
+              </label>}
+              {activeSet?.editable_reps&&<label className="current-set-weight current-set-reps">
+                <span>Reps performed</span>
+                <div>
+                  <input type="number" inputMode="numeric" min="0" value={activeSet.reps??''}
+                    onFocus={e=>e.currentTarget.select()}
+                    onChange={e=>{
+                      const value=e.target.value===''?'':Math.max(0,Number(e.target.value)||0)
+                      changeExercise(i,{setProgress:item.setProgress.map((sp,k)=>k===activeIndex?{...sp,reps:value}:sp)})
+                    }}
+                    onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur()}}
+                    placeholder="Reps"/>
+                  <b>reps</b>
+                </div>
               </label>}
               <button type="button" className="primary-action complete-current-set" onClick={()=>{
                 const currentWeight=loadField ? Number(shownWeight||0) : 0
@@ -444,7 +467,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
                       changeExercise(i,{setProgress:item.setProgress.map((sp,k)=>k===j?{...sp,done:false}:sp)})
                     }}>
                     <strong>{set.extra?'Extra set':'Set '+(j+1)}</strong>
-                    <span>{set.label || (set.reps?set.reps+' reps':'Done')}{recordedWeight?' · '+recordedWeight+' lb':''}</span>
+                    <span>{set.editable_reps&&set.done&&set.reps ? set.reps+' reps' : (set.label || (set.reps?set.reps+' reps':'Done'))}{recordedWeight?' · '+recordedWeight+' lb':''}</span>
                     <b>{set.done?'✓':'○'}</b>
                   </button>
                   {set.extra&&<button type="button" className="remove-extra-set" onClick={()=>removeExtraSet(i,j)} aria-label={'Remove extra set '+(j+1)}>×</button>}
@@ -473,6 +496,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
 
     {(workout.conditioningEnabled || workout.metcon?.format || workout.metcon?.name || workout.metcon?.activity || workout.metcon?.duration || workout.metcon?.time || workout.metcon?.rounds || workout.metcon?.reps || workout.metcon?.distance || workout.metcon?.calories) ? <details className="today-collapsible conditioning-tools" open={conditioningOpen} onToggle={e=>setConditioningOpen(e.currentTarget.open)}>
       <summary><span><b>Conditioning</b><small>{workout.metcon?.format || 'Optional'}</small></span></summary>
+      {workout.conditioning_plan&&<p className="helper-text"><strong>Program:</strong> {workout.conditioning_plan}</p>}
       <MetconTracker
         value={workout.metcon}
         onChange={value=>{change('conditioningEnabled',true);change('metcon',value)}}
