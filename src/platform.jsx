@@ -513,6 +513,7 @@ export function PlanPage({
   jumpToWorkout,
   onTrackingChanged,
   onProgramCompleted,
+  onStartStrengthBaseline,
 }) {
   const [ready,setReady] = useState(null)
   const [trackingReady,setTrackingReady] = useState(true)
@@ -537,6 +538,7 @@ export function PlanPage({
   const [limitPrompt,setLimitPrompt] = useState(null)
   const [resumePrompt,setResumePrompt] = useState(null)
   const [cancelPrompt,setCancelPrompt] = useState(null)
+  const [cancelBusy,setCancelBusy] = useState(false)
   const [category,setCategory] = useState('All')
   const [search,setSearch] = useState('')
   const [previewKey,setPreviewKey] = useState('archive:squatober')
@@ -736,6 +738,14 @@ export function PlanPage({
     }
     return keys
   },[sessions,allPrograms])
+
+  const baselineSearchMatch = useMemo(() => {
+    if(category!=='All' && category!=='Strength')return false
+    const q=search.trim().toLowerCase()
+    if(!q)return true
+    return ['strength baseline','baseline','1rm','1 rep max','rep max','strength test','max test']
+      .some(term=>term.includes(q)||q.includes(term))
+  },[category,search])
 
   const availablePrograms = useMemo(() => {
     const q=search.trim().toLowerCase()
@@ -972,16 +982,28 @@ export function PlanPage({
 
   const confirmCancelTracking = async () => {
     const track=cancelPrompt
-    if(!track)return
+    if(!track||cancelBusy)return
+    setCancelBusy(true)
+
     const {error}=await supabase.rpc('cancel_program_tracking',{target_tracking_id:track.id})
     if(error){
-      setMessage(error.message.includes('function')?'Run the program cancel migration in Supabase first.':error.message)
-      return
+      // Older deployments may not have the cancelled-state RPC yet. Deleting only
+      // the paused tracking row gives the same user-facing behavior: workout history
+      // stays intact and tracking the program again starts from the beginning.
+      const fallback=await supabase.from('user_program_tracking').delete()
+        .eq('id',track.id).eq('user_id',session.user.id).eq('status','paused').select('id')
+      if(fallback.error || !fallback.data?.length){
+        setMessage(fallback.error?.message || error.message || 'Could not stop tracking this program.')
+        setCancelBusy(false)
+        return
+      }
     }
+
     setCancelPrompt(null)
-    setMessage(track.program_name+' is no longer being tracked. Completed workouts remain in history; tracking it again will start a new run.')
+    setMessage(track.program_name+' is no longer being tracked. Completed workouts remain in history; tracking it again will start from the beginning.')
     await load()
     await onTrackingChanged?.()
+    setCancelBusy(false)
   }
 
   const markComplete = async track => {
@@ -1084,7 +1106,7 @@ export function PlanPage({
     </div>}
 
     {undoAction&&<div className="undo-toast"><span>{undoAction.label}</span><button onClick={undoAction.run}>Undo</button></div>}
-    {planMode!=='programs'&&message&&<div className="status-message">{message}</div>}
+    {message&&<div className="status-message">{message}</div>}
 
     {planMode==='programs'?<>
       {tracked.length>0&&<section className="program-state-section current-program-section">
@@ -1138,8 +1160,19 @@ export function PlanPage({
       </form>}
 
       <div className="archive-grid">
+        {baselineSearchMatch&&<article className="archive-card simplified-program-card strength-baseline-card">
+          <div className="archive-card-head"><span className="program-length">Strength test · 4-rep baseline</span><span className="tracking-badge">BUILT IN</span></div>
+          <h3>Strength Baseline</h3>
+          <p>Estimate current 1RMs with controlled 4-rep test sets around RPE 8.5–9.</p>
+          <div className="program-meta"><span>Strength</span><span>Single workout</span></div>
+          <div className="program-card-actions">
+            <button className="wide-button" onClick={()=>onStartStrengthBaseline?.('full')}>Start all 4 lifts</button>
+            <button className="secondary-action" onClick={()=>onStartStrengthBaseline?.('upper')}>Upper</button>
+            <button className="secondary-action" onClick={()=>onStartStrengthBaseline?.('lower')}>Lower</button>
+          </div>
+        </article>}
         {availablePrograms.map(p=><ProgramCard key={p.key} p={p}/>)}
-        {!availablePrograms.length&&<div className="empty-state action-empty"><strong>No programs match.</strong><button onClick={()=>{setSearch('');setCategory('All')}}>Clear filters</button></div>}
+        {!availablePrograms.length&&!baselineSearchMatch&&<div className="empty-state action-empty"><strong>No programs match.</strong><button onClick={()=>{setSearch('');setCategory('All')}}>Clear filters</button></div>}
       </div>
 
       {preview&&<section className="program-preview-card" id="program-preview">
@@ -1201,8 +1234,8 @@ export function PlanPage({
           <span className="card-label">STOP TRACKING</span>
           <h3>{cancelPrompt.program_name}</h3>
           <p>This removes the program from Paused and your tracked-program list. Completed workouts stay in History. If you track this program again later, it starts a new run from the beginning.</p>
-          <button className="danger-button" onClick={confirmCancelTracking}>Stop tracking this program</button>
-          <button className="secondary-action" onClick={()=>setCancelPrompt(null)}>Keep it paused</button>
+          <button className="danger-button" onClick={confirmCancelTracking} disabled={cancelBusy}>{cancelBusy?'Stopping…':'Stop tracking this program'}</button>
+          <button className="secondary-action" onClick={()=>setCancelPrompt(null)} disabled={cancelBusy}>Keep it paused</button>
         </section>
       </div>}
 
