@@ -406,6 +406,206 @@ function getProgramWeek(programId, week, lift) {
   }
 }
 
+const classicLiftExerciseNames = {
+  Squat:'Back Squat',
+  Bench:'Bench Press',
+  Deadlift:'Deadlift',
+  Press:'Overhead Press',
+}
+
+function classicSetProgressFromPrescription(text) {
+  const value=String(text||'').trim()
+  const multi=value.match(/(\d+)\s*[x×]\s*(\d+)(?:\s*[-–]\s*(\d+))?([^,;]*)/i)
+  if(multi){
+    const sets=Math.max(1,Number(multi[1])||1)
+    const reps=Math.max(1,Number(multi[2])||1)
+    const upper=Number(multi[3]||0)
+    const suffix=String(multi[4]||'').trim().replace(/^\s+/,'')
+    const repLabel=upper ? reps+'-'+upper+(suffix?' '+suffix:'') : reps+(suffix?' '+suffix:'')
+    return Array.from({length:sets},(_,i)=>({
+      set:i+1,reps,label:repLabel,done:false,weight:'',
+      editable_reps:Boolean(upper)||/amrap|max|rpe|as performed/i.test(value),
+    }))
+  }
+
+  const setsOnly=value.match(/(\d+)\s*sets?/i)
+  if(setsOnly){
+    const sets=Math.max(1,Number(setsOnly[1])||1)
+    return Array.from({length:sets},(_,i)=>({
+      set:i+1,reps:null,label:'As performed',done:false,weight:'',editable_reps:true,
+    }))
+  }
+
+  const repRange=value.match(/(\d+)\s*[-–]\s*(\d+)\s*reps?/i)
+  if(repRange){
+    return [{
+      set:1,reps:Number(repRange[1]),label:repRange[1]+'-'+repRange[2]+' reps',
+      done:false,weight:'',editable_reps:true,
+    }]
+  }
+
+  const xRange=value.match(/(?:^|\s)x\s*(\d+)\s*[-–]\s*(\d+)/i)
+  if(xRange){
+    return [{
+      set:1,reps:Number(xRange[1]),label:xRange[1]+'-'+xRange[2]+' reps',
+      done:false,weight:'',editable_reps:true,
+    }]
+  }
+
+  if(/single/i.test(value)){
+    return [{set:1,reps:1,label:'1 rep',done:false,weight:'',editable_reps:false}]
+  }
+
+  return [{set:1,reps:null,label:'As performed',done:false,weight:'',editable_reps:true}]
+}
+
+function classicAssistanceExercise(text,restSeconds,index) {
+  const value=String(text||'').trim()
+  let name=value||'Assistance'
+  let prescription='As performed'
+  const scheme=value.match(/\b\d+\s*(?:[x×]|sets?\b)/i)
+  const totalRange=value.match(/\b\d+\s*[-–]\s*\d+\s*reps?/i)
+  const split=scheme||totalRange
+  if(split&&split.index>0){
+    name=value.slice(0,split.index).trim()
+    prescription=value.slice(split.index).trim()
+  }
+  const setProgress=classicSetProgressFromPrescription(prescription)
+  return {
+    id:'assist-'+index,
+    name:name||'Assistance',
+    prescription,
+    rest_seconds:Number(restSeconds||75),
+    result:'',load:'',done:false,setProgress,
+  }
+}
+
+function classicSecondaryExercises(programId,week,lift,oneRm,plan) {
+  const secondary=plan.secondary
+  if(!secondary?.title)return []
+  const program=programs[programId]
+  const mainName=classicLiftExerciseNames[lift]||lift
+  const parts=String(secondary.title).split(/\s+\+\s+/).map(x=>x.trim()).filter(Boolean)
+  const result=parts.map((part,index)=>{
+    const lower=part.toLowerCase()
+    let name
+    if(/widowmaker/.test(lower)) name=mainName+' — Widowmaker'
+    else if(/\bfsl\b|first[ -]?set/.test(lower)) name=mainName+' — FSL'
+    else if(/\bbbb\b/.test(lower)) name=mainName+' — BBB'
+    else if(/joker/.test(lower)) name=mainName+' — Joker'
+    else if(/tm test|training max|100% tm/.test(lower)) name=mainName+' — TM Test'
+    else if(/backoff|back-off/.test(lower)) name=mainName+' — Backoff'
+    else {
+      const movement=part.replace(/\s+\d+\s*[x×].*$/i,'').replace(/\s+@.*$/,'').trim()
+      name=movement||secondary.label||'Supplemental'
+    }
+
+    const setProgress=classicSetProgressFromPrescription(part)
+    const autoWeight=secondary.pct!=null && (
+      parts.length===1 ||
+      /\bfsl\b|first[ -]?set|\bbbb\b|widowmaker|tm test|training max|100% tm|backoff|back-off/i.test(part)
+    )
+    const prescribedWeight=autoWeight ? targetWeight(oneRm,secondary.pct,program.basis) : ''
+    if(prescribedWeight)setProgress.forEach(set=>{set.weight=prescribedWeight})
+
+    return {
+      id:'secondary-'+index,
+      name,
+      prescription:part,
+      note:secondary.label||'Supplemental work',
+      rest_seconds:Number(plan.rest?.secondary||120),
+      result:'',load:'',done:false,setProgress,
+    }
+  })
+
+  if((plan.jokers||[]).length && !result.some(item=>/joker/i.test(item.name))){
+    result.unshift({
+      id:'joker-sets',
+      name:mainName+' — Joker Sets',
+      prescription:(plan.jokers||[]).length+' sets · choose load and reps as performed',
+      note:'Optional heavier work. Stop before a grinder.',
+      rest_seconds:Number(plan.rest?.secondary||180),
+      result:'',load:'',done:false,
+      setProgress:(plan.jokers||[]).map((item,index)=>({
+        set:index+1,reps:null,label:item.label||('Joker '+(index+1)),
+        done:false,weight:'',editable_reps:true,
+      })),
+    })
+  }
+  return result
+}
+
+function makePlannedFromClassic(programId,week,lift,scheduledDate,oneRm,trackingProgramKey='',trackingWorkoutKey='') {
+  const program=programs[programId] || programs['andy-hybrid-12']
+  const plan=getProgramWeek(programId,week,lift)
+  const mainName=classicLiftExerciseNames[lift]||lift
+  const mainSets=(plan.main||[]).map((set,index)=>{
+    const repsText=String(set.reps??'')
+    const reps=Math.max(1,Number.parseInt(repsText,10)||1)
+    const pctText=set.pctLabel || (set.pct!=null?set.pct+'%':'RPE / manual load')
+    return {
+      set:index+1,
+      reps,
+      label:pctText+' × '+repsText,
+      done:false,
+      weight:set.pct!=null ? (targetWeight(oneRm,set.pct,program.basis)||'') : '',
+      editable_reps:/[+]|[-–]|rpe|amrap|max/i.test(repsText+' '+pctText),
+    }
+  })
+  const mainPrescription=(plan.main||[]).map(set=>{
+    const pctText=set.pctLabel || (set.pct!=null?set.pct+'%':'RPE / manual')
+    return pctText+' × '+set.reps
+  }).join(' · ')
+
+  const exercises=[
+    {
+      id:'main',
+      name:mainName,
+      prescription:mainPrescription||'Main work',
+      note:[plan.phase,plan.rule].filter(Boolean).join(' · '),
+      rest_seconds:Number(plan.rest?.main||180),
+      result:'',load:'',done:false,setProgress:mainSets,
+      primary_lift:lift,
+    },
+    ...classicSecondaryExercises(programId,week,lift,oneRm,plan),
+    ...(plan.assistance||[]).map((item,index)=>classicAssistanceExercise(
+      item,
+      typeof plan.rest?.assistance==='function' ? plan.rest.assistance(item) : plan.rest?.assistance,
+      index
+    )),
+  ]
+
+  const conditioning=String(plan.conditioning||'').trim()
+  const hasConditioning=Boolean(conditioning&&conditioning!=='None')
+  const conditioningPrescribed=Boolean(hasConditioning&&!/^optional\b/i.test(conditioning))
+
+  return {
+    scheduled_date:scheduledDate,
+    title:lift+' Day',
+    source_program_name:program.name,
+    source_week:Number(week),
+    source_day:lift,
+    workout:{
+      version:2,
+      type:'flexible',
+      classic_program_id:programId,
+      tracking_program_key:trackingProgramKey||undefined,
+      tracking_workout_key:trackingWorkoutKey||undefined,
+      started_explicitly:true,
+      source:'WorkoutBoard built-in',
+      phase:plan.phase||'',
+      rule:plan.rule||'',
+      exercises,
+      conditioning_plan:hasConditioning?conditioning:'',
+      conditioningEnabled:conditioningPrescribed,
+      conditioning_prescribed:conditioningPrescribed,
+      metcon:{name:hasConditioning?conditioning:'',format:'',activity:'',duration:'',workTime:'',restTime:'',interval:'',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx',intensity:'Easy'},
+      sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',
+    },
+    status:'started',
+  }
+}
+
 function makeLog(programId, week, lift, tm) {
   const program = programs[programId]
   const plan = getProgramWeek(programId,week,lift)
@@ -1294,15 +1494,21 @@ function App() {
     }
     if(trackInfo.kind==='classic'){
       const programId=trackInfo.programId
+      const nextWeek=chosenWorkout.week||trackInfo.nextWeek||1
       const nextLift=chosenWorkout.lift||trackInfo.nextLift||lifts[chosenWorkout.dayIndex]||'Squat'
+      const today=localDateKey()
+      const plannedPayload=makePlannedFromClassic(
+        programId,nextWeek,nextLift,today,Number(oneRepMaxes[nextLift]||0),
+        trackInfo.key,chosenWorkout.trackingWorkoutKey
+      )
+      const {data,error}=await supabase.from('planned_workouts')
+        .insert({...plannedPayload,user_id:session.user.id}).select().single()
+      if(error){setWorkoutStartError(error.message);return}
       setActiveProgram(programId)
-      setWeek(chosenWorkout.week||trackInfo.nextWeek||1)
+      setWeek(nextWeek)
       setLift(nextLift)
       setTrackedTodayInfo(trackInfo)
-      setCompletionSummary(null)
-      setPlannedToday(null)
-      setShowRegularToday(true)
-      requestAnimationFrame(()=>window.scrollTo({top:0,left:0,behavior:'auto'}))
+      activatePlannedWorkout(data)
       return
     }
     const program=archiveProgramById[trackInfo.archiveId]
