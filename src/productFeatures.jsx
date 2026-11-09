@@ -2,6 +2,20 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './supabase'
 import { MetconTracker } from './advancedFeatures'
 
+function partnerSetTarget(maxes,set) {
+  const lift=set?.weight_lift
+  const pct=set?.pct
+  const oneRm=Number(maxes?.[lift]||0)
+  if(!lift||pct==null||!oneRm)return ''
+  const base=set.weight_basis==='tm'?oneRm*.85:oneRm
+  const low=Math.round((base*Number(pct)/100)/5)*5
+  if(set.pct_high!=null){
+    const high=Math.round((base*Number(set.pct_high)/100)/5)*5
+    if(high&&high!==low)return low+'-'+high+' lb'
+  }
+  return low?low+' lb':''
+}
+
 function parseVolume(value) {
   if (!value) return 0
   const text=String(value).replace(/,/g,'').replace(/[×X]/g,'x')
@@ -127,7 +141,7 @@ function PlannedAlternatives({name}) {
   </span>
 }
 
-export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,sharedSessionId=null}) {
+export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,sharedSessionId=null,partnerOneRms={}}) {
   const [workout,setWorkout]=useState(()=>{
     let cached=null
     try { cached=planned?.id ? JSON.parse(localStorage.getItem('wb-planned-draft-'+planned.id) || 'null') : null } catch {}
@@ -392,11 +406,18 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       const rest=timerPresets[key]||programRest
       const sub=substitutions[key]?.[0]
       const nextExerciseIndex=(workout.exercises||[]).findIndex(x=>!(x.done||(x.setProgress?.length&&x.setProgress.every(s=>s.done))))
+      const targetSet=(item.setProgress||[]).find(set=>!set.done)||(item.setProgress||[])[0]
+      const partnerTargets=Object.entries(partnerOneRms||{}).map(([userId,maxes])=>({
+        userId,
+        name:maxes?.displayName||'Partner',
+        target:partnerSetTarget(maxes,targetSet),
+      })).filter(x=>x.target)
       return <article className={'flex-exercise '+(item.done?'done ':'')+(item.group?'grouped ':'')+(!item.done&&i===nextExerciseIndex?'current-exercise':'')} key={item.id||i}>
         <div className="flex-exercise-title">
           <div>
             <div className="exercise-name-line"><strong>{item.name}</strong>{isPR&&<b className="pr-mini">PR</b>}<PlannedAlternatives name={item.name}/>{item.custom_added&&<button type="button" className="remove-added-exercise" onClick={()=>removeAddedExercise(i)}>Remove</button>}</div>
             <span className="exercise-plan-line">{humanPrescription(item.prescription)}{rest?' · '+(rest<120?rest+' sec':rest/60+' min')+' rest':''}</span>
+            {partnerTargets.length>0&&<small className="partner-targets"><strong>Targets:</strong> {partnerTargets.map(x=>x.name+' '+x.target).join(' · ')}</small>}
             {item.note&&<details className="exercise-cue"><summary>Cue</summary><small>{item.note}</small></details>}
             {hist?.last&&<small className="flex-history"><strong>Last time:</strong> {hist.last}</small>}
             {sub&&<small className="sub-suggestion">Saved substitute: {sub.substitute}{sub.reason?' · '+sub.reason:''}</small>}
@@ -415,7 +436,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
             {activeSet&&i===nextExerciseIndex&&<section className="current-set-panel">
               <div className="current-set-panel-head">
                 <div><span className="card-label">{activeSet.extra?'EXTRA SET':'CURRENT SET'}</span><h3>{activeSet.extra?'Extra set':'Set '+(activeIndex+1)+' of '+item.setProgress.length}</h3></div>
-                <strong>{activeSet.label || (activeSet.reps?activeSet.reps+' reps':'Complete')}</strong>
+                <strong>{activeSet.label || (activeSet.reps?activeSet.reps+' reps':'Complete')}{activeSet.target_weight_range?' · '+activeSet.target_weight_range:''}</strong>
               </div>
               {loadField&&<label className="current-set-weight">
                 <span>{loadField.label}{loadField.optional?' (optional)':''}</span>
