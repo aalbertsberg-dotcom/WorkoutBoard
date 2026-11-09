@@ -512,6 +512,7 @@ export function PlanPage({
   lifts,
   jumpToWorkout,
   onTrackingChanged,
+  onProgramCompleted,
 }) {
   const [ready,setReady] = useState(null)
   const [trackingReady,setTrackingReady] = useState(true)
@@ -990,6 +991,7 @@ export function PlanPage({
     setUndoAction({label:track.program_name+' marked complete',run:async()=>{await supabase.from('user_program_tracking').update({status:'tracking',completed_at:null,updated_at:new Date().toISOString()}).eq('id',track.id);setUndoAction(null);await load();await onTrackingChanged?.()}})
     await load()
     await onTrackingChanged?.()
+    await onProgramCompleted?.(track)
   }
 
   const scheduleProgramWorkout = async () => {
