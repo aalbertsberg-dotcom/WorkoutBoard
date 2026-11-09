@@ -145,7 +145,14 @@ function PlannedAlternatives({name}) {
 export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,sharedSessionId=null,partnerOneRms={}}) {
   const [workout,setWorkout]=useState(()=>{
     let cached=null
-    try { cached=planned?.id ? JSON.parse(localStorage.getItem('wb-planned-draft-'+planned.id) || 'null') : null } catch {}
+    try {
+      if(planned?.id){
+        const raw=JSON.parse(localStorage.getItem('wb-planned-draft-'+planned.id) || 'null')
+        const draftTs=Number(localStorage.getItem('wb-planned-draft-ts-'+planned.id)||0)
+        const serverTs=planned?.updated_at ? new Date(planned.updated_at).getTime() : 0
+        if(raw && draftTs>serverTs)cached=raw
+      }
+    } catch {}
     return withSetProgress({exercises:[],sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',circuit_rounds:'',conditioningEnabled:false,metcon:{name:'',format:'',activity:'',duration:'',workTime:'',restTime:'',interval:'',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx',intensity:'Easy'},...(planned?.workout||{}),...(cached||{})})
   })
   const [saveState,setSaveState]=useState('Saved')
@@ -163,18 +170,32 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
 
   useEffect(()=>{
     let cached=null
-    try { cached=planned?.id ? JSON.parse(localStorage.getItem('wb-planned-draft-'+planned.id) || 'null') : null } catch {}
+    try {
+      if(planned?.id){
+        const raw=JSON.parse(localStorage.getItem('wb-planned-draft-'+planned.id) || 'null')
+        const draftTs=Number(localStorage.getItem('wb-planned-draft-ts-'+planned.id)||0)
+        const serverTs=planned?.updated_at ? new Date(planned.updated_at).getTime() : 0
+        if(raw && draftTs>serverTs)cached=raw
+        else {
+          localStorage.removeItem('wb-planned-draft-'+planned.id)
+          localStorage.removeItem('wb-planned-draft-ts-'+planned.id)
+        }
+      }
+    } catch {}
     setWorkout(withSetProgress({exercises:[],sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',circuit_rounds:'',conditioningEnabled:false,metcon:{name:'',format:'',activity:'',duration:'',workTime:'',restTime:'',interval:'',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx',intensity:'Easy'},...(planned?.workout||{}),...(cached||{})}))
     setConditioningOpen(Boolean(planned?.workout?.conditioning_prescribed))
     setExerciseAdderOpen(false)
     setNewExercise({name:'',sets:3,target:'10',rest:90})
     setActiveExerciseIndex(0)
     setActiveSetByExercise({})
-  },[planned?.id])
+  },[planned?.id,planned?.updated_at])
 
   useEffect(()=>{
     if(!planned?.id)return
-    try { localStorage.setItem('wb-planned-draft-'+planned.id,JSON.stringify(workout)) } catch {}
+    try {
+      localStorage.setItem('wb-planned-draft-'+planned.id,JSON.stringify(workout))
+      localStorage.setItem('wb-planned-draft-ts-'+planned.id,String(Date.now()))
+    } catch {}
   },[workout,planned?.id])
 
   useEffect(()=>{
