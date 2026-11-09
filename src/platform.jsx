@@ -514,6 +514,7 @@ export function PlanPage({
   onTrackingChanged,
   onProgramCompleted,
   onStartStrengthBaseline,
+  onScheduleClassicWorkout,
 }) {
   const [ready,setReady] = useState(null)
   const [trackingReady,setTrackingReady] = useState(true)
@@ -591,7 +592,7 @@ export function PlanPage({
         ;(p.assistance?.[liftName]||[]).forEach(name=>exercises.push({name,prescription:'Log as performed',note:''}))
         const conditioning=p.conditioning?.(targetWeek,liftName)
         if(conditioning && conditioning!=='None') exercises.push({name:'Conditioning',prescription:conditioning,note:''})
-        return {title:liftName+' Day',exercises}
+        return {title:liftName+' Day',lift:liftName,exercises}
       })
     }
   }),[programs,programOrder,lifts])
@@ -1023,6 +1024,21 @@ export function PlanPage({
       return
     }
     const chosen=previewDays[Math.max(0,Math.min(previewDays.length-1,previewDay))]
+
+    if(preview.kind==='classic'&&onScheduleClassicWorkout){
+      const targetLift=chosen?.lift||String(chosen?.title||'Squat').replace(/\s+Day$/i,'')
+      const result=await onScheduleClassicWorkout({
+        programId:preview.id,
+        week:previewWeek,
+        lift:targetLift,
+        scheduledDate:scheduleDate,
+      })
+      if(result?.error){setMessage(result.error);return}
+      setMessage(`${preview.name} · ${chosen.title} added to ${scheduleDate}.`)
+      await load()
+      return
+    }
+
     let payload
     if(preview.kind==='archive'){
       payload=makePlannedFromArchive(preview,previewWeek,previewDay,scheduleDate)
