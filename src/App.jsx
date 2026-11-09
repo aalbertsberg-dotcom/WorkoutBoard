@@ -1361,6 +1361,7 @@ function App() {
     }).select().single()
     if(error){setWorkoutStartError(error.message);return}
     activatePlannedWorkout(data)
+    setActiveTab('today')
   }
 
   const startStandaloneWorkout = async (kind,{confirmed=false}={}) => {
@@ -2668,6 +2669,7 @@ function App() {
             jumpToWorkout={jumpToWorkout}
             onTrackingChanged={refreshTrackedProgramsInfo}
             onProgramCompleted={track=>setProgramCompletionPrompt({name:track?.program_name||'Program'})}
+            onStartStrengthBaseline={startStrengthBaseline}
           />
         ) : activeTab === 'whiteboard' ? (
           <WhiteboardPage session={session} />
