@@ -126,6 +126,33 @@ $$;
 
 grant execute on function public.admin_reset_training(uuid) to authenticated;
 
+create or replace function public.admin_update_user_profile(
+  target_user uuid,
+  new_display_name text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $
+begin
+  if not public.is_workout_admin() then
+    raise exception 'Admin access required';
+  end if;
+
+  update public.profiles
+  set display_name=coalesce(nullif(trim(new_display_name),''),display_name),
+      updated_at=now()
+  where id=target_user;
+
+  if not found then
+    raise exception 'User not found';
+  end if;
+end;
+$;
+
+grant execute on function public.admin_update_user_profile(uuid,text) to authenticated;
+
 -- Session members may see only the four training numbers of people who
 -- voluntarily joined the same workout. This supports side-by-side target weights.
 create or replace function public.shared_session_one_rep_maxes(target_session uuid)
