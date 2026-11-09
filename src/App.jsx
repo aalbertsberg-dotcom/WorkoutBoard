@@ -835,6 +835,9 @@ function App() {
   const [week,setWeek] = useState(1)
   const [lift,setLift] = useState('Squat')
   const [trainingMaxes,setTrainingMaxes] = useState(defaultTms)
+  const [oneRmWeight,setOneRmWeight] = useState('')
+  const [oneRmReps,setOneRmReps] = useState(5)
+  const [oneRmLift,setOneRmLift] = useState('Squat')
   const [history,setHistory] = useState([])
   const [saveState,setSaveState] = useState('Saved')
   const [inviteState,setInviteState] = useState('')
@@ -876,6 +879,91 @@ function App() {
   const workoutProgram = programs[workoutProgramId]
   const plan = getProgramWeek(workoutProgramId,week,lift)
   const tm = Number(trainingMaxes[lift] || 0)
+
+  const oneRmEstimate = useMemo(() => {
+    const weight=Number(oneRmWeight)
+    const reps=Math.max(1,Math.min(15,Number(oneRmReps)||1))
+    if(!weight)return 0
+    return reps===1 ? weight : weight*(1+reps/30)
+  },[oneRmWeight,oneRmReps])
+  const oneRmRounded = oneRmEstimate ? Math.round(oneRmEstimate/5)*5 : 0
+  const oneRmTrainingMax = oneRmEstimate ? Math.round((oneRmEstimate*.85)/5)*5 : 0
+
+  const buildTrackedProgramInfo = (track,completedRows,today) => {
+    const key=String(track?.program_key||'')
+    const workoutsToday=(completedRows||[]).filter(row=>(row.session_date||localDateKey(row.completed_at))===today).length
+
+    if(key.startsWith('archive:')){
+      const archiveId=key.slice(8)
+      const program=archiveProgramById[archiveId]
+      if(!program?.getWeek||!program.weeksCount||!program.daysPerWeek)return null
+      const completed=(completedRows||[]).filter(row=>{
+        if(new Date(row.completed_at).getTime()<new Date(track.started_at).getTime())return false
+        return row.workout?.tracking_program_key===key || row.program===program.name
+      })
+      const completedCount=completed.length
+      const total=Number(program.weeksCount)*Number(program.daysPerWeek)
+      const nextIndex=Math.min(completedCount,total)
+      const nextWeek=Math.min(Number(program.weeksCount),Math.floor(nextIndex/Number(program.daysPerWeek))+1)
+      const nextDayIndex=nextIndex%Number(program.daysPerWeek)
+      const upcoming=[]
+      for(let offset=0;offset<3;offset++){
+        const idx=nextIndex+offset
+        if(idx>=total)break
+        const upcomingWeek=Math.floor(idx/Number(program.daysPerWeek))+1
+        const dayIndex=idx%Number(program.daysPerWeek)
+        const workoutDay=program.getWeek(upcomingWeek)?.[dayIndex]
+        if(workoutDay)upcoming.push({week:upcomingWeek,dayIndex,title:workoutDay.title,note:workoutDay.note||'',exercises:workoutDay.exercises||[]})
+      }
+      return {
+        kind:'archive',key,trackingId:track.id,archiveId,name:program.name,
+        category:program.category||'Program',durationLabel:program.durationLabel||'',
+        completed:completedCount,total,
+        completedToday:completed.some(row=>(row.session_date||localDateKey(row.completed_at))===today),
+        workoutsToday,nextWeek,nextDayIndex,nextTitle:upcoming[0]?.title||'',upcoming,
+        complete:completedCount>=total,
+      }
+    }
+
+    if(key.startsWith('classic:')){
+      const programId=key.slice(8)
+      const program=programs[programId]
+      if(!program?.weeksCount)return null
+      const completed=(completedRows||[]).filter(row=>{
+        if(new Date(row.completed_at).getTime()<new Date(track.started_at).getTime())return false
+        return row.workout?.tracking_program_key===key || row.program===program.dbName
+      })
+      const completedCount=completed.length
+      const daysPerWeek=lifts.length
+      const total=Number(program.weeksCount)*daysPerWeek
+      const nextIndex=Math.min(completedCount,total)
+      const nextWeek=Math.min(Number(program.weeksCount),Math.floor(nextIndex/daysPerWeek)+1)
+      const nextDayIndex=nextIndex%daysPerWeek
+      const upcoming=[]
+      for(let offset=0;offset<3;offset++){
+        const idx=nextIndex+offset
+        if(idx>=total)break
+        const upcomingWeek=Math.floor(idx/daysPerWeek)+1
+        const dayIndex=idx%daysPerWeek
+        const liftName=lifts[dayIndex]
+        const workoutPlan=getProgramWeek(programId,upcomingWeek,liftName)
+        const mainPrescription=(workoutPlan.main||[]).map(set=>(set.pctLabel||set.pct+'%')+' × '+set.reps).join(', ')
+        const exercises=[{name:liftName,prescription:mainPrescription||'Main work'}]
+        if(workoutPlan.secondary?.title)exercises.push({name:workoutPlan.secondary.label||'Supplemental',prescription:workoutPlan.secondary.title})
+        upcoming.push({week:upcomingWeek,dayIndex,title:liftName+' Day',note:workoutPlan.phase||'',exercises,lift:liftName})
+      }
+      return {
+        kind:'classic',key,trackingId:track.id,programId,name:program.name,
+        category:'Strength',durationLabel:'',
+        completed:completedCount,total,
+        completedToday:completed.some(row=>(row.session_date||localDateKey(row.completed_at))===today),
+        workoutsToday,nextWeek,nextDayIndex,nextLift:upcoming[0]?.lift||lifts[nextDayIndex],
+        nextTitle:upcoming[0]?.title||'',upcoming,complete:completedCount>=total,
+      }
+    }
+
+    return null
+  }
 
   useEffect(() => {
     const dismissKeyboard = event => {
@@ -981,13 +1069,14 @@ function App() {
       setWeek(currentWeek)
       setHistory(rows)
 
-      const activeArchiveTracks=(trackingData||[])
-        .filter(row=>String(row.program_key||'').startsWith('archive:'))
+      const activeSupportedTracks=(trackingData||[])
+        .filter(row=>/^(archive|classic):/.test(String(row.program_key||'')))
         .sort((a,b)=>new Date(a.started_at)-new Date(b.started_at))
-      const multipleArchiveTracks=activeArchiveTracks.length>1
+      const activeArchiveTracks=activeSupportedTracks.filter(row=>String(row.program_key||'').startsWith('archive:'))
+      const multipleTrackedPrograms=activeSupportedTracks.length>1
       const workoutsToday=(flexCompleted||[]).filter(row=>(row.session_date||localDateKey(row.completed_at))===today).length
       const activeTrackKeys=new Set(activeArchiveTracks.map(row=>row.program_key))
-      let resolvedTodayPlan=multipleArchiveTracks
+      let resolvedTodayPlan=multipleTrackedPrograms
         ? (todayPlans||[]).find(row=>
             row.workout?.started_explicitly ||
             plannedWorkoutHasProgress(row) ||
@@ -995,7 +1084,7 @@ function App() {
           ) || null
         : (todayPlans||[]).find(row=>row.status==='planned'||row.status==='started') || null
 
-      if(multipleArchiveTracks){
+      if(multipleTrackedPrograms){
         const staleAutoRows=(todayPlans||[]).filter(row=>
           (row.status==='planned'||row.status==='started') &&
           activeTrackKeys.has(row.workout?.tracking_program_key) &&
@@ -1007,51 +1096,21 @@ function App() {
         }
       }
 
-      const trackInfos=[]
+      const trackInfos=activeSupportedTracks
+        .map(track=>buildTrackedProgramInfo(track,flexCompleted||[],today))
+        .filter(Boolean)
       for(const activeArchiveTrack of activeArchiveTracks){
-        const archiveId=String(activeArchiveTrack.program_key).slice(8)
-        const trackedProgram=archiveProgramById[archiveId]
-        if(!trackedProgram?.getWeek || !trackedProgram.weeksCount || !trackedProgram.daysPerWeek)continue
-        const completedTracked=(flexCompleted||[]).filter(row=>{
-          if(new Date(row.completed_at).getTime()<new Date(activeArchiveTrack.started_at).getTime())return false
-          return row.workout?.tracking_program_key===activeArchiveTrack.program_key || row.program===trackedProgram.name
-        })
-        const completedCount=completedTracked.length
-        const total=Number(trackedProgram.weeksCount)*Number(trackedProgram.daysPerWeek)
-        const completedToday=completedTracked.some(row=>(row.session_date||localDateKey(row.completed_at))===today)
-        const nextIndex=Math.min(completedCount,total)
-        const nextWeek=Math.min(Number(trackedProgram.weeksCount),Math.floor(nextIndex/Number(trackedProgram.daysPerWeek))+1)
-        const nextDayIndex=nextIndex%Number(trackedProgram.daysPerWeek)
-        const nextDay=nextIndex<total ? trackedProgram.getWeek(nextWeek)?.[nextDayIndex] : null
-        const upcoming=[]
-        for(let offset=0;offset<3;offset++){
-          const idx=nextIndex+offset
-          if(idx>=total)break
-          const w=Math.floor(idx/Number(trackedProgram.daysPerWeek))+1
-          const di=idx%Number(trackedProgram.daysPerWeek)
-          const d=trackedProgram.getWeek(w)?.[di]
-          if(d)upcoming.push({week:w,dayIndex:di,title:d.title,note:d.note||'',exercises:d.exercises||[]})
-        }
-        const info={
-          key:activeArchiveTrack.program_key,
-          trackingId:activeArchiveTrack.id,
-          archiveId,
-          name:trackedProgram.name,
-          category:trackedProgram.category||'Program',
-          durationLabel:trackedProgram.durationLabel||'',
-          completed:completedCount,
-          total,
-          completedToday,
-          workoutsToday,
-          nextWeek,
-          nextDayIndex,
-          nextTitle:nextDay?.title||'',
-          upcoming,
-          complete:completedCount>=total,
-        }
-        trackInfos.push(info)
+        const info=trackInfos.find(item=>item.key===activeArchiveTrack.program_key)
+        const trackedProgram=archiveProgramById[info?.archiveId]
+        if(!info||!trackedProgram)continue
+        const completedCount=info.completed
+        const completedToday=info.completedToday
+        const total=info.total
+        const nextWeek=info.nextWeek
+        const nextDayIndex=info.nextDayIndex
+        const nextDay=info.upcoming?.[0] ? trackedProgram.getWeek(nextWeek)?.[nextDayIndex] : null
 
-        if(!multipleArchiveTracks){
+        if(!multipleTrackedPrograms){
           const staleTrackedToday=workoutsToday>0 &&
             resolvedTodayPlan?.workout?.tracking_program_key===activeArchiveTrack.program_key &&
             !resolvedTodayPlan?.workout?.started_explicitly &&
@@ -1123,49 +1182,8 @@ function App() {
         .eq('user_id',session.user.id).not('completed_at','is',null)
         .order('completed_at',{ascending:false}).limit(1000)
     ])
-    const activeArchiveTracks=(trackingRows||[]).filter(row=>String(row.program_key||'').startsWith('archive:'))
-    const workoutsToday=(completedRows||[]).filter(row=>(row.session_date||localDateKey(row.completed_at))===today).length
-    const infos=[]
-    for(const track of activeArchiveTracks){
-      const archiveId=String(track.program_key).slice(8)
-      const program=archiveProgramById[archiveId]
-      if(!program?.getWeek||!program.weeksCount||!program.daysPerWeek)continue
-      const completed=(completedRows||[]).filter(row=>{
-        if(new Date(row.completed_at).getTime()<new Date(track.started_at).getTime())return false
-        return row.workout?.tracking_program_key===track.program_key || row.program===program.name
-      })
-      const completedCount=completed.length
-      const total=Number(program.weeksCount)*Number(program.daysPerWeek)
-      const nextIndex=Math.min(completedCount,total)
-      const nextWeek=Math.min(Number(program.weeksCount),Math.floor(nextIndex/Number(program.daysPerWeek))+1)
-      const nextDayIndex=nextIndex%Number(program.daysPerWeek)
-      const upcoming=[]
-      for(let offset=0;offset<3;offset++){
-        const idx=nextIndex+offset
-        if(idx>=total)break
-        const week=Math.floor(idx/Number(program.daysPerWeek))+1
-        const dayIndex=idx%Number(program.daysPerWeek)
-        const day=program.getWeek(week)?.[dayIndex]
-        if(day)upcoming.push({week,dayIndex,title:day.title,note:day.note||'',exercises:day.exercises||[]})
-      }
-      infos.push({
-        key:track.program_key,
-        trackingId:track.id,
-        archiveId,
-        name:program.name,
-        category:program.category||'Program',
-        durationLabel:program.durationLabel||'',
-        completed:completedCount,
-        total,
-        completedToday:completed.some(row=>(row.session_date||localDateKey(row.completed_at))===today),
-        workoutsToday,
-        nextWeek,
-        nextDayIndex,
-        nextTitle:upcoming[0]?.title||'',
-        upcoming,
-        complete:completedCount>=total,
-      })
-    }
+    const activeSupportedTracks=(trackingRows||[]).filter(row=>/^(archive|classic):/.test(String(row.program_key||'')))
+    const infos=activeSupportedTracks.map(track=>buildTrackedProgramInfo(track,completedRows||[],today)).filter(Boolean)
     setTrackedProgramsInfo(infos)
     setTrackedTodayInfo(infos[0]||null)
     setTogetherTracking(trackingRows||[])
@@ -1187,6 +1205,19 @@ function App() {
     if(!session?.user || !trackInfo || trackInfo.complete)return
     if((trackInfo.workoutsToday||todayCompletedWorkouts.length||0)>0 && !confirmed){
       setPendingWorkoutStart({kind:'program',trackingKey:trackInfo.key,label:trackInfo.upcoming?.[0]?.title||'next program day'})
+      return
+    }
+    if(trackInfo.kind==='classic'){
+      const programId=trackInfo.programId
+      const nextLift=trackInfo.nextLift||lifts[trackInfo.nextDayIndex]||'Squat'
+      setActiveProgram(programId)
+      setWeek(trackInfo.nextWeek||1)
+      setLift(nextLift)
+      setTrackedTodayInfo(trackInfo)
+      setCompletionSummary(null)
+      setPlannedToday(null)
+      setShowRegularToday(true)
+      requestAnimationFrame(()=>window.scrollTo({top:0,left:0,behavior:'auto'}))
       return
     }
     const program=archiveProgramById[trackInfo.archiveId]
@@ -1257,7 +1288,7 @@ function App() {
       supabase.from('user_program_tracking').select('program_key')
         .eq('user_id',session.user.id).eq('status','tracking')
     ])
-    const multipleTracks=(activeTracking||[]).filter(row=>String(row.program_key||'').startsWith('archive:')).length>1
+    const multipleTracks=(activeTracking||[]).filter(row=>/^(archive|classic):/.test(String(row.program_key||''))).length>1
     let activePlan=multipleTracks
       ? (activePlans||[]).find(row=>
           row.workout?.started_explicitly ||
@@ -2038,7 +2069,7 @@ function App() {
               }}
               onDismiss={sharedWorkoutActive || trackedProgramsInfo.length ? undefined : () => setShowRegularToday(true)}
             />
-          ) : trackedProgramsInfo.length ? (
+          ) : trackedProgramsInfo.length && !showRegularToday ? (
             <section className="page-section tracked-today-state">
               {todayCompletedWorkouts.length>0&&<details className="today-completed-workouts" open>
                 <summary><span><b>Today’s workouts</b><small>{todayCompletedWorkouts.length} completed</small></span></summary>
@@ -2527,6 +2558,23 @@ function App() {
                   </label>
                 ))}
               </div>
+            </section>
+
+            <section className="simple-card one-rm-card">
+              <div className="section-heading"><div><span className="card-label">1RM CALCULATOR</span><h3>Estimate from a rep set</h3></div>{oneRmEstimate>0&&<b className="one-rm-result">{oneRmRounded} lb</b>}</div>
+              <p className="helper-text">Uses the Epley estimate: weight × (1 + reps ÷ 30). Best used with lower-rep sets; it is an estimate, not a tested max.</p>
+              <div className="one-rm-inputs">
+                <label><span>Weight lifted</span><div className="input-with-unit"><input type="number" inputMode="decimal" value={oneRmWeight} placeholder="225" onFocus={e=>e.currentTarget.select()} onChange={e=>setOneRmWeight(e.target.value===''?'':Math.max(0,Number(e.target.value)))}/><b>lb</b></div></label>
+                <label><span>Reps</span><input type="number" inputMode="numeric" min="1" max="15" value={oneRmReps} onFocus={e=>e.currentTarget.select()} onChange={e=>setOneRmReps(Math.max(1,Math.min(15,Number(e.target.value)||1)))}/></label>
+              </div>
+              {oneRmEstimate>0&&<div className="one-rm-summary">
+                <div><span>Estimated 1RM</span><strong>{oneRmRounded} lb</strong></div>
+                <div><span>85% training max</span><strong>{oneRmTrainingMax} lb</strong></div>
+              </div>}
+              {oneRmEstimate>0&&<div className="one-rm-apply">
+                <select value={oneRmLift} onChange={e=>setOneRmLift(e.target.value)}>{lifts.map(name=><option key={name}>{name}</option>)}</select>
+                <button className="wide-button" type="button" onClick={()=>setTm(oneRmLift,oneRmTrainingMax)}>Use {oneRmTrainingMax} lb as {oneRmLift} TM</button>
+              </div>}
             </section>
 
             <section className="simple-card">
