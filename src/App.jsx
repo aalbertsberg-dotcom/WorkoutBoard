@@ -1444,7 +1444,7 @@ function App() {
     const workout=row?.workout||{}
     const exerciseProgress=(workout.exercises||[]).some(item=>{
       if(item.done || String(item.result||'').trim() || Number(item.load||0))return true
-      return (item.setProgress||[]).some(set=>set.done || Number(set.weight||0))
+      return (item.setProgress||[]).some(set=>set.done)
     })
     const conditioning=workout.metcon||{}
     const conditioningProgress=Boolean(
