@@ -171,7 +171,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       for(const row of (sessions.data||[])){
         for(const item of (row.workout?.exercises||[])){
           const key=String(item.name||'').trim().toLowerCase()
-          const loadedSets=(item.setProgress||[]).map(set=>({weight:setWeight(item,set),reps:repsForSet(item,set),done:Boolean(set.done)})).filter(set=>set.weight)
+          const loadedSets=(item.setProgress||[]).map(set=>({weight:setWeight(item,set),reps:repsForSet(item,set),done:Boolean(set.done)})).filter(set=>set.weight&&set.done)
           const bestSet=loadedSets.reduce((best,set)=>!best||set.weight>best.weight?set:best,null)
           const parsed=bestSet&&!isDistanceExercise(item.name)&&bestSet.reps?{weight:bestSet.weight,reps:bestSet.reps,e1rm:bestSet.weight*(1+bestSet.reps/30)}:null
           if(!key||(!bestSet&&!item.result))continue
@@ -290,6 +290,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
     for(const item of workout.exercises||[]){
       if(isDistanceExercise(item.name))continue
       for(const set of item.setProgress||[]){
+        if(!set.done)continue
         const weight=setWeight(item,set),reps=repsForSet(item,set)
         if(!weight||!reps)continue
         best=Math.max(best,weight*(1+reps/30))
