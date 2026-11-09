@@ -516,7 +516,12 @@ function classicSecondaryExercises(programId,week,lift,oneRms,plan) {
     ) && !(parts.length>1&&/joker/i.test(part)&&!explicitPct)
     const sourceOneRm=Number(oneRms?.[textLift]||currentOneRm||0)
     const prescribedWeight=autoWeight ? targetWeight(sourceOneRm,pct,program.basis) : ''
-    if(prescribedWeight)setProgress.forEach(set=>{set.weight=prescribedWeight})
+    if(autoWeight)setProgress.forEach(set=>{
+      set.weight=prescribedWeight||''
+      set.weight_lift=textLift
+      set.weight_basis=program.basis
+      set.pct=pct!=null?Number(pct):null
+    })
     if(explicitPct?.[2]&&sourceOneRm){
       const upper=targetWeight(sourceOneRm,Number(explicitPct[2]),program.basis)
       setProgress.forEach(set=>{set.target_weight_range=prescribedWeight+'-'+upper+' lb'})
@@ -564,6 +569,9 @@ function makePlannedFromClassic(programId,week,lift,scheduledDate,oneRms,trackin
       label:pctText+' × '+repsText,
       done:false,
       weight:set.pct!=null ? (targetWeight(oneRm,set.pct,program.basis)||'') : '',
+      weight_lift:lift,
+      weight_basis:program.basis,
+      pct:set.pct!=null?Number(set.pct):null,
       editable_reps:/[+]|[-–]|rpe|amrap|max/i.test(repsText+' '+pctText),
     }
   })
@@ -618,6 +626,29 @@ function makePlannedFromClassic(programId,week,lift,scheduledDate,oneRms,trackin
       sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',
     },
     status:'started',
+  }
+}
+
+function personalizeWorkoutLoads(workout,maxes={}) {
+  return {
+    ...workout,
+    exercises:(workout?.exercises||[]).map(item=>({
+      ...item,
+      setProgress:(item.setProgress||[]).map(set=>{
+        const targetLift=set.weight_lift
+        const pct=set.pct
+        if(!targetLift||pct==null)return {...set}
+        const low=targetWeight(Number(maxes?.[targetLift]||0),Number(pct),set.weight_basis||'e1rm')
+        const high=set.pct_high!=null
+          ? targetWeight(Number(maxes?.[targetLift]||0),Number(set.pct_high),set.weight_basis||'e1rm')
+          : null
+        return {
+          ...set,
+          weight:low||'',
+          target_weight_range:high&&high!==low?low+'-'+high+' lb':set.target_weight_range||'',
+        }
+      })
+    }))
   }
 }
 
@@ -2202,6 +2233,21 @@ function App() {
     if(togetherProgramChoice.kind==='classic'){
       sessionProgram=togetherProgramChoice.program.dbName
       sessionLift=selectedWorkout.lift||lifts[selectedIndex]||'Squat'
+      const planned=makePlannedFromClassic(
+        togetherProgramChoice.id,
+        selectedWeek,
+        sessionLift,
+        localDateKey(),
+        oneRepMaxes
+      )
+      sharedTemplate=planned.workout
+      sharedMeta={
+        program_key:togetherProgramChoice.key,
+        program_name:togetherProgramChoice.name,
+        week:selectedWeek,
+        workout_index:selectedIndex,
+        workout_title:planned.title,
+      }
     }else{
       const planned=makePlannedFromArchive(togetherProgramChoice.program,selectedWeek,selectedIndex,localDateKey(),oneRepMaxes)
       sessionProgram=togetherProgramChoice.key
@@ -2314,7 +2360,7 @@ function App() {
           source_program_name:sharedMeta?.program_name||'Workout Together',
           source_week:Number(sharedMeta?.week||1),
           source_day:marker,
-          workout:{...sharedTemplate,shared_session_id:activeSession.id,shared_meta:sharedMeta,shared_template:sharedTemplate},
+          workout:{...personalizeWorkoutLoads(sharedTemplate,sessionOneRms[session.user.id]||oneRepMaxes),shared_session_id:activeSession.id,shared_meta:sharedMeta,shared_template:sharedTemplate},
           status:'started',
         }
         const inserted=await supabase.from('planned_workouts').insert(payload).select().single()
@@ -2472,6 +2518,7 @@ function App() {
             <PlannedWorkoutRunner
               planned={plannedToday}
               sharedSessionId={sharedWorkoutActive&&activeSession ? activeSession.id : null}
+              partnerOneRms={sharedWorkoutActive ? sessionOneRms : {}}
               onCancelled={async() => {
                 setPlannedToday(null)
                 setShowRegularToday(false)
