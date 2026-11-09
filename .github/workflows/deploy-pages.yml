@@ -2,7 +2,7 @@ name: Deploy WorkoutBoard to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [main, cleanup/classic-program-flex-runner]
   workflow_dispatch:
 
 permissions:
