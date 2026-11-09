@@ -377,13 +377,13 @@ function getProgramRest(programId,week,lift,secondary) {
 
 const programOrder = ['andy-hybrid-12','andy-531-original-6','new-531-leader-anchor-11','andy-bbb-jokers-11','powerbuilding-8','strength-power-6','reset-4']
 const dbNameToProgram = Object.fromEntries(Object.entries(programs).map(([id,p]) => [p.dbName,id]))
-const defaultTms = { Squat:'', Bench:'', Deadlift:'', Press:'' }
+const defaultOneRms = { Squat:'', Bench:'', Deadlift:'', Press:'' }
 const round5 = n => Math.round(n / 5) * 5
 const appUrl = () => new URL(import.meta.env.BASE_URL, window.location.origin).toString()
 
-function targetWeight(tm, pct, basis) {
-  if (!tm || pct == null) return null
-  const base = basis === 'e1rm' ? tm / 0.85 : tm
+function targetWeight(oneRm, pct, basis) {
+  if (!oneRm || pct == null) return null
+  const base = basis === 'e1rm' ? oneRm : oneRm * 0.85
   return round5(base * pct / 100)
 }
 
@@ -464,6 +464,49 @@ function e1rm(weight, reps) {
   const r = Number(reps || 0)
   if (!w || !r) return 0
   return w * (1 + r / 30)
+}
+
+const round2 = value => Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100
+
+function canonicalMainLift(name) {
+  const value=String(name||'').trim().toLowerCase()
+  if(/^(back\s+)?squat$/.test(value)) return 'Squat'
+  if(/^(barbell\s+)?bench(\s+press)?$/.test(value)) return 'Bench'
+  if(/^(conventional\s+|sumo\s+)?deadlift$/.test(value)) return 'Deadlift'
+  if(/^(overhead\s+|strict\s+|military\s+)?press$/.test(value)) return 'Press'
+  return null
+}
+
+function calculatedOneRmsFromWorkouts(sessions=[],legacyRows=[]) {
+  const best=Object.fromEntries(lifts.map(name=>[name,null]))
+  const consider=(lift,weight,reps,source='Workout')=>{
+    const w=Number(weight||0),r=Number(reps||0)
+    if(!lift||!w||!r||r>15)return
+    const estimate=round2(e1rm(w,r))
+    if(!best[lift]||estimate>best[lift].value)best[lift]={value:estimate,weight:w,reps:r,source}
+  }
+  for(const row of sessions||[]){
+    const workout=row.workout||{}
+    for(const item of workout.exercises||[]){
+      const lift=canonicalMainLift(item.name)
+      if(!lift)continue
+      const prescriptionReps=Number(String(item.prescription||'').match(/\d+\s*[x×]\s*(\d+(?:\.\d+)?)/i)?.[1]||0)
+      for(const set of item.setProgress||[]){
+        if(set.done===false)continue
+        const weight=Number(set.weight!==undefined&&set.weight!==''?set.weight:item.load||0)
+        consider(lift,weight,Number(set.reps||prescriptionReps),row.title||item.name)
+      }
+    }
+    const legacyLift=lifts.includes(row.primary_lift)?row.primary_lift:null
+    if(legacyLift){
+      for(const set of workout.main||[])consider(legacyLift,set.weight,set.actualReps||set.reps,row.title||legacyLift)
+    }
+  }
+  for(const row of legacyRows||[]){
+    if(!row.completed_at||!lifts.includes(row.lift))continue
+    for(const set of row.workout?.main||[])consider(row.lift,set.weight,set.actualReps||set.reps,row.program||row.lift)
+  }
+  return best
 }
 
 function parseLoggedVolume(value) {
@@ -834,7 +877,7 @@ function App() {
   const [activeProgram,setActiveProgram] = useState('andy-hybrid-12')
   const [week,setWeek] = useState(1)
   const [lift,setLift] = useState('Squat')
-  const [trainingMaxes,setTrainingMaxes] = useState(defaultTms)
+  const [oneRepMaxes,setOneRepMaxes] = useState(defaultOneRms)
   const [oneRmWeight,setOneRmWeight] = useState('')
   const [oneRmReps,setOneRmReps] = useState(5)
   const [oneRmLift,setOneRmLift] = useState('Squat')
@@ -872,13 +915,15 @@ function App() {
   const [feedbackUnread,setFeedbackUnread] = useState(0)
   const [feedbackToast,setFeedbackToast] = useState(null)
   const [progressStartSection,setProgressStartSection] = useState('Overview')
+  const [completedTrainingSessions,setCompletedTrainingSessions] = useState([])
+  const [programCompletionPrompt,setProgramCompletionPrompt] = useState(null)
 
   const personalProgram = programs[activeProgram]
   const sharedProgramId = activeSession ? (dbNameToProgram[activeSession.program] || activeProgram) : activeProgram
   const workoutProgramId = sharedWorkoutActive && activeSession ? sharedProgramId : activeProgram
   const workoutProgram = programs[workoutProgramId]
   const plan = getProgramWeek(workoutProgramId,week,lift)
-  const tm = Number(trainingMaxes[lift] || 0)
+  const tm = Number(oneRepMaxes[lift] || 0)
 
   const oneRmEstimate = useMemo(() => {
     const weight=Number(oneRmWeight)
@@ -886,8 +931,12 @@ function App() {
     if(!weight)return 0
     return reps===1 ? weight : weight*(1+reps/30)
   },[oneRmWeight,oneRmReps])
-  const oneRmRounded = oneRmEstimate ? Math.round(oneRmEstimate/5)*5 : 0
-  const oneRmTrainingMax = oneRmEstimate ? Math.round((oneRmEstimate*.85)/5)*5 : 0
+  const oneRmRounded = oneRmEstimate ? round2(oneRmEstimate) : 0
+  const oneRmTrainingMax = oneRmEstimate ? round2(oneRmRounded*.85) : 0
+  const calculatedOneRms = useMemo(
+    () => calculatedOneRmsFromWorkouts(completedTrainingSessions,history),
+    [completedTrainingSessions,history]
+  )
 
   const buildTrackedProgramInfo = (track,completedRows,today) => {
     const key=String(track?.program_key||'')
@@ -1158,15 +1207,24 @@ function App() {
       setTrackedProgramsInfo(trackInfos)
       setTrackedTodayInfo(trackInfos[0]||null)
       setTodayCompletedWorkouts((flexCompleted||[]).filter(row=>(row.session_date||localDateKey(row.completed_at))===today))
+      setCompletedTrainingSessions(flexCompleted||[])
       setShowRegularToday(false)
       setTogetherTracking(trackingData || [])
 
-      if (tmData) {
-        setTrainingMaxes({
-          Squat:tmData.squat ?? '',
-          Bench:tmData.bench ?? '',
-          Deadlift:tmData.deadlift ?? '',
-          Press:tmData.press ?? '',
+      const savedOneRms=session.user.user_metadata?.one_rep_maxes
+      if(savedOneRms&&typeof savedOneRms==='object'){
+        setOneRepMaxes({
+          Squat:savedOneRms.Squat ?? '',
+          Bench:savedOneRms.Bench ?? '',
+          Deadlift:savedOneRms.Deadlift ?? '',
+          Press:savedOneRms.Press ?? '',
+        })
+      }else if(tmData){
+        setOneRepMaxes({
+          Squat:tmData.squat==null?'':round2(Number(tmData.squat)/.85),
+          Bench:tmData.bench==null?'':round2(Number(tmData.bench)/.85),
+          Deadlift:tmData.deadlift==null?'':round2(Number(tmData.deadlift)/.85),
+          Press:tmData.press==null?'':round2(Number(tmData.press)/.85),
         })
       }
 
@@ -1260,6 +1318,51 @@ function App() {
     activatePlannedWorkout(data)
   }
 
+  const startStrengthBaseline = async (path='full',{confirmed=false,liftName=null}={}) => {
+    if(!session?.user)return
+    const pathLifts=path==='upper' ? ['Bench','Press']
+      : path==='lower' ? ['Squat','Deadlift']
+      : path==='single'&&liftName ? [liftName]
+      : lifts
+    const label=path==='upper'?'Upper-body strength baseline'
+      : path==='lower'?'Lower-body strength baseline'
+      : path==='single' ? (liftName+' strength baseline')
+      : 'Full strength baseline'
+    if((todayCompletedWorkouts.length||trackedTodayInfo?.workoutsToday||0)>0&&!confirmed){
+      setPendingWorkoutStart({kind:'baseline',baselinePath:path,baselineLift:liftName,label})
+      return
+    }
+    const exerciseName={Squat:'Back Squat',Bench:'Bench Press',Deadlift:'Deadlift',Press:'Overhead Press'}
+    const exercises=pathLifts.map(mainLift=>({
+      name:exerciseName[mainLift],
+      prescription:'Ramp 5 / 3 / 2, then 4 test reps @ RPE 8.5-9',
+      note:'Build gradually. The final set is 4 clean reps around RPE 8.5-9; stop before form breaks.',
+      rest_seconds:240,
+      strength_baseline_lift:mainLift,
+      setProgress:[
+        {set:1,reps:5,label:'5 easy',done:false,weight:''},
+        {set:2,reps:3,label:'3 moderate',done:false,weight:''},
+        {set:3,reps:2,label:'2 heavier',done:false,weight:''},
+        {set:4,reps:4,label:'4 test @ RPE 8.5-9',done:false,weight:''},
+      ],
+    }))
+    const today=localDateKey()
+    const workout={
+      version:2,type:'flexible',standalone:true,started_explicitly:true,
+      strength_baseline:true,baseline_path:path,
+      exercises,sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',
+      conditioningEnabled:false,conditioning_prescribed:false,
+      metcon:{name:'',format:'',activity:'',duration:'',workTime:'',restTime:'',interval:'',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx',intensity:'Easy'},
+    }
+    const {data,error}=await supabase.from('planned_workouts').insert({
+      user_id:session.user.id,scheduled_date:today,title:label,
+      source_program_name:'Strength Baseline',source_week:null,source_day:path,
+      workout,status:'started',
+    }).select().single()
+    if(error){setWorkoutStartError(error.message);return}
+    activatePlannedWorkout(data)
+  }
+
   const startStandaloneWorkout = async (kind,{confirmed=false}={}) => {
     if(!session?.user)return
     const labels={free:'Free workout',run:'Run / Walk',conditioning:'Conditioning / Metcon'}
@@ -1299,8 +1402,9 @@ function App() {
       const track=trackedProgramsInfo.find(item=>item.key===pending.trackingKey)||trackedTodayInfo
       const selectedWorkout=[...(track?.weekChoices||[]),...(track?.upcoming||[])].find(item=>item.trackingWorkoutKey===pending.workoutKey)||track?.upcoming?.[0]
       await startTrackedWorkout(track,{confirmed:true,selectedWorkout})
-    }
-    else await startStandaloneWorkout(pending.kind,{confirmed:true})
+    }else if(pending.kind==='baseline'){
+      await startStrengthBaseline(pending.baselinePath,{confirmed:true,liftName:pending.baselineLift})
+    }else await startStandaloneWorkout(pending.kind,{confirmed:true})
   }
 
   const refreshPlannedToday = async () => {
@@ -1523,22 +1627,42 @@ function App() {
     setLog(v => ({...v,complete:false,main:v.main.map((set,idx) => idx === i ? {...set,[field]:value} : set)}))
   }
 
-  const saveTrainingMaxes = async next => {
-    setTrainingMaxes(next)
+  const saveOneRepMaxes = async next => {
+    const cleaned=Object.fromEntries(lifts.map(name=>[name,next[name]===''?'':round2(Math.max(0,Number(next[name])||0))]))
+    setOneRepMaxes(cleaned)
     if (!session?.user) return
-    await supabase.from('training_maxes').upsert({
-      user_id:session.user.id,
-      squat:next.Squat === '' ? null : Number(next.Squat),
-      bench:next.Bench === '' ? null : Number(next.Bench),
-      deadlift:next.Deadlift === '' ? null : Number(next.Deadlift),
-      press:next.Press === '' ? null : Number(next.Press),
-      updated_at:new Date().toISOString(),
-    })
+    await Promise.all([
+      supabase.auth.updateUser({data:{...session.user.user_metadata,one_rep_maxes:cleaned}}),
+      supabase.from('training_maxes').upsert({
+        user_id:session.user.id,
+        squat:cleaned.Squat === '' ? null : round2(Number(cleaned.Squat)*.85),
+        bench:cleaned.Bench === '' ? null : round2(Number(cleaned.Bench)*.85),
+        deadlift:cleaned.Deadlift === '' ? null : round2(Number(cleaned.Deadlift)*.85),
+        press:cleaned.Press === '' ? null : round2(Number(cleaned.Press)*.85),
+        updated_at:new Date().toISOString(),
+      })
+    ])
   }
 
-  const setTm = (name,raw) => {
-    const value = raw === '' ? '' : Math.max(0,Number(raw))
-    saveTrainingMaxes({...trainingMaxes,[name]:value})
+  const setOneRm = (name,raw) => {
+    const value = raw === '' ? '' : round2(Math.max(0,Number(raw)))
+    saveOneRepMaxes({...oneRepMaxes,[name]:value})
+  }
+
+  const refreshOneRmCandidates = async () => {
+    if(!session?.user)return
+    const {data}=await supabase.from('training_sessions')
+      .select('id,title,program,primary_lift,workout,completed_at')
+      .eq('user_id',session.user.id).not('completed_at','is',null)
+      .order('completed_at',{ascending:false}).limit(1000)
+    setCompletedTrainingSessions(data||[])
+  }
+
+  const openOneRmReview = async () => {
+    await refreshOneRmCandidates()
+    setProgramCompletionPrompt(null)
+    setActiveTab('me')
+    requestAnimationFrame(()=>document.getElementById('one-rm-center')?.scrollIntoView({behavior:'smooth',block:'start'}))
   }
 
   const usePrevious = i => {
@@ -1735,7 +1859,9 @@ function App() {
     }
 
     const refreshedTracks=await refreshTrackedProgramsInfo()
-    if(refreshedTracks.some(info=>info.kind==='classic'&&info.programId===workoutProgramId)){
+    const finishedTrack=refreshedTracks.find(info=>info.kind==='classic'&&info.programId===workoutProgramId)
+    if(finishedTrack?.complete)setProgramCompletionPrompt({name:finishedTrack.name||workoutProgram.name})
+    if(finishedTrack){
       setShowRegularToday(false)
       setPlannedToday(null)
       return
@@ -1950,7 +2076,7 @@ function App() {
     setSaveState('Saved')
     setActiveTab('today')
     const found = history.find(row => row.program === programs[programId].dbName && row.week === activeSession.week && row.lift === activeSession.lift)
-    setLog(normalizeLog(found?.workout || null,programId,activeSession.week,activeSession.lift,Number(trainingMaxes[activeSession.lift] || 0)))
+    setLog(normalizeLog(found?.workout || null,programId,activeSession.week,activeSession.lift,Number(oneRepMaxes[activeSession.lift] || 0)))
   }
 
   const shareSession = async () => {
@@ -2088,6 +2214,8 @@ function App() {
               }}
               onFinished={async(summary) => {
                 const finishedTrackingKey=plannedToday?.workout?.tracking_program_key||null
+                const finishedTrack=finishedTrackingKey?trackedProgramsInfo.find(info=>info.key===finishedTrackingKey):null
+                const programWillComplete=Boolean(finishedTrack&&finishedTrack.completed+1>=finishedTrack.total)
                 setPlannedToday(null)
                 setShowRegularToday(false)
                 if(sharedWorkoutActive&&activeSession){
@@ -2095,6 +2223,7 @@ function App() {
                   setActiveTab('together')
                 }else{
                   setCompletionSummary(summary||null)
+                  if(programWillComplete)setProgramCompletionPrompt({name:finishedTrack?.name||summary?.program||'Program'})
                   if(summary){
                     setTodayCompletedWorkouts(rows=>[{
                       id:'just-finished-'+Date.now(),
@@ -2169,6 +2298,9 @@ function App() {
 
               {extraWorkoutOpen&&<section className="simple-card extra-workout-picker">
                 <div className="section-heading"><div><span className="card-label">ANOTHER WORKOUT</span><h3>What are you tracking?</h3></div><button className="conditioning-remove" onClick={()=>setExtraWorkoutOpen(false)}>Cancel</button></div>
+                <button onClick={()=>startStrengthBaseline('full')}><strong>Strength baseline · All 4</strong><span>Squat, bench, deadlift and press · 4-rep test sets</span></button>
+                <button onClick={()=>startStrengthBaseline('upper')}><strong>Strength baseline · Upper</strong><span>Bench + press</span></button>
+                <button onClick={()=>startStrengthBaseline('lower')}><strong>Strength baseline · Lower</strong><span>Squat + deadlift</span></button>
                 <button onClick={()=>startStandaloneWorkout('free')}><strong>Free workout</strong><span>Add whatever exercises you want</span></button>
                 <button onClick={()=>startStandaloneWorkout('run')}><strong>Run / Walk</strong><span>Track distance and time</span></button>
                 <button onClick={()=>startStandaloneWorkout('conditioning')}><strong>Conditioning / Metcon</strong><span>Intervals, AMRAP, EMOM, cardio, etc.</span></button>
@@ -2216,12 +2348,12 @@ function App() {
               </details>
             )}
 
-            {!tm && <div className="hint"><strong>No {lift} training max yet.</strong><span>Add it under Me → Training Maxes, or type working weights directly.</span></div>}
+            {!tm && <div className="hint"><strong>No {lift} 1RM yet.</strong><span>Add it under Me → 1 Rep Maxes, or type working weights directly.</span></div>}
 
             <ExerciseHistoryStrip history={history} lift={lift} formatWeight={formatWeight} />
             <details className="today-collapsible">
               <summary><span><b>Workout Coach</b><small>Last performance, suggested load, warm-ups & PRs</small></span></summary>
-              <WorkoutCoach session={session} lift={lift} log={log} history={history} tm={tm} plan={plan} />
+              <WorkoutCoach session={session} lift={lift} log={log} history={history} tm={tm*.85} plan={plan} />
             </details>
 
             <section className="exercise-card">
@@ -2535,6 +2667,7 @@ function App() {
             lifts={lifts}
             jumpToWorkout={jumpToWorkout}
             onTrackingChanged={refreshTrackedProgramsInfo}
+            onProgramCompleted={track=>setProgramCompletionPrompt({name:track?.program_name||'Program'})}
           />
         ) : activeTab === 'whiteboard' ? (
           <WhiteboardPage session={session} />
@@ -2597,20 +2730,40 @@ function App() {
               dbNameToProgram={dbNameToProgram}
             />
 
-            <section className="simple-card">
-              <div className="section-heading"><div><span className="card-label">TRAINING MAXES</span><h3>Your current numbers</h3></div></div>
-              <p className="helper-text">Enter your normal 85% training max. Powerbuilding and Strength + Power convert it internally for e1RM-based percentages.</p>
+            <section className="simple-card" id="one-rm-center">
+              <div className="section-heading"><div><span className="card-label">1 REP MAXES</span><h3>Your current 1RMs</h3></div></div>
+              <p className="helper-text">Saved to 2 decimals. Programs calculate their own training max and working percentages from these numbers.</p>
               <div className="tm-grid">
                 {lifts.map(x => (
                   <label key={x}><span>{x}</span>
                     <div className="input-with-unit">
-                      <input type="number" inputMode="decimal" value={trainingMaxes[x] || ''} placeholder="0"
+                      <input type="number" inputMode="decimal" value={oneRepMaxes[x] || ''} placeholder="0"
                         onFocus={e => e.currentTarget.select()}
-                        onChange={e => setTm(x,e.target.value)} />
+                        onChange={e => setOneRm(x,e.target.value)} />
                       <b>lb</b>
                     </div>
                   </label>
                 ))}
+              </div>
+            </section>
+
+            <section className="simple-card one-rm-card">
+              <div className="section-heading"><div><span className="card-label">CALCULATED FROM WORKOUTS</span><h3>Best estimated 1RMs</h3></div></div>
+              <p className="helper-text">Calculated from completed main-lift sets using Epley. Use one as your saved 1RM, or test it with a baseline workout.</p>
+              <div className="one-rm-summary">
+                {lifts.map(name=>{
+                  const candidate=calculatedOneRms[name]
+                  return <div key={name}><span>{name}</span><strong>{candidate?candidate.value.toFixed(2)+' lb':'—'}</strong>{candidate&&<small>{candidate.weight} × {candidate.reps}</small>}{candidate&&<button type="button" onClick={()=>setOneRm(name,candidate.value)}>Use</button>}</div>
+                })}
+              </div>
+              <p className="helper-text"><strong>Would you like to test this now?</strong> Pick a baseline path.</p>
+              <div className="one-rm-apply">
+                <button className="wide-button" type="button" onClick={()=>startStrengthBaseline('full')}>All 4 lifts</button>
+                <button className="secondary-action" type="button" onClick={()=>startStrengthBaseline('upper')}>Upper</button>
+                <button className="secondary-action" type="button" onClick={()=>startStrengthBaseline('lower')}>Lower</button>
+              </div>
+              <div className="one-rm-apply">
+                {lifts.map(name=><button className="secondary-action" type="button" key={name} onClick={()=>startStrengthBaseline('single',{liftName:name})}>Test {name}</button>)}
               </div>
             </section>
 
@@ -2627,7 +2780,7 @@ function App() {
               </div>}
               {oneRmEstimate>0&&<div className="one-rm-apply">
                 <select value={oneRmLift} onChange={e=>setOneRmLift(e.target.value)}>{lifts.map(name=><option key={name}>{name}</option>)}</select>
-                <button className="wide-button" type="button" onClick={()=>setTm(oneRmLift,oneRmTrainingMax)}>Use {oneRmTrainingMax} lb as {oneRmLift} TM</button>
+                <button className="wide-button" type="button" onClick={()=>setOneRm(oneRmLift,oneRmRounded)}>Use {oneRmRounded} lb as {oneRmLift} 1RM</button>
               </div>}
             </section>
 
@@ -2691,6 +2844,15 @@ function App() {
         <span>New feedback · {feedbackToast.category}</span>
         <strong>{String(feedbackToast.message||'').slice(0,120)}</strong>
       </button>}
+
+      {programCompletionPrompt&&<div className="same-day-sheet-backdrop" onClick={()=>setProgramCompletionPrompt(null)}>
+        <section className="same-day-sheet" onClick={e=>e.stopPropagation()}>
+          <span className="card-label">PROGRAM COMPLETE</span>
+          <h3>{programCompletionPrompt.name} complete. Update your 1 rep maxes?</h3>
+          <p>Review workout-calculated estimates, enter a number manually, or start a strength baseline.</p>
+          <div><button className="secondary-action" onClick={()=>setProgramCompletionPrompt(null)}>Not now</button><button className="primary-action" onClick={openOneRmReview}>Review 1RMs</button></div>
+        </section>
+      </div>}
 
       {pendingWorkoutStart&&<div className="same-day-sheet-backdrop" onClick={()=>setPendingWorkoutStart(null)}>
         <section className="same-day-sheet" onClick={e=>e.stopPropagation()}>
