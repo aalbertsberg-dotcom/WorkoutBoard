@@ -1345,6 +1345,24 @@ function App() {
         supabase.from('training_sessions').select('id,title,program,week,primary_lift,workout,session_date,completed_at').eq('user_id',userId).not('completed_at','is',null).order('completed_at',{ascending:false}).limit(1000),
       ])
 
+      const savedMetaOneRms=session.user.user_metadata?.one_rep_maxes
+      const loadedOneRms=oneRmData ? {
+        Squat:oneRmData.squat ?? '',
+        Bench:oneRmData.bench ?? '',
+        Deadlift:oneRmData.deadlift ?? '',
+        Press:oneRmData.press ?? '',
+      } : savedMetaOneRms&&typeof savedMetaOneRms==='object' ? {
+        Squat:savedMetaOneRms.Squat ?? '',
+        Bench:savedMetaOneRms.Bench ?? '',
+        Deadlift:savedMetaOneRms.Deadlift ?? '',
+        Press:savedMetaOneRms.Press ?? '',
+      } : tmData ? {
+        Squat:tmData.squat==null?'':round2(Number(tmData.squat)/.85),
+        Bench:tmData.bench==null?'':round2(Number(tmData.bench)/.85),
+        Deadlift:tmData.deadlift==null?'':round2(Number(tmData.deadlift)/.85),
+        Press:tmData.press==null?'':round2(Number(tmData.press)/.85),
+      } : defaultOneRms
+
       if (cancelled) return
 
       const rows = logsData || []
@@ -1412,7 +1430,7 @@ function App() {
           }
           const cancelledTrackedToday=(todayPlans||[]).some(row=>row.status==='skipped'&&row.workout?.tracking_program_key===activeArchiveTrack.program_key)
           if(!resolvedTodayPlan && !completedToday && !cancelledTrackedToday && completedCount<total && nextDay){
-            const plannedPayload=makePlannedFromArchive(trackedProgram,nextWeek,nextDayIndex,today)
+            const plannedPayload=makePlannedFromArchive(trackedProgram,nextWeek,nextDayIndex,today,loadedOneRms)
             plannedPayload.workout={...plannedPayload.workout,tracking_program_key:activeArchiveTrack.program_key}
             const inserted=await supabase.from('planned_workouts').insert({...plannedPayload,user_id:userId}).select().single()
             if(!inserted.error)resolvedTodayPlan=inserted.data
@@ -1428,29 +1446,7 @@ function App() {
       setShowRegularToday(false)
       setTogetherTracking(trackingData || [])
 
-      const savedOneRms=session.user.user_metadata?.one_rep_maxes
-      if(oneRmData){
-        setOneRepMaxes({
-          Squat:oneRmData.squat ?? '',
-          Bench:oneRmData.bench ?? '',
-          Deadlift:oneRmData.deadlift ?? '',
-          Press:oneRmData.press ?? '',
-        })
-      }else if(savedOneRms&&typeof savedOneRms==='object'){
-        setOneRepMaxes({
-          Squat:savedOneRms.Squat ?? '',
-          Bench:savedOneRms.Bench ?? '',
-          Deadlift:savedOneRms.Deadlift ?? '',
-          Press:savedOneRms.Press ?? '',
-        })
-      }else if(tmData){
-        setOneRepMaxes({
-          Squat:tmData.squat==null?'':round2(Number(tmData.squat)/.85),
-          Bench:tmData.bench==null?'':round2(Number(tmData.bench)/.85),
-          Deadlift:tmData.deadlift==null?'':round2(Number(tmData.deadlift)/.85),
-          Press:tmData.press==null?'':round2(Number(tmData.press)/.85),
-        })
-      }
+      setOneRepMaxes(loadedOneRms)
 
       const completed = new Set(rows.filter(r => r.program === chosen.dbName && r.week === currentWeek && r.completed_at).map(r => r.lift))
       setLift(lifts.find(x => !completed.has(x)) || 'Press')
@@ -1539,7 +1535,7 @@ function App() {
     const next=chosenWorkout
     if(!program?.getWeek || !next)return
     const today=localDateKey()
-    const plannedPayload=makePlannedFromArchive(program,next.week,next.dayIndex,today)
+    const plannedPayload=makePlannedFromArchive(program,next.week,next.dayIndex,today,oneRepMaxes)
     plannedPayload.status='started'
     plannedPayload.workout={...plannedPayload.workout,tracking_program_key:trackInfo.key,tracking_workout_key:next.trackingWorkoutKey,started_explicitly:true}
     const {data,error}=await supabase.from('planned_workouts').insert({...plannedPayload,user_id:session.user.id}).select().single()
@@ -2207,7 +2203,7 @@ function App() {
       sessionProgram=togetherProgramChoice.program.dbName
       sessionLift=selectedWorkout.lift||lifts[selectedIndex]||'Squat'
     }else{
-      const planned=makePlannedFromArchive(togetherProgramChoice.program,selectedWeek,selectedIndex,localDateKey())
+      const planned=makePlannedFromArchive(togetherProgramChoice.program,selectedWeek,selectedIndex,localDateKey(),oneRepMaxes)
       sessionProgram=togetherProgramChoice.key
       sessionLift=lifts[Math.min(selectedIndex,lifts.length-1)]||'Squat'
       sharedTemplate=planned.workout
@@ -2945,6 +2941,7 @@ function App() {
             onProgramCompleted={track=>setProgramCompletionPrompt({name:track?.program_name||'Program'})}
             onStartStrengthBaseline={startStrengthBaseline}
             onScheduleClassicWorkout={scheduleClassicWorkoutFromPlan}
+            oneRepMaxes={oneRepMaxes}
           />
         ) : activeTab === 'whiteboard' ? (
           <WhiteboardPage session={session} />
