@@ -1743,6 +1743,30 @@ function App() {
     setActiveTab('today')
   }
 
+  useEffect(() => {
+    if(!session?.user)return
+    let timer=null
+    const syncToday=()=>{
+      if(document.visibilityState==='hidden')return
+      clearTimeout(timer)
+      // PlannedWorkoutRunner autosaves after ~350 ms. Waiting a little longer
+      // avoids replacing a just-entered set with an older server snapshot.
+      timer=setTimeout(()=>{
+        refreshPlannedToday()
+        if(activeTab==='today')refreshTrackedProgramsInfo()
+      },650)
+    }
+    window.addEventListener('focus',syncToday)
+    window.addEventListener('pageshow',syncToday)
+    document.addEventListener('visibilitychange',syncToday)
+    return ()=>{
+      clearTimeout(timer)
+      window.removeEventListener('focus',syncToday)
+      window.removeEventListener('pageshow',syncToday)
+      document.removeEventListener('visibilitychange',syncToday)
+    }
+  },[session?.user?.id,activeTab])
+
   const openMe = async () => {
     await refreshTrackedProgramsInfo()
     setActiveTab('me')

@@ -1,4 +1,4 @@
-const CACHE = 'workoutboard-shell-v3'
+const CACHE = 'workoutboard-shell-v4'
 
 const scopedUrl = path => new URL(path, self.registration.scope).href
 
@@ -38,13 +38,14 @@ self.addEventListener('fetch', event => {
     return
   }
 
+  // During active development, prefer the network for app assets so a phone
+  // refresh cannot remain pinned to an older JS/CSS bundle. Cache is fallback only.
   event.respondWith(
-    caches.match(event.request).then(cached => {
-      const network=fetch(event.request).then(response => {
+    fetch(event.request)
+      .then(response => {
         if (response.ok) caches.open(CACHE).then(cache => cache.put(event.request,response.clone()))
         return response
-      }).catch(() => cached)
-      return cached || network
-    })
+      })
+      .catch(() => caches.match(event.request))
   )
 })
