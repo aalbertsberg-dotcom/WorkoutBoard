@@ -94,7 +94,7 @@ function setWeight(item,set) {
 }
 
 function repsForSet(item,set) {
-  if(set?.reps)return Number(set.reps)||0
+  if(set?.reps!==undefined && set?.reps!==null && set?.reps!=='') return Number(set.reps)||0
   const m=String(item?.prescription||'').match(/\d+\s*[x×]\s*(\d+(?:\.\d+)?)/i)
   return m?Number(m[1]):0
 }
