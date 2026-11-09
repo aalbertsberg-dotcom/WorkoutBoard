@@ -2748,6 +2748,23 @@ function App() {
             </section>
 
             <section className="simple-card one-rm-card">
+              <div className="section-heading"><div><span className="card-label">1RM CALCULATOR</span><h3>Estimate from a rep set</h3></div>{oneRmEstimate>0&&<b className="one-rm-result">{oneRmRounded} lb</b>}</div>
+              <p className="helper-text">Uses the Epley estimate: weight × (1 + reps ÷ 30). Best used with lower-rep sets; it is an estimate, not a tested max.</p>
+              <div className="one-rm-inputs">
+                <label><span>Weight lifted</span><div className="input-with-unit"><input type="number" inputMode="decimal" value={oneRmWeight} placeholder="225" onFocus={e=>e.currentTarget.select()} onChange={e=>setOneRmWeight(e.target.value===''?'':Math.max(0,Number(e.target.value)))}/><b>lb</b></div></label>
+                <label><span>Reps</span><input type="number" inputMode="numeric" min="1" max="15" value={oneRmReps} onFocus={e=>e.currentTarget.select()} onChange={e=>setOneRmReps(Math.max(1,Math.min(15,Number(e.target.value)||1)))}/></label>
+              </div>
+              {oneRmEstimate>0&&<div className="one-rm-summary">
+                <div><span>Estimated 1RM</span><strong>{oneRmRounded} lb</strong></div>
+                <div><span>85% training max</span><strong>{oneRmTrainingMax} lb</strong></div>
+              </div>}
+              {oneRmEstimate>0&&<div className="one-rm-apply">
+                <select value={oneRmLift} onChange={e=>setOneRmLift(e.target.value)}>{lifts.map(name=><option key={name}>{name}</option>)}</select>
+                <button className="wide-button" type="button" onClick={()=>setOneRm(oneRmLift,oneRmRounded)}>Use {oneRmRounded} lb as {oneRmLift} 1RM</button>
+              </div>}
+            </section>
+
+            <section className="simple-card one-rm-card">
               <div className="section-heading"><div><span className="card-label">CALCULATED FROM WORKOUTS</span><h3>Best estimated 1RMs</h3></div></div>
               <p className="helper-text">Calculated from completed main-lift sets using Epley. Use one as your saved 1RM, or test it with a baseline workout.</p>
               <div className="one-rm-summary">
@@ -2765,23 +2782,6 @@ function App() {
               <div className="one-rm-apply">
                 {lifts.map(name=><button className="secondary-action" type="button" key={name} onClick={()=>startStrengthBaseline('single',{liftName:name})}>Test {name}</button>)}
               </div>
-            </section>
-
-            <section className="simple-card one-rm-card">
-              <div className="section-heading"><div><span className="card-label">1RM CALCULATOR</span><h3>Estimate from a rep set</h3></div>{oneRmEstimate>0&&<b className="one-rm-result">{oneRmRounded} lb</b>}</div>
-              <p className="helper-text">Uses the Epley estimate: weight × (1 + reps ÷ 30). Best used with lower-rep sets; it is an estimate, not a tested max.</p>
-              <div className="one-rm-inputs">
-                <label><span>Weight lifted</span><div className="input-with-unit"><input type="number" inputMode="decimal" value={oneRmWeight} placeholder="225" onFocus={e=>e.currentTarget.select()} onChange={e=>setOneRmWeight(e.target.value===''?'':Math.max(0,Number(e.target.value)))}/><b>lb</b></div></label>
-                <label><span>Reps</span><input type="number" inputMode="numeric" min="1" max="15" value={oneRmReps} onFocus={e=>e.currentTarget.select()} onChange={e=>setOneRmReps(Math.max(1,Math.min(15,Number(e.target.value)||1)))}/></label>
-              </div>
-              {oneRmEstimate>0&&<div className="one-rm-summary">
-                <div><span>Estimated 1RM</span><strong>{oneRmRounded} lb</strong></div>
-                <div><span>85% training max</span><strong>{oneRmTrainingMax} lb</strong></div>
-              </div>}
-              {oneRmEstimate>0&&<div className="one-rm-apply">
-                <select value={oneRmLift} onChange={e=>setOneRmLift(e.target.value)}>{lifts.map(name=><option key={name}>{name}</option>)}</select>
-                <button className="wide-button" type="button" onClick={()=>setOneRm(oneRmLift,oneRmRounded)}>Use {oneRmRounded} lb as {oneRmLift} 1RM</button>
-              </div>}
             </section>
 
             <section className="simple-card">
