@@ -466,7 +466,22 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
         name:maxes?.displayName||'Partner',
         target:partnerSetTarget(maxes,targetSet),
       })).filter(x=>x.target)
-      return <article id={'workout-exercise-'+i} className={'flex-exercise '+(item.done?'done ':'')+(item.group?'grouped ':'')+(i===focusedExerciseIndex?'current-exercise':'')} key={item.id||i}>
+      const cardActivatable=exerciseIncomplete(item)
+      const activateFromCard=e=>{
+        if(!cardActivatable)return
+        if(e.target.closest('button,input,select,textarea,a,label,summary,details'))return
+        activateExercise(i,null,{scroll:false})
+      }
+      return <article
+        id={'workout-exercise-'+i}
+        className={'flex-exercise '+(item.done?'done ':'')+(item.group?'grouped ':'')+(cardActivatable?'tappable-exercise ':'')+(i===focusedExerciseIndex?'current-exercise':'')}
+        key={item.id||i}
+        role={cardActivatable?'button':undefined}
+        tabIndex={cardActivatable?0:undefined}
+        aria-label={cardActivatable?`Work on ${item.name}`:undefined}
+        onClick={activateFromCard}
+        onKeyDown={e=>{if(cardActivatable&&(e.key==='Enter'||e.key===' ')){e.preventDefault();activateExercise(i,null,{scroll:false})}}}
+      >
         <div className="flex-exercise-title">
           <div>
             <div className="exercise-name-line"><strong>{item.name}</strong>{isPR&&<b className="pr-mini">PR</b>}<PlannedAlternatives name={item.name}/>{item.custom_added&&<button type="button" className="remove-added-exercise" onClick={()=>removeAddedExercise(i)}>Remove</button>}</div>
