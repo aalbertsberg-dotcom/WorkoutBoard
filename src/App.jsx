@@ -1090,6 +1090,7 @@ function App() {
   const [activeSession,setActiveSession] = useState(null)
   const [participants,setParticipants] = useState([])
   const [sessionResults,setSessionResults] = useState([])
+  const [sessionOneRms,setSessionOneRms] = useState({})
   const [joinCode,setJoinCode] = useState('')
   const [togetherMessage,setTogetherMessage] = useState('')
   const [sharedWorkoutActive,setSharedWorkoutActive] = useState(false)
@@ -1319,8 +1320,9 @@ function App() {
       setDataLoading(true)
       const userId = session.user.id
       const today = localDateKey()
-      const [{data:profileData},{data:tmData},{data:logsData},{data:todayPlans},{data:trackingData},{data:flexCompleted}] = await Promise.all([
+      const [{data:profileData},{data:oneRmData},{data:tmData},{data:logsData},{data:todayPlans},{data:trackingData},{data:flexCompleted}] = await Promise.all([
         supabase.from('profiles').select('*').eq('id',userId).single(),
+        supabase.from('one_rep_maxes').select('*').eq('user_id',userId).maybeSingle(),
         supabase.from('training_maxes').select('*').eq('user_id',userId).single(),
         supabase.from('workout_logs').select('*').eq('user_id',userId).order('updated_at',{ascending:false}),
         supabase.from('planned_workouts').select('*').eq('user_id',userId).eq('scheduled_date',today).in('status',['planned','started','skipped']).order('created_at'),
@@ -1412,7 +1414,14 @@ function App() {
       setTogetherTracking(trackingData || [])
 
       const savedOneRms=session.user.user_metadata?.one_rep_maxes
-      if(savedOneRms&&typeof savedOneRms==='object'){
+      if(oneRmData){
+        setOneRepMaxes({
+          Squat:oneRmData.squat ?? '',
+          Bench:oneRmData.bench ?? '',
+          Deadlift:oneRmData.deadlift ?? '',
+          Press:oneRmData.press ?? '',
+        })
+      }else if(savedOneRms&&typeof savedOneRms==='object'){
         setOneRepMaxes({
           Squat:savedOneRms.Squat ?? '',
           Bench:savedOneRms.Bench ?? '',
@@ -1840,14 +1849,22 @@ function App() {
 
   const refreshTogether = async sessionId => {
     if (!sessionId) return
-    const [{data:sessionData},{data:people},{data:results}] = await Promise.all([
+    const [{data:sessionData},{data:people},{data:results},{data:maxRows}] = await Promise.all([
       supabase.from('shared_sessions').select('*').eq('id',sessionId).single(),
       supabase.from('session_participants').select('*').eq('session_id',sessionId).order('joined_at'),
       supabase.from('session_results').select('*').eq('session_id',sessionId).order('updated_at',{ascending:false}),
+      supabase.rpc('shared_session_one_rep_maxes',{target_session:sessionId}),
     ])
     if (sessionData) setActiveSession(sessionData)
     setParticipants(people || [])
     setSessionResults(results || [])
+    setSessionOneRms(Object.fromEntries((maxRows||[]).map(row=>[row.user_id,{
+      displayName:row.display_name,
+      Squat:row.squat??'',
+      Bench:row.bench??'',
+      Deadlift:row.deadlift??'',
+      Press:row.press??'',
+    }])))
   }
 
   useEffect(() => {
@@ -1868,6 +1885,14 @@ function App() {
     if (!session?.user) return
     await Promise.all([
       supabase.auth.updateUser({data:{...session.user.user_metadata,one_rep_maxes:cleaned}}),
+      supabase.from('one_rep_maxes').upsert({
+        user_id:session.user.id,
+        squat:cleaned.Squat === '' ? null : Number(cleaned.Squat),
+        bench:cleaned.Bench === '' ? null : Number(cleaned.Bench),
+        deadlift:cleaned.Deadlift === '' ? null : Number(cleaned.Deadlift),
+        press:cleaned.Press === '' ? null : Number(cleaned.Press),
+        updated_at:new Date().toISOString(),
+      }),
       supabase.from('training_maxes').upsert({
         user_id:session.user.id,
         squat:cleaned.Squat === '' ? null : round2(Number(cleaned.Squat)*.85),
