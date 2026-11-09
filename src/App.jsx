@@ -480,11 +480,12 @@ function classicAssistanceExercise(text,restSeconds,index) {
   }
 }
 
-function classicSecondaryExercises(programId,week,lift,oneRm,plan) {
+function classicSecondaryExercises(programId,week,lift,oneRms,plan) {
   const secondary=plan.secondary
   if(!secondary?.title)return []
   const program=programs[programId]
   const mainName=classicLiftExerciseNames[lift]||lift
+  const currentOneRm=Number(oneRms?.[lift]||0)
   const parts=String(secondary.title).split(/\s+\+\s+/).map(x=>x.trim()).filter(Boolean)
   const result=parts.map((part,index)=>{
     const lower=part.toLowerCase()
@@ -501,12 +502,25 @@ function classicSecondaryExercises(programId,week,lift,oneRm,plan) {
     }
 
     const setProgress=classicSetProgressFromPrescription(part)
-    const autoWeight=secondary.pct!=null && (
+    const textLift=/bench/i.test(part)?'Bench'
+      : /deadlift/i.test(part)?'Deadlift'
+      : /squat/i.test(part)?'Squat'
+      : /press/i.test(part)?'Press'
+      : lift
+    const explicitPct=part.match(/@\s*([0-9]+(?:\.[0-9]+)?)(?:\s*[-–]\s*([0-9]+(?:\.[0-9]+)?))?\s*%/i)
+    const pct=explicitPct?Number(explicitPct[1]):secondary.pct
+    const autoWeight=pct!=null && (
+      Boolean(explicitPct) ||
       parts.length===1 ||
       /\bfsl\b|first[ -]?set|\bbbb\b|widowmaker|tm test|training max|100% tm|backoff|back-off/i.test(part)
-    )
-    const prescribedWeight=autoWeight ? targetWeight(oneRm,secondary.pct,program.basis) : ''
+    ) && !(parts.length>1&&/joker/i.test(part)&&!explicitPct)
+    const sourceOneRm=Number(oneRms?.[textLift]||currentOneRm||0)
+    const prescribedWeight=autoWeight ? targetWeight(sourceOneRm,pct,program.basis) : ''
     if(prescribedWeight)setProgress.forEach(set=>{set.weight=prescribedWeight})
+    if(explicitPct?.[2]&&sourceOneRm){
+      const upper=targetWeight(sourceOneRm,Number(explicitPct[2]),program.basis)
+      setProgress.forEach(set=>{set.target_weight_range=prescribedWeight+'-'+upper+' lb'})
+    }
 
     return {
       id:'secondary-'+index,
@@ -535,10 +549,11 @@ function classicSecondaryExercises(programId,week,lift,oneRm,plan) {
   return result
 }
 
-function makePlannedFromClassic(programId,week,lift,scheduledDate,oneRm,trackingProgramKey='',trackingWorkoutKey='') {
+function makePlannedFromClassic(programId,week,lift,scheduledDate,oneRms,trackingProgramKey='',trackingWorkoutKey='') {
   const program=programs[programId] || programs['andy-hybrid-12']
   const plan=getProgramWeek(programId,week,lift)
   const mainName=classicLiftExerciseNames[lift]||lift
+  const oneRm=Number(oneRms?.[lift]||0)
   const mainSets=(plan.main||[]).map((set,index)=>{
     const repsText=String(set.reps??'')
     const reps=Math.max(1,Number.parseInt(repsText,10)||1)
@@ -567,7 +582,7 @@ function makePlannedFromClassic(programId,week,lift,scheduledDate,oneRm,tracking
       result:'',load:'',done:false,setProgress:mainSets,
       primary_lift:lift,
     },
-    ...classicSecondaryExercises(programId,week,lift,oneRm,plan),
+    ...classicSecondaryExercises(programId,week,lift,oneRms,plan),
     ...(plan.assistance||[]).map((item,index)=>classicAssistanceExercise(
       item,
       typeof plan.rest?.assistance==='function' ? plan.rest.assistance(item) : plan.rest?.assistance,
@@ -1507,7 +1522,7 @@ function App() {
       const nextLift=chosenWorkout.lift||trackInfo.nextLift||lifts[chosenWorkout.dayIndex]||'Squat'
       const today=localDateKey()
       const plannedPayload=makePlannedFromClassic(
-        programId,nextWeek,nextLift,today,Number(oneRepMaxes[nextLift]||0),
+        programId,nextWeek,nextLift,today,oneRepMaxes,
         trackInfo.key,chosenWorkout.trackingWorkoutKey
       )
       const {data,error}=await supabase.from('planned_workouts')
@@ -1547,7 +1562,7 @@ function App() {
       Number(targetWeek),
       targetLift,
       scheduledDate,
-      Number(oneRepMaxes[targetLift]||0),
+      oneRepMaxes,
       trackingKey,
       trackingWorkoutKey
     )
