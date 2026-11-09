@@ -1180,6 +1180,23 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
 }
 .flex-runner-head h2 { margin:3px 0; }
 .flex-runner-head p { margin:0; color:#94a3b8; font-size:12px; }
+.flex-runner-head-actions { display:grid; justify-items:end; gap:7px; }
+.quick-add-exercise,
+.work-here-button {
+  min-height:34px;
+  border:1px solid #40526e;
+  border-radius:10px;
+  background:#111d31;
+  color:#dce6f5;
+  padding:6px 10px;
+  font-weight:850;
+  font-size:10px;
+}
+.work-here-button { white-space:nowrap; }
+.exercise-title-actions { display:flex; align-items:flex-start; gap:7px; }
+.next-exercise-button { margin-top:0; min-height:40px; }
+.add-exercise-card-top { border-color:#4a5f7c; }
+
 .save-pill,
 .source-pill,
 .archive-source-badge {
@@ -3018,6 +3035,10 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   margin-top:0;
 }
 @media (max-width:700px) {
+  .flex-runner-head { align-items:flex-start; }
+  .flex-runner-head-actions { min-width:94px; }
+  .quick-add-exercise { width:100%; }
+  .exercise-title-actions { flex-direction:column; align-items:flex-end; }
   .add-exercise-grid {
     grid-template-columns:.6fr 1.25fr .85fr;
   }
