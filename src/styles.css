@@ -2341,6 +2341,18 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   border-color:#506d2d !important;
   box-shadow:0 0 0 1px rgba(132,204,22,.16);
 }
+.flex-exercise.tappable-exercise {
+  cursor:pointer;
+  touch-action:manipulation;
+}
+.flex-exercise.tappable-exercise:active {
+  border-color:#708d43;
+}
+.flex-exercise.tappable-exercise:focus-visible {
+  outline:2px solid #a7f34e;
+  outline-offset:2px;
+}
+
 .current-exercise > .assist-title-row span,
 .flex-exercise.current-exercise .exercise-name-line strong { color:#d9f99d; }
 
