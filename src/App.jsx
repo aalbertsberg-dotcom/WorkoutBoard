@@ -891,37 +891,63 @@ function App() {
 
   const buildTrackedProgramInfo = (track,completedRows,today) => {
     const key=String(track?.program_key||'')
-    const workoutsToday=(completedRows||[]).filter(row=>(row.session_date||localDateKey(row.completed_at))===today).length
+    const afterStart=(completedRows||[]).filter(row=>
+      row.completed_at && new Date(row.completed_at).getTime()>=new Date(track.started_at).getTime()
+    )
+    const trackRows=afterStart.filter(row=>{
+      if(row.workout?.tracking_program_key===key)return true
+      if(key.startsWith('archive:')){
+        const program=archiveProgramById[key.slice(8)]
+        return Boolean(program&&row.program===program.name)
+      }
+      if(key.startsWith('classic:')){
+        const program=programs[key.slice(8)]
+        return Boolean(program&&row.program===program.dbName)
+      }
+      return false
+    })
+    const workoutsToday=trackRows.filter(row=>(row.session_date||localDateKey(row.completed_at))===today).length
+
+    const rowMatchesSlot=(row,slot)=>{
+      if(row.workout?.tracking_workout_key && row.workout.tracking_workout_key===slot.trackingWorkoutKey)return true
+      if(Number(row.week)!==Number(slot.week))return false
+      const rowDay=String(row.primary_lift||row.title||'').trim().toLowerCase()
+      return rowDay===String(slot.matchDay||slot.title||'').trim().toLowerCase()
+    }
 
     if(key.startsWith('archive:')){
       const archiveId=key.slice(8)
       const program=archiveProgramById[archiveId]
       if(!program?.getWeek||!program.weeksCount||!program.daysPerWeek)return null
-      const completed=(completedRows||[]).filter(row=>{
-        if(new Date(row.completed_at).getTime()<new Date(track.started_at).getTime())return false
-        return row.workout?.tracking_program_key===key || row.program===program.name
-      })
-      const completedCount=completed.length
-      const total=Number(program.weeksCount)*Number(program.daysPerWeek)
-      const nextIndex=Math.min(completedCount,total)
-      const nextWeek=Math.min(Number(program.weeksCount),Math.floor(nextIndex/Number(program.daysPerWeek))+1)
-      const nextDayIndex=nextIndex%Number(program.daysPerWeek)
-      const upcoming=[]
-      for(let offset=0;offset<3;offset++){
-        const idx=nextIndex+offset
-        if(idx>=total)break
-        const upcomingWeek=Math.floor(idx/Number(program.daysPerWeek))+1
-        const dayIndex=idx%Number(program.daysPerWeek)
-        const workoutDay=program.getWeek(upcomingWeek)?.[dayIndex]
-        if(workoutDay)upcoming.push({week:upcomingWeek,dayIndex,title:workoutDay.title,note:workoutDay.note||'',exercises:workoutDay.exercises||[]})
+      const slots=[]
+      for(let programWeek=1;programWeek<=Number(program.weeksCount);programWeek++){
+        const days=program.getWeek(programWeek)||[]
+        days.forEach((workoutDay,dayIndex)=>{
+          const slot={
+            week:programWeek,dayIndex,
+            title:workoutDay.title,
+            matchDay:workoutDay.title,
+            note:workoutDay.note||'',
+            exercises:workoutDay.exercises||[],
+            trackingWorkoutKey:`${key}|w${programWeek}|d${dayIndex}`,
+          }
+          slot.completed=trackRows.some(row=>rowMatchesSlot(row,slot))
+          slots.push(slot)
+        })
       }
+      const incomplete=slots.filter(slot=>!slot.completed)
+      const completedCount=slots.length-incomplete.length
+      const currentWeek=incomplete[0]?.week||Number(program.weeksCount)
+      const weekChoices=slots.filter(slot=>slot.week===currentWeek)
+      const upcoming=incomplete.slice(0,3)
       return {
-        kind:'archive',key,trackingId:track.id,archiveId,name:program.name,
+        kind:'archive',key,trackingId:track.id,startedAt:track.started_at,archiveId,name:program.name,
         category:program.category||'Program',durationLabel:program.durationLabel||'',
-        completed:completedCount,total,
-        completedToday:completed.some(row=>(row.session_date||localDateKey(row.completed_at))===today),
-        workoutsToday,nextWeek,nextDayIndex,nextTitle:upcoming[0]?.title||'',upcoming,
-        complete:completedCount>=total,
+        completed:completedCount,total:slots.length,
+        completedToday:workoutsToday>0,workoutsToday,
+        nextWeek:upcoming[0]?.week||currentWeek,nextDayIndex:upcoming[0]?.dayIndex||0,
+        nextTitle:upcoming[0]?.title||'',upcoming,weekChoices,currentWeek,
+        complete:incomplete.length===0,
       }
     }
 
@@ -929,36 +955,35 @@ function App() {
       const programId=key.slice(8)
       const program=programs[programId]
       if(!program?.weeksCount)return null
-      const completed=(completedRows||[]).filter(row=>{
-        if(new Date(row.completed_at).getTime()<new Date(track.started_at).getTime())return false
-        return row.workout?.tracking_program_key===key || row.program===program.dbName
-      })
-      const completedCount=completed.length
-      const daysPerWeek=lifts.length
-      const total=Number(program.weeksCount)*daysPerWeek
-      const nextIndex=Math.min(completedCount,total)
-      const nextWeek=Math.min(Number(program.weeksCount),Math.floor(nextIndex/daysPerWeek)+1)
-      const nextDayIndex=nextIndex%daysPerWeek
-      const upcoming=[]
-      for(let offset=0;offset<3;offset++){
-        const idx=nextIndex+offset
-        if(idx>=total)break
-        const upcomingWeek=Math.floor(idx/daysPerWeek)+1
-        const dayIndex=idx%daysPerWeek
-        const liftName=lifts[dayIndex]
-        const workoutPlan=getProgramWeek(programId,upcomingWeek,liftName)
-        const mainPrescription=(workoutPlan.main||[]).map(set=>(set.pctLabel||set.pct+'%')+' × '+set.reps).join(', ')
-        const exercises=[{name:liftName,prescription:mainPrescription||'Main work'}]
-        if(workoutPlan.secondary?.title)exercises.push({name:workoutPlan.secondary.label||'Supplemental',prescription:workoutPlan.secondary.title})
-        upcoming.push({week:upcomingWeek,dayIndex,title:liftName+' Day',note:workoutPlan.phase||'',exercises,lift:liftName})
+      const slots=[]
+      for(let programWeek=1;programWeek<=Number(program.weeksCount);programWeek++){
+        lifts.forEach((liftName,dayIndex)=>{
+          const workoutPlan=getProgramWeek(programId,programWeek,liftName)
+          const mainPrescription=(workoutPlan.main||[]).map(set=>(set.pctLabel||set.pct+'%')+' × '+set.reps).join(', ')
+          const exercises=[{name:liftName,prescription:mainPrescription||'Main work'}]
+          if(workoutPlan.secondary?.title)exercises.push({name:workoutPlan.secondary.label||'Supplemental',prescription:workoutPlan.secondary.title})
+          const slot={
+            week:programWeek,dayIndex,lift:liftName,title:liftName+' Day',matchDay:liftName,
+            note:workoutPlan.phase||'',exercises,
+            trackingWorkoutKey:`${key}|w${programWeek}|${liftName.toLowerCase()}`,
+          }
+          slot.completed=trackRows.some(row=>rowMatchesSlot(row,slot))
+          slots.push(slot)
+        })
       }
+      const incomplete=slots.filter(slot=>!slot.completed)
+      const completedCount=slots.length-incomplete.length
+      const currentWeek=incomplete[0]?.week||Number(program.weeksCount)
+      const weekChoices=slots.filter(slot=>slot.week===currentWeek)
+      const upcoming=incomplete.slice(0,3)
       return {
-        kind:'classic',key,trackingId:track.id,programId,name:program.name,
+        kind:'classic',key,trackingId:track.id,startedAt:track.started_at,programId,name:program.name,
         category:'Strength',durationLabel:'',
-        completed:completedCount,total,
-        completedToday:completed.some(row=>(row.session_date||localDateKey(row.completed_at))===today),
-        workoutsToday,nextWeek,nextDayIndex,nextLift:upcoming[0]?.lift||lifts[nextDayIndex],
-        nextTitle:upcoming[0]?.title||'',upcoming,complete:completedCount>=total,
+        completed:completedCount,total:slots.length,
+        completedToday:workoutsToday>0,workoutsToday,
+        nextWeek:upcoming[0]?.week||currentWeek,nextDayIndex:upcoming[0]?.dayIndex||0,
+        nextLift:upcoming[0]?.lift||lifts[0],nextTitle:upcoming[0]?.title||'',
+        upcoming,weekChoices,currentWeek,complete:incomplete.length===0,
       }
     }
 
@@ -1051,7 +1076,7 @@ function App() {
         supabase.from('workout_logs').select('*').eq('user_id',userId).order('updated_at',{ascending:false}),
         supabase.from('planned_workouts').select('*').eq('user_id',userId).eq('scheduled_date',today).in('status',['planned','started','skipped']).order('created_at'),
         supabase.from('user_program_tracking').select('*').eq('user_id',userId).eq('status','tracking').order('updated_at',{ascending:false}),
-        supabase.from('training_sessions').select('id,program,workout,session_date,completed_at').eq('user_id',userId).not('completed_at','is',null).order('completed_at',{ascending:false}).limit(1000),
+        supabase.from('training_sessions').select('id,title,program,week,primary_lift,workout,session_date,completed_at').eq('user_id',userId).not('completed_at','is',null).order('completed_at',{ascending:false}).limit(1000),
       ])
 
       if (cancelled) return
@@ -1178,7 +1203,7 @@ function App() {
     const [{data:trackingRows},{data:completedRows}]=await Promise.all([
       supabase.from('user_program_tracking').select('*')
         .eq('user_id',session.user.id).eq('status','tracking').order('started_at'),
-      supabase.from('training_sessions').select('id,program,workout,session_date,completed_at')
+      supabase.from('training_sessions').select('id,title,program,week,primary_lift,workout,session_date,completed_at')
         .eq('user_id',session.user.id).not('completed_at','is',null)
         .order('completed_at',{ascending:false}).limit(1000)
     ])
@@ -1201,17 +1226,19 @@ function App() {
     window.scrollTo({top:0,behavior:'smooth'})
   }
 
-  const startTrackedWorkout = async (trackInfo=trackedTodayInfo,{confirmed=false}={}) => {
+  const startTrackedWorkout = async (trackInfo=trackedTodayInfo,{confirmed=false,selectedWorkout=null}={}) => {
     if(!session?.user || !trackInfo || trackInfo.complete)return
+    const chosenWorkout=selectedWorkout||trackInfo.upcoming?.[0]
+    if(!chosenWorkout)return
     if((trackInfo.workoutsToday||todayCompletedWorkouts.length||0)>0 && !confirmed){
-      setPendingWorkoutStart({kind:'program',trackingKey:trackInfo.key,label:trackInfo.upcoming?.[0]?.title||'next program day'})
+      setPendingWorkoutStart({kind:'program',trackingKey:trackInfo.key,workoutKey:chosenWorkout.trackingWorkoutKey,label:chosenWorkout.title||'program workout'})
       return
     }
     if(trackInfo.kind==='classic'){
       const programId=trackInfo.programId
-      const nextLift=trackInfo.nextLift||lifts[trackInfo.nextDayIndex]||'Squat'
+      const nextLift=chosenWorkout.lift||trackInfo.nextLift||lifts[chosenWorkout.dayIndex]||'Squat'
       setActiveProgram(programId)
-      setWeek(trackInfo.nextWeek||1)
+      setWeek(chosenWorkout.week||trackInfo.nextWeek||1)
       setLift(nextLift)
       setTrackedTodayInfo(trackInfo)
       setCompletionSummary(null)
@@ -1221,12 +1248,12 @@ function App() {
       return
     }
     const program=archiveProgramById[trackInfo.archiveId]
-    const next=trackInfo.upcoming?.[0]
+    const next=chosenWorkout
     if(!program?.getWeek || !next)return
     const today=localDateKey()
     const plannedPayload=makePlannedFromArchive(program,next.week,next.dayIndex,today)
     plannedPayload.status='started'
-    plannedPayload.workout={...plannedPayload.workout,tracking_program_key:trackInfo.key,started_explicitly:true}
+    plannedPayload.workout={...plannedPayload.workout,tracking_program_key:trackInfo.key,tracking_workout_key:next.trackingWorkoutKey,started_explicitly:true}
     const {data,error}=await supabase.from('planned_workouts').insert({...plannedPayload,user_id:session.user.id}).select().single()
     if(error){setWorkoutStartError(error.message);return}
     setTrackedTodayInfo(trackInfo)
@@ -1270,7 +1297,8 @@ function App() {
     if(!pending)return
     if(pending.kind==='program'){
       const track=trackedProgramsInfo.find(item=>item.key===pending.trackingKey)||trackedTodayInfo
-      await startTrackedWorkout(track,{confirmed:true})
+      const selectedWorkout=[...(track?.weekChoices||[]),...(track?.upcoming||[])].find(item=>item.trackingWorkoutKey===pending.workoutKey)||track?.upcoming?.[0]
+      await startTrackedWorkout(track,{confirmed:true,selectedWorkout})
     }
     else await startStandaloneWorkout(pending.kind,{confirmed:true})
   }
@@ -1542,7 +1570,25 @@ function App() {
     if (!session?.user) return null
     setSaveState('Saving…')
     const now = new Date().toISOString()
-    const payload = {...log,complete,savedAt:now,week,lift,phase:plan.phase,program:workoutProgram.name}
+    const classicTrack=trackedProgramsInfo.find(info=>info.kind==='classic'&&info.programId===workoutProgramId)
+    const payload = {
+      ...log,complete,savedAt:now,week,lift,phase:plan.phase,program:workoutProgram.name,
+      ...(classicTrack?{
+        tracking_program_key:classicTrack.key,
+        tracking_workout_key:`${classicTrack.key}|w${week}|${String(lift).toLowerCase()}`
+      }:{})
+    }
+
+    // Classic workout_logs has one row per program/week/lift. When a new tracked
+    // run starts over, detach the old completed durable session before reusing
+    // that legacy row so historical runs remain intact.
+    if(classicTrack){
+      const {data:priorLegacy}=await supabase.from('workout_logs').select('id,completed_at')
+        .eq('user_id',session.user.id).eq('program',workoutProgram.dbName).eq('week',week).eq('lift',lift).maybeSingle()
+      if(priorLegacy?.id && priorLegacy.completed_at && new Date(priorLegacy.completed_at).getTime()<new Date(classicTrack.startedAt||0).getTime()){
+        await supabase.from('training_sessions').update({legacy_log_id:null}).eq('legacy_log_id',priorLegacy.id).not('completed_at','is',null)
+      }
+    }
 
     const {data,error} = await supabase.from('workout_logs').upsert({
       user_id:session.user.id,
@@ -1688,14 +1734,19 @@ function App() {
       return
     }
 
+    const refreshedTracks=await refreshTrackedProgramsInfo()
+    if(refreshedTracks.some(info=>info.kind==='classic'&&info.programId===workoutProgramId)){
+      setShowRegularToday(false)
+      setPlannedToday(null)
+      return
+    }
+
     const completed = new Set([...(completedByWeek[week] ? Array.from(completedByWeek[week]) : []),lift])
     const nextLift = lifts.find(x => !completed.has(x))
-
     if (nextLift) {
       setLift(nextLift)
       return
     }
-
     if (week < personalProgram.weeksCount) {
       const nextWeek = week + 1
       await changeWeek(nextWeek)
@@ -2101,12 +2152,15 @@ function App() {
                   </div>
                   <div className="program-progress-track"><div style={{width:(info.total?Math.min(100,info.completed/info.total*100):0)+'%'}}/></div>
                   {info.complete?<p className="helper-text">Program complete.</p>:<>
-                    <div className="tracked-next-line"><span>{info.completedToday?'Completed a session today':'Up next'}</span><strong>{info.upcoming?.[0]?.title||'Next workout'}</strong></div>
+                    <div className="tracked-week-choice-head"><span>WEEK {info.currentWeek}</span><strong>Choose today's workout</strong><small>Days can be completed in any order.</small></div>
+                    <div className="tracked-week-choice-list">{(info.weekChoices||[]).map((choice,index)=><div className={'tracked-week-choice '+(choice.completed?'completed':'')} key={choice.trackingWorkoutKey}>
+                      <div><span>Day {index+1}</span><strong>{choice.title}</strong>{choice.note&&<small>{choice.note}</small>}</div>
+                      {choice.completed?<b className="tracked-day-done">✓ Done</b>:<button type="button" onClick={()=>startTrackedWorkout(info,{selectedWorkout:choice})}>Start</button>}
+                    </div>)}</div>
                     {info.upcoming?.[0]&&<details className="tracked-next-preview">
-                      <summary>Preview next workout</summary>
+                      <summary>Preview {info.upcoming[0].title}</summary>
                       <div className="next-day-exercises">{info.upcoming[0].exercises.map((exercise,index)=><div key={index}><strong>{exercise.name}</strong><span>{exercise.prescription}</span></div>)}</div>
                     </details>}
-                    <button className="primary-action tracked-start-button" onClick={()=>startTrackedWorkout(info)}>Start next {info.category?.toLowerCase().includes('calisthenics')?'calisthenics':'program'} workout</button>
                   </>}
                 </section>)}
               </div>

@@ -535,6 +535,7 @@ export function PlanPage({
   const [undoAction,setUndoAction] = useState(null)
   const [limitPrompt,setLimitPrompt] = useState(null)
   const [resumePrompt,setResumePrompt] = useState(null)
+  const [cancelPrompt,setCancelPrompt] = useState(null)
   const [category,setCategory] = useState('All')
   const [search,setSearch] = useState('')
   const [previewKey,setPreviewKey] = useState('archive:squatober')
@@ -716,6 +717,7 @@ export function PlanPage({
 
   const tracked = tracking.filter(t=>t.status==='tracking')
   const paused = tracking.filter(t=>t.status==='paused')
+  const cancelled = tracking.filter(t=>t.status==='cancelled')
   const completed = tracking.filter(t=>t.status==='completed')
   const trackedKeys = new Set(tracked.map(t=>t.program_key))
   const pausedKeys = new Set(paused.map(t=>t.program_key))
@@ -965,6 +967,22 @@ export function PlanPage({
     await onTrackingChanged?.()
   }
 
+  const cancelTracking = track => setCancelPrompt(track)
+
+  const confirmCancelTracking = async () => {
+    const track=cancelPrompt
+    if(!track)return
+    const {error}=await supabase.rpc('cancel_program_tracking',{target_tracking_id:track.id})
+    if(error){
+      setMessage(error.message.includes('function')?'Run the program cancel migration in Supabase first.':error.message)
+      return
+    }
+    setCancelPrompt(null)
+    setMessage(track.program_name+' is no longer being tracked. Completed workouts remain in history; tracking it again will start a new run.')
+    await load()
+    await onTrackingChanged?.()
+  }
+
   const markComplete = async track => {
     const {error}=await supabase.rpc('complete_program_tracking',{target_tracking_id:track.id})
     if(error){setMessage(error.message);return}
@@ -1096,7 +1114,7 @@ export function PlanPage({
             <h3>{p.name}</h3>
             <div className="program-progress-track"><div style={{width:(expected ? Math.min(100,done/expected*100) : 0)+'%'}} /></div>
             <small>{done} of {expected||'—'} workouts · progress saved</small>
-            <div className="program-card-actions"><button className="wide-button" onClick={()=>openPreview(p.key)}>Preview</button><button className="primary-action" disabled={tracked.length>=activeProgramLimit} onClick={()=>resumeTracking(track)}>{tracked.length>=activeProgramLimit?'3 active · pause one first':'Resume'}</button></div>
+            <div className="program-card-actions paused-program-actions"><button className="wide-button" onClick={()=>openPreview(p.key)}>Preview</button><button className="primary-action" disabled={tracked.length>=activeProgramLimit} onClick={()=>resumeTracking(track)}>{tracked.length>=activeProgramLimit?'3 active · pause one first':'Resume'}</button><button className="secondary-action stop-tracking-button" onClick={()=>cancelTracking(track)}>Stop tracking</button></div>
           </article>
         })}</div>
       </section>}
@@ -1175,6 +1193,21 @@ export function PlanPage({
           <button className="secondary-action" onClick={()=>setResumePrompt(null)}>Cancel</button>
         </section>
       </div>}
+
+      {cancelPrompt&&<div className="program-choice-backdrop" onClick={()=>setCancelPrompt(null)}>
+        <section className="program-choice-sheet" onClick={e=>e.stopPropagation()}>
+          <span className="card-label">STOP TRACKING</span>
+          <h3>{cancelPrompt.program_name}</h3>
+          <p>This removes the program from Paused and your tracked-program list. Completed workouts stay in History. If you track this program again later, it starts a new run from the beginning.</p>
+          <button className="danger-button" onClick={confirmCancelTracking}>Stop tracking this program</button>
+          <button className="secondary-action" onClick={()=>setCancelPrompt(null)}>Keep it paused</button>
+        </section>
+      </div>}
+
+      {cancelled.length>0&&<details className="completed-programs stopped-programs">
+        <summary><span><b>Stopped programs</b><small>{cancelled.length} previous run{cancelled.length===1?'':'s'}</small></span></summary>
+        <div className="archive-grid">{cancelled.map(track=>{const p=programByKey[track.program_key];if(!p)return null;return <article className="archive-card completed-program-card" key={track.id}><h3>{p.name}</h3><p>Stopped · completed workouts remain in history</p><button className="wide-button" onClick={()=>startTracking(p)}>{tracked.length>=activeProgramLimit?'3 active · choose one to pause':'Track again from beginning'}</button></article>})}</div>
+      </details>}
 
       {completed.length>0&&<details className="completed-programs">
         <summary><span><b>Completed programs</b><small>{completed.length} run{completed.length===1?'':'s'}</small></span></summary>
