@@ -256,6 +256,69 @@ const plOly6 = {
 }
 
 
+function andyHybridRebuildWeek(week) {
+  const w=Math.max(1,Math.min(8,Number(week)||1))
+  const mainByWeek={
+    1:'4x6 @70% e1RM',
+    2:'4x6 @72.5% e1RM',
+    3:'4x6 @75% e1RM',
+    4:'3x5 @60% e1RM',
+    5:'5x5 @75% e1RM',
+    6:'5x4 @80% e1RM',
+    7:'6x3 @82.5-85% e1RM',
+    8:'Top set 3-5 @RPE 8, then 2x5 @70% e1RM',
+  }
+  const main=mainByWeek[w]
+  const deload=w===4
+  const peak=w===8
+  const lowerAssistance=deload?'2 sets each, easy':'3 sets each'
+  const upperAssistance=deload?'2 sets each, easy':'3-4 sets each'
+  const weekNote=deload
+    ? 'Deload. Keep every rep fast and easy. Cut optional conditioning if you feel beat up.'
+    : peak
+      ? 'Performance week. Stop the top set at RPE 8. No grinders. Back-off work stays crisp.'
+      : 'Add load only when the last main-lift set stays at or below RPE 8. Leave 1-2 reps in reserve on assistance.'
+
+  return [
+    day('Day 1 - Squat / Lower Strength',[
+      ex('Back Squat',main,'Main lift. Use a current e1RM or current training max, not an old PR.'),
+      ex('Romanian Deadlift',deload?'2x8 light':'3x8','Controlled hinge; keep the bar close.'),
+      ex('Bulgarian Split Squat',deload?'2x8/leg easy':'3x10/leg','Use load only if balance and knee position stay solid.'),
+      ex('Calf Raise',deload?'2x12':'3x15','Full range and controlled pause.'),
+      ex('Dead Bug / Leg Raise',deload?'2x8/side':'3x10/side','Brace hard and keep the low back controlled.'),
+      ex('Suitcase Carry / Sled',deload?'6 min easy':'8-10 min easy','Easy conditioning only on this day.'),
+    ],weekNote),
+
+    day('Day 2 - Bench / Upper Strength',[
+      ex('Bench Press',main,'Main lift. Pause lightly and keep the setup repeatable.'),
+      ex('Barbell Row / DB Row',deload?'2x8':'4x8','Controlled pull; no heaving.'),
+      ex('Strict Press',deload?'2x8 light':'3x8','Stay stacked; no back lean.'),
+      ex('Pullup / Pulldown',deload?'2 easy sets':'3-4 sets','Stop 1-2 reps before failure.'),
+      ex('Triceps Pressdown / Dip',deload?'2x10 easy':'3x10-12','Choose the shoulder-friendly option.'),
+      ex('Pallof Press',deload?'2x8/side':'3x10/side','Pause fully extended.'),
+    ],weekNote),
+
+    day('Day 3 - Deadlift / Lower Hypertrophy',[
+      ex('Deadlift',main,'Main lift. Reset every rep and stop before technique changes.'),
+      ex('Front Squat',deload?'2x8 light':'3x8','Upright torso and controlled depth.'),
+      ex('Hamstring Curl',deload?'2x10':'3x12','Smooth reps.'),
+      ex('Reverse Lunge',deload?'2x8/leg easy':'3x10/leg','Controlled step and stable knee.'),
+      ex('Farmer Carry',deload?'3x30 yd easy':'4x40 yd','Heavy enough to challenge grip without changing posture.'),
+      ex('Zone 2 Row / Walk',deload?'10 min easy':'15-20 min easy','Optional. Keep it conversational.'),
+    ],weekNote),
+
+    day('Day 4 - Press / Upper Hypertrophy',[
+      ex('Strict Press',main,'Main lift. Brace before every rep and keep the bar path clean.'),
+      ex('Incline DB Bench',deload?'2x10 light':'4x10','Controlled lowering; stop short of shoulder irritation.'),
+      ex('Lat Pulldown / Pullup',deload?'2x10 easy':'3x10-12','Use a grip that feels good on elbows and shoulders.'),
+      ex('Chest-Supported DB Row',deload?'2x10':'3x12','Pause briefly at the top.'),
+      ex('Lateral Raise',deload?'2x12':'3x15','Light and controlled.'),
+      ex('Curl + Pushdown',deload?'2x10 each':'3x12 each','Superset if desired.'),
+      ex('Short Conditioning',deload?'Skip or 5 min easy':'8-12 min moderate','Choose rower, sled, kettlebell, carry or sandbag work. Keep only one hard conditioning session per week.'),
+    ],weekNote),
+  ]
+}
+
 function strengthStabilityBuilderWeek(week) {
   const w=Math.max(1,Math.min(6,Number(week)||1))
   const main = w<=2 ? '3x8 @ RPE 6-7' : w<=4 ? '4x6 @ RPE 7-8' : w===5 ? '5x5 @ RPE 8' : '3x5 @ RPE 6-7'
@@ -649,6 +712,7 @@ export const archivePrograms = [
   {id:'street-parking-public-extras',name:'Street Parking - Public Extra Samples',category:'General + Conditioning',difficulty:'Beginner / Intermediate',weeksCount:1,daysPerWeek:6,source:'Street Parking official public Sample Workouts page',description:'Public samples from Dumbbell Strength, 5K, Bodyweight Strength, and On Ramp.',getWeek:()=>streetParkingPublicExtras},
   {id:'soflete-public-dailies',name:'SOFLETE - Public Daily Samples',category:'Tactical + Strength + Conditioning',difficulty:'Intermediate / Advanced',weeksCount:1,daysPerWeek:5,source:'SOFLETE official public daily workout posts',description:'Five non-periodized public SOFLETE daily sample workouts. These are samples, not subscription programming.',getWeek:()=>sofletePublicDailySamples},
   {id:'soflete-assaulter-public-sample',name:'SOFLETE - Assaulter Public Sample',category:'Tactical Strength',difficulty:'Advanced',weeksCount:1,daysPerWeek:1,source:'SOFLETE official training-app public demo',description:'One detailed upper-body Assaulter demo session publicly shown by SOFLETE; not the full paid cycle.',getWeek:()=>sofleteAssaulterPublicSample},
+  {id:'andy-hybrid-rebuild',name:'Andy Hybrid Rebuild',category:'Powerbuilding + Stability',difficulty:'Intermediate',weeksCount:8,daysPerWeek:4,durationLabel:'45-60 min/session',source:'Andy workout archive + WorkoutBoard rebuild',description:'Personalized from Andy’s repeated 5/3/1, 5x5 and powerbuilding patterns: squat, bench, deadlift and press anchors with familiar unilateral work, rows/pullups, carries, core and short conditioning. Progression is capped around RPE 8 with a deload to avoid the excess intensity seen in older plans.',getWeek:andyHybridRebuildWeek},
   {id:'strength-stability-builder',name:'Strength + Stability Builder',category:'Strength + Stability',difficulty:'Beginner / Intermediate',weeksCount:6,daysPerWeek:3,durationLabel:'35-50 min/session',source:'WorkoutBoard custom program',description:'A stronger step up from Beginner Core & Stability: three full-body lifting days with squat, hinge, press, pull, unilateral work, carries, core stability and optional conditioning. Six weeks with a progressive build and a final deload.',getWeek:strengthStabilityBuilderWeek},
   {id:'beginner-core-stability',name:'Beginner Core & Stability',category:'Core + Stability',difficulty:'Beginner',weeksCount:6,daysPerWeek:3,source:'WorkoutBoard custom program',description:'Six-week beginner stability block using familiar unilateral leg work, hinges, rows, presses, carries, core bracing and easy conditioning.',getWeek:w=>beginnerCoreStabilityWeeks[Math.max(1,Math.min(6,w))]},
   {id:'squatober',name:'Squatober',category:'Specialization',difficulty:'Intermediate',weeksCount:3,daysPerWeek:2,source:'FEB SQUATOBER.pdf',description:'Squat-focused block with bench, deadlift, pulling, and accessories.',getWeek:w=>squatoberWeeks[Math.max(1,Math.min(3,w))]},
