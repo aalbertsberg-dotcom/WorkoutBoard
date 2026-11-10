@@ -142,7 +142,7 @@ function PlannedAlternatives({name}) {
   </span>
 }
 
-export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,sharedSessionId=null,partnerOneRms={}}) {
+export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,sharedSessionId=null,partnerOneRms={},oneRepMaxes={}}) {
   const [workout,setWorkout]=useState(()=>{
     let cached=null
     try {
@@ -603,15 +603,17 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
           const activeIndex=selectedSet>=0 ? selectedSet : item.setProgress.findIndex(set=>!set.done)
           const activeSet=activeIndex>=0?item.setProgress[activeIndex]:null
           const activeWeight=activeSet?.weight!==undefined&&activeSet?.weight!=='' ? Number(activeSet.weight)||0 : 0
+          const programmedTargetText=activeSet ? partnerSetTarget(oneRepMaxes,activeSet) : ''
+          const programmedTarget=Number(String(programmedTargetText||'').match(/^\d+/)?.[0]||0)
           const previousWeight=activeIndex>0 ? Number(item.setProgress[activeIndex-1]?.weight||0) : 0
           const lastTimeWeight=activeIndex>=0 ? Number(hist?.lastWeights?.[Math.min(activeIndex,(hist?.lastWeights?.length||1)-1)]||0) : 0
           const legacyWeight=item.load!==undefined&&item.load!=='' ? Number(item.load)||0 : 0
-          const shownWeight=activeWeight||previousWeight||lastTimeWeight||legacyWeight||''
+          const shownWeight=activeWeight||programmedTarget||previousWeight||lastTimeWeight||legacyWeight||''
           return <>
             {activeSet&&i===focusedExerciseIndex&&<section className="current-set-panel">
               <div className="current-set-panel-head">
                 <div><span className="card-label">{activeSet.extra?'EXTRA SET':'CURRENT SET'}</span><h3>{activeSet.extra?'Extra set':'Set '+(activeIndex+1)+' of '+item.setProgress.length}</h3></div>
-                <strong>{activeSet.label || (activeSet.reps?activeSet.reps+' reps':'Complete')}{activeSet.target_weight_range?' · '+activeSet.target_weight_range:''}</strong>
+                <strong>{activeSet.label || (activeSet.reps?activeSet.reps+' reps':'Complete')}{activeSet.target_weight_range?' · '+activeSet.target_weight_range:programmedTargetText?' · '+programmedTargetText:''}</strong>
               </div>
               <div className="current-set-entry-grid">
                 {loadField&&<label className="current-set-weight">
@@ -647,7 +649,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
                   </div>
                 </label>}
               </div>
-              {activeSet&&!isDistanceExercise(item.name)&&<small className="rep-default-hint">Reps shown are the programmed default. Only type when you did something different.</small>}
+              {activeSet&&!isDistanceExercise(item.name)&&<small className="rep-default-hint">Leave blank = programmed reps. Enter only if different.</small>}
               <div className="current-set-actions">
               <button type="button" className="primary-action complete-current-set" onClick={()=>{
                 const currentWeight=loadField ? Number(shownWeight||0) : 0

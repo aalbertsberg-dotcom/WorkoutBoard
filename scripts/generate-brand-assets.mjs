@@ -5,11 +5,11 @@ await mkdir('public', { recursive:true })
 
 const source='public/icon.svg'
 const outputs=[
-  [32,'public/workset-icon-32.png'],
-  [180,'public/workset-icon-180.png'],
-  [192,'public/workset-icon-192.png'],
-  [512,'public/workset-icon-512.png'],
-  [512,'public/workset-icon-maskable-512.png'],
+  [32,'public/workset-icon-v1-32.png'],
+  [180,'public/workset-icon-v1-180.png'],
+  [192,'public/workset-icon-v1-192.png'],
+  [512,'public/workset-icon-v1-512.png'],
+  [512,'public/workset-icon-v1-maskable-512.png'],
 ]
 
 await Promise.all(outputs.map(([size,path])=>

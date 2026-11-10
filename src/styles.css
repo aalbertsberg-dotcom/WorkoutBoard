@@ -4837,3 +4837,205 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   border-color:#754852 !important;
   color:#fecdd3 !important;
 }
+
+
+/* Workset release update prompt */
+.release-update-toast {
+  position:fixed;
+  left:50%;
+  bottom:22px;
+  z-index:7000;
+  transform:translateX(-50%);
+  width:min(calc(100vw - 24px),430px);
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:center;
+  gap:10px;
+  padding:10px 11px;
+  border:1px solid #526b34;
+  border-radius:12px;
+  background:#101a12;
+  box-shadow:0 12px 30px rgba(0,0,0,.38);
+}
+.release-update-toast > div {
+  display:grid;
+  gap:2px;
+  min-width:0;
+}
+.release-update-toast strong {
+  color:#e8f7cf;
+  font-size:11px;
+}
+.release-update-toast span {
+  color:#9eac95;
+  font-size:9px;
+}
+.release-update-toast button {
+  min-height:38px;
+  padding:0 12px;
+  border:1px solid #6b9a2d;
+  border-radius:9px;
+  background:#5faa00;
+  color:#fff;
+  font-size:10px;
+  font-weight:900;
+}
+
+/* Compact mobile gym mode */
+@media (max-width:700px) {
+  .flex-runner { gap:7px; }
+
+  .flex-runner-head {
+    gap:8px;
+    padding:10px 11px;
+    border-radius:13px;
+  }
+  .flex-runner-head h2 {
+    margin:2px 0;
+    font-size:19px;
+    line-height:1.12;
+  }
+  .flex-runner-head p {
+    font-size:10px;
+    line-height:1.25;
+  }
+  .flex-runner-head .card-label {
+    font-size:8px;
+  }
+  .flex-runner-head-actions {
+    min-width:82px;
+    gap:5px;
+  }
+  .flex-runner-head-actions .save-pill {
+    padding:4px 7px;
+    font-size:8px;
+  }
+  .quick-add-exercise {
+    min-height:31px;
+    padding:4px 8px;
+    font-size:9px;
+  }
+
+  .flex-exercise {
+    border-radius:13px;
+  }
+  .current-exercise {
+    border-color:#3e5069 !important;
+    border-left:3px solid #84cc16 !important;
+    box-shadow:none !important;
+  }
+
+  .current-set-panel {
+    gap:7px !important;
+    margin:6px 0 3px;
+    padding:9px !important;
+    border-color:#354a2a;
+    border-left:3px solid #84cc16;
+    border-radius:10px;
+    background:#101a14;
+  }
+  .current-set-panel-head {
+    gap:8px;
+  }
+  .current-set-panel-head h3 {
+    font-size:14px !important;
+  }
+  .current-set-panel-head > strong {
+    max-width:52% !important;
+    font-size:10px;
+    line-height:1.25;
+  }
+  .current-set-entry-grid {
+    grid-template-columns:minmax(0,1.45fr) minmax(82px,.55fr);
+    gap:7px;
+  }
+  .current-set-weight {
+    gap:3px;
+  }
+  .current-set-weight > span {
+    font-size:8px;
+  }
+  .current-set-weight input {
+    min-height:43px !important;
+    padding:6px 8px !important;
+    font-size:17px !important;
+  }
+  .current-set-weight b {
+    padding:0 8px !important;
+    font-size:9px !important;
+  }
+  .rep-default-hint {
+    font-size:8px;
+    line-height:1.25;
+  }
+  .current-set-actions {
+    grid-template-columns:minmax(0,2.5fr) minmax(68px,.65fr);
+    gap:7px;
+  }
+  .complete-current-set {
+    min-height:42px;
+  }
+  .current-set-actions .next-exercise-button {
+    min-height:42px;
+    padding-inline:8px;
+    border-color:#34445b;
+    background:#0d1728;
+    color:#a6b1c2;
+    font-size:10px;
+  }
+
+  .set-progress-grid,
+  .set-progress-grid.compact {
+    grid-template-columns:repeat(auto-fit,minmax(74px,1fr));
+    gap:5px !important;
+    margin-top:5px;
+  }
+  .set-progress-button {
+    min-height:44px !important;
+    padding:5px 6px !important;
+    gap:0 5px;
+    border-radius:8px;
+  }
+  .set-progress-button strong {
+    font-size:9px;
+  }
+  .set-progress-button span {
+    font-size:8px;
+    line-height:1.2;
+  }
+  .set-progress-button b {
+    width:22px;
+    height:22px;
+    font-size:12px;
+  }
+  .set-progress-button.current-set {
+    border-color:#628839 !important;
+    box-shadow:none !important;
+    background:#141e17;
+  }
+
+  .app-level-mobile-nav {
+    height:88px !important;
+    min-height:88px !important;
+    padding:5px 6px !important;
+    gap:4px !important;
+  }
+  .app-level-mobile-nav button {
+    height:62px !important;
+    min-height:62px !important;
+    gap:4px !important;
+    padding:4px 2px !important;
+  }
+  .app-level-mobile-nav button b {
+    font-size:16px !important;
+  }
+  .app-level-mobile-nav button span {
+    font-size:9px !important;
+  }
+  .app {
+    padding-bottom:104px !important;
+  }
+  .release-update-toast {
+    bottom:96px;
+  }
+}
