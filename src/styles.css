@@ -432,6 +432,92 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   font-weight:800;
 }
 
+.managed-athletes-card { margin:0; }
+.managed-athlete-list { display:grid; gap:7px; }
+.managed-athlete-row {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:9px 10px;
+  border:1px solid #30415b;
+  border-radius:9px;
+  background:#0d1728;
+}
+.managed-athlete-row > div:first-child { display:grid; gap:2px; min-width:0; }
+.managed-athlete-row strong { font-size:11px; }
+.managed-athlete-row span { color:#93a2b6; font-size:8px; line-height:1.35; }
+.managed-athlete-row > div:last-child { display:flex; gap:6px; }
+.managed-athlete-row button,
+.compact-action {
+  min-height:34px;
+  padding:6px 9px;
+  border:1px solid #40526e;
+  border-radius:8px;
+  background:#111d31;
+  color:#dce6f5;
+  font-weight:800;
+}
+.managed-athlete-editor {
+  display:grid;
+  gap:9px;
+  margin-top:10px;
+  padding:10px;
+  border:1px solid #4a5f7c;
+  border-radius:10px;
+  background:#0b1525;
+}
+.managed-athlete-editor > label,
+.managed-athlete-max-grid label { display:grid; gap:4px; }
+.managed-athlete-editor label > span {
+  color:#9fb0c5;
+  font-size:9px;
+  font-weight:800;
+}
+.managed-athlete-max-grid {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+.managed-athlete-editor-actions {
+  display:grid;
+  grid-template-columns:1fr 1.4fr;
+  gap:8px;
+}
+.managed-partner-picker {
+  display:grid;
+  gap:6px;
+  margin:8px 0;
+  padding:9px 10px;
+  border:1px solid #31445f;
+  border-radius:9px;
+  background:#0d1728;
+}
+.managed-partner-picker > span {
+  color:#9fb0c5;
+  font-size:9px;
+  font-weight:900;
+  text-transform:uppercase;
+}
+.managed-partner-picker > div {
+  display:flex;
+  flex-wrap:wrap;
+  gap:7px;
+}
+.managed-partner-picker label {
+  display:flex;
+  align-items:center;
+  gap:6px;
+  min-height:34px;
+  padding:5px 8px;
+  border:1px solid #40526e;
+  border-radius:8px;
+  background:#111d31;
+}
+.managed-partner-picker input { width:auto; }
+.managed-partner-picker b { font-size:10px; }
+.partner-row.managed { border-style:dashed; }
+
 .setup-needed,
 .together-start-card,
 .session-hero {
