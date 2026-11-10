@@ -3255,6 +3255,65 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   text-transform:uppercase;
 }
 .completion-stats strong { font-size:15px; }
+.baseline-finish-review {
+  display:grid;
+  gap:10px;
+  margin-top:4px;
+  padding:12px;
+  border:1px solid #4d6c2f;
+  border-radius:12px;
+  background:#0d180d;
+}
+.baseline-finish-review .section-heading { margin:0; }
+.baseline-result-list {
+  display:grid;
+  gap:8px;
+}
+.baseline-result-list > article {
+  display:grid;
+  gap:8px;
+  padding:10px;
+  border:1px solid #31475e;
+  border-radius:10px;
+  background:#0b1525;
+}
+.baseline-result-list > article.accepted {
+  border-color:#4d7c0f;
+  background:#10200d;
+}
+.baseline-result-head {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.baseline-result-head strong { font-size:14px; }
+.baseline-result-head span { color:#9fb0c5; font-size:10px; }
+.baseline-result-values {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:7px;
+}
+.baseline-result-values > div {
+  display:grid;
+  gap:2px;
+  padding:8px;
+  border-radius:8px;
+  background:#111d30;
+}
+.baseline-result-values span {
+  color:#8fa0b8;
+  font-size:8px;
+  font-weight:900;
+  text-transform:uppercase;
+}
+.baseline-result-values b { font-size:15px; }
+.baseline-history-note {
+  color:#8fa0a8;
+  font-size:9px;
+  line-height:1.35;
+}
+
 .upcoming-workouts-card { margin:0; }
 .upcoming-workout-list {
   display:grid;

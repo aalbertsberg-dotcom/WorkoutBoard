@@ -398,11 +398,43 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
     onCancelled?.({planned,sharedSessionId})
   }
 
+  const baselineLiftForExercise=item=>{
+    if(item?.strength_baseline_lift)return item.strength_baseline_lift
+    const name=String(item?.name||'').trim().toLowerCase()
+    if(/^(back\s+)?squat$/.test(name))return 'Squat'
+    if(/^(barbell\s+)?bench(\s+press)?$/.test(name))return 'Bench'
+    if(/^(conventional\s+|sumo\s+)?deadlift$/.test(name))return 'Deadlift'
+    if(/^(overhead\s+|strict\s+|military\s+)?press$/.test(name))return 'Press'
+    return null
+  }
+
+  const baselineResults=useMemo(()=>{
+    if(!workout?.strength_baseline)return []
+    const rows=[]
+    for(const item of workout.exercises||[]){
+      const lift=baselineLiftForExercise(item)
+      if(!lift)continue
+      let best=null
+      for(const set of item.setProgress||[]){
+        if(!set.done)continue
+        const weight=setWeight(item,set)
+        const reps=repsForSet(item,set)
+        if(!weight||!reps||reps>15)continue
+        const estimate=Math.round((weight*(1+reps/30)+Number.EPSILON)*100)/100
+        if(!best||estimate>best.estimated_1rm){
+          best={lift,weight,reps,estimated_1rm:estimate,set:set.set||null,label:set.label||''}
+        }
+      }
+      if(best)rows.push(best)
+    }
+    return rows
+  },[workout])
+
   const finish=async()=>{
     if (!planned?.id || finishing) return
     setFinishing(true)
     const now=new Date().toISOString()
-    const finalWorkout={...workout,complete:true,savedAt:now}
+    const finalWorkout={...workout,complete:true,savedAt:now,baseline_results:baselineResults}
     const existing=await supabase.from('training_sessions').select('id').eq('planned_workout_id',planned.id).maybeSingle()
     let error=null
     let trainingSessionId=existing.data?.id||null
@@ -479,6 +511,10 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
         exercises:(finalWorkout.exercises||[]).filter(item=>item.done||(item.setProgress||[]).some(set=>set.done)).length,
         sets:completedSets,
         volume:Math.round(totalVolume),
+        strengthBaseline:Boolean(finalWorkout.strength_baseline),
+        baselinePath:finalWorkout.baseline_path||null,
+        baselineResults:baselineResults,
+        trainingSessionId,
       })
     } else {
       setSaveState('Finish failed: '+error.message)
