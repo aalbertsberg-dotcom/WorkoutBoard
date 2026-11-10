@@ -27,14 +27,14 @@ input, select, textarea { font-size:16px; }
   min-height:24px;
 }
 .brand-lockup img {
-  width:22px;
-  height:22px;
+  width:28px;
+  height:28px;
   border-radius:6px;
   flex:0 0 auto;
 }
 .brand-lockup span {
   color:#f8fafc;
-  font-size:14px;
+  font-size:15px;
   font-weight:950;
   font-style:italic;
   letter-spacing:-.035em;
