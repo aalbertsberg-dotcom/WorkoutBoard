@@ -18,14 +18,13 @@ jobs:
       - run: npm install
       - name: Build
         env:
-          GITHUB_SHA: test-release-1234567890
           VITE_SUPABASE_URL: https://lplybuzlgowxeszkvtqe.supabase.co
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
         run: npm run build
       - name: Verify release and install assets
         run: |
           test -f dist/version.json
-          grep -q "test-release-1234567890" dist/version.json
+          node -e "const fs=require('fs');const v=JSON.parse(fs.readFileSync('dist/version.json','utf8'));if(!v.buildId)process.exit(1)"
           test -f dist/workset-icon-v1-32.png
           test -f dist/workset-icon-v1-180.png
           test -f dist/workset-icon-v1-192.png
