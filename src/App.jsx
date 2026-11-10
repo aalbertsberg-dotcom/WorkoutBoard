@@ -1127,6 +1127,7 @@ function App() {
   const [oneRmWeight,setOneRmWeight] = useState('')
   const [oneRmReps,setOneRmReps] = useState(5)
   const [oneRmLift,setOneRmLift] = useState('')
+  const [baselineTestChoice,setBaselineTestChoice] = useState('')
   const [history,setHistory] = useState([])
   const [saveState,setSaveState] = useState('Saved')
   const [inviteState,setInviteState] = useState('')
@@ -1156,6 +1157,8 @@ function App() {
   const [nextDayPreviewOpen,setNextDayPreviewOpen] = useState(false)
   const [pendingWorkoutStart,setPendingWorkoutStart] = useState(null)
   const [todayCompletedWorkouts,setTodayCompletedWorkouts] = useState([])
+  const [completedDeletePrompt,setCompletedDeletePrompt] = useState(null)
+  const [deletingCompletedWorkout,setDeletingCompletedWorkout] = useState(false)
   const [workoutStartError,setWorkoutStartError] = useState('')
   const [classicCancelConfirm,setClassicCancelConfirm] = useState(false)
   const [classicCancelling,setClassicCancelling] = useState(false)
@@ -1736,6 +1739,64 @@ function App() {
     setPlannedToday(activePlan)
     setTodayCompletedWorkouts(completedRows||[])
     setShowRegularToday(false)
+  }
+
+  const deleteCompletedWorkout = async row => {
+    if(!session?.user || !row?.id || deletingCompletedWorkout)return
+    setDeletingCompletedWorkout(true)
+    const {data:sessionRow,error:lookupError}=await supabase.from('training_sessions')
+      .select('id,planned_workout_id')
+      .eq('id',row.id)
+      .eq('user_id',session.user.id)
+      .maybeSingle()
+
+    if(lookupError || !sessionRow){
+      setWorkoutStartError(lookupError?.message||'Could not find that completed workout.')
+      setDeletingCompletedWorkout(false)
+      return
+    }
+
+    const communityResult=await supabase.from('community_activity')
+      .delete().eq('training_session_id',sessionRow.id)
+    if(communityResult.error){
+      setWorkoutStartError(communityResult.error.message)
+      setDeletingCompletedWorkout(false)
+      return
+    }
+
+    const sessionResult=await supabase.from('training_sessions')
+      .delete().eq('id',sessionRow.id).eq('user_id',session.user.id)
+    if(sessionResult.error){
+      setWorkoutStartError(sessionResult.error.message)
+      setDeletingCompletedWorkout(false)
+      return
+    }
+
+    if(sessionRow.planned_workout_id){
+      const planResult=await supabase.from('planned_workouts')
+        .delete().eq('id',sessionRow.planned_workout_id).eq('user_id',session.user.id)
+      if(planResult.error){
+        setWorkoutStartError(planResult.error.message)
+        setDeletingCompletedWorkout(false)
+        return
+      }
+    }
+
+    setTodayCompletedWorkouts(rows=>rows.filter(item=>item.id!==row.id))
+    setCompletedDeletePrompt(null)
+    setCompletionSummary(null)
+    await refreshTrackedProgramsInfo()
+    setDeletingCompletedWorkout(false)
+  }
+
+  const startSelectedBaseline = () => {
+    if(!baselineTestChoice)return
+    if(baselineTestChoice.startsWith('single:')){
+      startStrengthBaseline('single',{liftName:baselineTestChoice.split(':')[1]})
+    }else{
+      startStrengthBaseline(baselineTestChoice)
+    }
+    setBaselineTestChoice('')
   }
 
   const openToday = async () => {
@@ -2605,6 +2666,7 @@ function App() {
               {todayCompletedWorkouts.length>0&&<details className="today-completed-workouts" open>
                 <summary><span><b>Today’s workouts</b><small>{todayCompletedWorkouts.length} completed</small></span></summary>
                 <div className="today-completed-list">{todayCompletedWorkouts.map(row=><article key={row.id}>
+                  <button type="button" className="completed-workout-delete" aria-label={'Delete '+(row.title||'workout')} onClick={()=>setCompletedDeletePrompt(row)}>×</button>
                   <div><strong>{row.title||'Workout'}</strong><span>{row.program||'Workout'}{row.completed_at?' · '+new Date(row.completed_at).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):''}</span></div>
                   <b>{Number(row.total_volume||0)>0?Number(row.total_volume).toLocaleString()+' lb':'Completed'}</b>
                   {row.workout?.exercises?.length>0&&<details><summary>Exercises</summary><p>{row.workout.exercises.map(x=>x.name).filter(Boolean).join(' · ')}</p></details>}
@@ -3136,14 +3198,16 @@ function App() {
                   return <div key={name}><span>{name}</span><strong>{candidate?candidate.value.toFixed(2)+' lb':'—'}</strong>{candidate&&<small>{candidate.weight} × {candidate.reps}</small>}{candidate&&<button type="button" onClick={()=>setOneRm(name,candidate.value,{notify:true})}>Use</button>}</div>
                 })}
               </div>
-              <p className="helper-text"><strong>Would you like to test this now?</strong> Pick a baseline path.</p>
-              <div className="one-rm-apply">
-                <button className="wide-button" type="button" onClick={()=>startStrengthBaseline('full')}>All 4 lifts</button>
-                <button className="secondary-action" type="button" onClick={()=>startStrengthBaseline('upper')}>Upper</button>
-                <button className="secondary-action" type="button" onClick={()=>startStrengthBaseline('lower')}>Lower</button>
-              </div>
-              <div className="one-rm-apply">
-                {lifts.map(name=><button className="secondary-action" type="button" key={name} onClick={()=>startStrengthBaseline('single',{liftName:name})}>Test {name}</button>)}
+              <p className="helper-text"><strong>Would you like to test this now?</strong></p>
+              <div className="baseline-test-picker">
+                <select value={baselineTestChoice} onChange={e=>setBaselineTestChoice(e.target.value)}>
+                  <option value="">Choose a baseline test…</option>
+                  <option value="full">All 4 lifts</option>
+                  <option value="upper">Upper</option>
+                  <option value="lower">Lower</option>
+                  {lifts.map(name=><option key={name} value={'single:'+name}>Test {name}</option>)}
+                </select>
+                <button className="wide-button" type="button" disabled={!baselineTestChoice} onClick={startSelectedBaseline}>Start test</button>
               </div>
             </section>
 
@@ -3209,6 +3273,19 @@ function App() {
       </button>}
 
       {oneRmNotice&&<div className={'one-rm-save-toast '+(oneRmNotice.type==='error'?'error':'success')} role="status">{oneRmNotice.type==='success'?'✓ ':''}{oneRmNotice.text}</div>}
+
+      {completedDeletePrompt&&<div className="same-day-sheet-backdrop" onClick={()=>!deletingCompletedWorkout&&setCompletedDeletePrompt(null)}>
+        <section className="same-day-sheet completed-workout-delete-sheet" onClick={e=>e.stopPropagation()}>
+          <span className="card-label">DELETE WORKOUT</span>
+          <h3>Delete this completed workout?</h3>
+          <p>{completedDeletePrompt.title||'Workout'}{completedDeletePrompt.completed_at?' · '+new Date(completedDeletePrompt.completed_at).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):''}</p>
+          <p>This removes it from your history and Community. This cannot be undone.</p>
+          <div>
+            <button className="secondary-action" type="button" disabled={deletingCompletedWorkout} onClick={()=>setCompletedDeletePrompt(null)}>Keep workout</button>
+            <button className="danger-action" type="button" disabled={deletingCompletedWorkout} onClick={()=>deleteCompletedWorkout(completedDeletePrompt)}>{deletingCompletedWorkout?'Deleting…':'Delete workout'}</button>
+          </div>
+        </section>
+      </div>}
 
       {programCompletionPrompt&&<div className="same-day-sheet-backdrop" onClick={()=>setProgramCompletionPrompt(null)}>
         <section className="same-day-sheet" onClick={e=>e.stopPropagation()}>
