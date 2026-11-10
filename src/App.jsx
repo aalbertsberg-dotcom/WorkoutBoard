@@ -1153,6 +1153,7 @@ function App() {
   const [togetherView,setTogetherView] = useState('live')
   const [conditioningOpen,setConditioningOpen] = useState(false)
   const [completionSummary,setCompletionSummary] = useState(null)
+  const [baselineFinishReview,setBaselineFinishReview] = useState(null)
   const [extraWorkoutOpen,setExtraWorkoutOpen] = useState(false)
   const [nextDayPreviewOpen,setNextDayPreviewOpen] = useState(false)
   const [pendingWorkoutStart,setPendingWorkoutStart] = useState(null)
@@ -1785,6 +1786,7 @@ function App() {
     setTodayCompletedWorkouts(rows=>rows.filter(item=>item.id!==row.id))
     setCompletedDeletePrompt(null)
     setCompletionSummary(null)
+    setBaselineFinishReview(null)
     await refreshTrackedProgramsInfo()
     setDeletingCompletedWorkout(false)
   }
@@ -2043,6 +2045,33 @@ function App() {
       setOneRmNotice(notice)
       setTimeout(()=>setOneRmNotice(current=>current===notice?null:current),2800)
     }
+  }
+
+  const acceptBaselineResult = async result => {
+    if(!result?.lift||!result?.estimated_1rm)return
+    await setOneRm(result.lift,result.estimated_1rm,{notify:true})
+    setBaselineFinishReview(current=>current ? {
+      ...current,
+      accepted:{...(current.accepted||{}),[result.lift]:true}
+    } : current)
+  }
+
+  const acceptAllBaselineResults = async () => {
+    const rows=baselineFinishReview?.results||[]
+    if(!rows.length)return
+    for(const result of rows){
+      await setOneRm(result.lift,result.estimated_1rm,{notify:false})
+    }
+    setBaselineFinishReview(current=>current ? {
+      ...current,
+      accepted:Object.fromEntries(rows.map(result=>[result.lift,true]))
+    } : current)
+    const text=rows.length===1
+      ? rows[0].lift+' 1RM saved at '+Number(rows[0].estimated_1rm).toFixed(2)+' lb'
+      : rows.length+' baseline 1RMs saved'
+    const notice={type:'success',text}
+    setOneRmNotice(notice)
+    setTimeout(()=>setOneRmNotice(current=>current===notice?null:current),2800)
   }
 
   const refreshOneRmCandidates = async () => {
@@ -2617,6 +2646,7 @@ function App() {
                 setPlannedToday(null)
                 setShowRegularToday(false)
                 setCompletionSummary(null)
+                setBaselineFinishReview(null)
                 setWorkoutStartError('')
                 if(sharedWorkoutActive&&activeSession){
                   setSharedWorkoutActive(false)
@@ -2635,6 +2665,15 @@ function App() {
                   setActiveTab('together')
                 }else{
                   setCompletionSummary(summary||null)
+                  if(summary?.strengthBaseline&&summary?.baselineResults?.length){
+                    setBaselineFinishReview({
+                      results:summary.baselineResults,
+                      accepted:{},
+                      sessionId:summary.trainingSessionId||null,
+                    })
+                  }else{
+                    setBaselineFinishReview(null)
+                  }
                   if(programWillComplete)setProgramCompletionPrompt({name:finishedTrack?.name||summary?.program||'Program'})
                   if(summary){
                     setTodayCompletedWorkouts(rows=>[{
@@ -2680,6 +2719,28 @@ function App() {
                   <div><span>Sets</span><strong>{completionSummary.sets||0}</strong></div>
                   <div><span>Volume</span><strong>{Number(completionSummary.volume||0).toLocaleString()} lb</strong></div>
                 </div>
+                {baselineFinishReview?.results?.length>0&&<section className="baseline-finish-review">
+                  <div className="section-heading"><div><span className="card-label">STRENGTH BASELINE</span><h3>Review your calculated 1RMs</h3></div></div>
+                  <p className="helper-text">Calculated from the best completed set for each tested lift using your actual reps. Nothing changes until you choose Use.</p>
+                  <div className="baseline-result-list">
+                    {baselineFinishReview.results.map(result=>{
+                      const current=Number(oneRepMaxes[result.lift]||0)
+                      const accepted=Boolean(baselineFinishReview.accepted?.[result.lift])
+                      return <article key={result.lift} className={accepted?'accepted':''}>
+                        <div className="baseline-result-head"><strong>{result.lift}</strong><span>{result.weight} × {result.reps}</span></div>
+                        <div className="baseline-result-values">
+                          <div><span>Current</span><b>{current?current.toFixed(2)+' lb':'—'}</b></div>
+                          <div><span>Calculated</span><b>{Number(result.estimated_1rm).toFixed(2)} lb</b></div>
+                        </div>
+                        <button type="button" className={accepted?'secondary-action':'primary-action'} disabled={accepted} onClick={()=>acceptBaselineResult(result)}>
+                          {accepted?'✓ Saved':`Use ${Number(result.estimated_1rm).toFixed(2)} lb`}
+                        </button>
+                      </article>
+                    })}
+                  </div>
+                  {baselineFinishReview.results.length>1&&<button type="button" className="wide-button" onClick={acceptAllBaselineResults}>Use all calculated 1RMs</button>}
+                  <small className="baseline-history-note">The actual test sets stay in workout history so you can always see where each estimate came from.</small>
+                </section>}
               </section>}
 
               {!completionSummary&&<section className="today-card multi-track-heading">
