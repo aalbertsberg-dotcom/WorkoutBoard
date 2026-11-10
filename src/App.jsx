@@ -7,6 +7,8 @@ import { TrainingTimer } from './trainingTools'
 import { WorkoutCoach, MetconTracker, AccountSecurityPanel, BackupRestorePanel, WorkoutSettingsPanel } from './advancedFeatures'
 import { archiveProgramById, makePlannedFromArchive } from './archivePrograms'
 
+const WORKSET_BUILD_ID = __WORKSET_BUILD_ID__
+
 const localDateKey=(value=new Date())=>{
   const d=value instanceof Date ? value : new Date(value)
   if(Number.isNaN(d.getTime()))return ''
@@ -1173,6 +1175,58 @@ function App() {
   const [completedTrainingSessions,setCompletedTrainingSessions] = useState([])
   const [programCompletionPrompt,setProgramCompletionPrompt] = useState(null)
   const [oneRmNotice,setOneRmNotice] = useState(null)
+  const [releaseUpdate,setReleaseUpdate] = useState(null)
+
+  useEffect(()=>{
+    if(!import.meta.env.PROD)return
+    let cancelled=false
+    let timer=null
+    const checkRelease=async()=>{
+      try{
+        const res=await fetch(import.meta.env.BASE_URL+'version.json?ts='+Date.now(),{cache:'no-store'})
+        if(!res.ok)return
+        const info=await res.json()
+        if(!cancelled&&info?.buildId&&info.buildId!==WORKSET_BUILD_ID){
+          setReleaseUpdate(info)
+        }
+      }catch{}
+    }
+    const refresh=()=>{
+      if(document.visibilityState==='hidden')return
+      clearTimeout(timer)
+      timer=setTimeout(checkRelease,350)
+    }
+    checkRelease()
+    const interval=setInterval(checkRelease,5*60*1000)
+    window.addEventListener('focus',refresh)
+    window.addEventListener('pageshow',refresh)
+    document.addEventListener('visibilitychange',refresh)
+    return()=>{
+      cancelled=true
+      clearTimeout(timer)
+      clearInterval(interval)
+      window.removeEventListener('focus',refresh)
+      window.removeEventListener('pageshow',refresh)
+      document.removeEventListener('visibilitychange',refresh)
+    }
+  },[])
+
+  const applyReleaseUpdate=async()=>{
+    if(!releaseUpdate?.buildId)return
+    try{
+      if('caches' in window){
+        const keys=await caches.keys()
+        await Promise.all(keys.filter(key=>/^(workoutboard|workset)-/i.test(key)).map(key=>caches.delete(key)))
+      }
+      if('serviceWorker' in navigator){
+        const regs=await navigator.serviceWorker.getRegistrations()
+        await Promise.all(regs.map(reg=>reg.unregister()))
+      }
+    }catch{}
+    const url=new URL(window.location.href)
+    url.searchParams.set('_workset_release',String(releaseUpdate.buildId).slice(0,12))
+    window.location.replace(url.toString())
+  }
 
   const personalProgram = programs[activeProgram]
   const sharedProgramId = activeSession ? (dbNameToProgram[activeSession.program] || activeProgram) : activeProgram
@@ -2736,6 +2790,7 @@ function App() {
           plannedToday && !showRegularToday ? (
             <PlannedWorkoutRunner
               planned={plannedToday}
+              oneRepMaxes={oneRepMaxes}
               sharedSessionId={sharedWorkoutActive&&activeSession ? activeSession.id : null}
               partnerOneRms={sharedWorkoutActive ? {...sessionOneRms,...sharedManagedPartnerOneRms} : {}}
               onCancelled={async() => {
@@ -3455,6 +3510,11 @@ function App() {
         <button className={activeTab==='program'?'active':''} onClick={()=>setActiveTab('program')}><b>▦</b><span>Plan</span></button>
         <button className={activeTab==='whiteboard'?'active':''} onClick={()=>setActiveTab('whiteboard')}><b>□</b><span>Board</span></button>
       </nav>
+
+      {releaseUpdate&&<div className="release-update-toast" role="status">
+        <div><strong>Workset update ready</strong><span>Reload to use the latest version.</span></div>
+        <button type="button" onClick={applyReleaseUpdate}>Reload</button>
+      </div>}
 
       {feedbackToast&&isAdmin&&<button className="admin-feedback-toast" onClick={()=>{setFeedbackUnread(0);setFeedbackToast(null);setActiveTab('admin')}}>
         <span>New feedback · {feedbackToast.category}</span>
