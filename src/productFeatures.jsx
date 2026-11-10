@@ -470,7 +470,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
         <button type="button" className="conditioning-remove" onClick={()=>setExerciseAdderOpen(false)}>Cancel</button>
       </div>
       <div className="quick-add-row">
-        <label className="conditioning-field"><span>Movement</span><input autoFocus value={newExercise.name} onChange={e=>setNewExercise(v=>({...v,name:e.target.value}))} onKeyDown={e=>{if(e.key==='Enter'&&String(newExercise.name||'').trim()){e.preventDefault();addExercise()}}} placeholder="e.g. Lat Pulldown"/></label>
+        <label className="conditioning-field"><span>Movement</span><input autoFocus enterKeyHint="done" value={newExercise.name} onChange={e=>setNewExercise(v=>({...v,name:e.target.value}))} onKeyDown={e=>{if(e.key==='Enter'&&String(newExercise.name||'').trim()){e.preventDefault();addExercise()}}} placeholder="e.g. Lat Pulldown"/></label>
         <button type="button" className="primary-action quick-add-submit" disabled={!String(newExercise.name||'').trim()} onClick={addExercise}>Add</button>
       </div>
       <div className="add-exercise-grid compact-add-details">
@@ -550,7 +550,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
                 {loadField&&<label className="current-set-weight">
                   <span>{loadField.label}{loadField.optional?' (optional)':''}</span>
                   <div>
-                    <input type="number" inputMode="decimal" value={shownWeight}
+                    <input type="number" inputMode="decimal" enterKeyHint="done" value={shownWeight}
                       onFocus={e=>e.currentTarget.select()}
                       onChange={e=>{
                         const value=e.target.value===''?'':Number(e.target.value)
@@ -568,7 +568,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
                 {activeSet&&!isDistanceExercise(item.name)&&<label className="current-set-weight current-set-reps">
                   <span>Reps</span>
                   <div>
-                    <input type="number" inputMode="numeric" min="0" step="1"
+                    <input type="number" inputMode="numeric" enterKeyHint="done" min="0" step="1"
                       value={activeSet.actual_reps??''}
                       onChange={e=>{
                         const value=e.target.value===''?'':Math.max(0,Math.floor(Number(e.target.value)||0))
