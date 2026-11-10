@@ -2045,11 +2045,13 @@ function App() {
       setOneRmNotice(notice)
       setTimeout(()=>setOneRmNotice(current=>current===notice?null:current),2800)
     }
+    return result
   }
 
   const acceptBaselineResult = async result => {
     if(!result?.lift||!result?.estimated_1rm)return
-    await setOneRm(result.lift,result.estimated_1rm,{notify:true})
+    const saved=await setOneRm(result.lift,result.estimated_1rm,{notify:true})
+    if(saved?.error)return
     setBaselineFinishReview(current=>current ? {
       ...current,
       accepted:{...(current.accepted||{}),[result.lift]:true}
@@ -2059,8 +2061,14 @@ function App() {
   const acceptAllBaselineResults = async () => {
     const rows=baselineFinishReview?.results||[]
     if(!rows.length)return
-    for(const result of rows){
-      await setOneRm(result.lift,result.estimated_1rm,{notify:false})
+    const next={...oneRepMaxes}
+    for(const result of rows)next[result.lift]=round2(result.estimated_1rm)
+    const saved=await saveOneRepMaxes(next)
+    if(saved?.error){
+      const notice={type:'error',text:'Could not save baseline 1RMs.'}
+      setOneRmNotice(notice)
+      setTimeout(()=>setOneRmNotice(current=>current===notice?null:current),2800)
+      return
     }
     setBaselineFinishReview(current=>current ? {
       ...current,
