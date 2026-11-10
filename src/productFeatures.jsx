@@ -649,7 +649,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
                   </div>
                 </label>}
               </div>
-              {activeSet&&!isDistanceExercise(item.name)&&<small className="rep-default-hint">Reps shown are the programmed default. Only type when you did something different.</small>}
+              {activeSet&&!isDistanceExercise(item.name)&&<small className="rep-default-hint">Leave blank = programmed reps. Enter only if different.</small>}
               <div className="current-set-actions">
               <button type="button" className="primary-action complete-current-set" onClick={()=>{
                 const currentWeight=loadField ? Number(shownWeight||0) : 0
