@@ -1409,7 +1409,30 @@ export function AdminPanel({ programs }) {
   }
   useEffect(() => { loadUsers();loadFeedback() },[])
 
+  const closeUserDetail = () => {
+    setSelected(null)
+    setMaxes(null)
+    setSessions([])
+    setEditSession(null)
+    setMessage('')
+  }
+
+  useEffect(() => {
+    const handlePopState = () => {
+      if(selected)closeUserDetail()
+    }
+    window.addEventListener('popstate',handlePopState)
+    return () => window.removeEventListener('popstate',handlePopState)
+  },[selected])
+
   const openUser = async user => {
+    if(!window.history.state?.workoutboardCoachUser){
+      window.history.pushState(
+        {...(window.history.state||{}),workoutboardCoachUser:user.user_id},
+        '',
+        window.location.href
+      )
+    }
     setSelected(user); setMessage(''); setEditSession(null);setDisplayNameDraft(user.display_name||'')
     const [{data:oneRm},{data:tm},{data:rows}] = await Promise.all([
       supabase.from('one_rep_maxes').select('*').eq('user_id',user.user_id).maybeSingle(),
@@ -1535,7 +1558,10 @@ export function AdminPanel({ programs }) {
   }
 
   return <section className="page-section">
-    <button className="secondary-action" onClick={()=>{setSelected(null);setMaxes(null);setSessions([]);setEditSession(null)}}>← All users</button>
+    <button type="button" className="secondary-action" onClick={()=>{
+      if(window.history.state?.workoutboardCoachUser)window.history.back()
+      else closeUserDetail()
+    }}>← All users</button>
     <section className="profile-card">
       <span className="card-label">COACH MODE</span><h2>{selected.display_name||'Unnamed user'}</h2><p>{selected.email}</p>
       <div className="admin-meta"><span>{selected.workout_count||0} workouts</span><span>{Number(selected.total_volume||0).toLocaleString()} lb tracked volume</span><span>Last: {fmtDate(selected.last_workout)}</span></div>
