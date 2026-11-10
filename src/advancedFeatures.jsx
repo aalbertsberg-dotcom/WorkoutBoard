@@ -393,7 +393,7 @@ export function BackupRestorePanel({session}) {
     setBusy(true)
     try{
       const data=JSON.parse(await file.text())
-      if(data.format!=='WorkoutBoard Backup')throw new Error('Not a WorkoutBoard backup file')
+      if(data.format!=='WorkoutBoard Backup')throw new Error('Not a compatible Workset backup file')
       for(const table of backupTables){
         const rows=data.tables?.[table]||[];if(!rows.length)continue
         const fixed=rows.map(row=>table==='profiles'?{...row,id:session.user.id}:{...row,user_id:session.user.id})
