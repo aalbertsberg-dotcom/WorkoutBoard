@@ -12,19 +12,19 @@
   "prefer_related_applications": false,
   "icons": [
     {
-      "src": "./workset-icon-192.png",
+      "src": "./workset-icon-v1-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "./workset-icon-512.png",
+      "src": "./workset-icon-v1-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "./workset-icon-maskable-512.png",
+      "src": "./workset-icon-v1-maskable-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
