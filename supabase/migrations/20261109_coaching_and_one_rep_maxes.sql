@@ -134,7 +134,7 @@ returns void
 language plpgsql
 security definer
 set search_path = public
-as $
+as $$
 begin
   if not public.is_workout_admin() then
     raise exception 'Admin access required';
@@ -149,7 +149,7 @@ begin
     raise exception 'User not found';
   end if;
 end;
-$;
+$$;
 
 grant execute on function public.admin_update_user_profile(uuid,text) to authenticated;
 
