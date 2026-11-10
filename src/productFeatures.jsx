@@ -167,6 +167,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
   const [newExercise,setNewExercise]=useState({name:'',sets:3,target:'10',rest:90})
   const [activeExerciseIndex,setActiveExerciseIndex]=useState(0)
   const [activeSetByExercise,setActiveSetByExercise]=useState({})
+  const [removeExercisePrompt,setRemoveExercisePrompt]=useState(null)
 
   useEffect(()=>{
     let cached=null
@@ -188,6 +189,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
     setNewExercise({name:'',sets:3,target:'10',rest:90})
     setActiveExerciseIndex(0)
     setActiveSetByExercise({})
+    setRemoveExercisePrompt(null)
   },[planned?.id,planned?.updated_at])
 
   useEffect(()=>{
@@ -300,9 +302,17 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
     requestAnimationFrame(()=>document.getElementById('workout-exercise-'+newIndex)?.scrollIntoView({behavior:'smooth',block:'start'}))
   }
 
-  const removeAddedExercise=index=>{
+  const removeExercise=index=>{
     setSaveState('Unsaved')
     setWorkout(v=>({...v,exercises:(v.exercises||[]).filter((_,i)=>i!==index)}))
+    setActiveExerciseIndex(current=>{
+      const nextLength=Math.max(0,(workout.exercises||[]).length-1)
+      if(!nextLength)return 0
+      if(current>index)return current-1
+      if(current===index)return Math.min(index,nextLength-1)
+      return current
+    })
+    setRemoveExercisePrompt(null)
   }
 
   const addExtraSet=index=>{
@@ -459,13 +469,15 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
         <div><span className="card-label">ADD EXERCISE</span><h3>Add to this workout</h3></div>
         <button type="button" className="conditioning-remove" onClick={()=>setExerciseAdderOpen(false)}>Cancel</button>
       </div>
-      <label className="conditioning-field"><span>Movement</span><input autoFocus value={newExercise.name} onChange={e=>setNewExercise(v=>({...v,name:e.target.value}))} placeholder="e.g. Lat Pulldown"/></label>
-      <div className="add-exercise-grid">
-        <label className="conditioning-field"><span>Sets</span><input type="number" inputMode="numeric" min="1" max="20" value={newExercise.sets} onChange={e=>setNewExercise(v=>({...v,sets:e.target.value}))}/></label>
-        <label className="conditioning-field"><span>Reps / target</span><input value={newExercise.target} onChange={e=>setNewExercise(v=>({...v,target:e.target.value}))} placeholder="10 or 40 yd/side"/></label>
-        <label className="conditioning-field"><span>Rest (sec)</span><input type="number" inputMode="numeric" min="0" value={newExercise.rest} onChange={e=>setNewExercise(v=>({...v,rest:e.target.value}))}/></label>
+      <div className="quick-add-row">
+        <label className="conditioning-field"><span>Movement</span><input autoFocus value={newExercise.name} onChange={e=>setNewExercise(v=>({...v,name:e.target.value}))} onKeyDown={e=>{if(e.key==='Enter'&&String(newExercise.name||'').trim()){e.preventDefault();addExercise()}}} placeholder="e.g. Lat Pulldown"/></label>
+        <button type="button" className="primary-action quick-add-submit" disabled={!String(newExercise.name||'').trim()} onClick={addExercise}>Add</button>
       </div>
-      <button type="button" className="primary-action" disabled={!String(newExercise.name||'').trim()} onClick={addExercise}>Add exercise</button>
+      <div className="add-exercise-grid compact-add-details">
+        <label className="conditioning-field"><span>Sets</span><input type="number" inputMode="numeric" min="1" max="20" value={newExercise.sets} onChange={e=>setNewExercise(v=>({...v,sets:e.target.value}))}/></label>
+        <label className="conditioning-field"><span>Reps</span><input value={newExercise.target} onChange={e=>setNewExercise(v=>({...v,target:e.target.value}))} placeholder="10"/></label>
+        <label className="conditioning-field"><span>Rest</span><input type="number" inputMode="numeric" min="0" value={newExercise.rest} onChange={e=>setNewExercise(v=>({...v,rest:e.target.value}))}/></label>
+      </div>
     </section>}
 
     {(workout.exercises||[]).map((item,i)=>{
@@ -505,7 +517,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       >
         <div className="flex-exercise-title">
           <div>
-            <div className="exercise-name-line"><strong>{item.name}</strong>{isPR&&<b className="pr-mini">PR</b>}<PlannedAlternatives name={item.name}/>{item.custom_added&&<button type="button" className="remove-added-exercise" onClick={()=>removeAddedExercise(i)}>Remove</button>}</div>
+            <div className="exercise-name-line"><strong>{item.name}</strong>{isPR&&<b className="pr-mini">PR</b>}<PlannedAlternatives name={item.name}/></div>
             <span className="exercise-plan-line">{humanPrescription(item.prescription)}{rest?' · '+(rest<120?rest+' sec':rest/60+' min')+' rest':''}</span>
             {partnerTargets.length>0&&<small className="partner-targets"><strong>Targets:</strong> {partnerTargets.map(x=>x.name+' '+x.target).join(' · ')}</small>}
             {item.note&&<details className="exercise-cue"><summary>Cue</summary><small>{item.note}</small></details>}
@@ -513,7 +525,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
             {sub&&<small className="sub-suggestion">Saved substitute: {sub.substitute}{sub.reason?' · '+sub.reason:''}</small>}
           </div>
           <div className="exercise-title-actions">
-            {exerciseIncomplete(item)&&i!==focusedExerciseIndex&&<button type="button" className="work-here-button" onClick={()=>activateExercise(i,null,{scroll:false})}>Work here</button>}
+            <button type="button" className="remove-exercise-x" aria-label={'Remove '+item.name+' from this workout'} onClick={()=>setRemoveExercisePrompt({index:i,name:item.name})}>×</button>
             {!item.setProgress?.length&&<button type="button" className={'check '+(item.done?'checked':'')} onClick={()=>{ const next=!item.done; changeExercise(i,{done:next}); if(next) window.dispatchEvent(new CustomEvent('workoutboard:rest-timer',{detail:{seconds:rest}})) }}>✓</button>}
           </div>
         </div>
@@ -534,53 +546,57 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
                 <div><span className="card-label">{activeSet.extra?'EXTRA SET':'CURRENT SET'}</span><h3>{activeSet.extra?'Extra set':'Set '+(activeIndex+1)+' of '+item.setProgress.length}</h3></div>
                 <strong>{activeSet.label || (activeSet.reps?activeSet.reps+' reps':'Complete')}{activeSet.target_weight_range?' · '+activeSet.target_weight_range:''}</strong>
               </div>
-              {loadField&&<label className="current-set-weight">
-                <span>{loadField.label}{loadField.optional?' (optional)':''}</span>
-                <div>
-                  <input type="number" inputMode="decimal" value={shownWeight}
-                    onFocus={e=>e.currentTarget.select()}
-                    onChange={e=>{
-                      const value=e.target.value===''?'':Number(e.target.value)
-                      changeExercise(i,{
-                        load:value,
-                        result:'',
-                        setProgress:item.setProgress.map((sp,k)=>k===activeIndex?{...sp,weight:value}:sp)
-                      })
-                    }}
-                    onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur()}}
-                    placeholder={loadField.placeholder}/>
-                  <b>lb</b>
-                </div>
-                {hist?.lastWeights?.length>0&&<small>Last time: {hist.lastWeights.map((w,idx)=>'S'+(idx+1)+' '+w+' lb').join(' · ')}</small>}
-              </label>}
-              {activeSet&&!isDistanceExercise(item.name)&&<label className="current-set-weight current-set-reps">
-                <span>Reps performed</span>
-                <div>
-                  <input type="number" inputMode="numeric" min="0" step="1"
-                    value={activeSet.actual_reps??''}
-                    onChange={e=>{
-                      const value=e.target.value===''?'':Math.max(0,Math.floor(Number(e.target.value)||0))
-                      changeExercise(i,{setProgress:item.setProgress.map((sp,k)=>k===activeIndex?{...sp,actual_reps:value}:sp)})
-                    }}
-                    onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur()}}
-                    placeholder={activeSet.reps!==undefined&&activeSet.reps!==null&&activeSet.reps!==''?String(activeSet.reps):'Reps'}/>
-                  <b>reps</b>
-                </div>
-                <small>Leave blank to use the programmed reps. Type a number only when you do more or fewer.</small>
-              </label>}
+              <div className="current-set-entry-grid">
+                {loadField&&<label className="current-set-weight">
+                  <span>{loadField.label}{loadField.optional?' (optional)':''}</span>
+                  <div>
+                    <input type="number" inputMode="decimal" value={shownWeight}
+                      onFocus={e=>e.currentTarget.select()}
+                      onChange={e=>{
+                        const value=e.target.value===''?'':Number(e.target.value)
+                        changeExercise(i,{
+                          load:value,
+                          result:'',
+                          setProgress:item.setProgress.map((sp,k)=>k===activeIndex?{...sp,weight:value}:sp)
+                        })
+                      }}
+                      onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur()}}
+                      placeholder={loadField.placeholder}/>
+                    <b>lb</b>
+                  </div>
+                </label>}
+                {activeSet&&!isDistanceExercise(item.name)&&<label className="current-set-weight current-set-reps">
+                  <span>Reps</span>
+                  <div>
+                    <input type="number" inputMode="numeric" min="0" step="1"
+                      value={activeSet.actual_reps??''}
+                      onChange={e=>{
+                        const value=e.target.value===''?'':Math.max(0,Math.floor(Number(e.target.value)||0))
+                        changeExercise(i,{setProgress:item.setProgress.map((sp,k)=>k===activeIndex?{...sp,actual_reps:value}:sp)})
+                      }}
+                      onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur()}}
+                      placeholder={activeSet.reps!==undefined&&activeSet.reps!==null&&activeSet.reps!==''?String(activeSet.reps):'Reps'}/>
+                    <b>reps</b>
+                  </div>
+                </label>}
+              </div>
+              {activeSet&&!isDistanceExercise(item.name)&&<small className="rep-default-hint">Reps shown are the programmed default. Only type when you did something different.</small>}
+              <div className="current-set-actions">
               <button type="button" className="primary-action complete-current-set" onClick={()=>{
                 const currentWeight=loadField ? Number(shownWeight||0) : 0
                 const nextSetIndex=item.setProgress.findIndex((sp,k)=>k!==activeIndex&&!sp.done)
                 changeExercise(i,{load:shownWeight,setProgress:item.setProgress.map((sp,k)=>k===activeIndex?{...sp,done:true,weight:currentWeight||sp.weight}:sp)})
                 if(nextSetIndex>=0){
                   setActiveSetByExercise(v=>({...v,[exerciseKey]:nextSetIndex}))
+                  requestAnimationFrame(()=>document.getElementById('workout-exercise-'+i)?.scrollIntoView({behavior:'smooth',block:'nearest'}))
                 }else{
                   setActiveSetByExercise(v=>({...v,[exerciseKey]:null}))
                   requestAnimationFrame(()=>goToNextExercise(i))
                 }
                 window.dispatchEvent(new CustomEvent('workoutboard:rest-timer',{detail:{seconds:rest}}))
               }}>Complete Set {activeIndex+1}</button>
-              <button type="button" className="secondary-action next-exercise-button" onClick={()=>goToNextExercise(i)}>Next exercise</button>
+              <button type="button" className="secondary-action next-exercise-button" onClick={()=>goToNextExercise(i)}>Next</button>
+              </div>
             </section>}
             <div className="set-progress-grid compact flexible-set-progress">
               {item.setProgress.map((set,j)=>{
@@ -634,6 +650,15 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
         <label className="field-label"><span>Notes</span><textarea value={workout.note||''} onChange={e=>change('note',e.target.value)} placeholder="Anything worth remembering next time…" /></label>
       </section>
     </details>
+
+    {removeExercisePrompt&&<div className="same-day-sheet-backdrop" onClick={()=>setRemoveExercisePrompt(null)}>
+      <section className="same-day-sheet remove-exercise-confirm" onClick={e=>e.stopPropagation()}>
+        <span className="card-label">REMOVE EXERCISE</span>
+        <h3>Remove {removeExercisePrompt.name}?</h3>
+        <p>This removes it from today's workout only. It won't change the program.</p>
+        <div><button type="button" className="secondary-action" onClick={()=>setRemoveExercisePrompt(null)}>Keep it</button><button type="button" className="danger-action" onClick={()=>removeExercise(removeExercisePrompt.index)}>Remove</button></div>
+      </section>
+    </div>}
 
     {onDismiss&&<button className="secondary-action regular-workout-fallback" onClick={onDismiss}>Use regular Today workout</button>}
     <button type="button" className="secondary-action cancel-workout-button" onClick={()=>setCancelConfirm(true)}>Cancel workout</button>
