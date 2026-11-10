@@ -141,7 +141,26 @@ export function PlatformProgress({
     setMeasurements(measurementRows || [])
   }
 
-  useEffect(() => { loadData() },[session?.user?.id])
+  useEffect(() => { loadData() },[session?.user?.id,effectiveMode])
+
+  useEffect(() => {
+    if(!session?.user || effectiveMode!=='community')return
+    let timer=null
+    const refresh=()=>{
+      if(document.visibilityState==='hidden')return
+      clearTimeout(timer)
+      timer=setTimeout(loadData,250)
+    }
+    window.addEventListener('focus',refresh)
+    window.addEventListener('pageshow',refresh)
+    document.addEventListener('visibilitychange',refresh)
+    return ()=>{
+      clearTimeout(timer)
+      window.removeEventListener('focus',refresh)
+      window.removeEventListener('pageshow',refresh)
+      document.removeEventListener('visibilitychange',refresh)
+    }
+  },[session?.user?.id,effectiveMode])
 
   const toggleCommunity = async enabled => {
     if (!session?.user) return

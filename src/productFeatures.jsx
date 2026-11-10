@@ -405,26 +405,57 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
     const finalWorkout={...workout,complete:true,savedAt:now}
     const existing=await supabase.from('training_sessions').select('id').eq('planned_workout_id',planned.id).maybeSingle()
     let error=null
-    if (existing.data?.id) {
-      ;({error}=await supabase.from('training_sessions').update({
+    let trainingSessionId=existing.data?.id||null
+    if (trainingSessionId) {
+      const result=await supabase.from('training_sessions').update({
         title:planned.title,program:planned.source_program_name||'Custom workout',week:planned.source_week||null,
         primary_lift:planned.source_day||null,session_date:planned.scheduled_date,workout:finalWorkout,
         total_volume:Math.round(totalVolume),bodyweight:Number(workout.bodyweight||0)||null,
         shared_session_id:sharedSessionId||null,
         completed_at:now,updated_at:now
-      }).eq('id',existing.data.id))
+      }).eq('id',trainingSessionId).select('id').single()
+      error=result.error
+      trainingSessionId=result.data?.id||trainingSessionId
     } else {
-      ;({error}=await supabase.from('training_sessions').insert({
+      const result=await supabase.from('training_sessions').insert({
         user_id:planned.user_id,planned_workout_id:planned.id,title:planned.title,
         program:planned.source_program_name||'Custom workout',week:planned.source_week||null,
         primary_lift:planned.source_day||null,session_date:planned.scheduled_date,workout:finalWorkout,
         total_volume:Math.round(totalVolume),bodyweight:Number(workout.bodyweight||0)||null,
         shared_session_id:sharedSessionId||null,
         started_at:planned.created_at||now,completed_at:now,updated_at:now
-      }))
+      }).select('id').single()
+      error=result.error
+      trainingSessionId=result.data?.id||null
     }
     if (!error) {
       await supabase.from('planned_workouts').update({status:'completed',workout:finalWorkout,updated_at:now}).eq('id',planned.id)
+
+      if(trainingSessionId){
+        const {data:communityProfile}=await supabase.from('profiles')
+          .select('display_name,community_opt_in,community_display_name,community_share_bodyweight')
+          .eq('id',planned.user_id).maybeSingle()
+        if(communityProfile?.community_opt_in){
+          const completedSets=(finalWorkout.exercises||[]).reduce((sum,item)=>sum+(item.setProgress||[]).filter(set=>set.done).length,0)
+          const completedExercises=(finalWorkout.exercises||[]).filter(item=>item.done||(item.setProgress||[]).some(set=>set.done)).length
+          await supabase.from('community_activity').upsert({
+            user_id:planned.user_id,
+            training_session_id:trainingSessionId,
+            display_name:communityProfile.community_display_name||communityProfile.display_name||'Member',
+            activity_date:planned.scheduled_date,
+            title:planned.title,
+            summary:{
+              program:planned.source_program_name||'Custom workout',
+              lift:planned.source_day||null,
+              volume:Math.round(totalVolume),
+              estimated_1rm:bestEstimated1rm||null,
+              exercises:completedExercises,
+              sets:completedSets,
+              bodyweight:communityProfile.community_share_bodyweight ? (Number(workout.bodyweight||0)||null) : null
+            }
+          },{onConflict:'training_session_id'})
+        }
+      }
       if(sharedSessionId){
         await supabase.from('session_results').upsert({
           session_id:sharedSessionId,
