@@ -771,8 +771,8 @@ export function InstallAppButton() {
     window.addEventListener('appinstalled',installedHandler)
     return ()=>{window.removeEventListener('beforeinstallprompt',before);window.removeEventListener('appinstalled',installedHandler)}
   },[])
-  if (installed) return <div className="status-message">WorkoutBoard is installed on this device.</div>
-  return <button className="wide-button" disabled={!prompt} onClick={async()=>{if(!prompt)return;await prompt.prompt();setPrompt(null)}}>{prompt?'Install WorkoutBoard':'Install from your browser menu'}</button>
+  if (installed) return <div className="status-message">Workset is installed on this device.</div>
+  return <button className="wide-button" disabled={!prompt} onClick={async()=>{if(!prompt)return;await prompt.prompt();setPrompt(null)}}>{prompt?'Install Workset':'Install from your browser menu'}</button>
 }
 
 function download(name,content,type='application/json') {
@@ -800,7 +800,7 @@ export function ExportDataButton({userId}) {
       row.session_date,row.title,row.program,row.week,row.primary_lift,row.total_volume,row.estimated_1rm,row.bodyweight,row.completed_at
     ])
     const csv=[headers.map(esc).join(','),...rows.map(row=>row.map(esc).join(','))].join('\n')
-    download(`WorkoutBoard-sessions-${stamp}.csv`,csv,'text/csv')
+    download(`Workset-sessions-${stamp}.csv`,csv,'text/csv')
     setBusy(false)
   }
   return <button className="wide-button" onClick={exportData} disabled={busy}>{busy?'Preparing export…':'Export CSV'}</button>

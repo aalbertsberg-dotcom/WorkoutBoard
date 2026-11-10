@@ -615,7 +615,7 @@ function makePlannedFromClassic(programId,week,lift,scheduledDate,oneRms,trackin
       tracking_program_key:trackingProgramKey||undefined,
       tracking_workout_key:trackingWorkoutKey||undefined,
       started_explicitly:true,
-      source:'WorkoutBoard built-in',
+      source:'Workset built-in',
       phase:plan.phase||'',
       rule:plan.rule||'',
       exercises,
@@ -1021,9 +1021,9 @@ function AuthScreen() {
   return (
     <main className="auth-shell">
       <section className="auth-card">
-        <div className="eyebrow">WORKOUTBOARD</div>
+        <div className="brand-lockup"><img src={import.meta.env.BASE_URL+'icon.svg'} alt="" /><span>Work<b>set</b></span></div>
         <h1>{mode === 'signin' ? 'Sign in' : 'Create account'}</h1>
-        <p className="auth-sub">{mode === 'signin' ? 'Use your WorkoutBoard email and password.' : 'Just enter an email and password.'}</p>
+        <p className="auth-sub">{mode === 'signin' ? 'Use your Workset email and password.' : 'Just enter an email and password.'}</p>
 
         <div className="auth-tabs">
           <button className={mode === 'signin' ? 'active' : ''} onClick={() => {setMode('signin');setMessage('')}}>Sign in</button>
@@ -1097,7 +1097,7 @@ function RecoveryScreen({onDone}) {
   return (
     <main className="auth-shell">
       <section className="auth-card">
-        <div className="eyebrow">WORKOUTBOARD</div>
+        <div className="brand-lockup"><img src={import.meta.env.BASE_URL+'icon.svg'} alt="" /><span>Work<b>set</b></span></div>
         <h1>Set new password</h1>
         <p className="auth-sub">Choose a new password for this account.</p>
         <form onSubmit={save}>
@@ -2398,7 +2398,7 @@ function App() {
 
   const shareInvite = async () => {
     const url = appUrl()
-    const data = {title:'WorkoutBoard',text:'Join me on WorkoutBoard. Create your own account and track your workouts.',url}
+    const data = {title:'Workset',text:'Join me on Workset. Create your own account and track your workouts.',url}
     try {
       if (navigator.share) {
         await navigator.share(data)
@@ -2609,9 +2609,9 @@ function App() {
     const url=new URL(appUrl())
     url.searchParams.set('join',activeSession.join_code)
     const shareUrl=url.toString()
-    const text='Join my WorkoutBoard session'
+    const text='Join my Workset session'
     try {
-      if (navigator.share) await navigator.share({title:'WorkoutBoard Together',text,url:shareUrl})
+      if (navigator.share) await navigator.share({title:'Workset Together',text,url:shareUrl})
       else {
         await navigator.clipboard.writeText(shareUrl)
         setTogetherMessage('Join link copied.')
@@ -2703,7 +2703,7 @@ function App() {
   const conditioningPrescribed = Boolean(conditioningSuggested && !/^optional\b/i.test(String(plan.conditioning).trim()))
   const conditioningHasData = Boolean(log.metcon?.format || log.metcon?.name || log.metcon?.activity || log.metcon?.duration || log.metcon?.workTime || log.metcon?.restTime || log.metcon?.interval || log.metcon?.time || log.metcon?.rounds || log.metcon?.reps || log.metcon?.distance || log.metcon?.calories)
 
-  if (authLoading) return <div className="loading-screen">Loading WorkoutBoard…</div>
+  if (authLoading) return <div className="loading-screen">Loading Workset…</div>
   if (passwordRecovery) return <RecoveryScreen onDone={() => setPasswordRecovery(false)} />
   if (!session) return <AuthScreen />
 
@@ -2712,7 +2712,7 @@ function App() {
       <main className="app">
         <header className="app-header">
           <div>
-            <div className="eyebrow">WORKOUTBOARD</div>
+            <div className="brand-lockup"><img src={import.meta.env.BASE_URL+'icon.svg'} alt="" /><span>Work<b>set</b></span></div>
             <h1>{activeTab === 'today' ? 'Today' : activeTab === 'together' ? 'Together' : activeTab === 'program' ? 'Plan' : activeTab === 'whiteboard' ? 'Whiteboard' : activeTab === 'progress' ? 'Progress' : activeTab === 'admin' ? 'Admin' : 'Me'}</h1>
           </div>
           <button className={'account-chip ' + (isAdmin ? 'admin' : '')} onClick={openMe}>
@@ -3117,7 +3117,7 @@ function App() {
                     <div><span className="card-label">TRAINING PARTNERS</span><h3>Managed partners</h3></div>
                     <button type="button" className="secondary-action compact-action" onClick={()=>openManagedAthleteEditor(null)}>+ Partner</button>
                   </div>
-                  <p className="helper-text">For someone who doesn't want their own WorkoutBoard account. You keep their 1RMs and can include their target weights in Together workouts.</p>
+                  <p className="helper-text">For someone who doesn't want their own Workset account. You keep their 1RMs and can include their target weights in Together workouts.</p>
                   {managedAthletes.length>0?<div className="managed-athlete-list">
                     {managedAthletes.map(athlete=><div key={athlete.id} className="managed-athlete-row">
                       <div><strong>{athlete.display_name}</strong><span>{['Squat','Bench','Deadlift','Press'].filter(lift=>Number(athlete[lift]||0)>0).map(lift=>lift+' '+Number(athlete[lift]).toFixed(2)).join(' · ')||'No 1RMs saved yet'}</span></div>
@@ -3412,14 +3412,14 @@ function App() {
             <section className="simple-card">
               <div className="section-heading"><div><span className="card-label">INVITE</span><h3>Invite someone</h3></div></div>
               <p className="helper-text">Anyone you invite gets their own account, program, maxes, history, and progress dashboard.</p>
-              <button className="wide-button invite-button" onClick={shareInvite}>Share WorkoutBoard</button>
+              <button className="wide-button invite-button" onClick={shareInvite}>Share Workset</button>
               {inviteState && <div className="invite-status">{inviteState}</div>}
             </section>
 
             <FeedbackPanel session={session} profile={profile} />
 
             <section className="simple-card">
-              <div className="section-heading"><div><span className="card-label">APP</span><h3>Install WorkoutBoard</h3></div></div>
+              <div className="section-heading"><div><span className="card-label">APP</span><h3>Install Workset</h3></div></div>
               <p className="helper-text">Install it on your phone or desktop for a full-screen app experience and faster reopening.</p>
               <InstallAppButton />
             </section>
@@ -3436,7 +3436,7 @@ function App() {
 
             {isAdmin && (
               <section className="simple-card admin-entry">
-                <div className="section-heading"><div><span className="card-label">WORKOUTADMIN</span><h3>Administration</h3></div></div>
+                <div className="section-heading"><div><span className="card-label">WORKSET ADMIN</span><h3>Administration</h3></div></div>
                 <p className="helper-text">View users, workout history, progress totals, training maxes, and manage current programs.</p>
                 <button className="wide-button admin-button" onClick={() => {setFeedbackUnread(0);setActiveTab('admin')}}>Open Admin{feedbackUnread?` · ${feedbackUnread} feedback`:''}</button>
               </section>
@@ -3449,7 +3449,7 @@ function App() {
         <div className="bottom-space" />
       </main>
 
-      <nav className={'mobile-bottom-nav app-level-mobile-nav '+(activeTab==='whiteboard'?'board-bottom-offset':'')} aria-label="WorkoutBoard mobile navigation">
+      <nav className={'mobile-bottom-nav app-level-mobile-nav '+(activeTab==='whiteboard'?'board-bottom-offset':'')} aria-label="Workset mobile navigation">
         <button className={activeTab==='today'?'active':''} onClick={openToday}><b>●</b><span>Today</span></button>
         <button className={activeTab==='together'?'active':''} onClick={()=>setActiveTab('together')}><b>⇄</b><span>Together</span></button>
         <button className={activeTab==='program'?'active':''} onClick={()=>setActiveTab('program')}><b>▦</b><span>Plan</span></button>

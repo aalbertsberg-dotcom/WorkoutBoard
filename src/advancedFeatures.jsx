@@ -364,7 +364,7 @@ export function ShareImportPanel({session}) {
       setMessage('Shared program imported as a draft.')
     }
   }
-  return <section className="simple-card"><div className="section-heading"><div><span className="card-label">SHARE / IMPORT</span><h3>Import a WorkoutBoard code</h3></div></div><div className="share-import"><input value={code} onChange={e=>setCode(e.target.value.toUpperCase())} maxLength={8} placeholder="8-character code"/><button onClick={importCode}>Import</button></div>{message&&<div className="status-message">{message}</div>}</section>
+  return <section className="simple-card"><div className="section-heading"><div><span className="card-label">SHARE / IMPORT</span><h3>Import a Workset code</h3></div></div><div className="share-import"><input value={code} onChange={e=>setCode(e.target.value.toUpperCase())} maxLength={8} placeholder="8-character code"/><button onClick={importCode}>Import</button></div>{message&&<div className="status-message">{message}</div>}</section>
 }
 
 export function AccountSecurityPanel({session,appUrl}) {
@@ -385,15 +385,15 @@ export function BackupRestorePanel({session}) {
       const {data:rows,error}=await q
       if(!error)data.tables[table]=rows||[]
     }
-    download(`WorkoutBoard-backup-${today()}.json`,JSON.stringify(data,null,2));setBusy(false);setMessage('Backup downloaded.')
+    download(`Workset-backup-${today()}.json`,JSON.stringify(data,null,2));setBusy(false);setMessage('Backup downloaded.')
   }
   const restore=async e=>{
     const file=e.target.files?.[0];if(!file)return
-    if(!window.confirm('Merge this WorkoutBoard backup into the current account?')){e.target.value='';return}
+    if(!window.confirm('Merge this Workset backup into the current account?')){e.target.value='';return}
     setBusy(true)
     try{
       const data=JSON.parse(await file.text())
-      if(data.format!=='WorkoutBoard Backup')throw new Error('Not a WorkoutBoard backup file')
+      if(data.format!=='WorkoutBoard Backup')throw new Error('Not a compatible Workset backup file')
       for(const table of backupTables){
         const rows=data.tables?.[table]||[];if(!rows.length)continue
         const fixed=rows.map(row=>table==='profiles'?{...row,id:session.user.id}:{...row,user_id:session.user.id})
@@ -404,7 +404,7 @@ export function BackupRestorePanel({session}) {
     }catch(err){setMessage(err.message)}
     setBusy(false);e.target.value=''
   }
-  return <section className="simple-card"><div className="section-heading"><div><span className="card-label">BACKUP / RESTORE</span><h3>Full WorkoutBoard backup package</h3></div></div><p className="helper-text">JSON is used here because CSV cannot restore nested workouts, programs, board cards, and settings reliably.</p><div className="backup-actions"><button onClick={backup} disabled={busy}>Download full backup</button><button onClick={()=>fileRef.current?.click()} disabled={busy}>Restore backup</button><input ref={fileRef} type="file" accept="application/json,.json" onChange={restore} hidden/></div>{message&&<div className="status-message">{message}</div>}</section>
+  return <section className="simple-card"><div className="section-heading"><div><span className="card-label">BACKUP / RESTORE</span><h3>Full Workset backup package</h3></div></div><p className="helper-text">JSON is used here because CSV cannot restore nested workouts, programs, board cards, and settings reliably.</p><div className="backup-actions"><button onClick={backup} disabled={busy}>Download full backup</button><button onClick={()=>fileRef.current?.click()} disabled={busy}>Restore backup</button><input ref={fileRef} type="file" accept="application/json,.json" onChange={restore} hidden/></div>{message&&<div className="status-message">{message}</div>}</section>
 }
 
 export function AdminDashboardSummary() {
@@ -457,7 +457,7 @@ export function WorkoutSettingsPanel({session}) {
     <div className="section-heading"><div><span className="card-label">SETTINGS</span><h3>Workout preferences</h3></div></div>
 
     <div className="settings-grid">
-      <label className="settings-row"><div><strong>Weight units</strong><span>WorkoutBoard currently stores program and training weights in pounds.</span></div><select value="lb" disabled><option value="lb">Pounds (lb)</option></select></label>
+      <label className="settings-row"><div><strong>Weight units</strong><span>Workset currently stores program and training weights in pounds.</span></div><select value="lb" disabled><option value="lb">Pounds (lb)</option></select></label>
 
       <label className="settings-row"><div><strong>Keep screen awake</strong><span>Default for running workout timers.</span></div><input type="checkbox" checked={wake} onChange={e=>persist('wb-setting-wake-lock',e.target.checked,setWake)}/></label>
 

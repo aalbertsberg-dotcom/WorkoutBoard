@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "WorkoutBoard",
-  "short_name": "WorkoutBoard",
-  "description": "Workout planning, tracking, progress, and shared training sessions.",
+  "name": "Workset",
+  "short_name": "Workset",
+  "description": "Training programs, workout tracking, progress, coaching, and shared sessions.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
@@ -12,21 +12,21 @@
   "prefer_related_applications": false,
   "icons": [
     {
-      "src": "./icon.svg",
+      "src": "./workset-icon-192.png",
       "sizes": "192x192",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "./icon.svg",
+      "src": "./workset-icon-512.png",
       "sizes": "512x512",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "./icon.svg",
+      "src": "./workset-icon-maskable-512.png",
       "sizes": "512x512",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "maskable"
     }
   ]

@@ -599,7 +599,7 @@ export function PlanPage({
       source:id==='andy-531-original-6' ? 'Andy_531 Spreadsheet.xlsx'
         : id==='new-531-leader-anchor-11' ? 'NEW 531 PROGRAM.docx'
         : id==='andy-bbb-jokers-11' ? 'ANDY 531-Boring But Big-Jokers.xlsx'
-        : 'WorkoutBoard built-in',
+        : 'Workset built-in',
       dbName:p.dbName,
       transcriptionStatus:'full',
       getWeek:(targetWeek)=>lifts.map(liftName=>{
@@ -684,8 +684,8 @@ export function PlanPage({
         kind:'shared',
         name:snap.name||data.title||'Shared program',
         shortName:snap.name||data.title||'Shared program',
-        source:snap.source||'Shared WorkoutBoard link',
-        description:snap.description||'Shared WorkoutBoard program.',
+        source:snap.source||'Shared Workset link',
+        description:snap.description||'Shared Workset program.',
         category:snap.category||'Shared',
         difficulty:snap.difficulty||'',
         weeksCount:Number(snap.weeksCount||snap.weeks?.length||1),
@@ -911,7 +911,7 @@ export function PlanPage({
 
   const nativeShareProgram = async () => {
     if(!shareLink||!navigator.share)return
-    try{await navigator.share({title:preview?.name||'WorkoutBoard program',text:'WorkoutBoard program',url:shareLink})}catch{}
+    try{await navigator.share({title:preview?.name||'Workset program',text:'Workset program',url:shareLink})}catch{}
   }
 
   const startTracking = async p => {
@@ -1356,10 +1356,10 @@ export function FeedbackPanel({session,profile}) {
 
   return <section className="simple-card feedback-card">
     <div className="section-heading">
-      <div><span className="card-label">FEEDBACK</span><h3>Help make WorkoutBoard better</h3></div>
+      <div><span className="card-label">FEEDBACK</span><h3>Help make Workset better</h3></div>
       <button type="button" className="feedback-toggle" onClick={()=>setOpen(v=>!v)}>{open?'Close':'Send feedback'}</button>
     </div>
-    <p className="feedback-plea">WorkoutBoard is being built for you. If something feels confusing, broken, annoying, or missing, tell me. I can’t make it better without your help.</p>
+    <p className="feedback-plea">Workset is being built for you. If something feels confusing, broken, annoying, or missing, tell me. I can’t make it better without your help.</p>
     {open&&<form className="feedback-form" onSubmit={submit}>
       <label>What kind of feedback?
         <select value={category} onChange={e=>setCategory(e.target.value)}>
@@ -1538,7 +1538,7 @@ export function AdminPanel({ programs }) {
         <div className="section-heading"><div><span className="card-label">FEEDBACK INBOX</span><h3>User feedback</h3></div><b className="feedback-count">{feedback.filter(row=>row.status!=='resolved').length}</b></div>
         {feedback.length?<div className="feedback-admin-list">{feedback.map(row=><article className={'feedback-admin-item '+(row.status==='resolved'?'resolved':'')} key={row.id}>
           <div className="feedback-admin-meta"><span className={'feedback-type '+row.category}>{row.category}</span><span>{fmtFeedbackTime(row.created_at)}</span></div>
-          <strong>{row.display_name||row.email||'WorkoutBoard user'}</strong>
+          <strong>{row.display_name||row.email||'Workset user'}</strong>
           <p>{row.message}</p>
           <small>{row.email||''}{row.page?' · '+row.page:''}</small>
           {row.status!=='resolved'&&<button className="secondary-action" onClick={()=>resolveFeedback(row.id)}>Mark resolved</button>}
@@ -1546,7 +1546,7 @@ export function AdminPanel({ programs }) {
         {feedbackMessage&&<div className="status-message">{feedbackMessage}</div>}
       </section>
       <section className="simple-card">
-        <div className="section-heading"><div><span className="card-label">ADMIN</span><h3>WorkoutBoard users</h3></div></div>
+        <div className="section-heading"><div><span className="card-label">ADMIN</span><h3>Workset users</h3></div></div>
         <div className="admin-user-list">{users.map(user=><button className="admin-user-row" key={user.user_id} onClick={()=>openUser(user)}>
           <div><strong>{user.display_name||'Unnamed user'}</strong><span>{user.email}</span></div>
           <div><strong>{user.workout_count||0} workouts</strong><span>{fmtDate(user.last_workout)}</span></div>
@@ -1584,7 +1584,7 @@ export function AdminPanel({ programs }) {
 
     <section className="simple-card">
       <div className="section-heading"><div><span className="card-label">1 REP MAXES</span><h3>Coach training numbers</h3></div></div>
-      <p className="helper-text">These are the athlete's true saved 1RMs. WorkoutBoard calculates each program's training max and working percentages from them.</p>
+      <p className="helper-text">These are the athlete's true saved 1RMs. Workset calculates each program's training max and working percentages from them.</p>
       <div className="admin-edit-max-grid">
         {['squat','bench','deadlift','press'].map(name=><label key={name}><span>{name[0].toUpperCase()+name.slice(1)}</span><input type="number" inputMode="decimal" value={maxDraft[name]} onChange={e=>setMaxDraft(v=>({...v,[name]:e.target.value}))} placeholder="—"/></label>)}
       </div>

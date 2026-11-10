@@ -20,6 +20,30 @@ input, select, textarea { font-size:16px; }
   padding:2px 2px 12px;
 }
 .eyebrow { color:#8fa3bf; font-size:10px; font-weight:900; letter-spacing:.14em; }
+.brand-lockup {
+  display:flex;
+  align-items:center;
+  gap:7px;
+  min-height:24px;
+}
+.brand-lockup img {
+  width:22px;
+  height:22px;
+  border-radius:6px;
+  flex:0 0 auto;
+}
+.brand-lockup span {
+  color:#f8fafc;
+  font-size:14px;
+  font-weight:950;
+  font-style:italic;
+  letter-spacing:-.035em;
+  line-height:1;
+}
+.brand-lockup b {
+  color:#a3ff12;
+  font-weight:950;
+}
 h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
 .mini-user { color:#cbd5e1; font-size:13px; font-weight:800; }
 
