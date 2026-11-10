@@ -1138,6 +1138,10 @@ function App() {
   const [participants,setParticipants] = useState([])
   const [sessionResults,setSessionResults] = useState([])
   const [sessionOneRms,setSessionOneRms] = useState({})
+  const [managedAthletes,setManagedAthletes] = useState([])
+  const [selectedManagedAthleteIds,setSelectedManagedAthleteIds] = useState([])
+  const [managedAthleteEditorOpen,setManagedAthleteEditorOpen] = useState(false)
+  const [managedAthleteDraft,setManagedAthleteDraft] = useState({id:null,display_name:'',Squat:'',Bench:'',Deadlift:'',Press:''})
   const [joinCode,setJoinCode] = useState('')
   const [togetherMessage,setTogetherMessage] = useState('')
   const [sharedWorkoutActive,setSharedWorkoutActive] = useState(false)
@@ -1977,6 +1981,67 @@ function App() {
     return()=>{cancelled=true}
   },[session?.user?.id,profile?.id,togetherReady])
 
+  const refreshManagedAthletes = async () => {
+    if(!session?.user)return
+    const {data,error}=await supabase.from('managed_athletes')
+      .select('*').eq('owner_user_id',session.user.id).order('updated_at',{ascending:false})
+    if(error)return
+    setManagedAthletes((data||[]).map(row=>({
+      id:row.id,
+      display_name:row.display_name,
+      Squat:row.squat??'',
+      Bench:row.bench??'',
+      Deadlift:row.deadlift??'',
+      Press:row.press??'',
+    })))
+  }
+
+  useEffect(()=>{
+    if(!session?.user)return
+    refreshManagedAthletes()
+  },[session?.user?.id])
+
+  const openManagedAthleteEditor = athlete => {
+    setManagedAthleteDraft(athlete ? {...athlete} : {id:null,display_name:'',Squat:'',Bench:'',Deadlift:'',Press:''})
+    setManagedAthleteEditorOpen(true)
+  }
+
+  const saveManagedAthlete = async () => {
+    if(!session?.user)return
+    const name=String(managedAthleteDraft.display_name||'').trim()
+    if(!name){setTogetherMessage('Partner name is required.');return}
+    const num=value=>value===''?null:round2(Math.max(0,Number(value)||0))
+    const payload={
+      owner_user_id:session.user.id,
+      display_name:name,
+      squat:num(managedAthleteDraft.Squat),
+      bench:num(managedAthleteDraft.Bench),
+      deadlift:num(managedAthleteDraft.Deadlift),
+      press:num(managedAthleteDraft.Press),
+      updated_at:new Date().toISOString(),
+    }
+    const query=managedAthleteDraft.id
+      ? supabase.from('managed_athletes').update(payload).eq('id',managedAthleteDraft.id).eq('owner_user_id',session.user.id)
+      : supabase.from('managed_athletes').insert(payload)
+    const {error}=await query
+    if(error){setTogetherMessage(error.message);return}
+    setManagedAthleteEditorOpen(false)
+    setManagedAthleteDraft({id:null,display_name:'',Squat:'',Bench:'',Deadlift:'',Press:''})
+    setTogetherMessage(name+' saved.')
+    await refreshManagedAthletes()
+  }
+
+  const deleteManagedAthlete = async athlete => {
+    if(!session?.user||!athlete?.id)return
+    if(!window.confirm('Remove '+athlete.display_name+' from your managed training partners?'))return
+    const {error}=await supabase.from('managed_athletes').delete()
+      .eq('id',athlete.id).eq('owner_user_id',session.user.id)
+    if(error){setTogetherMessage(error.message);return}
+    setSelectedManagedAthleteIds(ids=>ids.filter(id=>id!==athlete.id))
+    setTogetherMessage(athlete.display_name+' removed.')
+    await refreshManagedAthletes()
+  }
+
   const refreshTogether = async sessionId => {
     if (!sessionId) return
     const [{data:sessionData},{data:people},{data:results},{data:maxRows}] = await Promise.all([
@@ -2393,6 +2458,18 @@ function App() {
       }
     }
 
+    const selectedManagedPartners=managedAthletes
+      .filter(athlete=>selectedManagedAthleteIds.includes(athlete.id))
+      .map(athlete=>({
+        id:athlete.id,
+        display_name:athlete.display_name,
+        Squat:athlete.Squat??'',
+        Bench:athlete.Bench??'',
+        Deadlift:athlete.Deadlift??'',
+        Press:athlete.Press??'',
+      }))
+    sharedMeta={...(sharedMeta||{}),managed_partners:selectedManagedPartners}
+
     let created = null
     for (let attempt=0; attempt<4 && !created; attempt++) {
       const code = randomJoinCode()
@@ -2604,6 +2681,17 @@ function App() {
   const ownSessionResult = sessionResults.find(result => result.user_id === session?.user?.id)
   const sharedHostResult = activeSession ? sessionResults.find(result => result.user_id === activeSession.host_user_id) : null
   const sharedMeta = sharedHostResult?.workout?.shared_meta || null
+  const sharedManagedPartners=sharedMeta?.managed_partners||[]
+  const sharedManagedPartnerOneRms=Object.fromEntries(sharedManagedPartners.map(athlete=>[
+    'managed:'+athlete.id,
+    {
+      displayName:athlete.display_name,
+      Squat:athlete.Squat??'',
+      Bench:athlete.Bench??'',
+      Deadlift:athlete.Deadlift??'',
+      Press:athlete.Press??'',
+    }
+  ]))
   const combinedSessionVolume = sessionResults.reduce((sum,result) => sum + Number(result.total_volume || 0),0)
   const maxWeeklyVolume = Math.max(1,...progress.weekly.map(item => item.volume))
   const nextMainIndex = log.main?.findIndex(set=>!set.done) ?? -1
@@ -2649,7 +2737,7 @@ function App() {
             <PlannedWorkoutRunner
               planned={plannedToday}
               sharedSessionId={sharedWorkoutActive&&activeSession ? activeSession.id : null}
-              partnerOneRms={sharedWorkoutActive ? sessionOneRms : {}}
+              partnerOneRms={sharedWorkoutActive ? {...sessionOneRms,...sharedManagedPartnerOneRms} : {}}
               onCancelled={async() => {
                 setPlannedToday(null)
                 setShowRegularToday(false)
@@ -3024,6 +3112,27 @@ function App() {
               </div>
             ) : !activeSession ? (
               <>
+                <section className="simple-card managed-athletes-card">
+                  <div className="section-heading">
+                    <div><span className="card-label">TRAINING PARTNERS</span><h3>Managed partners</h3></div>
+                    <button type="button" className="secondary-action compact-action" onClick={()=>openManagedAthleteEditor(null)}>+ Partner</button>
+                  </div>
+                  <p className="helper-text">For someone who doesn't want their own WorkoutBoard account. You keep their 1RMs and can include their target weights in Together workouts.</p>
+                  {managedAthletes.length>0?<div className="managed-athlete-list">
+                    {managedAthletes.map(athlete=><div key={athlete.id} className="managed-athlete-row">
+                      <div><strong>{athlete.display_name}</strong><span>{['Squat','Bench','Deadlift','Press'].filter(lift=>Number(athlete[lift]||0)>0).map(lift=>lift+' '+Number(athlete[lift]).toFixed(2)).join(' · ')||'No 1RMs saved yet'}</span></div>
+                      <div><button type="button" onClick={()=>openManagedAthleteEditor(athlete)}>Edit</button><button type="button" onClick={()=>deleteManagedAthlete(athlete)}>×</button></div>
+                    </div>)}
+                  </div>:<p className="helper-text">No managed partners yet.</p>}
+                  {managedAthleteEditorOpen&&<div className="managed-athlete-editor">
+                    <label><span>Name</span><input value={managedAthleteDraft.display_name} onChange={e=>setManagedAthleteDraft(v=>({...v,display_name:e.target.value}))} placeholder="Tracey"/></label>
+                    <div className="managed-athlete-max-grid">
+                      {lifts.map(lift=><label key={lift}><span>{lift}</span><div className="input-with-unit"><input type="number" inputMode="decimal" value={managedAthleteDraft[lift]} onChange={e=>setManagedAthleteDraft(v=>({...v,[lift]:e.target.value===''?'':Math.max(0,Number(e.target.value)||0)}))} placeholder="0"/><b>lb</b></div></label>)}
+                    </div>
+                    <div className="managed-athlete-editor-actions"><button type="button" className="secondary-action" onClick={()=>setManagedAthleteEditorOpen(false)}>Cancel</button><button type="button" className="primary-action" onClick={saveManagedAthlete}>Save partner</button></div>
+                  </div>}
+                </section>
+
                 <section className="together-start-card">
                   <span className="card-label">HOST A WORKOUT</span>
                   <h2>1. Create a session code</h2>
@@ -3033,6 +3142,13 @@ function App() {
                     <label><span>Week</span><select value={togetherWeek} onChange={e=>{setTogetherWeek(Number(e.target.value));setTogetherWorkoutIndex(0)}}>{Array.from({length:Number(togetherProgramChoice?.weeksCount||1)},(_,i)=>i+1).map(n=><option key={n} value={n}>Week {n}</option>)}</select></label>
                     <label><span>Workout</span><select value={togetherWorkoutIndex} onChange={e=>setTogetherWorkoutIndex(Number(e.target.value))}>{togetherWorkoutChoices.map((d,i)=><option key={i} value={i}>{d.title}</option>)}</select></label>
                   </div>
+                  {managedAthletes.length>0&&<div className="managed-partner-picker">
+                    <span>Include managed partner targets</span>
+                    <div>{managedAthletes.map(athlete=><label key={athlete.id}>
+                      <input type="checkbox" checked={selectedManagedAthleteIds.includes(athlete.id)} onChange={e=>setSelectedManagedAthleteIds(ids=>e.target.checked?[...ids,athlete.id]:ids.filter(id=>id!==athlete.id))}/>
+                      <b>{athlete.display_name}</b>
+                    </label>)}</div>
+                  </div>}
                   <div className="together-workout-preview"><strong>{togetherProgramChoice?.shortName||'Choose a program'}</strong><span>Week {togetherWeek} · {togetherWorkoutChoices[togetherWorkoutIndex]?.title||'Choose workout'}</span></div>
                   <button className="primary-action" disabled={!togetherProgramChoice||!togetherWorkoutChoices.length} onClick={createTogetherSession}>Create my 6-character code</button>
                 </section>
@@ -3063,7 +3179,7 @@ function App() {
                 </section>
 
                 <section className="summary-grid together-summary">
-                  <div><span>People</span><strong>{participants.length}</strong></div>
+                  <div><span>People</span><strong>{participants.length+sharedManagedPartners.length}</strong></div>
                   <div><span>Finished</span><strong>{sessionResults.filter(r => r.completed_at).length}</strong></div>
                   <div><span>Combined volume</span><strong>{formatWeight(combinedSessionVolume)} lb</strong></div>
                 </section>
@@ -3111,6 +3227,10 @@ function App() {
                         </div>
                       )
                     })}
+                    {sharedManagedPartners.map(athlete=><div className="partner-row managed" key={'managed:'+athlete.id}>
+                      <div><strong>{athlete.display_name}</strong><span>Managed partner · targets shown in workout</span></div>
+                      <div><strong>—</strong><span>No login required</span></div>
+                    </div>)}
                   </div>
                 </section>
 
