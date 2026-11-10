@@ -9,7 +9,7 @@ createRoot(document.getElementById('root')).render(
   </StrictMode>
 )
 
-// Disable the offline service worker while WorkoutBoard is under active development.
+// Disable the offline service worker while Workset is under active development.
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
     try {
