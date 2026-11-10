@@ -398,11 +398,21 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
     onCancelled?.({planned,sharedSessionId})
   }
 
+  const baselineLiftForExercise=item=>{
+    if(item?.strength_baseline_lift)return item.strength_baseline_lift
+    const name=String(item?.name||'').trim().toLowerCase()
+    if(/^(back\s+)?squat$/.test(name))return 'Squat'
+    if(/^(barbell\s+)?bench(\s+press)?$/.test(name))return 'Bench'
+    if(/^(conventional\s+|sumo\s+)?deadlift$/.test(name))return 'Deadlift'
+    if(/^(overhead\s+|strict\s+|military\s+)?press$/.test(name))return 'Press'
+    return null
+  }
+
   const baselineResults=useMemo(()=>{
     if(!workout?.strength_baseline)return []
     const rows=[]
     for(const item of workout.exercises||[]){
-      const lift=item.strength_baseline_lift
+      const lift=baselineLiftForExercise(item)
       if(!lift)continue
       let best=null
       for(const set of item.setProgress||[]){
