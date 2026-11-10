@@ -1,0 +1,30 @@
+name: Workset Brand Build Check
+
+on:
+  push:
+    branches: [brand/workset-visible-rename]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Build
+        env:
+          VITE_SUPABASE_URL: https://lplybuzlgowxeszkvtqe.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+        run: npm run build
+      - name: Verify brand assets
+        run: |
+          test -f public/workset-icon-32.png
+          test -f public/workset-icon-180.png
+          test -f public/workset-icon-192.png
+          test -f public/workset-icon-512.png
+          test -f public/workset-icon-maskable-512.png
