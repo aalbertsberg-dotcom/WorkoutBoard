@@ -1164,6 +1164,7 @@ function App() {
   const [progressStartSection,setProgressStartSection] = useState('Overview')
   const [completedTrainingSessions,setCompletedTrainingSessions] = useState([])
   const [programCompletionPrompt,setProgramCompletionPrompt] = useState(null)
+  const [oneRmNotice,setOneRmNotice] = useState(null)
 
   const personalProgram = programs[activeProgram]
   const sharedProgramId = activeSession ? (dbNameToProgram[activeSession.program] || activeProgram) : activeProgram
@@ -1948,8 +1949,8 @@ function App() {
   const saveOneRepMaxes = async next => {
     const cleaned=Object.fromEntries(lifts.map(name=>[name,next[name]===''?'':round2(Math.max(0,Number(next[name])||0))]))
     setOneRepMaxes(cleaned)
-    if (!session?.user) return
-    await Promise.all([
+    if (!session?.user) return {error:null}
+    const results=await Promise.all([
       supabase.auth.updateUser({data:{...session.user.user_metadata,one_rep_maxes:cleaned}}),
       supabase.from('one_rep_maxes').upsert({
         user_id:session.user.id,
@@ -1968,11 +1969,19 @@ function App() {
         updated_at:new Date().toISOString(),
       })
     ])
+    return {error:results.find(result=>result?.error)?.error||null}
   }
 
-  const setOneRm = (name,raw) => {
+  const setOneRm = async (name,raw,{notify=false}={}) => {
     const value = raw === '' ? '' : round2(Math.max(0,Number(raw)))
-    saveOneRepMaxes({...oneRepMaxes,[name]:value})
+    const result=await saveOneRepMaxes({...oneRepMaxes,[name]:value})
+    if(notify){
+      const notice=result?.error
+        ? {type:'error',text:'Could not save '+name+' 1RM.'}
+        : {type:'success',name,value,text:name+' 1RM saved at '+Number(value).toFixed(2)+' lb'}
+      setOneRmNotice(notice)
+      setTimeout(()=>setOneRmNotice(current=>current===notice?null:current),2800)
+    }
   }
 
   const refreshOneRmCandidates = async () => {
@@ -3110,8 +3119,10 @@ function App() {
                     {lifts.map(name=><option key={name} value={name}>{name}</option>)}
                   </select>
                 </label>
-                <button className="wide-button" type="button" disabled={!oneRmLift||!oneRmRounded} onClick={()=>setOneRm(oneRmLift,oneRmRounded)}>
-                  {oneRmLift?`Add ${oneRmRounded} lb to ${oneRmLift} 1RM`:'Choose a lift to save this estimate'}
+                <button className="wide-button" type="button" disabled={!oneRmLift||!oneRmRounded} onClick={()=>setOneRm(oneRmLift,oneRmRounded,{notify:true})}>
+                  {oneRmNotice?.type==='success'&&oneRmNotice.name===oneRmLift&&Number(oneRmNotice.value)===Number(oneRmRounded)
+                    ? `✓ Saved ${oneRmLift} at ${oneRmRounded} lb`
+                    : oneRmLift?`Add ${oneRmRounded} lb to ${oneRmLift} 1RM`:'Choose a lift to save this estimate'}
                 </button>
               </div>}
             </section>
@@ -3122,7 +3133,7 @@ function App() {
               <div className="one-rm-summary">
                 {lifts.map(name=>{
                   const candidate=calculatedOneRms[name]
-                  return <div key={name}><span>{name}</span><strong>{candidate?candidate.value.toFixed(2)+' lb':'—'}</strong>{candidate&&<small>{candidate.weight} × {candidate.reps}</small>}{candidate&&<button type="button" onClick={()=>setOneRm(name,candidate.value)}>Use</button>}</div>
+                  return <div key={name}><span>{name}</span><strong>{candidate?candidate.value.toFixed(2)+' lb':'—'}</strong>{candidate&&<small>{candidate.weight} × {candidate.reps}</small>}{candidate&&<button type="button" onClick={()=>setOneRm(name,candidate.value,{notify:true})}>Use</button>}</div>
                 })}
               </div>
               <p className="helper-text"><strong>Would you like to test this now?</strong> Pick a baseline path.</p>
@@ -3196,6 +3207,8 @@ function App() {
         <span>New feedback · {feedbackToast.category}</span>
         <strong>{String(feedbackToast.message||'').slice(0,120)}</strong>
       </button>}
+
+      {oneRmNotice&&<div className={'one-rm-save-toast '+(oneRmNotice.type==='error'?'error':'success')} role="status">{oneRmNotice.type==='success'?'✓ ':''}{oneRmNotice.text}</div>}
 
       {programCompletionPrompt&&<div className="same-day-sheet-backdrop" onClick={()=>setProgramCompletionPrompt(null)}>
         <section className="same-day-sheet" onClick={e=>e.stopPropagation()}>
