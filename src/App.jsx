@@ -3474,8 +3474,8 @@ function App() {
             <FeedbackPanel session={session} profile={profile} />
 
             <section className="simple-card">
-              <div className="section-heading"><div><span className="card-label">APP</span><h3>Install Workset</h3></div></div>
-              <p className="helper-text">Install it on your phone or desktop for a full-screen app experience and faster reopening.</p>
+              <div className="section-heading"><div><span className="card-label">APP</span><h3>Install & update Workset</h3></div></div>
+              <p className="helper-text">Install Workset, check for a new release, or force a clean refresh if the installed app ever looks stale.</p>
               <InstallAppButton />
             </section>
 
