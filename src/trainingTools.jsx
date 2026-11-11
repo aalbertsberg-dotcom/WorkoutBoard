@@ -228,6 +228,10 @@ function measurementValue(row,key) {
   return value
 }
 
+function hasCompleteMeasurementSet(row={}) {
+  return circumferenceFields.every(([key])=>Number(measurementValue(row,key)||0)>0)
+}
+
 function totalInches(row={}) {
   return circumferenceFields.reduce((sum,[key])=>{
     const value=Number(measurementValue(row,key)||0)
@@ -432,6 +436,8 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
   }
 
   const latest=measurements[0]
+  const latestBodyMeasurement=measurements.find(row=>editableMeasurementFields.some(([key])=>Number(measurementValue(row,key)||0)>0))||null
+  const summaryMeasurement=todayMeasurementCount?todayMeasurement:latestBodyMeasurement
   return <section className="progress-toolbox">
     {!onlyTab&&<div className="segmented toolbox-tabs">
       {['PRs','Exercises','Calendar','Goals','Measurements'].map(x=><button key={x} className={tab===x?'active':''} onClick={()=>setTab(x)}>{x}</button>)}
@@ -479,7 +485,7 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
 
     {activeTab==='Measurements'&&<section className="measurement-workspace">
       <section className="simple-card">
-        <div className="section-heading"><div><span className="card-label">BODY MEASUREMENTS</span><h3>{latest?('Latest · '+new Date(latest.measured_on+'T12:00:00').toLocaleDateString()):'Add a baseline'}</h3></div>{latest&&<b className="measurement-total-badge">{totalInches(latest)?totalInches(latest).toFixed(2)+' in total':''}</b>}</div>
+        <div className="section-heading"><div><span className="card-label">BODY MEASUREMENTS</span><h3>{summaryMeasurement?('Latest · '+new Date(summaryMeasurement.measured_on+'T12:00:00').toLocaleDateString()):'Add a baseline'}</h3></div>{summaryMeasurement&&hasCompleteMeasurementSet(summaryMeasurement)&&<b className="measurement-total-badge">{totalInches(summaryMeasurement).toFixed(2)} in total</b>}</div>
         <div className={'measurement-today-state '+(todayMeasurementCount?'active':'')}>
           <strong>{todayMeasurementCount?("Updating today's measurements · "+todayMeasurementCount+" saved"):'No body measurements saved today'}</strong>
           <span>Tap any measurement to change it. Today's value is used first; otherwise the last saved value is preloaded.</span>
@@ -551,8 +557,8 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
 
           <div className="measurement-total-preview">
             <span>Total inches</span>
-            <strong>{totalInches(measurement)?totalInches(measurement).toFixed(2):'—'}</strong>
-            <small>Automatically sums forearms, neck, arms, waist, hips, thighs, calves and chest.</small>
+            <strong>{hasCompleteMeasurementSet(measurement)?totalInches(measurement).toFixed(2):'—'}</strong>
+            <small>{hasCompleteMeasurementSet(measurement)?'Forearms, neck, arms, waist, hips, thighs, calves and chest.':'Total inches appears after all circumference fields are filled.'}</small>
           </div>
           <button className="primary-action" disabled={measurementSaveStatus==='Saving…'}>{measurementSaveStatus==='Saving…'?'Saving…':measurementSaveStatus==='Saved'?`✓ Saved for ${new Date(measurement.measured_on+'T12:00:00').toLocaleDateString()}`:'Save measurements'}</button>
           {measurementSaveStatus==='Saved'&&<div className="measurement-save-success">Saved values stay loaded so you can see or update this date.</div>}
@@ -566,7 +572,7 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
           {measurements.map(row=><details className="measurement-history-row" key={row.id}>
             <summary>
               <div><strong>{new Date(row.measured_on+'T12:00:00').toLocaleDateString()}</strong><span>{row.bodyweight!=null?row.bodyweight+' lb':'No weight'}</span></div>
-              <div><strong>{totalInches(row)?totalInches(row).toFixed(2)+' in':'—'}</strong><span>Total inches</span></div>
+              <div><strong>{hasCompleteMeasurementSet(row)?totalInches(row).toFixed(2)+' in':'—'}</strong><span>Total inches</span></div>
             </summary>
             <div className="measurement-history-detail">
               {circumferenceFields.map(([key,label])=>{
