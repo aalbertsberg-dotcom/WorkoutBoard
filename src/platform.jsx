@@ -124,6 +124,7 @@ export function PlatformProgress({
   const [progressSection,setProgressSection] = useState(initialSection)
   const [quickWeight,setQuickWeight] = useState('')
   const [quickWeightStatus,setQuickWeightStatus] = useState('')
+  const [quickWeightSavedValue,setQuickWeightSavedValue] = useState(null)
   const [bodyTrendRange,setBodyTrendRange] = useState('3M')
   const [bodyTrendMetric,setBodyTrendMetric] = useState('waist')
 
@@ -208,6 +209,7 @@ export function PlatformProgress({
   ])
   let activeWeekStreak=0
   const cursor=startOfWeek()
+  if(!activeWeeks.has(isoDate(cursor)))cursor.setDate(cursor.getDate()-7)
   while(activeWeeks.has(isoDate(cursor))){
     activeWeekStreak++
     cursor.setDate(cursor.getDate()-7)
@@ -354,9 +356,11 @@ export function PlatformProgress({
     e.preventDefault()
     const value=Number(quickWeight)
     if(!session?.user||!Number.isFinite(value)||value<=0){
+      setQuickWeightSavedValue(null)
       setQuickWeightStatus('Enter a valid bodyweight.')
       return
     }
+    setQuickWeightSavedValue(null)
     setQuickWeightStatus('Saving…')
     const date=localDateKey()
     const {data:existing}=await supabase.from('body_measurements').select('*').eq('user_id',session.user.id).eq('measured_on',date).maybeSingle()
@@ -367,9 +371,11 @@ export function PlatformProgress({
       bodyweight:value,
     },{onConflict:'user_id,measured_on'})
     if(error){
+      setQuickWeightSavedValue(null)
       setQuickWeightStatus(error.message)
       return
     }
+    setQuickWeightSavedValue(value)
     setQuickWeight('')
     setQuickWeightStatus('Saved.')
     await loadData()
@@ -385,7 +391,7 @@ export function PlatformProgress({
       <section className="summary-grid progress-home-kpis progress-summary-kpis">
         <div><span>Workouts this month</span><strong>{thisMonth}</strong></div>
         <div><span>30-day volume</span><strong>{formatWeight(volume30)} lb</strong></div>
-        <div><span>Training streak</span><strong>{activeWeekStreak} wk</strong></div>
+        <div><span>Consecutive weeks</span><strong>{activeWeekStreak} wk</strong><small style={{display:'block',marginTop:4,color:'#74849c',fontSize:9,lineHeight:1.25}}>1+ completed workout each week</small></div>
         <div className="progress-weight-kpi"><span>Current weight</span><strong>{latestBodyweight?latestBodyweight+' lb':'—'}</strong><button type="button" onClick={onOpenWeight}>Log weight</button></div>
       </section>
       <div className="progress-summary-pr">
@@ -411,7 +417,7 @@ export function PlatformProgress({
         <section className="summary-grid progress-home-kpis">
           <div><span>Workouts this month</span><strong>{thisMonth}</strong></div>
           <div><span>30-day volume</span><strong>{formatWeight(volume30)} lb</strong></div>
-          <div><span>Training streak</span><strong>{activeWeekStreak} wk</strong></div>
+          <div><span>Consecutive weeks</span><strong>{activeWeekStreak} wk</strong><small style={{display:'block',marginTop:4,color:'#74849c',fontSize:9,lineHeight:1.25}}>1+ completed workout each week</small></div>
           <div><span>Current weight</span><strong>{latestBodyweight?latestBodyweight+' lb':'—'}</strong></div>
         </section>
 
@@ -468,11 +474,11 @@ export function PlatformProgress({
         <section className="simple-card quick-weight-card">
           <div className="section-heading"><div><span className="card-label">WEIGHT</span><h3>Log today's weight</h3></div><strong>{latestBodyweight?latestBodyweight+' lb':'No weight yet'}</strong></div>
           <form className="quick-weight-form" onSubmit={saveQuickWeight}>
-            <div className="input-with-unit"><input type="number" step="0.1" inputMode="decimal" value={quickWeight} onChange={e=>setQuickWeight(e.target.value)} placeholder={latestBodyweight||'Weight'}/><b>lb</b></div>
-            <button className="primary-action" disabled={!quickWeight}>Save weight</button>
+            <div className="input-with-unit"><input type="number" step="0.1" inputMode="decimal" value={quickWeight} onChange={e=>{setQuickWeight(e.target.value);setQuickWeightStatus('');setQuickWeightSavedValue(null)}} placeholder={latestBodyweight||'Weight'}/><b>lb</b></div>
+            <button type="submit" className="primary-action" disabled={!quickWeight||quickWeightStatus==='Saving…'} aria-live="polite">{quickWeightStatus==='Saving…'?'Saving…':quickWeightStatus==='Saved.'?`✓ ${quickWeightSavedValue} lb saved`:'Save weight'}</button>
           </form>
           <p className="helper-text">Saving here adds a dated bodyweight entry and immediately feeds the Weight over time chart.</p>
-          {quickWeightStatus&&<div className="status-message">{quickWeightStatus}</div>}
+          {quickWeightStatus&&quickWeightStatus!=='Saved.'&&quickWeightStatus!=='Saving…'&&<div className="status-message">{quickWeightStatus}</div>}
         </section>
 
         <section className="body-trend-stack">
