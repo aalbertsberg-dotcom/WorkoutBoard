@@ -110,6 +110,8 @@ export function PlatformProgress({
   compact=false,
   onOpenProgress=null,
   onOpenWeight=null,
+  onOpenMeasurements=null,
+  onSectionChange=null,
   trackedProgramInfo=null,
   trackedProgramsInfo=[],
   initialSection='Overview',
@@ -125,10 +127,6 @@ export function PlatformProgress({
   const [quickWeight,setQuickWeight] = useState('')
   const [quickWeightStatus,setQuickWeightStatus] = useState('')
   const [quickWeightSavedValue,setQuickWeightSavedValue] = useState(null)
-  const [quickMeasureKey,setQuickMeasureKey] = useState('waist')
-  const [quickMeasureValue,setQuickMeasureValue] = useState('')
-  const [quickMeasureDate,setQuickMeasureDate] = useState(localDateKey())
-  const [quickMeasureStatus,setQuickMeasureStatus] = useState('')
   const [bodyTrendRange,setBodyTrendRange] = useState('3M')
   const [bodyTrendMetric,setBodyTrendMetric] = useState('waist')
 
@@ -147,6 +145,14 @@ export function PlatformProgress({
   }
 
   useEffect(() => { loadData() },[session?.user?.id,effectiveMode])
+  useEffect(() => { setProgressSection(initialSection) },[initialSection])
+
+  const selectProgressSection=section=>{
+    if(section===progressSection)return
+    setProgressSection(section)
+    onSectionChange?.(section)
+    window.scrollTo({top:0,behavior:'auto'})
+  }
 
   useEffect(() => {
     if(!session?.user || effectiveMode!=='community')return
@@ -356,30 +362,6 @@ export function PlatformProgress({
     return events.sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,3)
   },[progress.completed,flexSessions])
 
-  const saveQuickMeasurement=async e=>{
-    e.preventDefault()
-    const metric=bodyTrendMetrics.find(item=>item.key===quickMeasureKey&&item.key!=='total_inches')
-    const value=Number(quickMeasureValue)
-    if(!session?.user||!metric||!Number.isFinite(value)||value<=0){
-      setQuickMeasureStatus('Enter a valid measurement.')
-      return
-    }
-    const date=quickMeasureDate||localDateKey()
-    setQuickMeasureStatus('Saving…')
-    const {data:existing}=await supabase.from('body_measurements').select('*').eq('user_id',session.user.id).eq('measured_on',date).maybeSingle()
-    const {error}=await supabase.from('body_measurements').upsert({
-      ...(existing||{}),
-      user_id:session.user.id,
-      measured_on:date,
-      [metric.key]:value,
-    },{onConflict:'user_id,measured_on'})
-    if(error){setQuickMeasureStatus(error.message);return}
-    setQuickMeasureStatus(`✓ ${metric.label} saved: ${value} ${metric.unit}`)
-    setQuickMeasureValue('')
-    setBodyTrendMetric(metric.key)
-    await loadData()
-  }
-
   const saveQuickWeight=async e=>{
     e.preventDefault()
     const value=Number(quickWeight)
@@ -426,7 +408,10 @@ export function PlatformProgress({
         <span>Latest PR</span>
         {latestPr?<><strong>{latestPr.label}</strong><b>{latestPr.set?latestPr.set.weight+' × '+latestPr.set.reps:'e1RM '+formatWeight(latestPr.e1rm)}</b></>:<small>No PRs yet — complete weighted sets and they’ll appear here.</small>}
       </div>
-      <button type="button" className="wide-button progress-open-wide" onClick={onOpenProgress}>Open full Progress & Analytics</button>
+      <div className="progress-summary-actions">
+        <button type="button" className="wide-button progress-open-wide" onClick={onOpenProgress}>Open Progress & Analytics</button>
+        <button type="button" className="wide-button progress-measurements-wide" onClick={onOpenMeasurements||onOpenWeight}>Measurements</button>
+      </div>
     </section>
   }
 
@@ -438,7 +423,7 @@ export function PlatformProgress({
 
     {effectiveMode==='mine'?<>
       <div className="progress-section-tabs">
-        {['Overview','Strength','Weight & Measurements','History'].map(section=><button key={section} className={progressSection===section?'active':''} onClick={()=>{setProgressSection(section);window.scrollTo({top:0,behavior:'auto'})}}>{section}</button>)}
+        {['Overview','Strength','Weight & Measurements','History'].map(section=><button key={section} className={progressSection===section?'active':''} onClick={()=>selectProgressSection(section)}>{section}</button>)}
       </div>
 
       {progressSection==='Overview'&&<>
@@ -509,18 +494,6 @@ export function PlatformProgress({
           {quickWeightStatus&&quickWeightStatus!=='Saved.'&&quickWeightStatus!=='Saving…'&&<div className="status-message">{quickWeightStatus}</div>}
         </section>
 
-        <section className="simple-card quick-measure-card">
-          <div className="section-heading"><div><span className="card-label">BODY MEASUREMENT</span><h3>Log one measurement</h3></div></div>
-          <form className="quick-measure-form" onSubmit={saveQuickMeasurement}>
-            <label><span>Measurement</span><select value={quickMeasureKey} onChange={e=>{setQuickMeasureKey(e.target.value);setBodyTrendMetric(e.target.value);setQuickMeasureStatus('')}}>{bodyTrendMetrics.filter(metric=>metric.key!=='total_inches').map(metric=><option key={metric.key} value={metric.key}>{metric.label}</option>)}</select></label>
-            <label><span>Value</span><div className="input-with-unit"><input type="number" step="0.01" inputMode="decimal" value={quickMeasureValue} onChange={e=>{setQuickMeasureValue(e.target.value);setQuickMeasureStatus('')}} placeholder="Enter value"/><b>{(bodyTrendMetrics.find(metric=>metric.key===quickMeasureKey)||{}).unit||'in'}</b></div></label>
-            <label><span>Date</span><input type="date" value={quickMeasureDate} onChange={e=>{setQuickMeasureDate(e.target.value);setQuickMeasureStatus('')}}/></label>
-            <button type="submit" className="primary-action" disabled={!quickMeasureValue||quickMeasureStatus==='Saving…'}>{quickMeasureStatus==='Saving…'?'Saving…':'Save measurement'}</button>
-          </form>
-          <p className="helper-text">Add only what you measured. Saving again on the same date updates that measurement without erasing the others.</p>
-          {quickMeasureStatus&&quickMeasureStatus!=='Saving…'&&<div className={quickMeasureStatus.startsWith('✓')?'measurement-save-success':'status-message'}>{quickMeasureStatus}</div>}
-        </section>
-
         <section className="body-trend-stack">
           <section className="simple-card analytics-chart-card body-trend-card">
             <div className="section-heading"><div><span className="card-label">WEIGHT TREND</span><h3>Your weight over time</h3></div></div>
@@ -535,7 +508,7 @@ export function PlatformProgress({
           </section>
         </section>
 
-        <ProgressToolbox session={session} legacyHistory={progress.completed} flexSessions={flexSessions} formatWeight={formatWeight} onlyTab="Measurements"/>
+        <ProgressToolbox session={session} legacyHistory={progress.completed} flexSessions={flexSessions} formatWeight={formatWeight} onlyTab="Measurements" onMeasurementMetricChange={setBodyTrendMetric} onMeasurementsChanged={loadData}/>
       </>}
 
       {progressSection==='History'&&<>
