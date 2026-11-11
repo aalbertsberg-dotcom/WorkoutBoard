@@ -1142,6 +1142,14 @@ function App() {
   const [participants,setParticipants] = useState([])
   const [sessionResults,setSessionResults] = useState([])
   const [sessionOneRms,setSessionOneRms] = useState({})
+  const [friends,setFriends] = useState([])
+  const [incomingFriendRequests,setIncomingFriendRequests] = useState([])
+  const [outgoingFriendRequests,setOutgoingFriendRequests] = useState([])
+  const [selectedFriendIds,setSelectedFriendIds] = useState([])
+  const [friendAddOpen,setFriendAddOpen] = useState(false)
+  const [friendEmail,setFriendEmail] = useState('')
+  const [friendMessage,setFriendMessage] = useState('')
+  const [friendManageOpen,setFriendManageOpen] = useState(false)
   const [managedAthletes,setManagedAthletes] = useState([])
   const [selectedManagedAthleteIds,setSelectedManagedAthleteIds] = useState([])
   const [managedAthleteEditorOpen,setManagedAthleteEditorOpen] = useState(false)
@@ -2135,8 +2143,82 @@ function App() {
     return () => clearInterval(timer)
   },[activeSession?.id,togetherReady])
 
+  const refreshFriends = async () => {
+    if(!session?.user)return
+    const userId=session.user.id
+    const {data,error}=await supabase.from('workset_friendships')
+      .select('*')
+      .or(`requester_user_id.eq.${userId},addressee_user_id.eq.${userId}`)
+      .order('created_at',{ascending:false})
+    if(error)return
+
+    const rows=data||[]
+    const accepted=[]
+    const incoming=[]
+    const outgoing=[]
+
+    for(const row of rows){
+      const requesterIsMe=row.requester_user_id===userId
+      const other={
+        friendship_id:row.id,
+        user_id:requesterIsMe?row.addressee_user_id:row.requester_user_id,
+        display_name:requesterIsMe?row.addressee_display_name:row.requester_display_name,
+        status:row.status,
+        created_at:row.created_at,
+      }
+      if(row.status==='accepted')accepted.push(other)
+      else if(row.status==='pending'&&row.addressee_user_id===userId)incoming.push({...other,requester_user_id:row.requester_user_id})
+      else if(row.status==='pending'&&row.requester_user_id===userId)outgoing.push(other)
+    }
+
+    setFriends(accepted)
+    setIncomingFriendRequests(incoming)
+    setOutgoingFriendRequests(outgoing)
+    setSelectedFriendIds(ids=>ids.filter(id=>accepted.some(friend=>friend.user_id===id)))
+  }
+
+  const requestWorksetFriend = async () => {
+    const email=String(friendEmail||'').trim()
+    if(!email){setFriendMessage('Enter their Workset account email.');return}
+    setFriendMessage('Sending friend request…')
+    const {data,error}=await supabase.rpc('request_workset_friend_by_email',{target_email:email})
+    if(error){setFriendMessage(error.message);return}
+    const result=data?.[0]
+    setFriendEmail('')
+    if(result?.friendship_status==='accepted'){
+      setFriendMessage((result.friend_display_name||'That user')+' is now in your friends.')
+      setFriendAddOpen(false)
+    }else{
+      setFriendMessage('Friend request sent to '+(result?.friend_display_name||email)+'.')
+    }
+    await refreshFriends()
+  }
+
+  const respondFriendRequest = async (friendship,response) => {
+    if(!friendship?.friendship_id)return
+    setFriendMessage(response==='accepted'?'Adding friend…':'Dismissing request…')
+    const {error}=await supabase.rpc('respond_workset_friend_request',{
+      target_friendship:friendship.friendship_id,
+      response,
+    })
+    if(error){setFriendMessage(error.message);return}
+    setFriendMessage(response==='accepted'?(friendship.display_name+' added to friends.'):'')
+    await refreshFriends()
+  }
+
+  const removeWorksetFriend = async friend => {
+    if(!friend?.user_id)return
+    if(!window.confirm('Remove '+friend.display_name+' from your Workset friends?'))return
+    const {error}=await supabase.rpc('remove_workset_friend',{target_friend:friend.user_id})
+    if(error){setFriendMessage(error.message);return}
+    setSelectedFriendIds(ids=>ids.filter(id=>id!==friend.user_id))
+    setFriendMessage(friend.display_name+' removed from friends.')
+    await refreshFriends()
+  }
+
   const refreshTogetherLobby = async () => {
     if(!session?.user)return
+    await refreshFriends()
     const [{data:invites},{data:memberships}]=await Promise.all([
       supabase.from('together_invites').select('*')
         .eq('recipient_user_id',session.user.id)
@@ -2180,6 +2262,17 @@ function App() {
     setInviteEmail('')
     setTogetherMessage('Invite sent to '+person+'.')
     await refreshTogetherLobby()
+  }
+
+  const inviteFriendToActiveSession = async friend => {
+    if(!activeSession?.id||activeSession.host_user_id!==session?.user?.id||!friend?.user_id)return
+    setTogetherMessage('Inviting '+friend.display_name+'…')
+    const {error}=await supabase.rpc('invite_workset_friend_to_session',{
+      target_session:activeSession.id,
+      friend_user_id:friend.user_id,
+    })
+    setTogetherMessage(error?error.message:'Invite sent to '+friend.display_name+'.')
+    if(!error)await refreshTogetherLobby()
   }
 
   const respondTogetherInvite = async (invite,response) => {
@@ -2643,12 +2736,23 @@ function App() {
       },{onConflict:'session_id,user_id'})
     }
 
+    let friendInviteCount=0
+    if(selectedFriendIds.length){
+      const inviteResults=await Promise.all(selectedFriendIds.map(friendId=>
+        supabase.rpc('invite_workset_friend_to_session',{
+          target_session:created.id,
+          friend_user_id:friendId,
+        })
+      ))
+      friendInviteCount=inviteResults.filter(result=>!result.error).length
+    }
+
     setTogetherReady(true)
     setActiveSession(created)
     setTogetherAction('')
     setInvitePanelOpen(false)
     setShowSessionQr(false)
-    setTogetherMessage('')
+    setTogetherMessage(friendInviteCount?friendInviteCount+' friend invite'+(friendInviteCount===1?'':'s')+' sent.':'')
     await refreshTogether(created.id)
   }
 
@@ -2948,7 +3052,7 @@ function App() {
 
         <nav className="primary-nav">
           <button className={activeTab === 'today' ? 'active' : ''} onClick={openToday}><b>●</b><span>Today</span></button>
-          <button className={activeTab === 'together' ? 'active' : ''} onClick={() => setActiveTab('together')}><b>⇄</b><span>Together</span>{incomingTogetherInvites.length>0&&<i className="nav-invite-badge">{incomingTogetherInvites.length}</i>}</button>
+          <button className={activeTab === 'together' ? 'active' : ''} onClick={() => setActiveTab('together')}><b>⇄</b><span>Together</span>{(incomingTogetherInvites.length+incomingFriendRequests.length)>0&&<i className="nav-invite-badge">{incomingTogetherInvites.length+incomingFriendRequests.length}</i>}</button>
           <button className={activeTab === 'program' ? 'active' : ''} onClick={() => setActiveTab('program')}><b>▦</b><span>Plan</span></button>
           <button className={activeTab === 'whiteboard' ? 'active' : ''} onClick={() => setActiveTab('whiteboard')}><b>□</b><span>Board</span></button>
         </nav>
@@ -3351,20 +3455,66 @@ function App() {
                   </div>
                 </section>}
 
+                {incomingFriendRequests.length>0&&<section className="together-friend-requests">
+                  <div className="section-heading"><div><span className="card-label">FRIEND REQUESTS</span><h3>People adding you</h3></div><b>{incomingFriendRequests.length}</b></div>
+                  <div className="friend-request-list">
+                    {incomingFriendRequests.map(request=><article key={request.friendship_id}>
+                      <div><strong>{request.display_name}</strong><span>wants to be your Workset friend</span></div>
+                      <div><button type="button" className="secondary-action" onClick={()=>respondFriendRequest(request,'declined')}>Dismiss</button><button type="button" className="primary-action" onClick={()=>respondFriendRequest(request,'accepted')}>Accept</button></div>
+                    </article>)}
+                  </div>
+                </section>}
+
+                <section className="simple-card together-friends-card">
+                  <div className="section-heading">
+                    <div><span className="card-label">FRIENDS</span><h3>Workset friends</h3></div>
+                    <button type="button" className="secondary-action compact-action" onClick={()=>{setFriendAddOpen(v=>!v);setFriendMessage('')}}>+ Friend</button>
+                  </div>
+                  <p className="helper-text">Friends have their own Workset account. Select who you're training with and Workset will invite them when you start.</p>
+
+                  {friends.length>0?<div className="together-partner-chips friend-chips">
+                    {friends.map(friend=><button
+                      type="button"
+                      key={friend.user_id}
+                      className={selectedFriendIds.includes(friend.user_id)?'selected':''}
+                      onClick={()=>setSelectedFriendIds(ids=>ids.includes(friend.user_id)?ids.filter(id=>id!==friend.user_id):[...ids,friend.user_id])}
+                    ><strong>{friend.display_name}</strong><span>{selectedFriendIds.includes(friend.user_id)?'Training with you':'Friend'}</span></button>)}
+                  </div>:<p className="helper-text">No Workset friends yet. Add someone by the email they use for Workset.</p>}
+
+                  {friendAddOpen&&<div className="friend-add-panel">
+                    <label><span>Workset email</span><input type="email" value={friendEmail} onChange={e=>setFriendEmail(e.target.value)} placeholder="name@example.com"/></label>
+                    <div><button type="button" className="secondary-action" onClick={()=>{setFriendAddOpen(false);setFriendEmail('');setFriendMessage('')}}>Cancel</button><button type="button" className="primary-action" onClick={requestWorksetFriend}>Send request</button></div>
+                  </div>}
+
+                  {outgoingFriendRequests.length>0&&<div className="friend-pending-list">
+                    <span>Pending</span>
+                    <div>{outgoingFriendRequests.map(request=><b key={request.friendship_id}>{request.display_name}</b>)}</div>
+                  </div>}
+
+                  {friendMessage&&<p className="status-message friend-status-message">{friendMessage}</p>}
+
+                  {friends.length>0&&<button type="button" className="together-manage-link" onClick={()=>setFriendManageOpen(v=>!v)}>{friendManageOpen?'Close friend management':'Manage friends'}</button>}
+                  {friendManageOpen&&friends.length>0&&<div className="together-partner-manage-list">
+                    {friends.map(friend=><div key={friend.user_id}><span>{friend.display_name}</span><div><button type="button" className="danger-lite" onClick={()=>removeWorksetFriend(friend)}>Remove</button></div></div>)}
+                  </div>}
+                </section>
+
                 <section className="together-lobby-hero">
                   <span className="card-label">TRAIN TOGETHER</span>
-                  <h2>Start or join a workout</h2>
-                  <p>Pick who you're training with, choose the workout, and go. Codes and QR are there when you need them.</p>
+                  <h2>{selectedFriendIds.length||selectedManagedAthleteIds.length?'Ready to train together?':'Start or join a workout'}</h2>
+                  <p>{selectedFriendIds.length
+                    ? 'Your selected friends will receive a Workset invite when you start.'
+                    : 'Choose friends above, add a no-account partner below, or start and share a code / QR.'}</p>
                   <div className="together-primary-actions">
                     <button type="button" className={togetherAction==='start'?'primary-action active':'primary-action'} onClick={()=>setTogetherAction(v=>v==='start'?'':'start')}>Start together</button>
                     <button type="button" className={togetherAction==='join'?'secondary-action active':'secondary-action'} onClick={()=>setTogetherAction(v=>v==='join'?'':'join')}>Join session</button>
                   </div>
                 </section>
 
-                <section className="simple-card together-partners-card">
+                <section className="simple-card together-partners-card managed-partners-compact">
                   <div className="section-heading">
-                    <div><span className="card-label">PARTNERS</span><h3>Your training partners</h3></div>
-                    <button type="button" className="secondary-action compact-action" onClick={()=>openManagedAthleteEditor(null)}>+ Add</button>
+                    <div><span className="card-label">NO ACCOUNT PARTNERS</span><h3>Managed partners</h3></div>
+                    <button type="button" className="secondary-action compact-action" onClick={()=>openManagedAthleteEditor(null)}>+ Managed</button>
                   </div>
                   {managedAthletes.length>0?<div className="together-partner-chips">
                     {managedAthletes.map(athlete=><button
@@ -3372,9 +3522,9 @@ function App() {
                       key={athlete.id}
                       className={selectedManagedAthleteIds.includes(athlete.id)?'selected':''}
                       onClick={()=>setSelectedManagedAthleteIds(ids=>ids.includes(athlete.id)?ids.filter(id=>id!==athlete.id):[...ids,athlete.id])}
-                    ><strong>{athlete.display_name}</strong><span>{selectedManagedAthleteIds.includes(athlete.id)?'Selected':'Managed'}</span></button>)}
-                  </div>:<p className="helper-text">Add a no-login training partner to keep their 1RMs and target weights in Workset.</p>}
-                  {managedAthletes.length>0&&<button type="button" className="together-manage-link" onClick={()=>{setManagedAthleteEditorOpen(v=>!v);setManagedAthleteDraft({id:null,display_name:'',Squat:'',Bench:'',Deadlift:'',Press:''})}}>{managedAthleteEditorOpen?'Close partner management':'Manage partners'}</button>}
+                    ><strong>{athlete.display_name}</strong><span>{selectedManagedAthleteIds.includes(athlete.id)?'Training with you':'Managed'}</span></button>)}
+                  </div>:<p className="helper-text">For someone training beside you who doesn't use Workset. You maintain their 1RMs and target weights.</p>}
+                  {managedAthletes.length>0&&<button type="button" className="together-manage-link" onClick={()=>{setManagedAthleteEditorOpen(v=>!v);setManagedAthleteDraft({id:null,display_name:'',Squat:'',Bench:'',Deadlift:'',Press:''})}}>{managedAthleteEditorOpen?'Close managed partners':'Manage partners'}</button>}
                   {managedAthleteEditorOpen&&managedAthletes.length>0&&<div className="together-partner-manage-list">
                     {managedAthletes.map(athlete=><div key={athlete.id}><span>{athlete.display_name}</span><div><button type="button" onClick={()=>openManagedAthleteEditor(athlete)}>Edit</button><button type="button" onClick={()=>deleteManagedAthlete(athlete)}>×</button></div></div>)}
                   </div>}
@@ -3390,7 +3540,10 @@ function App() {
 
                 {togetherAction==='start'&&<section className="together-flow-card">
                   <div className="section-heading"><div><span className="card-label">START TOGETHER</span><h3>Choose the workout</h3></div><button type="button" className="icon-close" onClick={()=>setTogetherAction('')}>×</button></div>
-                  {selectedManagedAthleteIds.length>0&&<div className="together-selected-partners"><span>Training with</span><strong>{managedAthletes.filter(a=>selectedManagedAthleteIds.includes(a.id)).map(a=>a.display_name).join(' · ')}</strong></div>}
+                  {(selectedFriendIds.length>0||selectedManagedAthleteIds.length>0)&&<div className="together-selected-partners"><span>Training with</span><strong>{[
+                    ...friends.filter(friend=>selectedFriendIds.includes(friend.user_id)).map(friend=>friend.display_name),
+                    ...managedAthletes.filter(a=>selectedManagedAthleteIds.includes(a.id)).map(a=>a.display_name),
+                  ].join(' · ')}</strong></div>}
                   <div className="together-host-picker">
                     <label><span>Program</span><select value={togetherProgramChoice?.key||''} onChange={e=>{setTogetherProgramKey(e.target.value);setTogetherWeek(1);setTogetherWorkoutIndex(0)}}>{togetherProgramOptions.map(p=><option key={p.key} value={p.key}>{p.name}</option>)}</select></label>
                     <label><span>Week</span><select value={togetherWeek} onChange={e=>{setTogetherWeek(Number(e.target.value));setTogetherWorkoutIndex(0)}}>{Array.from({length:Number(togetherProgramChoice?.weeksCount||1)},(_,i)=>i+1).map(n=><option key={n} value={n}>Week {n}</option>)}</select></label>
@@ -3451,8 +3604,12 @@ function App() {
                   </div>}
 
                   {invitePanelOpen&&activeSession.host_user_id===session.user.id&&<div className="together-notify-panel">
-                    <span>Notify a Workset user</span>
-                    <p>Enter their exact Workset account email. They'll get an invite inside Together.</p>
+                    <span>Invite to this workout</span>
+                    {friends.length>0&&<>
+                      <p>Your Workset friends</p>
+                      <div className="active-session-friend-invites">{friends.map(friend=><button type="button" key={friend.user_id} onClick={()=>inviteFriendToActiveSession(friend)}>{friend.display_name}</button>)}</div>
+                    </>}
+                    <p>{friends.length?'Or invite another Workset user by exact email.':'Enter their exact Workset account email. They will get an invite inside Together.'}</p>
                     <div><input type="email" value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)} placeholder="name@example.com"/><button type="button" onClick={sendTogetherInvite}>Send invite</button></div>
                   </div>}
 
@@ -3728,7 +3885,7 @@ function App() {
 
       <nav className="mobile-bottom-nav app-level-mobile-nav" aria-label="Workset mobile navigation">
         <button className={activeTab==='today'?'active':''} onClick={openToday}><b>●</b><span>Today</span></button>
-        <button className={activeTab==='together'?'active':''} onClick={()=>setActiveTab('together')}><b>⇄</b><span>Together</span>{incomingTogetherInvites.length>0&&<i className="nav-invite-badge">{incomingTogetherInvites.length}</i>}</button>
+        <button className={activeTab==='together'?'active':''} onClick={()=>setActiveTab('together')}><b>⇄</b><span>Together</span>{(incomingTogetherInvites.length+incomingFriendRequests.length)>0&&<i className="nav-invite-badge">{incomingTogetherInvites.length+incomingFriendRequests.length}</i>}</button>
         <button className={activeTab==='program'?'active':''} onClick={()=>setActiveTab('program')}><b>▦</b><span>Plan</span></button>
         <button className={activeTab==='whiteboard'?'active':''} onClick={()=>setActiveTab('whiteboard')}><b>□</b><span>Board</span></button>
       </nav>
