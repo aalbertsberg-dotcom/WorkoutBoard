@@ -2725,12 +2725,23 @@ function App() {
       },{onConflict:'session_id,user_id'})
     }
 
+    let friendInviteCount=0
+    if(selectedFriendIds.length){
+      const inviteResults=await Promise.all(selectedFriendIds.map(friendId=>
+        supabase.rpc('invite_workset_friend_to_session',{
+          target_session:created.id,
+          friend_user_id:friendId,
+        })
+      ))
+      friendInviteCount=inviteResults.filter(result=>!result.error).length
+    }
+
     setTogetherReady(true)
     setActiveSession(created)
     setTogetherAction('')
     setInvitePanelOpen(false)
     setShowSessionQr(false)
-    setTogetherMessage('')
+    setTogetherMessage(friendInviteCount?friendInviteCount+' friend invite'+(friendInviteCount===1?'':'s')+' sent.':'')
     await refreshTogether(created.id)
   }
 
