@@ -2159,9 +2159,9 @@ function App() {
   }
 
   useEffect(()=>{
-    if(!session?.user||activeTab!=='together')return
+    if(!session?.user)return
     refreshTogetherLobby()
-    const timer=setInterval(refreshTogetherLobby,10000)
+    const timer=setInterval(refreshTogetherLobby,activeTab==='together'?10000:30000)
     return()=>clearInterval(timer)
   },[session?.user?.id,activeTab,activeSession?.id])
 
@@ -2951,7 +2951,7 @@ function App() {
 
         <nav className="primary-nav">
           <button className={activeTab === 'today' ? 'active' : ''} onClick={openToday}><b>●</b><span>Today</span></button>
-          <button className={activeTab === 'together' ? 'active' : ''} onClick={() => setActiveTab('together')}><b>⇄</b><span>Together</span></button>
+          <button className={activeTab === 'together' ? 'active' : ''} onClick={() => setActiveTab('together')}><b>⇄</b><span>Together</span>{incomingTogetherInvites.length>0&&<i className="nav-invite-badge">{incomingTogetherInvites.length}</i>}</button>
           <button className={activeTab === 'program' ? 'active' : ''} onClick={() => setActiveTab('program')}><b>▦</b><span>Plan</span></button>
           <button className={activeTab === 'whiteboard' ? 'active' : ''} onClick={() => setActiveTab('whiteboard')}><b>□</b><span>Board</span></button>
         </nav>
@@ -3377,7 +3377,10 @@ function App() {
                       onClick={()=>setSelectedManagedAthleteIds(ids=>ids.includes(athlete.id)?ids.filter(id=>id!==athlete.id):[...ids,athlete.id])}
                     ><strong>{athlete.display_name}</strong><span>{selectedManagedAthleteIds.includes(athlete.id)?'Selected':'Managed'}</span></button>)}
                   </div>:<p className="helper-text">Add a no-login training partner to keep their 1RMs and target weights in Workset.</p>}
-                  {managedAthletes.length>0&&<button type="button" className="together-manage-link" onClick={()=>setManagedAthleteEditorOpen(v=>!v)}>{managedAthleteEditorOpen?'Close partner management':'Manage partners'}</button>}
+                  {managedAthletes.length>0&&<button type="button" className="together-manage-link" onClick={()=>{setManagedAthleteEditorOpen(v=>!v);setManagedAthleteDraft({id:null,display_name:'',Squat:'',Bench:'',Deadlift:'',Press:''})}}>{managedAthleteEditorOpen?'Close partner management':'Manage partners'}</button>}
+                  {managedAthleteEditorOpen&&managedAthletes.length>0&&<div className="together-partner-manage-list">
+                    {managedAthletes.map(athlete=><div key={athlete.id}><span>{athlete.display_name}</span><div><button type="button" onClick={()=>openManagedAthleteEditor(athlete)}>Edit</button><button type="button" onClick={()=>deleteManagedAthlete(athlete)}>×</button></div></div>)}
+                  </div>}
                   {managedAthleteEditorOpen&&<div className="managed-athlete-editor">
                     <label><span>Name</span><input value={managedAthleteDraft.display_name} onChange={e=>setManagedAthleteDraft(v=>({...v,display_name:e.target.value}))} placeholder="Tracey"/></label>
                     <div className="managed-athlete-max-grid">
@@ -3728,7 +3731,7 @@ function App() {
 
       <nav className="mobile-bottom-nav app-level-mobile-nav" aria-label="Workset mobile navigation">
         <button className={activeTab==='today'?'active':''} onClick={openToday}><b>●</b><span>Today</span></button>
-        <button className={activeTab==='together'?'active':''} onClick={()=>setActiveTab('together')}><b>⇄</b><span>Together</span></button>
+        <button className={activeTab==='together'?'active':''} onClick={()=>setActiveTab('together')}><b>⇄</b><span>Together</span>{incomingTogetherInvites.length>0&&<i className="nav-invite-badge">{incomingTogetherInvites.length}</i>}</button>
         <button className={activeTab==='program'?'active':''} onClick={()=>setActiveTab('program')}><b>▦</b><span>Plan</span></button>
         <button className={activeTab==='whiteboard'?'active':''} onClick={()=>setActiveTab('whiteboard')}><b>□</b><span>Board</span></button>
       </nav>
