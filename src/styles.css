@@ -5077,3 +5077,200 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
     grid-template-columns:1fr;
   }
 }
+
+
+/* Workset v2.1 mobile whiteboard */
+.draw-board-wrap {
+  position:relative;
+  min-height:0;
+  overflow:hidden;
+  background:#111827;
+}
+.draw-board-pan {
+  width:100%;
+  height:100%;
+  overflow:auto;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  background:#dbe1e8;
+}
+.draw-board-pan canvas {
+  display:block;
+  margin:0 auto;
+  max-width:none;
+}
+.draw-board-zoom {
+  position:absolute;
+  top:8px;
+  right:8px;
+  z-index:20;
+  display:flex;
+  align-items:center;
+  gap:4px;
+  padding:4px;
+  border:1px solid #42536c;
+  border-radius:10px;
+  background:rgba(9,16,29,.92);
+  box-shadow:0 6px 18px rgba(0,0,0,.28);
+  backdrop-filter:blur(8px);
+}
+.draw-board-zoom button {
+  min-width:34px;
+  height:34px;
+  border:1px solid #3d4e67;
+  border-radius:7px;
+  background:#172338;
+  color:#f1f5f9;
+  font-size:18px;
+  font-weight:900;
+  line-height:1;
+}
+.draw-board-zoom .zoom-readout {
+  min-width:54px;
+  padding:0 7px;
+  color:#d9f99d;
+  font-size:10px;
+}
+.draw-board-zoom button:disabled {
+  opacity:.4;
+}
+
+@media (max-width:700px) {
+  .whiteboard-page {
+    gap:7px !important;
+    padding-bottom:98px !important;
+  }
+  .whiteboard-view-tabs {
+    margin-bottom:0;
+  }
+  .whiteboard-view-tabs button {
+    min-height:42px;
+  }
+  .whiteboard-draw-intro {
+    display:none;
+  }
+
+  .draw-board-section {
+    gap:6px;
+    padding-bottom:0 !important;
+  }
+  .draw-board-manager {
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+    gap:5px;
+  }
+  .draw-board-manager select,
+  .draw-board-manager input {
+    min-height:34px;
+    padding:0 7px;
+    font-size:11px;
+  }
+  .draw-board-manager button {
+    min-height:33px;
+    padding:0 7px;
+    font-size:10px;
+  }
+
+  .draw-board-toolbar {
+    display:grid;
+    grid-template-columns:minmax(0,1fr) auto;
+    align-items:center;
+    gap:6px;
+    padding:7px;
+    border-radius:10px;
+  }
+  .draw-tools {
+    grid-column:1/-1;
+    width:100%;
+    flex-wrap:nowrap !important;
+    overflow-x:auto;
+    overscroll-behavior-x:contain;
+    scrollbar-width:none;
+    padding-bottom:1px;
+  }
+  .draw-tools::-webkit-scrollbar {
+    display:none;
+  }
+  .draw-tools button {
+    flex:0 0 auto !important;
+    min-height:32px;
+    padding:0 9px;
+    font-size:10px;
+  }
+  .draw-colors {
+    min-width:0;
+    overflow-x:auto;
+    scrollbar-width:none;
+  }
+  .draw-colors::-webkit-scrollbar {
+    display:none;
+  }
+  .draw-colors button {
+    flex:0 0 auto;
+    width:24px;
+    height:24px;
+  }
+  .draw-width {
+    justify-self:end;
+    white-space:nowrap;
+    font-size:9px;
+  }
+  .draw-width input {
+    width:74px;
+  }
+  .draw-grid-toggle {
+    font-size:9px;
+  }
+  .draw-board-toolbar > button {
+    min-height:32px;
+    padding:0 9px;
+    font-size:10px;
+  }
+  .draw-actions {
+    grid-column:1/-1;
+    width:100%;
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:5px;
+  }
+  .draw-actions button {
+    min-height:33px;
+    padding:0 6px;
+    font-size:10px;
+  }
+
+  .draw-board-wrap {
+    height:clamp(250px,38vh,340px);
+    min-height:0 !important;
+    border-radius:11px;
+  }
+  .draw-board-pan {
+    min-height:0;
+  }
+  .draw-board-zoom {
+    top:6px;
+    right:6px;
+    padding:3px;
+  }
+  .draw-board-zoom button {
+    min-width:31px;
+    height:31px;
+  }
+  .draw-board-zoom .zoom-readout {
+    min-width:48px;
+  }
+
+  .draw-board-bottom {
+    gap:6px;
+    font-size:8px;
+  }
+  .draw-board-bottom > span {
+    display:none;
+  }
+  .draw-board-bottom > div {
+    width:100%;
+    gap:6px;
+  }
+  .draw-board-bottom button {
+    min-height:38px;
+  }
+}
