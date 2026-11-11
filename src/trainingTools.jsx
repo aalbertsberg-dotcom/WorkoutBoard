@@ -487,8 +487,8 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
       <section className="simple-card">
         <div className="section-heading"><div><span className="card-label">BODY MEASUREMENTS</span><h3>{summaryMeasurement?('Latest · '+new Date(summaryMeasurement.measured_on+'T12:00:00').toLocaleDateString()):'Add a baseline'}</h3></div>{summaryMeasurement&&hasCompleteMeasurementSet(summaryMeasurement)&&<b className="measurement-total-badge">{totalInches(summaryMeasurement).toFixed(2)} in total</b>}</div>
         <div className={'measurement-today-state '+(todayMeasurementCount?'active':'')}>
-          <strong>{todayMeasurementCount?("Updating today's measurements · "+todayMeasurementCount+" saved"):'No body measurements saved today'}</strong>
-          <span>Tap any measurement to change it. Today's value is used first; otherwise the last saved value is preloaded.</span>
+          <strong>{todayMeasurementCount?("Today · "+todayMeasurementCount+" measurements saved"):'No measurements saved today'}</strong>
+          <span>Tap a value to edit it.</span>
         </div>
 
         <div className="measurement-edit-grid">
@@ -498,22 +498,27 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
             const shown=todayRaw??latestInfo?.value??null
             const isEditing=editingMeasurementKey===key
             const savedToday=todayRaw!==null&&todayRaw!==''&&Number(todayRaw)>0
+            const context=savedToday
+              ? ('Today · '+Number(todayRaw).toLocaleString(undefined,{maximumFractionDigits:2})+' '+unit)
+              : latestInfo
+                ? ('Last: '+Number(latestInfo.value).toLocaleString(undefined,{maximumFractionDigits:2})+' '+unit+' · '+new Date(latestInfo.date+'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'}))
+                : 'Tap to add'
             return <article className={'measurement-edit-card '+(isEditing?'editing':'')} key={key}>
-              <button type="button" className="measurement-edit-main" onClick={()=>startInlineMeasurement(key)}>
+              {isEditing?<form className="measurement-inline-form" onSubmit={e=>{e.preventDefault();saveInlineMeasurement(key)}}>
+                <span className="measurement-inline-label">{label}</span>
+                <div className="measurement-inline-row">
+                  <div className="input-with-unit"><input autoFocus type="number" step={unit==='%'?'0.1':'0.01'} inputMode="decimal" value={inlineMeasurementValue} onChange={e=>{setInlineMeasurementValue(e.target.value);setInlineMeasurementStatus('')}}/><b>{unit}</b></div>
+                  <button type="button" className="measurement-inline-icon cancel" aria-label={'Cancel '+label+' edit'} onClick={()=>{setEditingMeasurementKey('');setInlineMeasurementStatus('')}}>×</button>
+                  <button type="submit" className="measurement-inline-icon save" aria-label={'Save '+label} disabled={inlineMeasurementStatus==='Saving…'}>{inlineMeasurementStatus==='Saving…'?'…':'✓'}</button>
+                </div>
+                <small className={inlineMeasurementStatus&&inlineMeasurementStatus!=='Saving…'&&inlineMeasurementStatus!==key?'measurement-inline-error':'measurement-inline-context'}>
+                  {inlineMeasurementStatus&&inlineMeasurementStatus!=='Saving…'&&inlineMeasurementStatus!==key?inlineMeasurementStatus:context}
+                </small>
+              </form>:<button type="button" className="measurement-edit-main" onClick={()=>startInlineMeasurement(key)}>
                 <span>{label}</span>
                 <strong>{shown!=null?(Number(shown).toLocaleString(undefined,{maximumFractionDigits:2})+' '+unit):'Add'}</strong>
-                <small>{savedToday
-                  ? ('Today · '+Number(todayRaw).toLocaleString(undefined,{maximumFractionDigits:2})+' '+unit)
-                  : latestInfo
-                    ? ('Last: '+Number(latestInfo.value).toLocaleString(undefined,{maximumFractionDigits:2})+' '+unit+' · '+new Date(latestInfo.date+'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}))
-                    : 'Tap to add'}</small>
-              </button>
-              {isEditing&&<form className="measurement-inline-form" onSubmit={e=>{e.preventDefault();saveInlineMeasurement(key)}}>
-                <div className="input-with-unit"><input autoFocus type="number" step={unit==='%'?'0.1':'0.01'} inputMode="decimal" value={inlineMeasurementValue} onChange={e=>{setInlineMeasurementValue(e.target.value);setInlineMeasurementStatus('')}}/><b>{unit}</b></div>
-                <div><button type="button" className="secondary-action" onClick={()=>{setEditingMeasurementKey('');setInlineMeasurementStatus('')}}>Cancel</button><button type="submit" className="primary-action" disabled={inlineMeasurementStatus==='Saving…'}>{inlineMeasurementStatus==='Saving…'?'Saving…':'Save'}</button></div>
-                {inlineMeasurementStatus&&inlineMeasurementStatus!=='Saving…'&&inlineMeasurementStatus!==key&&<small className="measurement-inline-error">{inlineMeasurementStatus}</small>}
-              </form>}
-              {!isEditing&&inlineMeasurementStatus===key&&<small className="measurement-inline-saved">✓ Saved today</small>}
+                <small>{inlineMeasurementStatus===key?'✓ Saved today':context}</small>
+              </button>}
             </article>
           })}
         </div>
