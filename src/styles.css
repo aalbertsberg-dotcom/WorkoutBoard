@@ -6281,3 +6281,121 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
     grid-template-columns:1fr;
   }
 }
+
+
+/* Workset 2.3.4 compact measurement editor */
+.measurement-today-state {
+  grid-template-columns:auto 1fr;
+  align-items:center;
+  column-gap:8px;
+  padding:8px 10px;
+}
+.measurement-today-state strong {
+  white-space:nowrap;
+}
+.measurement-today-state span {
+  text-align:right;
+}
+.measurement-edit-card {
+  min-height:90px;
+}
+.measurement-edit-card.editing {
+  grid-column:auto !important;
+  border-color:#5b7b38;
+  background:#101d18;
+}
+.measurement-edit-main {
+  min-height:90px;
+  padding:10px 11px;
+}
+.measurement-edit-main small {
+  min-height:0;
+}
+.measurement-inline-form {
+  display:grid;
+  grid-template-rows:auto 1fr auto;
+  gap:5px;
+  min-height:90px;
+  padding:9px 9px 8px;
+}
+.measurement-inline-label {
+  color:#9aacbf;
+  font-size:9px;
+  font-weight:850;
+}
+.measurement-inline-row {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 34px 34px;
+  gap:5px;
+  align-items:center;
+}
+.measurement-inline-row .input-with-unit {
+  min-width:0;
+}
+.measurement-inline-row .input-with-unit input {
+  min-width:0;
+  min-height:38px;
+  padding:0 30px 0 8px;
+  font-size:17px;
+  font-weight:900;
+}
+.measurement-inline-row .input-with-unit b {
+  right:8px;
+  font-size:10px;
+}
+.measurement-inline-icon {
+  display:grid;
+  place-items:center;
+  width:34px;
+  height:34px;
+  min-height:34px !important;
+  padding:0;
+  border-radius:9px;
+  font-size:18px;
+  font-weight:950;
+}
+.measurement-inline-icon.cancel {
+  border:1px solid #40526e;
+  background:#172338;
+  color:#c8d2e0;
+}
+.measurement-inline-icon.save {
+  border:1px solid #6fa823;
+  background:#5aa900;
+  color:white;
+}
+.measurement-inline-icon:disabled {
+  opacity:.65;
+}
+.measurement-inline-context,
+.measurement-inline-error {
+  min-height:12px;
+  color:#7f90a6;
+  font-size:8px;
+  line-height:1.25;
+}
+.measurement-inline-error {
+  color:#fecaca;
+}
+.measurement-inline-saved {
+  display:none;
+}
+
+@media (max-width:430px) {
+  .measurement-today-state {
+    grid-template-columns:1fr;
+    gap:2px;
+  }
+  .measurement-today-state span {
+    text-align:left;
+  }
+  .measurement-inline-row {
+    grid-template-columns:minmax(0,1fr) 32px 32px;
+    gap:4px;
+  }
+  .measurement-inline-icon {
+    width:32px;
+    height:32px;
+    min-height:32px !important;
+  }
+}
