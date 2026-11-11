@@ -3,7 +3,7 @@ import { supabase } from './supabase'
 
 const pad=n=>String(Math.max(0,Math.floor(n))).padStart(2,'0')
 const fmt=seconds=>`${pad(seconds/60)}:${pad(seconds%60)}`
-const today=()=>new Date().toISOString().slice(0,10)
+const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
 
 function beep() {
   const sound=localStorage.getItem('wb-setting-sound')!=='false'
@@ -225,6 +225,17 @@ function totalInches(row={}) {
   },0)
 }
 
+function measurementDraft(row=null,date=today()) {
+  const value=(key,fallback=null)=>row?.[key]??(fallback?row?.[fallback]:null)??''
+  return {
+    measured_on:row?.measured_on||date,
+    bodyweight:value('bodyweight'),left_forearm:value('left_forearm'),right_forearm:value('right_forearm'),neck:value('neck'),
+    left_arm:value('left_arm','arm'),right_arm:value('right_arm','arm'),waist:value('waist'),hips:value('hips'),
+    left_thigh:value('left_thigh','thigh'),right_thigh:value('right_thigh','thigh'),left_calf:value('left_calf'),right_calf:value('right_calf'),
+    chest:value('chest'),body_fat:value('body_fat'),note:row?.note||''
+  }
+}
+
 function parseResult(text){
   const m=String(text||'').replace(/[×X]/g,'x').match(/(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/i)
   return m?{weight:Number(m[1]),reps:Number(m[2]),e1rm:Number(m[1])*(1+Number(m[2])/30)}:null
@@ -238,11 +249,8 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
   const [planned,setPlanned]=useState([])
   const [tracking,setTracking]=useState([])
   const [newGoal,setNewGoal]=useState({label:'',goal_type:'Strength',target_value:'',unit:'lb',target_date:''})
-  const [measurement,setMeasurement]=useState({
-    measured_on:today(),bodyweight:'',left_forearm:'',right_forearm:'',neck:'',
-    left_arm:'',right_arm:'',waist:'',hips:'',left_thigh:'',right_thigh:'',
-    left_calf:'',right_calf:'',chest:'',body_fat:'',note:''
-  })
+  const [measurement,setMeasurement]=useState(()=>measurementDraft())
+  const [measurementSaveStatus,setMeasurementSaveStatus]=useState('')
   const [message,setMessage]=useState('')
 
   const load=async()=>{
@@ -325,6 +333,12 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
     setNewGoal({label:'',goal_type:'Strength',target_value:'',unit:'lb',target_date:''});await load()
   }
   const completeGoal=async id=>{await supabase.from('training_goals').update({status:'completed',updated_at:new Date().toISOString()}).eq('id',id);await load()}
+  const setMeasurementField=(key,value)=>{setMeasurementSaveStatus('');setMeasurement(v=>({...v,[key]:value}))}
+  const chooseMeasurementDate=date=>{
+    setMeasurementSaveStatus('')
+    const existing=measurements.find(row=>row.measured_on===date)
+    setMeasurement(measurementDraft(existing,date))
+  }
   const saveMeasurement=async e=>{
     e.preventDefault()
     const date=measurement.measured_on||today()
@@ -336,14 +350,12 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
     if(String(measurement.note||'').trim())changes.note=measurement.note.trim()
     const {data:existing}=await supabase.from('body_measurements').select('*').eq('user_id',session.user.id).eq('measured_on',date).maybeSingle()
     const payload=existing?{...existing,...changes}:{...changes}
-    const {error}=await supabase.from('body_measurements').upsert(payload,{onConflict:'user_id,measured_on'})
-    if(error){setMessage(error.message);return}
-    setMessage('Measurements saved.')
-    setMeasurement({
-      measured_on:today(),bodyweight:'',left_forearm:'',right_forearm:'',neck:'',
-      left_arm:'',right_arm:'',waist:'',hips:'',left_thigh:'',right_thigh:'',
-      left_calf:'',right_calf:'',chest:'',body_fat:'',note:''
-    })
+    setMeasurementSaveStatus('Saving…')
+    const {data:saved,error}=await supabase.from('body_measurements').upsert(payload,{onConflict:'user_id,measured_on'}).select().single()
+    if(error){setMeasurementSaveStatus('');setMessage(error.message);return}
+    setMessage('')
+    setMeasurement(measurementDraft(saved,date))
+    setMeasurementSaveStatus('Saved')
     await load()
   }
 
@@ -403,9 +415,11 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
           ].map(([label,value,unit])=><div key={label}><span>{label}</span><strong>{value??'—'}{value!=null?' '+unit:''}</strong></div>)}
         </div>}
 
+        <details className="measurement-full-checkin">
+          <summary><span><b>Full measurement check-in</b><small>Enter several measurements at once</small></span></summary>
         <form className="measurement-form expanded-measurement-form" onSubmit={saveMeasurement}>
-          <label className="measurement-date-field"><span>Date</span><input type="date" value={measurement.measured_on} onChange={e=>setMeasurement(v=>({...v,measured_on:e.target.value}))}/></label>
-          <label><span>Weight</span><div className="input-with-unit"><input type="number" step="0.1" inputMode="decimal" value={measurement.bodyweight} onChange={e=>setMeasurement(v=>({...v,bodyweight:e.target.value}))} placeholder="Weight"/><b>lb</b></div></label>
+          <label className="measurement-date-field"><span>Date</span><input type="date" value={measurement.measured_on} onChange={e=>chooseMeasurementDate(e.target.value)}/></label>
+          <label><span>Weight</span><div className="input-with-unit"><input type="number" step="0.1" inputMode="decimal" value={measurement.bodyweight} onChange={e=>setMeasurementField('bodyweight',e.target.value)} placeholder="Weight"/><b>lb</b></div></label>
 
           <p className="measurement-save-rule"><strong>Same date = same entry.</strong> Saving again updates only the fields you enter. Blank fields keep whatever was already saved.</p>
 
@@ -415,14 +429,14 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
               {[
                 ['left_forearm','Left forearm'],['right_forearm','Right forearm'],['neck','Neck'],
                 ['left_arm','Left arm'],['right_arm','Right arm'],['chest','Chest']
-              ].map(([key,label])=><label key={key}><span>{label}</span><div className="input-with-unit"><input type="number" step="0.01" inputMode="decimal" value={measurement[key]} onChange={e=>setMeasurement(v=>({...v,[key]:e.target.value}))}/><b>in</b></div></label>)}
+              ].map(([key,label])=><label key={key}><span>{label}</span><div className="input-with-unit"><input type="number" step="0.01" inputMode="decimal" value={measurement[key]} onChange={e=>setMeasurementField(key,e.target.value)}/><b>in</b></div></label>)}
             </div>
           </fieldset>
 
           <fieldset className="measurement-group">
             <legend>Midsection</legend>
             <div className="measurement-field-grid">
-              {[['waist','Waist'],['hips','Hips']].map(([key,label])=><label key={key}><span>{label}</span><div className="input-with-unit"><input type="number" step="0.01" inputMode="decimal" value={measurement[key]} onChange={e=>setMeasurement(v=>({...v,[key]:e.target.value}))}/><b>in</b></div></label>)}
+              {[['waist','Waist'],['hips','Hips']].map(([key,label])=><label key={key}><span>{label}</span><div className="input-with-unit"><input type="number" step="0.01" inputMode="decimal" value={measurement[key]} onChange={e=>setMeasurementField(key,e.target.value)}/><b>in</b></div></label>)}
             </div>
           </fieldset>
 
@@ -432,20 +446,22 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
               {[
                 ['left_thigh','Left thigh'],['right_thigh','Right thigh'],
                 ['left_calf','Left calf'],['right_calf','Right calf']
-              ].map(([key,label])=><label key={key}><span>{label}</span><div className="input-with-unit"><input type="number" step="0.01" inputMode="decimal" value={measurement[key]} onChange={e=>setMeasurement(v=>({...v,[key]:e.target.value}))}/><b>in</b></div></label>)}
+              ].map(([key,label])=><label key={key}><span>{label}</span><div className="input-with-unit"><input type="number" step="0.01" inputMode="decimal" value={measurement[key]} onChange={e=>setMeasurementField(key,e.target.value)}/><b>in</b></div></label>)}
             </div>
           </fieldset>
 
-          <label><span>Body fat (optional)</span><div className="input-with-unit"><input type="number" step="0.1" inputMode="decimal" value={measurement.body_fat} onChange={e=>setMeasurement(v=>({...v,body_fat:e.target.value}))}/><b>%</b></div></label>
-          <label><span>Note</span><input value={measurement.note} onChange={e=>setMeasurement(v=>({...v,note:e.target.value}))} placeholder="Optional note"/></label>
+          <label><span>Body fat (optional)</span><div className="input-with-unit"><input type="number" step="0.1" inputMode="decimal" value={measurement.body_fat} onChange={e=>setMeasurementField('body_fat',e.target.value)}/><b>%</b></div></label>
+          <label><span>Note</span><input value={measurement.note} onChange={e=>setMeasurementField('note',e.target.value)} placeholder="Optional note"/></label>
 
           <div className="measurement-total-preview">
             <span>Total inches</span>
             <strong>{totalInches(measurement)?totalInches(measurement).toFixed(2):'—'}</strong>
             <small>Automatically sums forearms, neck, arms, waist, hips, thighs, calves and chest.</small>
           </div>
-          <button className="primary-action">Save measurements</button>
+          <button className="primary-action" disabled={measurementSaveStatus==='Saving…'}>{measurementSaveStatus==='Saving…'?'Saving…':measurementSaveStatus==='Saved'?`✓ Saved for ${new Date(measurement.measured_on+'T12:00:00').toLocaleDateString()}`:'Save measurements'}</button>
+          {measurementSaveStatus==='Saved'&&<div className="measurement-save-success">Saved values stay loaded so you can see or update this date.</div>}
         </form>
+        </details>
       </section>
 
       <section className="simple-card">
