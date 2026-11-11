@@ -3761,11 +3761,7 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
 
 
 /* Board Android visual viewport correction */
-@media (max-width:700px) {
-  .app-level-mobile-nav.board-bottom-offset {
-    bottom:28px !important;
-  }
-}
+/* All tabs use the same app-level mobile navigation geometry. */
 
 
 /* Keep same-day confirmation fully reachable on mobile */
@@ -5272,5 +5268,69 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   }
   .draw-board-bottom button {
     min-height:38px;
+  }
+}
+
+
+/* Workset v2.1.1 mobile readability + navigation consistency */
+@media (max-width:700px) {
+  .app-level-mobile-nav {
+    bottom:0 !important;
+  }
+  .app-level-mobile-nav button span {
+    font-size:10px !important;
+    line-height:1.15 !important;
+  }
+  .app-level-mobile-nav button b {
+    font-size:17px !important;
+  }
+
+  .card-label {
+    font-size:10px !important;
+    line-height:1.2;
+  }
+  .helper-text {
+    font-size:12px !important;
+    line-height:1.42;
+  }
+  .program-meta span,
+  .today-completed-list > article span,
+  .extra-workout-picker > button span,
+  .next-day-exercises span,
+  .settings-row span {
+    font-size:10px !important;
+  }
+
+  .flex-runner-head .card-label,
+  .current-set-weight > span,
+  .rep-default-hint,
+  .set-progress-button span {
+    font-size:9px !important;
+  }
+  .set-progress-button strong {
+    font-size:10px !important;
+  }
+
+  .draw-board-manager select,
+  .draw-board-manager input,
+  .draw-board-manager button,
+  .draw-tools button,
+  .draw-board-toolbar > button,
+  .draw-actions button {
+    font-size:11px !important;
+  }
+  .draw-width,
+  .draw-grid-toggle {
+    font-size:10px !important;
+  }
+  .draw-board-zoom .zoom-readout {
+    font-size:11px !important;
+  }
+
+  .managed-athlete-row span,
+  .together-banner span,
+  .rest-chip,
+  .recent-pr-list span {
+    font-size:10px !important;
   }
 }
