@@ -2648,10 +2648,11 @@ function App() {
     await refreshTogether(created.id)
   }
 
-  const joinTogetherSession = async () => {
-    if (!session?.user || !joinCode.trim()) return
+  const joinTogetherSession = async providedCode => {
+    const raw=String(providedCode||joinCode||'').trim()
+    if (!session?.user || !raw) return
     setTogetherMessage('Joining…')
-    const code = joinCode.trim().toUpperCase()
+    const code = raw.toUpperCase()
 
     const {data:found,error} = await supabase
       .from('shared_sessions')
@@ -2738,11 +2739,16 @@ function App() {
     setLog(normalizeLog(found?.workout || null,programId,activeSession.week,activeSession.lift,Number(oneRepMaxes[activeSession.lift] || 0)))
   }
 
+  const sessionJoinUrl = sessionRow => {
+    if(!sessionRow?.join_code)return ''
+    const url=new URL(appUrl())
+    url.searchParams.set('join',sessionRow.join_code)
+    return url.toString()
+  }
+
   const shareSession = async () => {
     if (!activeSession) return
-    const url=new URL(appUrl())
-    url.searchParams.set('join',activeSession.join_code)
-    const shareUrl=url.toString()
+    const shareUrl=sessionJoinUrl(activeSession)
     const text='Join my Workset session'
     try {
       if (navigator.share) await navigator.share({title:'Workset Together',text,url:shareUrl})
@@ -2754,6 +2760,85 @@ function App() {
       setTogetherMessage(shareUrl)
     }
   }
+
+  useEffect(()=>{
+    if(!showSessionQr||!activeSession?.join_code){setSessionQr('');return}
+    let cancelled=false
+    QRCode.toDataURL(sessionJoinUrl(activeSession),{
+      width:300,
+      margin:1,
+      errorCorrectionLevel:'M',
+      color:{dark:'#07101f',light:'#ffffff'},
+    }).then(url=>{if(!cancelled)setSessionQr(url)}).catch(()=>{if(!cancelled)setSessionQr('')})
+    return()=>{cancelled=true}
+  },[showSessionQr,activeSession?.id,activeSession?.join_code])
+
+  const parseScannedJoinCode = raw => {
+    const value=String(raw||'').trim()
+    if(!value)return ''
+    try{
+      const url=new URL(value)
+      const code=url.searchParams.get('join')
+      if(code)return code.trim().toUpperCase().slice(0,6)
+    }catch{}
+    const match=value.toUpperCase().match(/[A-Z0-9]{6}/)
+    return match?.[0]||''
+  }
+
+  useEffect(()=>{
+    if(!qrScanning)return
+    let stopped=false
+    let stream=null
+    let timer=null
+
+    const stop=()=>{
+      stopped=true
+      clearTimeout(timer)
+      stream?.getTracks?.().forEach(track=>track.stop())
+    }
+
+    const start=async()=>{
+      if(!('BarcodeDetector' in window)){
+        setQrScanMessage('QR camera scanning is not supported by this browser. Enter the code instead.')
+        setQrScanning(false)
+        return
+      }
+      try{
+        const detector=new window.BarcodeDetector({formats:['qr_code']})
+        stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false})
+        await new Promise(resolve=>setTimeout(resolve,50))
+        const video=qrVideoRef.current
+        if(!video){stop();return}
+        video.srcObject=stream
+        await video.play()
+
+        const scan=async()=>{
+          if(stopped)return
+          try{
+            const codes=await detector.detect(video)
+            const code=parseScannedJoinCode(codes?.[0]?.rawValue)
+            if(code){
+              setJoinCode(code)
+              setQrScanMessage('QR code found: '+code)
+              setQrScanning(false)
+              stop()
+              await joinTogetherSession(code)
+              return
+            }
+          }catch{}
+          timer=setTimeout(scan,350)
+        }
+        scan()
+      }catch(error){
+        setQrScanMessage(error?.name==='NotAllowedError'?'Camera permission was denied.':'Could not start the QR scanner.')
+        setQrScanning(false)
+        stop()
+      }
+    }
+
+    start()
+    return stop
+  },[qrScanning])
 
   const saveTogetherNote = async value => {
     if (!activeSession || activeSession.host_user_id !== session?.user?.id || activeSession.session_note === undefined) return
