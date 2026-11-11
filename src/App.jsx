@@ -2143,8 +2143,82 @@ function App() {
     return () => clearInterval(timer)
   },[activeSession?.id,togetherReady])
 
+  const refreshFriends = async () => {
+    if(!session?.user)return
+    const userId=session.user.id
+    const {data,error}=await supabase.from('workset_friendships')
+      .select('*')
+      .or(`requester_user_id.eq.${userId},addressee_user_id.eq.${userId}`)
+      .order('created_at',{ascending:false})
+    if(error)return
+
+    const rows=data||[]
+    const accepted=[]
+    const incoming=[]
+    const outgoing=[]
+
+    for(const row of rows){
+      const requesterIsMe=row.requester_user_id===userId
+      const other={
+        friendship_id:row.id,
+        user_id:requesterIsMe?row.addressee_user_id:row.requester_user_id,
+        display_name:requesterIsMe?row.addressee_display_name:row.requester_display_name,
+        status:row.status,
+        created_at:row.created_at,
+      }
+      if(row.status==='accepted')accepted.push(other)
+      else if(row.status==='pending'&&row.addressee_user_id===userId)incoming.push({...other,requester_user_id:row.requester_user_id})
+      else if(row.status==='pending'&&row.requester_user_id===userId)outgoing.push(other)
+    }
+
+    setFriends(accepted)
+    setIncomingFriendRequests(incoming)
+    setOutgoingFriendRequests(outgoing)
+    setSelectedFriendIds(ids=>ids.filter(id=>accepted.some(friend=>friend.user_id===id)))
+  }
+
+  const requestWorksetFriend = async () => {
+    const email=String(friendEmail||'').trim()
+    if(!email){setFriendMessage('Enter their Workset account email.');return}
+    setFriendMessage('Sending friend request…')
+    const {data,error}=await supabase.rpc('request_workset_friend_by_email',{target_email:email})
+    if(error){setFriendMessage(error.message);return}
+    const result=data?.[0]
+    setFriendEmail('')
+    if(result?.friendship_status==='accepted'){
+      setFriendMessage((result.friend_display_name||'That user')+' is now in your friends.')
+      setFriendAddOpen(false)
+    }else{
+      setFriendMessage('Friend request sent to '+(result?.friend_display_name||email)+'.')
+    }
+    await refreshFriends()
+  }
+
+  const respondFriendRequest = async (friendship,response) => {
+    if(!friendship?.friendship_id)return
+    setFriendMessage(response==='accepted'?'Adding friend…':'Dismissing request…')
+    const {error}=await supabase.rpc('respond_workset_friend_request',{
+      target_friendship:friendship.friendship_id,
+      response,
+    })
+    if(error){setFriendMessage(error.message);return}
+    setFriendMessage(response==='accepted'?(friendship.display_name+' added to friends.'):'')
+    await refreshFriends()
+  }
+
+  const removeWorksetFriend = async friend => {
+    if(!friend?.user_id)return
+    if(!window.confirm('Remove '+friend.display_name+' from your Workset friends?'))return
+    const {error}=await supabase.rpc('remove_workset_friend',{target_friend:friend.user_id})
+    if(error){setFriendMessage(error.message);return}
+    setSelectedFriendIds(ids=>ids.filter(id=>id!==friend.user_id))
+    setFriendMessage(friend.display_name+' removed from friends.')
+    await refreshFriends()
+  }
+
   const refreshTogetherLobby = async () => {
     if(!session?.user)return
+    await refreshFriends()
     const [{data:invites},{data:memberships}]=await Promise.all([
       supabase.from('together_invites').select('*')
         .eq('recipient_user_id',session.user.id)
