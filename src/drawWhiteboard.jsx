@@ -28,6 +28,7 @@ export function DrawWhiteboard({session}) {
   const [message,setMessage]=useState('')
   const [saving,setSaving]=useState(false)
   const [loaded,setLoaded]=useState(false)
+  const [zoom,setZoom]=useState(1)
 
   const loadBoards=async(preferId=null)=>{
     if(!session?.user)return
@@ -63,7 +64,9 @@ export function DrawWhiteboard({session}) {
   const drawAll=()=>{
     const canvas=canvasRef.current,wrap=wrapRef.current;if(!canvas||!wrap)return
     const rect=wrap.getBoundingClientRect(),dpr=Math.max(1,window.devicePixelRatio||1)
-    const w=Math.max(320,Math.floor(rect.width)),h=Math.max(440,Math.floor(Math.min(760,Math.max(500,w*.72))))
+    const viewportWidth=Math.max(280,Math.floor(rect.width))
+    const w=Math.max(240,Math.floor(viewportWidth*zoom))
+    const h=Math.max(180,Math.floor(w*.72))
     canvas.width=Math.floor(w*dpr);canvas.height=Math.floor(h*dpr);canvas.style.width=w+'px';canvas.style.height=h+'px'
     const ctx=canvas.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h)
     if(grid){ctx.strokeStyle='#e5e7eb';ctx.lineWidth=1;for(let x=24;x<w;x+=24){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke()}for(let y=24;y<h;y+=24){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke()}}
@@ -93,8 +96,8 @@ export function DrawWhiteboard({session}) {
     }
   }
 
-  useEffect(()=>{drawAll()},[items,grid])
-  useEffect(()=>{const ro=new ResizeObserver(drawAll);if(wrapRef.current)ro.observe(wrapRef.current);return()=>ro.disconnect()},[items,grid])
+  useEffect(()=>{drawAll()},[items,grid,zoom])
+  useEffect(()=>{const ro=new ResizeObserver(drawAll);if(wrapRef.current)ro.observe(wrapRef.current);return()=>ro.disconnect()},[items,grid,zoom])
 
   const point=e=>{const rect=canvasRef.current.getBoundingClientRect();return{x:clamp((e.clientX-rect.left)/rect.width),y:clamp((e.clientY-rect.top)/rect.height)}}
 
@@ -147,7 +150,7 @@ export function DrawWhiteboard({session}) {
     try{const src=await fileToDataUrl(file);setItems(v=>[...v,{id:uid(),type:'image',src,x:.08,y:.08,w:.55,h:.55}]);setRedo([])}catch{setMessage('Could not load that image.')}
     e.target.value=''
   }
-  const exportPng=()=>{const c=canvasRef.current;if(!c)return;const a=document.createElement('a');a.href=c.toDataURL('image/png');a.download=`WorkoutBoard-${boardTitle.replace(/[^a-z0-9]+/gi,'-')}.png`;document.body.appendChild(a);a.click();a.remove()}
+  const exportPng=()=>{const c=canvasRef.current;if(!c)return;const a=document.createElement('a');a.href=c.toDataURL('image/png');a.download=`Workset-${boardTitle.replace(/[^a-z0-9]+/gi,'-')}.png`;document.body.appendChild(a);a.click();a.remove()}
 
   return <section className="draw-board-section">
     <div className="draw-board-manager">
@@ -163,7 +166,16 @@ export function DrawWhiteboard({session}) {
       <button onClick={()=>imageInputRef.current?.click()}>Image</button><input ref={imageInputRef} type="file" accept="image/*" hidden onChange={addImage}/>
       <div className="draw-actions"><button onClick={undo} disabled={!items.length}>Undo</button><button onClick={redoOne} disabled={!redo.length}>Redo</button><button onClick={clear} disabled={!items.length}>Clear</button></div>
     </div>
-    <div className="draw-board-wrap" ref={wrapRef}><canvas ref={canvasRef} onPointerDown={start} onPointerMove={move} onPointerUp={end} onPointerCancel={end} onPointerLeave={end}/></div>
+    <div className="draw-board-wrap">
+      <div className="draw-board-zoom" aria-label="Whiteboard zoom controls">
+        <button type="button" onClick={()=>setZoom(v=>Math.max(.6,Math.round((v-.1)*10)/10))} disabled={zoom<=.6}>−</button>
+        <button type="button" className="zoom-readout" onClick={()=>setZoom(1)} title="Reset zoom">{Math.round(zoom*100)}%</button>
+        <button type="button" onClick={()=>setZoom(v=>Math.min(2.2,Math.round((v+.1)*10)/10))} disabled={zoom>=2.2}>+</button>
+      </div>
+      <div className="draw-board-pan" ref={wrapRef}>
+        <canvas ref={canvasRef} onPointerDown={start} onPointerMove={move} onPointerUp={end} onPointerCancel={end} onPointerLeave={end}/>
+      </div>
+    </div>
     <div className="draw-board-bottom"><span>{message||'Draw, add shapes/text/stickies, or place an image and draw over it.'}</span><div><button className="secondary-action" onClick={exportPng}>Export PNG</button><button className="primary-action" onClick={save} disabled={saving}>{saving?'Saving…':'Save board'}</button></div></div>
   </section>
 }
