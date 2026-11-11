@@ -7,6 +7,7 @@ import { TrainingTimer } from './trainingTools'
 import { WorkoutCoach, MetconTracker, AccountSecurityPanel, BackupRestorePanel, WorkoutSettingsPanel } from './advancedFeatures'
 import { archiveProgramById, makePlannedFromArchive } from './archivePrograms'
 import QRCode from 'qrcode'
+import { BarcodeDetector as BarcodeDetectorPonyfill } from 'barcode-detector/ponyfill'
 
 const WORKSET_BUILD_ID = __WORKSET_BUILD_ID__
 
@@ -2803,13 +2804,9 @@ function App() {
     }
 
     const start=async()=>{
-      if(!('BarcodeDetector' in window)){
-        setQrScanMessage('QR camera scanning is not supported by this browser. Enter the code instead.')
-        setQrScanning(false)
-        return
-      }
       try{
-        const detector=new window.BarcodeDetector({formats:['qr_code']})
+        const Detector=window.BarcodeDetector||BarcodeDetectorPonyfill
+        const detector=new Detector({formats:['qr_code']})
         stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false})
         await new Promise(resolve=>setTimeout(resolve,50))
         const video=qrVideoRef.current
