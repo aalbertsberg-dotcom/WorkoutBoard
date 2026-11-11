@@ -272,14 +272,16 @@ export function PlatformProgress({
 
   const measurementTotalInches=row=>{
     const fields=['left_forearm','right_forearm','neck','left_arm','right_arm','waist','hips','left_thigh','right_thigh','left_calf','right_calf','chest']
-    return fields.reduce((sum,key)=>{
+    const values=fields.map(key=>{
       let value=Number(row?.[key]||0)
       if(!value&&key==='left_arm')value=Number(row?.arm||0)
       if(!value&&key==='right_arm')value=Number(row?.arm||0)
       if(!value&&key==='left_thigh')value=Number(row?.thigh||0)
       if(!value&&key==='right_thigh')value=Number(row?.thigh||0)
-      return sum+(Number.isFinite(value)?value:0)
-    },0)
+      return value
+    })
+    if(values.some(value=>!Number.isFinite(value)||value<=0))return null
+    return values.reduce((sum,value)=>sum+value,0)
   }
 
   const measurementTrendSeries=useMemo(()=>[
