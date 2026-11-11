@@ -125,6 +125,10 @@ export function PlatformProgress({
   const [quickWeight,setQuickWeight] = useState('')
   const [quickWeightStatus,setQuickWeightStatus] = useState('')
   const [quickWeightSavedValue,setQuickWeightSavedValue] = useState(null)
+  const [quickMeasureKey,setQuickMeasureKey] = useState('waist')
+  const [quickMeasureValue,setQuickMeasureValue] = useState('')
+  const [quickMeasureDate,setQuickMeasureDate] = useState(localDateKey())
+  const [quickMeasureStatus,setQuickMeasureStatus] = useState('')
   const [bodyTrendRange,setBodyTrendRange] = useState('3M')
   const [bodyTrendMetric,setBodyTrendMetric] = useState('waist')
 
@@ -352,6 +356,30 @@ export function PlatformProgress({
     return events.sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,3)
   },[progress.completed,flexSessions])
 
+  const saveQuickMeasurement=async e=>{
+    e.preventDefault()
+    const metric=bodyTrendMetrics.find(item=>item.key===quickMeasureKey&&item.key!=='total_inches')
+    const value=Number(quickMeasureValue)
+    if(!session?.user||!metric||!Number.isFinite(value)||value<=0){
+      setQuickMeasureStatus('Enter a valid measurement.')
+      return
+    }
+    const date=quickMeasureDate||localDateKey()
+    setQuickMeasureStatus('Saving…')
+    const {data:existing}=await supabase.from('body_measurements').select('*').eq('user_id',session.user.id).eq('measured_on',date).maybeSingle()
+    const {error}=await supabase.from('body_measurements').upsert({
+      ...(existing||{}),
+      user_id:session.user.id,
+      measured_on:date,
+      [metric.key]:value,
+    },{onConflict:'user_id,measured_on'})
+    if(error){setQuickMeasureStatus(error.message);return}
+    setQuickMeasureStatus(`✓ ${metric.label} saved: ${value} ${metric.unit}`)
+    setQuickMeasureValue('')
+    setBodyTrendMetric(metric.key)
+    await loadData()
+  }
+
   const saveQuickWeight=async e=>{
     e.preventDefault()
     const value=Number(quickWeight)
@@ -479,6 +507,18 @@ export function PlatformProgress({
           </form>
           <p className="helper-text">Saving here adds a dated bodyweight entry and immediately feeds the Weight over time chart.</p>
           {quickWeightStatus&&quickWeightStatus!=='Saved.'&&quickWeightStatus!=='Saving…'&&<div className="status-message">{quickWeightStatus}</div>}
+        </section>
+
+        <section className="simple-card quick-measure-card">
+          <div className="section-heading"><div><span className="card-label">BODY MEASUREMENT</span><h3>Log one measurement</h3></div></div>
+          <form className="quick-measure-form" onSubmit={saveQuickMeasurement}>
+            <label><span>Measurement</span><select value={quickMeasureKey} onChange={e=>{setQuickMeasureKey(e.target.value);setBodyTrendMetric(e.target.value);setQuickMeasureStatus('')}}>{bodyTrendMetrics.filter(metric=>metric.key!=='total_inches').map(metric=><option key={metric.key} value={metric.key}>{metric.label}</option>)}</select></label>
+            <label><span>Value</span><div className="input-with-unit"><input type="number" step="0.01" inputMode="decimal" value={quickMeasureValue} onChange={e=>{setQuickMeasureValue(e.target.value);setQuickMeasureStatus('')}} placeholder="Enter value"/><b>{(bodyTrendMetrics.find(metric=>metric.key===quickMeasureKey)||{}).unit||'in'}</b></div></label>
+            <label><span>Date</span><input type="date" value={quickMeasureDate} onChange={e=>{setQuickMeasureDate(e.target.value);setQuickMeasureStatus('')}}/></label>
+            <button type="submit" className="primary-action" disabled={!quickMeasureValue||quickMeasureStatus==='Saving…'}>{quickMeasureStatus==='Saving…'?'Saving…':'Save measurement'}</button>
+          </form>
+          <p className="helper-text">Add only what you measured. Saving again on the same date updates that measurement without erasing the others.</p>
+          {quickMeasureStatus&&quickMeasureStatus!=='Saving…'&&<div className={quickMeasureStatus.startsWith('✓')?'measurement-save-success':'status-message'}>{quickMeasureStatus}</div>}
         </section>
 
         <section className="body-trend-stack">
