@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase'
 import { PlatformProgress, PlanPage, AdminPanel, FeedbackPanel } from './platform'
 import { PlannedWorkoutRunner, ExerciseHistoryStrip, InstallAppButton, ExportDataButton, SharedTimer } from './productFeatures'
@@ -6,6 +6,7 @@ import { WhiteboardPage } from './whiteboard'
 import { TrainingTimer } from './trainingTools'
 import { WorkoutCoach, MetconTracker, AccountSecurityPanel, BackupRestorePanel, WorkoutSettingsPanel } from './advancedFeatures'
 import { archiveProgramById, makePlannedFromArchive } from './archivePrograms'
+import QRCode from 'qrcode'
 
 const WORKSET_BUILD_ID = __WORKSET_BUILD_ID__
 
@@ -1146,6 +1147,16 @@ function App() {
   const [managedAthleteDraft,setManagedAthleteDraft] = useState({id:null,display_name:'',Squat:'',Bench:'',Deadlift:'',Press:''})
   const [joinCode,setJoinCode] = useState('')
   const [togetherMessage,setTogetherMessage] = useState('')
+  const [togetherAction,setTogetherAction] = useState('')
+  const [incomingTogetherInvites,setIncomingTogetherInvites] = useState([])
+  const [recentTogetherSessions,setRecentTogetherSessions] = useState([])
+  const [inviteEmail,setInviteEmail] = useState('')
+  const [invitePanelOpen,setInvitePanelOpen] = useState(false)
+  const [sessionQr,setSessionQr] = useState('')
+  const [showSessionQr,setShowSessionQr] = useState(false)
+  const [qrScanning,setQrScanning] = useState(false)
+  const [qrScanMessage,setQrScanMessage] = useState('')
+  const qrVideoRef=useRef(null)
   const [sharedWorkoutActive,setSharedWorkoutActive] = useState(false)
   const [isAdmin,setIsAdmin] = useState(false)
   const [plannedToday,setPlannedToday] = useState(null)
