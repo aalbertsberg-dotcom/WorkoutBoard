@@ -3341,57 +3341,86 @@ function App() {
               </div>
             ) : !activeSession ? (
               <>
-                <section className="simple-card managed-athletes-card">
-                  <div className="section-heading">
-                    <div><span className="card-label">TRAINING PARTNERS</span><h3>Managed partners</h3></div>
-                    <button type="button" className="secondary-action compact-action" onClick={()=>openManagedAthleteEditor(null)}>+ Partner</button>
+                {incomingTogetherInvites.length>0&&<section className="together-invite-inbox">
+                  <div className="section-heading"><div><span className="card-label">INVITES</span><h3>Workout invitations</h3></div><b>{incomingTogetherInvites.length}</b></div>
+                  <div className="together-invite-list">
+                    {incomingTogetherInvites.map(invite=><article key={invite.id}>
+                      <div><strong>{invite.sender_display_name}</strong><span>invited you to train together</span></div>
+                      <div>
+                        <button type="button" className="secondary-action" onClick={()=>respondTogetherInvite(invite,'declined')}>Dismiss</button>
+                        <button type="button" className="primary-action" onClick={()=>respondTogetherInvite(invite,'accepted')}>Join</button>
+                      </div>
+                    </article>)}
                   </div>
-                  <p className="helper-text">For someone who doesn't want their own Workset account. You keep their 1RMs and can include their target weights in Together workouts.</p>
-                  {managedAthletes.length>0?<div className="managed-athlete-list">
-                    {managedAthletes.map(athlete=><div key={athlete.id} className="managed-athlete-row">
-                      <div><strong>{athlete.display_name}</strong><span>{['Squat','Bench','Deadlift','Press'].filter(lift=>Number(athlete[lift]||0)>0).map(lift=>lift+' '+Number(athlete[lift]).toFixed(2)).join(' · ')||'No 1RMs saved yet'}</span></div>
-                      <div><button type="button" onClick={()=>openManagedAthleteEditor(athlete)}>Edit</button><button type="button" onClick={()=>deleteManagedAthlete(athlete)}>×</button></div>
-                    </div>)}
-                  </div>:<p className="helper-text">No managed partners yet.</p>}
+                </section>}
+
+                <section className="together-lobby-hero">
+                  <span className="card-label">TRAIN TOGETHER</span>
+                  <h2>Start or join a workout</h2>
+                  <p>Pick who you're training with, choose the workout, and go. Codes and QR are there when you need them.</p>
+                  <div className="together-primary-actions">
+                    <button type="button" className={togetherAction==='start'?'primary-action active':'primary-action'} onClick={()=>setTogetherAction(v=>v==='start'?'':'start')}>Start together</button>
+                    <button type="button" className={togetherAction==='join'?'secondary-action active':'secondary-action'} onClick={()=>setTogetherAction(v=>v==='join'?'':'join')}>Join session</button>
+                  </div>
+                </section>
+
+                <section className="simple-card together-partners-card">
+                  <div className="section-heading">
+                    <div><span className="card-label">PARTNERS</span><h3>Your training partners</h3></div>
+                    <button type="button" className="secondary-action compact-action" onClick={()=>openManagedAthleteEditor(null)}>+ Add</button>
+                  </div>
+                  {managedAthletes.length>0?<div className="together-partner-chips">
+                    {managedAthletes.map(athlete=><button
+                      type="button"
+                      key={athlete.id}
+                      className={selectedManagedAthleteIds.includes(athlete.id)?'selected':''}
+                      onClick={()=>setSelectedManagedAthleteIds(ids=>ids.includes(athlete.id)?ids.filter(id=>id!==athlete.id):[...ids,athlete.id])}
+                    ><strong>{athlete.display_name}</strong><span>{selectedManagedAthleteIds.includes(athlete.id)?'Selected':'Managed'}</span></button>)}
+                  </div>:<p className="helper-text">Add a no-login training partner to keep their 1RMs and target weights in Workset.</p>}
+                  {managedAthletes.length>0&&<button type="button" className="together-manage-link" onClick={()=>setManagedAthleteEditorOpen(v=>!v)}>{managedAthleteEditorOpen?'Close partner management':'Manage partners'}</button>}
                   {managedAthleteEditorOpen&&<div className="managed-athlete-editor">
                     <label><span>Name</span><input value={managedAthleteDraft.display_name} onChange={e=>setManagedAthleteDraft(v=>({...v,display_name:e.target.value}))} placeholder="Tracey"/></label>
                     <div className="managed-athlete-max-grid">
                       {lifts.map(lift=><label key={lift}><span>{lift}</span><div className="input-with-unit"><input type="number" inputMode="decimal" value={managedAthleteDraft[lift]} onChange={e=>setManagedAthleteDraft(v=>({...v,[lift]:e.target.value===''?'':Math.max(0,Number(e.target.value)||0)}))} placeholder="0"/><b>lb</b></div></label>)}
                     </div>
                     <div className="managed-athlete-editor-actions"><button type="button" className="secondary-action" onClick={()=>setManagedAthleteEditorOpen(false)}>Cancel</button><button type="button" className="primary-action" onClick={saveManagedAthlete}>Save partner</button></div>
+                    {managedAthleteDraft.id&&<button type="button" className="danger-lite" onClick={()=>deleteManagedAthlete(managedAthleteDraft)}>Remove partner</button>}
                   </div>}
                 </section>
 
-                <section className="together-start-card">
-                  <span className="card-label">HOST A WORKOUT</span>
-                  <h2>1. Create a session code</h2>
-                  <p>Together shares one workout at a time. Choose the tracked program, week, and workout you want everyone to run.</p>
+                {togetherAction==='start'&&<section className="together-flow-card">
+                  <div className="section-heading"><div><span className="card-label">START TOGETHER</span><h3>Choose the workout</h3></div><button type="button" className="icon-close" onClick={()=>setTogetherAction('')}>×</button></div>
+                  {selectedManagedAthleteIds.length>0&&<div className="together-selected-partners"><span>Training with</span><strong>{managedAthletes.filter(a=>selectedManagedAthleteIds.includes(a.id)).map(a=>a.display_name).join(' · ')}</strong></div>}
                   <div className="together-host-picker">
                     <label><span>Program</span><select value={togetherProgramChoice?.key||''} onChange={e=>{setTogetherProgramKey(e.target.value);setTogetherWeek(1);setTogetherWorkoutIndex(0)}}>{togetherProgramOptions.map(p=><option key={p.key} value={p.key}>{p.name}</option>)}</select></label>
                     <label><span>Week</span><select value={togetherWeek} onChange={e=>{setTogetherWeek(Number(e.target.value));setTogetherWorkoutIndex(0)}}>{Array.from({length:Number(togetherProgramChoice?.weeksCount||1)},(_,i)=>i+1).map(n=><option key={n} value={n}>Week {n}</option>)}</select></label>
                     <label><span>Workout</span><select value={togetherWorkoutIndex} onChange={e=>setTogetherWorkoutIndex(Number(e.target.value))}>{togetherWorkoutChoices.map((d,i)=><option key={i} value={i}>{d.title}</option>)}</select></label>
                   </div>
-                  {managedAthletes.length>0&&<div className="managed-partner-picker">
-                    <span>Include managed partner targets</span>
-                    <div>{managedAthletes.map(athlete=><label key={athlete.id}>
-                      <input type="checkbox" checked={selectedManagedAthleteIds.includes(athlete.id)} onChange={e=>setSelectedManagedAthleteIds(ids=>e.target.checked?[...ids,athlete.id]:ids.filter(id=>id!==athlete.id))}/>
-                      <b>{athlete.display_name}</b>
-                    </label>)}</div>
-                  </div>}
                   <div className="together-workout-preview"><strong>{togetherProgramChoice?.shortName||'Choose a program'}</strong><span>Week {togetherWeek} · {togetherWorkoutChoices[togetherWorkoutIndex]?.title||'Choose workout'}</span></div>
-                  <button className="primary-action" disabled={!togetherProgramChoice||!togetherWorkoutChoices.length} onClick={createTogetherSession}>Create my 6-character code</button>
-                </section>
+                  <button className="primary-action together-start-now" disabled={!togetherProgramChoice||!togetherWorkoutChoices.length} onClick={createTogetherSession}>Start together</button>
+                </section>}
 
-                <section className="together-start-card">
-                  <span className="card-label">JOIN A WORKOUT</span>
-                  <h2>2. Enter the host's code</h2>
-                  <p>If someone else is hosting, open their join link or enter the 6-character code here.</p>
-                  <div className="join-row">
+                {togetherAction==='join'&&<section className="together-flow-card">
+                  <div className="section-heading"><div><span className="card-label">JOIN SESSION</span><h3>Code or QR</h3></div><button type="button" className="icon-close" onClick={()=>{setTogetherAction('');setQrScanning(false)}}>×</button></div>
+                  <div className="join-row together-join-row">
                     <input value={joinCode} onChange={e => setJoinCode(e.target.value.toUpperCase())} maxLength="6" placeholder="ABC123" />
-                    <button onClick={joinTogetherSession}>Join</button>
+                    <button type="button" onClick={()=>joinTogetherSession()}>Join</button>
                   </div>
-                  {togetherMessage && <p className="status-message">{togetherMessage}</p>}
-                </section>
+                  <button type="button" className="secondary-action together-scan-button" onClick={()=>{setQrScanMessage('');setQrScanning(v=>!v)}}>{qrScanning?'Stop camera':'Scan QR code'}</button>
+                  {qrScanning&&<div className="together-qr-scanner"><video ref={qrVideoRef} playsInline muted/><div>Point the camera at a Workset join QR code.</div></div>}
+                  {qrScanMessage&&<p className="status-message">{qrScanMessage}</p>}
+                  {togetherMessage&&<p className="status-message">{togetherMessage}</p>}
+                </section>}
+
+                {recentTogetherSessions.length>0&&<section className="simple-card together-recent-card">
+                  <div className="section-heading"><div><span className="card-label">RECENT</span><h3>Recent sessions</h3></div></div>
+                  <div className="together-recent-list">
+                    {recentTogetherSessions.map(row=><div key={row.id}>
+                      <div><strong>{row.program||'Shared workout'}</strong><span>Week {row.week} · {row.lift}</span></div>
+                      <b>{row.status==='open'?'Live':'Finished'}</b>
+                    </div>)}
+                  </div>
+                </section>}
               </>
             ) : (
               <>
