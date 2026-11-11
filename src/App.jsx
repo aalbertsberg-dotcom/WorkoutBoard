@@ -2264,6 +2264,17 @@ function App() {
     await refreshTogetherLobby()
   }
 
+  const inviteFriendToActiveSession = async friend => {
+    if(!activeSession?.id||activeSession.host_user_id!==session?.user?.id||!friend?.user_id)return
+    setTogetherMessage('Inviting '+friend.display_name+'…')
+    const {error}=await supabase.rpc('invite_workset_friend_to_session',{
+      target_session:activeSession.id,
+      friend_user_id:friend.user_id,
+    })
+    setTogetherMessage(error?error.message:'Invite sent to '+friend.display_name+'.')
+    if(!error)await refreshTogetherLobby()
+  }
+
   const respondTogetherInvite = async (invite,response) => {
     if(!invite?.id)return
     setTogetherMessage(response==='accepted'?'Joining session…':'Dismissing invite…')
@@ -3593,8 +3604,12 @@ function App() {
                   </div>}
 
                   {invitePanelOpen&&activeSession.host_user_id===session.user.id&&<div className="together-notify-panel">
-                    <span>Notify a Workset user</span>
-                    <p>Enter their exact Workset account email. They'll get an invite inside Together.</p>
+                    <span>Invite to this workout</span>
+                    {friends.length>0&&<>
+                      <p>Your Workset friends</p>
+                      <div className="active-session-friend-invites">{friends.map(friend=><button type="button" key={friend.user_id} onClick={()=>inviteFriendToActiveSession(friend)}>{friend.display_name}</button>)}</div>
+                    </>}
+                    <p>{friends.length?'Or invite another Workset user by exact email.':'Enter their exact Workset account email. They will get an invite inside Together.'}</p>
                     <div><input type="email" value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)} placeholder="name@example.com"/><button type="button" onClick={sendTogetherInvite}>Send invite</button></div>
                   </div>}
 
