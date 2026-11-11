@@ -1,0 +1,23 @@
+name: Workset Update Controls Check
+
+on:
+  push:
+    branches: [ux/install-update-controls]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Build
+        env:
+          VITE_SUPABASE_URL: https://lplybuzlgowxeszkvtqe.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+        run: npm run build
