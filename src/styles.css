@@ -5039,3 +5039,41 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
     bottom:96px;
   }
 }
+
+
+/* Installed app update controls */
+.installed-app-controls {
+  display:grid;
+  gap:8px;
+}
+.installed-app-controls .status-message {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  min-width:0;
+}
+.installed-app-controls .status-message strong {
+  color:#e8eef8;
+  font-size:10px;
+}
+.installed-app-controls .status-message span {
+  color:#8fa0b8;
+  font-size:8px;
+  text-align:right;
+}
+.app-update-actions {
+  display:grid;
+  grid-template-columns:minmax(0,1.4fr) minmax(120px,.8fr);
+  gap:8px;
+}
+.app-update-actions .wide-button,
+.app-update-actions .secondary-action {
+  margin:0;
+  min-height:42px;
+}
+@media (max-width:460px) {
+  .app-update-actions {
+    grid-template-columns:1fr;
+  }
+}
