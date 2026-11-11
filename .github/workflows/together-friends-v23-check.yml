@@ -1,0 +1,25 @@
+name: Workset Friends v2.3 Check
+
+on:
+  push:
+    branches: [feature/together-friends-v23]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Build
+        env:
+          VITE_SUPABASE_URL: https://lplybuzlgowxeszkvtqe.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+        run: npm run build
+      - name: Verify version
+        run: node -e "const fs=require('fs');const v=JSON.parse(fs.readFileSync('dist/version.json','utf8'));if(v.appVersion!=='2.3.0')process.exit(1)"
