@@ -814,7 +814,7 @@ export function InstallAppButton() {
 
   if (installed) return <div className="installed-app-controls">
     <div className="status-message">
-      <strong>Workset is installed.</strong>
+      <strong>Workset v{__WORKSET_APP_VERSION__}</strong>
       <span>Build {String(__WORKSET_BUILD_ID__).slice(0,8)}{updateState?' · '+updateState:''}</span>
     </div>
     <div className="app-update-actions">
