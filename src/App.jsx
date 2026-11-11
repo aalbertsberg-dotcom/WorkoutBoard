@@ -3504,7 +3504,7 @@ function App() {
         <div className="bottom-space" />
       </main>
 
-      <nav className={'mobile-bottom-nav app-level-mobile-nav '+(activeTab==='whiteboard'?'board-bottom-offset':'')} aria-label="Workset mobile navigation">
+      <nav className="mobile-bottom-nav app-level-mobile-nav" aria-label="Workset mobile navigation">
         <button className={activeTab==='today'?'active':''} onClick={openToday}><b>●</b><span>Today</span></button>
         <button className={activeTab==='together'?'active':''} onClick={()=>setActiveTab('together')}><b>⇄</b><span>Together</span></button>
         <button className={activeTab==='program'?'active':''} onClick={()=>setActiveTab('program')}><b>▦</b><span>Plan</span></button>
