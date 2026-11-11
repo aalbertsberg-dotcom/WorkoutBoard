@@ -3424,16 +3424,39 @@ function App() {
               </>
             ) : (
               <>
-                <section className="session-hero">
-                  <span className="card-label">{activeSession.status === 'open' ? 'LIVE SESSION' : 'SESSION SUMMARY'}</span>
-                  <div className="session-code">{activeSession.join_code}</div>
-                  <div className="code-help">This is the code your workout partners enter.</div>
-                  <h2>{sharedMeta?.program_name || programs[sharedProgramId]?.shortName || activeSession.program}</h2>
-                  <p>{sharedMeta ? 'Week '+sharedMeta.week+' · '+sharedMeta.workout_title : 'Week '+activeSession.week+' · '+activeSession.lift}</p>
-                  <div className="session-actions">
-                    {activeSession.status === 'open' && <button onClick={shareSession}>Share join link</button>}
-                    <button onClick={() => refreshTogether(activeSession.id)}>Refresh</button>
+                <section className="session-hero together-active-hero">
+                  <div className="together-active-head">
+                    <div>
+                      <span className="card-label">{activeSession.status === 'open' ? 'LIVE NOW' : 'SESSION SUMMARY'}</span>
+                      <h2>{sharedMeta?.program_name || programs[sharedProgramId]?.shortName || activeSession.program}</h2>
+                      <p>{sharedMeta ? 'Week '+sharedMeta.week+' · '+sharedMeta.workout_title : 'Week '+activeSession.week+' · '+activeSession.lift}</p>
+                    </div>
+                    <div className="together-live-count"><strong>{participants.length+sharedManagedPartners.length}</strong><span>people</span></div>
                   </div>
+
+                  {activeSession.status === 'open' && !ownSessionResult?.completed_at&&<button className="primary-action together-resume-button" onClick={openSharedWorkout}>{sharedWorkoutActive?'Resume workout':'Open my workout'}</button>}
+
+                  <div className="together-session-share">
+                    <div className="together-code-compact"><span>Join code</span><strong>{activeSession.join_code}</strong></div>
+                    {activeSession.status==='open'&&<div className="together-share-actions">
+                      <button type="button" onClick={shareSession}>Share</button>
+                      <button type="button" onClick={()=>setShowSessionQr(v=>!v)}>{showSessionQr?'Hide QR':'QR code'}</button>
+                      {activeSession.host_user_id===session.user.id&&<button type="button" onClick={()=>setInvitePanelOpen(v=>!v)}>Notify</button>}
+                    </div>}
+                  </div>
+
+                  {showSessionQr&&<div className="together-qr-card">
+                    {sessionQr?<img src={sessionQr} alt={'QR code to join Workset session '+activeSession.join_code}/>:<div className="qr-loading">Generating QR…</div>}
+                    <div><strong>Scan to join</strong><span>or enter {activeSession.join_code}</span></div>
+                  </div>}
+
+                  {invitePanelOpen&&activeSession.host_user_id===session.user.id&&<div className="together-notify-panel">
+                    <span>Notify a Workset user</span>
+                    <p>Enter their exact Workset account email. They'll get an invite inside Together.</p>
+                    <div><input type="email" value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)} placeholder="name@example.com"/><button type="button" onClick={sendTogetherInvite}>Send invite</button></div>
+                  </div>}
+
+                  {togetherMessage&&<p className="status-message">{togetherMessage}</p>}
                 </section>
 
                 <section className="summary-grid together-summary">
@@ -3491,10 +3514,6 @@ function App() {
                     </div>)}
                   </div>
                 </section>
-
-                {activeSession.status === 'open' && !ownSessionResult?.completed_at && (
-                  <button className="primary-action" onClick={openSharedWorkout}>Open my shared workout</button>
-                )}
 
                 {ownSessionResult?.completed_at && (
                   <div className="completed-callout">✓ Your workout is finished. Your personal history and this shared summary both have it.</div>
