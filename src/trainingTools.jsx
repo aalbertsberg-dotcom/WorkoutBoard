@@ -213,14 +213,24 @@ const circumferenceFields=[
   ['left_thigh','Left thigh'],['right_thigh','Right thigh'],['left_calf','Left calf'],
   ['right_calf','Right calf'],['chest','Chest'],
 ]
+const editableMeasurementFields=[
+  ...circumferenceFields.map(([key,label])=>[key,label,'in']),
+  ['body_fat','Body fat','%'],
+]
+
+function measurementValue(row,key) {
+  if(!row)return null
+  let value=row[key]
+  if(value==null&&key==='left_arm')value=row.arm
+  if(value==null&&key==='right_arm')value=row.arm
+  if(value==null&&key==='left_thigh')value=row.thigh
+  if(value==null&&key==='right_thigh')value=row.thigh
+  return value
+}
 
 function totalInches(row={}) {
   return circumferenceFields.reduce((sum,[key])=>{
-    let value=Number(row[key]||0)
-    if(!value && key==='left_arm') value=Number(row.arm||0)
-    if(!value && key==='right_arm') value=Number(row.arm||0)
-    if(!value && key==='left_thigh') value=Number(row.thigh||0)
-    if(!value && key==='right_thigh') value=Number(row.thigh||0)
+    const value=Number(measurementValue(row,key)||0)
     return sum+(Number.isFinite(value)?value:0)
   },0)
 }
@@ -241,7 +251,7 @@ function parseResult(text){
   return m?{weight:Number(m[1]),reps:Number(m[2]),e1rm:Number(m[1])*(1+Number(m[2])/30)}:null
 }
 
-export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],formatWeight,initialTab='PRs',onlyTab=null}) {
+export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],formatWeight,initialTab='PRs',onlyTab=null,onMeasurementMetricChange=null,onMeasurementsChanged=null}) {
   const [tab,setTab]=useState(onlyTab||initialTab)
   const activeTab=onlyTab||tab
   const [goals,setGoals]=useState([])
@@ -251,6 +261,10 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
   const [newGoal,setNewGoal]=useState({label:'',goal_type:'Strength',target_value:'',unit:'lb',target_date:''})
   const [measurement,setMeasurement]=useState(()=>measurementDraft())
   const [measurementSaveStatus,setMeasurementSaveStatus]=useState('')
+  const [editingMeasurementKey,setEditingMeasurementKey]=useState('')
+  const [inlineMeasurementValue,setInlineMeasurementValue]=useState('')
+  const [inlineMeasurementStatus,setInlineMeasurementStatus]=useState('')
+  const measurementDraftLoadedRef=useRef('')
   const [message,setMessage]=useState('')
 
   const load=async()=>{
@@ -262,7 +276,14 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
       supabase.from('user_program_tracking').select('*').eq('user_id',session.user.id).order('updated_at',{ascending:false}),
     ])
     if(g.error||m.error){setMessage((g.error||m.error).message);return}
-    setGoals(g.data||[]);setMeasurements(m.data||[]);setPlanned(p.data||[]);setTracking(t.data||[])
+    const measurementRows=m.data||[]
+    setGoals(g.data||[]);setMeasurements(measurementRows);setPlanned(p.data||[]);setTracking(t.data||[])
+    const draftDate=measurement.measured_on||today()
+    if(measurementDraftLoadedRef.current!==draftDate){
+      const existing=measurementRows.find(row=>row.measured_on===draftDate)
+      setMeasurement(measurementDraft(existing,draftDate))
+      measurementDraftLoadedRef.current=draftDate
+    }
   }
   useEffect(()=>{load()},[session?.user?.id])
 
@@ -338,11 +359,12 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
     setMeasurementSaveStatus('')
     const existing=measurements.find(row=>row.measured_on===date)
     setMeasurement(measurementDraft(existing,date))
+    measurementDraftLoadedRef.current=date
   }
   const saveMeasurement=async e=>{
     e.preventDefault()
     const date=measurement.measured_on||today()
-    const numericKeys=['bodyweight',...circumferenceFields.map(([key])=>key),'body_fat']
+    const numericKeys=[...circumferenceFields.map(([key])=>key),'body_fat']
     const changes={user_id:session.user.id,measured_on:date}
     for(const key of numericKeys){
       if(measurement[key]!==''&&measurement[key]!=null)changes[key]=Number(measurement[key])
@@ -355,8 +377,58 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
     if(error){setMeasurementSaveStatus('');setMessage(error.message);return}
     setMessage('')
     setMeasurement(measurementDraft(saved,date))
+    measurementDraftLoadedRef.current=date
     setMeasurementSaveStatus('Saved')
     await load()
+    await onMeasurementsChanged?.()
+  }
+
+  const todayKey=today()
+  const todayMeasurement=measurements.find(row=>row.measured_on===todayKey)||null
+  const latestMeasurementFor=key=>{
+    for(const row of measurements){
+      const raw=measurementValue(row,key)
+      if(raw!==null&&raw!==''&&Number.isFinite(Number(raw))&&Number(raw)>0){
+        return {value:Number(raw),date:row.measured_on}
+      }
+    }
+    return null
+  }
+  const todayMeasurementCount=editableMeasurementFields.filter(([key])=>{
+    const raw=measurementValue(todayMeasurement,key)
+    return raw!==null&&raw!==''&&Number(raw)>0
+  }).length
+  const startInlineMeasurement=key=>{
+    const todayRaw=measurementValue(todayMeasurement,key)
+    const prior=latestMeasurementFor(key)
+    setEditingMeasurementKey(key)
+    setInlineMeasurementValue(String(todayRaw??prior?.value??''))
+    setInlineMeasurementStatus('')
+    onMeasurementMetricChange?.(key)
+  }
+  const saveInlineMeasurement=async(key)=>{
+    const value=Number(inlineMeasurementValue)
+    if(!session?.user||!Number.isFinite(value)||value<=0){
+      setInlineMeasurementStatus('Enter a valid value.')
+      return
+    }
+    setInlineMeasurementStatus('Saving…')
+    const {data:existing}=await supabase.from('body_measurements').select('*').eq('user_id',session.user.id).eq('measured_on',todayKey).maybeSingle()
+    const {data:saved,error}=await supabase.from('body_measurements').upsert({
+      ...(existing||{}),
+      user_id:session.user.id,
+      measured_on:todayKey,
+      [key]:value,
+    },{onConflict:'user_id,measured_on'}).select().single()
+    if(error){setInlineMeasurementStatus(error.message);return}
+    setMeasurement(measurementDraft(saved,todayKey))
+    measurementDraftLoadedRef.current=todayKey
+    setEditingMeasurementKey('')
+    setInlineMeasurementValue('')
+    setInlineMeasurementStatus(key)
+    onMeasurementMetricChange?.(key)
+    await load()
+    await onMeasurementsChanged?.()
   }
 
   const latest=measurements[0]
@@ -408,20 +480,44 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
     {activeTab==='Measurements'&&<section className="measurement-workspace">
       <section className="simple-card">
         <div className="section-heading"><div><span className="card-label">BODY MEASUREMENTS</span><h3>{latest?('Latest · '+new Date(latest.measured_on+'T12:00:00').toLocaleDateString()):'Add a baseline'}</h3></div>{latest&&<b className="measurement-total-badge">{totalInches(latest)?totalInches(latest).toFixed(2)+' in total':''}</b>}</div>
-        {latest&&<div className="measurement-summary">
-          {[
-            ['Weight',latest.bodyweight,'lb'],['Waist',latest.waist,'in'],['Hips',latest.hips,'in'],
-            ['Chest',latest.chest,'in'],['Neck',latest.neck,'in'],['Body fat',latest.body_fat,'%']
-          ].map(([label,value,unit])=><div key={label}><span>{label}</span><strong>{value??'—'}{value!=null?' '+unit:''}</strong></div>)}
-        </div>}
+        <div className={'measurement-today-state '+(todayMeasurementCount?'active':'')}>
+          <strong>{todayMeasurementCount?("Updating today's measurements · "+todayMeasurementCount+" saved"):'No body measurements saved today'}</strong>
+          <span>Tap any measurement to change it. Today's value is used first; otherwise the last saved value is preloaded.</span>
+        </div>
+
+        <div className="measurement-edit-grid">
+          {editableMeasurementFields.map(([key,label,unit])=>{
+            const todayRaw=measurementValue(todayMeasurement,key)
+            const latestInfo=latestMeasurementFor(key)
+            const shown=todayRaw??latestInfo?.value??null
+            const isEditing=editingMeasurementKey===key
+            const savedToday=todayRaw!==null&&todayRaw!==''&&Number(todayRaw)>0
+            return <article className={'measurement-edit-card '+(isEditing?'editing':'')} key={key}>
+              <button type="button" className="measurement-edit-main" onClick={()=>startInlineMeasurement(key)}>
+                <span>{label}</span>
+                <strong>{shown!=null?(Number(shown).toLocaleString(undefined,{maximumFractionDigits:2})+' '+unit):'Add'}</strong>
+                <small>{savedToday
+                  ? ('Today · '+Number(todayRaw).toLocaleString(undefined,{maximumFractionDigits:2})+' '+unit)
+                  : latestInfo
+                    ? ('Last: '+Number(latestInfo.value).toLocaleString(undefined,{maximumFractionDigits:2})+' '+unit+' · '+new Date(latestInfo.date+'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}))
+                    : 'Tap to add'}</small>
+              </button>
+              {isEditing&&<form className="measurement-inline-form" onSubmit={e=>{e.preventDefault();saveInlineMeasurement(key)}}>
+                <div className="input-with-unit"><input autoFocus type="number" step={unit==='%'?'0.1':'0.01'} inputMode="decimal" value={inlineMeasurementValue} onChange={e=>{setInlineMeasurementValue(e.target.value);setInlineMeasurementStatus('')}}/><b>{unit}</b></div>
+                <div><button type="button" className="secondary-action" onClick={()=>{setEditingMeasurementKey('');setInlineMeasurementStatus('')}}>Cancel</button><button type="submit" className="primary-action" disabled={inlineMeasurementStatus==='Saving…'}>{inlineMeasurementStatus==='Saving…'?'Saving…':'Save'}</button></div>
+                {inlineMeasurementStatus&&inlineMeasurementStatus!=='Saving…'&&inlineMeasurementStatus!==key&&<small className="measurement-inline-error">{inlineMeasurementStatus}</small>}
+              </form>}
+              {!isEditing&&inlineMeasurementStatus===key&&<small className="measurement-inline-saved">✓ Saved today</small>}
+            </article>
+          })}
+        </div>
 
         <details className="measurement-full-checkin">
-          <summary><span><b>Full measurement check-in</b><small>Enter several measurements at once</small></span></summary>
+          <summary><span><b>Full measurement check-in</b><small>Optional: update several body measurements at once</small></span></summary>
         <form className="measurement-form expanded-measurement-form" onSubmit={saveMeasurement}>
           <label className="measurement-date-field"><span>Date</span><input type="date" value={measurement.measured_on} onChange={e=>chooseMeasurementDate(e.target.value)}/></label>
-          <label><span>Weight</span><div className="input-with-unit"><input type="number" step="0.1" inputMode="decimal" value={measurement.bodyweight} onChange={e=>setMeasurementField('bodyweight',e.target.value)} placeholder="Weight"/><b>lb</b></div></label>
 
-          <p className="measurement-save-rule"><strong>Same date = same entry.</strong> Saving again updates only the fields you enter. Blank fields keep whatever was already saved.</p>
+          <p className="measurement-save-rule"><strong>Same date = same entry.</strong> Saving again updates only the fields you enter. Weight is logged separately above.</p>
 
           <fieldset className="measurement-group">
             <legend>Upper body</legend>
