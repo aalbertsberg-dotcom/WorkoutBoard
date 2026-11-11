@@ -6129,3 +6129,155 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
     grid-column:auto;
   }
 }
+
+
+/* App-style back navigation */
+.app-history-back {
+  margin-top:7px;
+  min-height:32px;
+  border:1px solid #3a4964;
+  border-radius:9px;
+  background:#121d30;
+  color:#dce6f4;
+  padding:0 11px;
+  font-size:10px;
+  font-weight:900;
+}
+.app-history-back:active {
+  transform:translateY(1px);
+}
+
+/* Direct Measurements entry from Me */
+.progress-summary-actions {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+.progress-summary-actions .wide-button {
+  margin:0;
+  min-height:42px;
+}
+.progress-measurements-wide {
+  border-color:#4b6735;
+  background:#17250f;
+  color:#d9f99d;
+}
+
+/* Tap-to-edit body measurements */
+.measurement-today-state {
+  display:grid;
+  gap:3px;
+  margin:2px 0 10px;
+  padding:9px 10px;
+  border:1px solid #31435e;
+  border-radius:10px;
+  background:#0b1525;
+}
+.measurement-today-state.active {
+  border-color:#4b6735;
+  background:#12200f;
+}
+.measurement-today-state strong {
+  color:#e4ecf7;
+  font-size:11px;
+}
+.measurement-today-state.active strong {
+  color:#d9f99d;
+}
+.measurement-today-state span {
+  color:#8fa0b8;
+  font-size:9px;
+  line-height:1.4;
+}
+.measurement-edit-grid {
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:7px;
+}
+.measurement-edit-card {
+  min-width:0;
+  overflow:hidden;
+  border:1px solid #31435e;
+  border-radius:11px;
+  background:#0d1728;
+}
+.measurement-edit-card.editing {
+  grid-column:span 2;
+  border-color:#5b7b38;
+  background:#111d19;
+}
+.measurement-edit-main {
+  display:grid;
+  gap:3px;
+  width:100%;
+  min-height:78px;
+  border:0;
+  background:transparent;
+  color:#fff;
+  padding:10px;
+  text-align:left;
+}
+.measurement-edit-main span {
+  color:#91a2b9;
+  font-size:9px;
+  font-weight:850;
+}
+.measurement-edit-main strong {
+  font-size:17px;
+  line-height:1.1;
+}
+.measurement-edit-main small {
+  min-height:22px;
+  color:#77879d;
+  font-size:8px;
+  line-height:1.35;
+}
+.measurement-inline-form {
+  display:grid;
+  gap:7px;
+  padding:0 9px 9px;
+}
+.measurement-inline-form .input-with-unit input {
+  min-height:46px;
+  font-size:17px;
+  font-weight:900;
+}
+.measurement-inline-form > div:last-of-type {
+  display:grid;
+  grid-template-columns:.8fr 1.2fr;
+  gap:6px;
+}
+.measurement-inline-form button {
+  min-height:38px;
+}
+.measurement-inline-error {
+  color:#fecaca;
+  font-size:9px;
+}
+.measurement-inline-saved {
+  display:block;
+  padding:0 10px 9px;
+  color:#d9f99d;
+  font-size:9px;
+  font-weight:900;
+}
+.measurement-full-checkin {
+  margin-top:10px;
+}
+
+@media (max-width:700px) {
+  .progress-summary-actions {
+    grid-template-columns:1fr 1fr;
+  }
+  .measurement-edit-grid {
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+  .measurement-edit-card.editing {
+    grid-column:1 / -1;
+  }
+}
+@media (max-width:390px) {
+  .progress-summary-actions {
+    grid-template-columns:1fr;
+  }
+}
