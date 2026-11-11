@@ -1192,10 +1192,62 @@ function App() {
   const [feedbackUnread,setFeedbackUnread] = useState(0)
   const [feedbackToast,setFeedbackToast] = useState(null)
   const [progressStartSection,setProgressStartSection] = useState('Overview')
+  const [appNavDepth,setAppNavDepth] = useState(()=>Number(window.history.state?.worksetDepth||0))
   const [completedTrainingSessions,setCompletedTrainingSessions] = useState([])
   const [programCompletionPrompt,setProgramCompletionPrompt] = useState(null)
   const [oneRmNotice,setOneRmNotice] = useState(null)
   const [releaseUpdate,setReleaseUpdate] = useState(null)
+
+  const navigateTo = (tab,{progressSection=null,replace=false}={}) => {
+    const section=progressSection || (tab==='progress'?progressStartSection:'Overview')
+    if(tab===activeTab && (tab!=='progress'||section===progressStartSection))return
+    const currentDepth=Number(window.history.state?.worksetDepth||appNavDepth||0)
+    const nextDepth=replace?currentDepth:currentDepth+1
+    const state={...(window.history.state||{}),worksetApp:true,tab,progressSection:section,worksetDepth:nextDepth}
+    if(replace)window.history.replaceState(state,'',window.location.href)
+    else window.history.pushState(state,'',window.location.href)
+    setAppNavDepth(nextDepth)
+    if(tab==='progress')setProgressStartSection(section)
+    setActiveTab(tab)
+  }
+
+  const navigateBack = () => {
+    const depth=Number(window.history.state?.worksetDepth||appNavDepth||0)
+    if(depth>0){
+      window.history.back()
+      return
+    }
+    if(activeTab!=='me'&&activeTab!=='today'){
+      const state={...(window.history.state||{}),worksetApp:true,tab:'me',progressSection:'Overview',worksetDepth:0}
+      window.history.replaceState(state,'',window.location.href)
+      setProgressStartSection('Overview')
+      setActiveTab('me')
+      setAppNavDepth(0)
+    }
+  }
+
+  const openProgress = (section='Overview') => navigateTo('progress',{progressSection:section})
+
+  useEffect(()=>{
+    const state=window.history.state||{}
+    if(state.worksetApp&&state.tab){
+      setActiveTab(state.tab)
+      setProgressStartSection(state.progressSection||'Overview')
+      setAppNavDepth(Number(state.worksetDepth||0))
+    }else{
+      window.history.replaceState({...state,worksetApp:true,tab:activeTab,progressSection:progressStartSection,worksetDepth:0},'',window.location.href)
+      setAppNavDepth(0)
+    }
+    const onPopState=e=>{
+      const next=e.state
+      if(!next?.worksetApp)return
+      setActiveTab(next.tab||'today')
+      setProgressStartSection(next.progressSection||'Overview')
+      setAppNavDepth(Number(next.worksetDepth||0))
+    }
+    window.addEventListener('popstate',onPopState)
+    return()=>window.removeEventListener('popstate',onPopState)
+  },[])
 
   useEffect(()=>{
     if(!import.meta.env.PROD)return
@@ -1882,7 +1934,7 @@ function App() {
   const openToday = async () => {
     await refreshTrackedProgramsInfo()
     await refreshPlannedToday()
-    setActiveTab('today')
+    navigateTo('today')
   }
 
   useEffect(() => {
@@ -1911,7 +1963,7 @@ function App() {
 
   const openMe = async () => {
     await refreshTrackedProgramsInfo()
-    setActiveTab('me')
+    navigateTo('me')
   }
 
   useEffect(() => {
@@ -2048,7 +2100,7 @@ function App() {
       setActiveTab('together')
       const url=new URL(window.location.href)
       url.searchParams.delete('join')
-      window.history.replaceState({},'',url.pathname+url.search+url.hash)
+      window.history.replaceState({...window.history.state,worksetApp:true,tab:'together',progressSection:'Overview',worksetDepth:Number(window.history.state?.worksetDepth||0)},'',url.pathname+url.search+url.hash)
       await refreshTogether(found.id)
     }
     joinFromUrl()
@@ -3043,6 +3095,7 @@ function App() {
           <div>
             <div className="brand-lockup"><img src={import.meta.env.BASE_URL+'icon.svg'} alt="" /><span>Work<b>set</b></span></div>
             <h1>{activeTab === 'today' ? 'Today' : activeTab === 'together' ? 'Together' : activeTab === 'program' ? 'Plan' : activeTab === 'whiteboard' ? 'Whiteboard' : activeTab === 'progress' ? 'Progress' : activeTab === 'admin' ? 'Admin' : 'Me'}</h1>
+            {appNavDepth>0&&<button type="button" className="app-history-back" onClick={navigateBack}>← Back</button>}
           </div>
           <button className={'account-chip ' + (isAdmin ? 'admin' : '')} onClick={openMe}>
             <span>{displayName}</span>
@@ -3052,9 +3105,9 @@ function App() {
 
         <nav className="primary-nav">
           <button className={activeTab === 'today' ? 'active' : ''} onClick={openToday}><b>●</b><span>Today</span></button>
-          <button className={activeTab === 'together' ? 'active' : ''} onClick={() => setActiveTab('together')}><b>⇄</b><span>Together</span>{(incomingTogetherInvites.length+incomingFriendRequests.length)>0&&<i className="nav-invite-badge">{incomingTogetherInvites.length+incomingFriendRequests.length}</i>}</button>
-          <button className={activeTab === 'program' ? 'active' : ''} onClick={() => setActiveTab('program')}><b>▦</b><span>Plan</span></button>
-          <button className={activeTab === 'whiteboard' ? 'active' : ''} onClick={() => setActiveTab('whiteboard')}><b>□</b><span>Board</span></button>
+          <button className={activeTab === 'together' ? 'active' : ''} onClick={() => navigateTo('together')}><b>⇄</b><span>Together</span>{(incomingTogetherInvites.length+incomingFriendRequests.length)>0&&<i className="nav-invite-badge">{incomingTogetherInvites.length+incomingFriendRequests.length}</i>}</button>
+          <button className={activeTab === 'program' ? 'active' : ''} onClick={() => navigateTo('program')}><b>▦</b><span>Plan</span></button>
+          <button className={activeTab === 'whiteboard' ? 'active' : ''} onClick={() => navigateTo('whiteboard')}><b>□</b><span>Board</span></button>
         </nav>
 
         {activeTab === 'today' && <TrainingTimer />}
@@ -3206,7 +3259,7 @@ function App() {
                 <button onClick={()=>startStandaloneWorkout('conditioning')}><strong>Conditioning / Metcon</strong><span>Intervals, AMRAP, EMOM, cardio, etc.</span></button>
               </section>}
 
-              <button className="secondary-action" onClick={()=>setActiveTab('program')}>View full program / plan ahead</button>
+              <button className="secondary-action" onClick={()=>navigateTo('program')}>View full program / plan ahead</button>
 
               {workoutStartError&&<div className="status-message">{workoutStartError}</div>}
             </section>
@@ -3215,7 +3268,7 @@ function App() {
             {sharedWorkoutActive && activeSession && (
               <section className="together-banner">
                 <div><span>WORKOUT TOGETHER</span><strong>Code {activeSession.join_code}</strong></div>
-                <button onClick={() => setActiveTab('together')}>{participants.length} people</button>
+                <button onClick={() => navigateTo('together')}>{participants.length} people</button>
               </section>
             )}
 
@@ -3243,7 +3296,7 @@ function App() {
                       {lifts.map(x => <option key={x}>{x}</option>)}
                     </select>
                   </label>
-                  <button type="button" className="program-library-link" onClick={() => setActiveTab('program')}>Choose / track programs in Plan</button>
+                  <button type="button" className="program-library-link" onClick={() => navigateTo('program')}>Choose / track programs in Plan</button>
                 </div>
               </details>
             )}
@@ -3713,7 +3766,6 @@ function App() {
         ) : activeTab === 'progress' ? (
           <section className="page-section progress-page">
             <div className="progress-page-top">
-              <button className="secondary-action progress-back-button" onClick={()=>{setProgressStartSection('Overview');setActiveTab('me')}}>← Back to Me</button>
               <div>
                 <span className="card-label">YOUR PROGRESS</span>
                 <h2>Progress & Analytics</h2>
@@ -3733,6 +3785,7 @@ function App() {
               trackedProgramInfo={trackedTodayInfo}
               trackedProgramsInfo={trackedProgramsInfo}
               initialSection={progressStartSection}
+              onSectionChange={section=>openProgress(section)}
             />
           </section>
         ) : activeTab === 'admin' ? (
@@ -3757,8 +3810,9 @@ function App() {
             <PlatformProgress
               view="mine"
               compact
-              onOpenProgress={()=>{setProgressStartSection('Overview');setActiveTab('progress');window.scrollTo({top:0,behavior:'auto'})}}
-              onOpenWeight={()=>{setProgressStartSection('Weight & Measurements');setActiveTab('progress');window.scrollTo({top:0,behavior:'auto'})}}
+              onOpenProgress={()=>openProgress('Overview')}
+              onOpenWeight={()=>openProgress('Weight & Measurements')}
+              onOpenMeasurements={()=>openProgress('Weight & Measurements')}
               session={session}
               profile={profile}
               setProfile={setProfile}
@@ -3840,7 +3894,7 @@ function App() {
                 <div><strong>{info.name}</strong><span>{info.nextTitle?'Next: '+info.nextTitle:info.complete?'Complete':'Tracking'}</span></div>
                 <b>{info.completed}/{info.total}</b>
               </div>)}</div>}
-              <button className="wide-button" onClick={() => setActiveTab('program')}>Plan & programs</button>
+              <button className="wide-button" onClick={() => navigateTo('program')}>Plan & programs</button>
             </section>
 
             <section className="simple-card">
@@ -3872,7 +3926,7 @@ function App() {
               <section className="simple-card admin-entry">
                 <div className="section-heading"><div><span className="card-label">WORKSET ADMIN</span><h3>Administration</h3></div></div>
                 <p className="helper-text">View users, workout history, progress totals, training maxes, and manage current programs.</p>
-                <button className="wide-button admin-button" onClick={() => {setFeedbackUnread(0);setActiveTab('admin')}}>Open Admin{feedbackUnread?` · ${feedbackUnread} feedback`:''}</button>
+                <button className="wide-button admin-button" onClick={() => {setFeedbackUnread(0);navigateTo('admin')}}>Open Admin{feedbackUnread?` · ${feedbackUnread} feedback`:''}</button>
               </section>
             )}
 
@@ -3885,9 +3939,9 @@ function App() {
 
       <nav className="mobile-bottom-nav app-level-mobile-nav" aria-label="Workset mobile navigation">
         <button className={activeTab==='today'?'active':''} onClick={openToday}><b>●</b><span>Today</span></button>
-        <button className={activeTab==='together'?'active':''} onClick={()=>setActiveTab('together')}><b>⇄</b><span>Together</span>{(incomingTogetherInvites.length+incomingFriendRequests.length)>0&&<i className="nav-invite-badge">{incomingTogetherInvites.length+incomingFriendRequests.length}</i>}</button>
-        <button className={activeTab==='program'?'active':''} onClick={()=>setActiveTab('program')}><b>▦</b><span>Plan</span></button>
-        <button className={activeTab==='whiteboard'?'active':''} onClick={()=>setActiveTab('whiteboard')}><b>□</b><span>Board</span></button>
+        <button className={activeTab==='together'?'active':''} onClick={()=>navigateTo('together')}><b>⇄</b><span>Together</span>{(incomingTogetherInvites.length+incomingFriendRequests.length)>0&&<i className="nav-invite-badge">{incomingTogetherInvites.length+incomingFriendRequests.length}</i>}</button>
+        <button className={activeTab==='program'?'active':''} onClick={()=>navigateTo('program')}><b>▦</b><span>Plan</span></button>
+        <button className={activeTab==='whiteboard'?'active':''} onClick={()=>navigateTo('whiteboard')}><b>□</b><span>Board</span></button>
       </nav>
 
       {releaseUpdate&&<div className="release-update-toast" role="status">
@@ -3895,7 +3949,7 @@ function App() {
         <button type="button" onClick={applyReleaseUpdate}>Reload</button>
       </div>}
 
-      {feedbackToast&&isAdmin&&<button className="admin-feedback-toast" onClick={()=>{setFeedbackUnread(0);setFeedbackToast(null);setActiveTab('admin')}}>
+      {feedbackToast&&isAdmin&&<button className="admin-feedback-toast" onClick={()=>{setFeedbackUnread(0);setFeedbackToast(null);navigateTo('admin')}}>
         <span>New feedback · {feedbackToast.category}</span>
         <strong>{String(feedbackToast.message||'').slice(0,120)}</strong>
       </button>}
