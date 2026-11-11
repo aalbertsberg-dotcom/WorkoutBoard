@@ -2134,6 +2134,75 @@ function App() {
     return () => clearInterval(timer)
   },[activeSession?.id,togetherReady])
 
+  const refreshTogetherLobby = async () => {
+    if(!session?.user)return
+    const [{data:invites},{data:memberships}]=await Promise.all([
+      supabase.from('together_invites').select('*')
+        .eq('recipient_user_id',session.user.id)
+        .eq('status','pending')
+        .order('created_at',{ascending:false})
+        .limit(8),
+      supabase.from('session_participants').select('session_id,joined_at')
+        .eq('user_id',session.user.id)
+        .order('joined_at',{ascending:false})
+        .limit(8),
+    ])
+    setIncomingTogetherInvites(invites||[])
+    const ids=[...new Set((memberships||[]).map(row=>row.session_id).filter(Boolean))]
+    if(!ids.length){setRecentTogetherSessions([]);return}
+    const {data:sessions}=await supabase.from('shared_sessions').select('*').in('id',ids)
+    const order=new Map(ids.map((id,index)=>[id,index]))
+    setRecentTogetherSessions((sessions||[])
+      .filter(row=>row.id!==activeSession?.id)
+      .sort((a,b)=>(order.get(a.id)??99)-(order.get(b.id)??99))
+      .slice(0,4))
+  }
+
+  useEffect(()=>{
+    if(!session?.user||activeTab!=='together')return
+    refreshTogetherLobby()
+    const timer=setInterval(refreshTogetherLobby,10000)
+    return()=>clearInterval(timer)
+  },[session?.user?.id,activeTab,activeSession?.id])
+
+  const sendTogetherInvite = async () => {
+    if(!activeSession?.id||activeSession.host_user_id!==session?.user?.id)return
+    const email=String(inviteEmail||'').trim()
+    if(!email){setTogetherMessage('Enter the Workset account email.');return}
+    setTogetherMessage('Sending invite…')
+    const {data,error}=await supabase.rpc('invite_workset_user_by_email',{
+      target_session:activeSession.id,
+      target_email:email,
+    })
+    if(error){setTogetherMessage(error.message);return}
+    const person=data?.[0]?.recipient_display_name||email
+    setInviteEmail('')
+    setTogetherMessage('Invite sent to '+person+'.')
+    await refreshTogetherLobby()
+  }
+
+  const respondTogetherInvite = async (invite,response) => {
+    if(!invite?.id)return
+    setTogetherMessage(response==='accepted'?'Joining session…':'Dismissing invite…')
+    const {data,error}=await supabase.rpc('respond_to_together_invite',{
+      target_invite:invite.id,
+      response,
+    })
+    if(error){setTogetherMessage(error.message);return}
+    await refreshTogetherLobby()
+    if(response==='accepted'&&data?.[0]?.session_id){
+      const {data:joined}=await supabase.from('shared_sessions').select('*').eq('id',data[0].session_id).single()
+      if(joined){
+        setActiveSession(joined)
+        setTogetherAction('')
+        setTogetherMessage('')
+        await refreshTogether(joined.id)
+      }
+    }else{
+      setTogetherMessage('')
+    }
+  }
+
   const updateMain = (i,field,value) => {
     setSaveState('Unsaved')
     setLog(v => ({...v,complete:false,main:v.main.map((set,idx) => idx === i ? {...set,[field]:value} : set)}))
