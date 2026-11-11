@@ -2644,6 +2644,9 @@ function App() {
 
     setTogetherReady(true)
     setActiveSession(created)
+    setTogetherAction('')
+    setInvitePanelOpen(false)
+    setShowSessionQr(false)
     setTogetherMessage('')
     await refreshTogether(created.id)
   }
@@ -2679,7 +2682,9 @@ function App() {
     }
 
     setActiveSession(found)
+    setTogetherAction('')
     setJoinCode('')
+    setQrScanning(false)
     setTogetherMessage('')
     await refreshTogether(found.id)
   }
@@ -2891,6 +2896,10 @@ function App() {
     setActiveSession(null)
     setParticipants([])
     setSessionResults([])
+    setTogetherAction('')
+    setInvitePanelOpen(false)
+    setShowSessionQr(false)
+    setQrScanning(false)
     setTogetherMessage('')
   }
 
