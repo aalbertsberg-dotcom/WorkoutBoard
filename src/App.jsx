@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase'
 import { PlatformProgress, PlanPage, AdminPanel, FeedbackPanel } from './platform'
 import { PlannedWorkoutRunner, ExerciseHistoryStrip, InstallAppButton, ExportDataButton, SharedTimer } from './productFeatures'
@@ -6,6 +6,8 @@ import { WhiteboardPage } from './whiteboard'
 import { TrainingTimer } from './trainingTools'
 import { WorkoutCoach, MetconTracker, AccountSecurityPanel, BackupRestorePanel, WorkoutSettingsPanel } from './advancedFeatures'
 import { archiveProgramById, makePlannedFromArchive } from './archivePrograms'
+import QRCode from 'qrcode'
+import { BarcodeDetector as BarcodeDetectorPonyfill } from 'barcode-detector/ponyfill'
 
 const WORKSET_BUILD_ID = __WORKSET_BUILD_ID__
 
@@ -1146,6 +1148,16 @@ function App() {
   const [managedAthleteDraft,setManagedAthleteDraft] = useState({id:null,display_name:'',Squat:'',Bench:'',Deadlift:'',Press:''})
   const [joinCode,setJoinCode] = useState('')
   const [togetherMessage,setTogetherMessage] = useState('')
+  const [togetherAction,setTogetherAction] = useState('')
+  const [incomingTogetherInvites,setIncomingTogetherInvites] = useState([])
+  const [recentTogetherSessions,setRecentTogetherSessions] = useState([])
+  const [inviteEmail,setInviteEmail] = useState('')
+  const [invitePanelOpen,setInvitePanelOpen] = useState(false)
+  const [sessionQr,setSessionQr] = useState('')
+  const [showSessionQr,setShowSessionQr] = useState(false)
+  const [qrScanning,setQrScanning] = useState(false)
+  const [qrScanMessage,setQrScanMessage] = useState('')
+  const qrVideoRef=useRef(null)
   const [sharedWorkoutActive,setSharedWorkoutActive] = useState(false)
   const [isAdmin,setIsAdmin] = useState(false)
   const [plannedToday,setPlannedToday] = useState(null)
@@ -2123,6 +2135,75 @@ function App() {
     return () => clearInterval(timer)
   },[activeSession?.id,togetherReady])
 
+  const refreshTogetherLobby = async () => {
+    if(!session?.user)return
+    const [{data:invites},{data:memberships}]=await Promise.all([
+      supabase.from('together_invites').select('*')
+        .eq('recipient_user_id',session.user.id)
+        .eq('status','pending')
+        .order('created_at',{ascending:false})
+        .limit(8),
+      supabase.from('session_participants').select('session_id,joined_at')
+        .eq('user_id',session.user.id)
+        .order('joined_at',{ascending:false})
+        .limit(8),
+    ])
+    setIncomingTogetherInvites(invites||[])
+    const ids=[...new Set((memberships||[]).map(row=>row.session_id).filter(Boolean))]
+    if(!ids.length){setRecentTogetherSessions([]);return}
+    const {data:sessions}=await supabase.from('shared_sessions').select('*').in('id',ids)
+    const order=new Map(ids.map((id,index)=>[id,index]))
+    setRecentTogetherSessions((sessions||[])
+      .filter(row=>row.id!==activeSession?.id)
+      .sort((a,b)=>(order.get(a.id)??99)-(order.get(b.id)??99))
+      .slice(0,4))
+  }
+
+  useEffect(()=>{
+    if(!session?.user)return
+    refreshTogetherLobby()
+    const timer=setInterval(refreshTogetherLobby,activeTab==='together'?10000:30000)
+    return()=>clearInterval(timer)
+  },[session?.user?.id,activeTab,activeSession?.id])
+
+  const sendTogetherInvite = async () => {
+    if(!activeSession?.id||activeSession.host_user_id!==session?.user?.id)return
+    const email=String(inviteEmail||'').trim()
+    if(!email){setTogetherMessage('Enter the Workset account email.');return}
+    setTogetherMessage('Sending invite…')
+    const {data,error}=await supabase.rpc('invite_workset_user_by_email',{
+      target_session:activeSession.id,
+      target_email:email,
+    })
+    if(error){setTogetherMessage(error.message);return}
+    const person=data?.[0]?.recipient_display_name||email
+    setInviteEmail('')
+    setTogetherMessage('Invite sent to '+person+'.')
+    await refreshTogetherLobby()
+  }
+
+  const respondTogetherInvite = async (invite,response) => {
+    if(!invite?.id)return
+    setTogetherMessage(response==='accepted'?'Joining session…':'Dismissing invite…')
+    const {data,error}=await supabase.rpc('respond_to_together_invite',{
+      target_invite:invite.id,
+      response,
+    })
+    if(error){setTogetherMessage(error.message);return}
+    await refreshTogetherLobby()
+    if(response==='accepted'&&data?.[0]?.session_id){
+      const {data:joined}=await supabase.from('shared_sessions').select('*').eq('id',data[0].session_id).single()
+      if(joined){
+        setActiveSession(joined)
+        setTogetherAction('')
+        setTogetherMessage('')
+        await refreshTogether(joined.id)
+      }
+    }else{
+      setTogetherMessage('')
+    }
+  }
+
   const updateMain = (i,field,value) => {
     setSaveState('Unsaved')
     setLog(v => ({...v,complete:false,main:v.main.map((set,idx) => idx === i ? {...set,[field]:value} : set)}))
@@ -2564,14 +2645,18 @@ function App() {
 
     setTogetherReady(true)
     setActiveSession(created)
+    setTogetherAction('')
+    setInvitePanelOpen(false)
+    setShowSessionQr(false)
     setTogetherMessage('')
     await refreshTogether(created.id)
   }
 
-  const joinTogetherSession = async () => {
-    if (!session?.user || !joinCode.trim()) return
+  const joinTogetherSession = async providedCode => {
+    const raw=String(providedCode||joinCode||'').trim()
+    if (!session?.user || !raw) return
     setTogetherMessage('Joining…')
-    const code = joinCode.trim().toUpperCase()
+    const code = raw.toUpperCase()
 
     const {data:found,error} = await supabase
       .from('shared_sessions')
@@ -2598,7 +2683,9 @@ function App() {
     }
 
     setActiveSession(found)
+    setTogetherAction('')
     setJoinCode('')
+    setQrScanning(false)
     setTogetherMessage('')
     await refreshTogether(found.id)
   }
@@ -2658,11 +2745,16 @@ function App() {
     setLog(normalizeLog(found?.workout || null,programId,activeSession.week,activeSession.lift,Number(oneRepMaxes[activeSession.lift] || 0)))
   }
 
+  const sessionJoinUrl = sessionRow => {
+    if(!sessionRow?.join_code)return ''
+    const url=new URL(appUrl())
+    url.searchParams.set('join',sessionRow.join_code)
+    return url.toString()
+  }
+
   const shareSession = async () => {
     if (!activeSession) return
-    const url=new URL(appUrl())
-    url.searchParams.set('join',activeSession.join_code)
-    const shareUrl=url.toString()
+    const shareUrl=sessionJoinUrl(activeSession)
     const text='Join my Workset session'
     try {
       if (navigator.share) await navigator.share({title:'Workset Together',text,url:shareUrl})
@@ -2674,6 +2766,81 @@ function App() {
       setTogetherMessage(shareUrl)
     }
   }
+
+  useEffect(()=>{
+    if(!showSessionQr||!activeSession?.join_code){setSessionQr('');return}
+    let cancelled=false
+    QRCode.toDataURL(sessionJoinUrl(activeSession),{
+      width:300,
+      margin:1,
+      errorCorrectionLevel:'M',
+      color:{dark:'#07101f',light:'#ffffff'},
+    }).then(url=>{if(!cancelled)setSessionQr(url)}).catch(()=>{if(!cancelled)setSessionQr('')})
+    return()=>{cancelled=true}
+  },[showSessionQr,activeSession?.id,activeSession?.join_code])
+
+  const parseScannedJoinCode = raw => {
+    const value=String(raw||'').trim()
+    if(!value)return ''
+    try{
+      const url=new URL(value)
+      const code=url.searchParams.get('join')
+      if(code)return code.trim().toUpperCase().slice(0,6)
+    }catch{}
+    const match=value.toUpperCase().match(/[A-Z0-9]{6}/)
+    return match?.[0]||''
+  }
+
+  useEffect(()=>{
+    if(!qrScanning)return
+    let stopped=false
+    let stream=null
+    let timer=null
+
+    const stop=()=>{
+      stopped=true
+      clearTimeout(timer)
+      stream?.getTracks?.().forEach(track=>track.stop())
+    }
+
+    const start=async()=>{
+      try{
+        const Detector=window.BarcodeDetector||BarcodeDetectorPonyfill
+        const detector=new Detector({formats:['qr_code']})
+        stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false})
+        await new Promise(resolve=>setTimeout(resolve,50))
+        const video=qrVideoRef.current
+        if(!video){stop();return}
+        video.srcObject=stream
+        await video.play()
+
+        const scan=async()=>{
+          if(stopped)return
+          try{
+            const codes=await detector.detect(video)
+            const code=parseScannedJoinCode(codes?.[0]?.rawValue)
+            if(code){
+              setJoinCode(code)
+              setQrScanMessage('QR code found: '+code)
+              setQrScanning(false)
+              stop()
+              await joinTogetherSession(code)
+              return
+            }
+          }catch{}
+          timer=setTimeout(scan,350)
+        }
+        scan()
+      }catch(error){
+        setQrScanMessage(error?.name==='NotAllowedError'?'Camera permission was denied.':'Could not start the QR scanner.')
+        setQrScanning(false)
+        stop()
+      }
+    }
+
+    start()
+    return stop
+  },[qrScanning])
 
   const saveTogetherNote = async value => {
     if (!activeSession || activeSession.host_user_id !== session?.user?.id || activeSession.session_note === undefined) return
@@ -2726,6 +2893,10 @@ function App() {
     setActiveSession(null)
     setParticipants([])
     setSessionResults([])
+    setTogetherAction('')
+    setInvitePanelOpen(false)
+    setShowSessionQr(false)
+    setQrScanning(false)
     setTogetherMessage('')
   }
 
@@ -2777,7 +2948,7 @@ function App() {
 
         <nav className="primary-nav">
           <button className={activeTab === 'today' ? 'active' : ''} onClick={openToday}><b>●</b><span>Today</span></button>
-          <button className={activeTab === 'together' ? 'active' : ''} onClick={() => setActiveTab('together')}><b>⇄</b><span>Together</span></button>
+          <button className={activeTab === 'together' ? 'active' : ''} onClick={() => setActiveTab('together')}><b>⇄</b><span>Together</span>{incomingTogetherInvites.length>0&&<i className="nav-invite-badge">{incomingTogetherInvites.length}</i>}</button>
           <button className={activeTab === 'program' ? 'active' : ''} onClick={() => setActiveTab('program')}><b>▦</b><span>Plan</span></button>
           <button className={activeTab === 'whiteboard' ? 'active' : ''} onClick={() => setActiveTab('whiteboard')}><b>□</b><span>Board</span></button>
         </nav>
@@ -3167,70 +3338,125 @@ function App() {
               </div>
             ) : !activeSession ? (
               <>
-                <section className="simple-card managed-athletes-card">
-                  <div className="section-heading">
-                    <div><span className="card-label">TRAINING PARTNERS</span><h3>Managed partners</h3></div>
-                    <button type="button" className="secondary-action compact-action" onClick={()=>openManagedAthleteEditor(null)}>+ Partner</button>
+                {incomingTogetherInvites.length>0&&<section className="together-invite-inbox">
+                  <div className="section-heading"><div><span className="card-label">INVITES</span><h3>Workout invitations</h3></div><b>{incomingTogetherInvites.length}</b></div>
+                  <div className="together-invite-list">
+                    {incomingTogetherInvites.map(invite=><article key={invite.id}>
+                      <div><strong>{invite.sender_display_name}</strong><span>invited you to train together</span></div>
+                      <div>
+                        <button type="button" className="secondary-action" onClick={()=>respondTogetherInvite(invite,'declined')}>Dismiss</button>
+                        <button type="button" className="primary-action" onClick={()=>respondTogetherInvite(invite,'accepted')}>Join</button>
+                      </div>
+                    </article>)}
                   </div>
-                  <p className="helper-text">For someone who doesn't want their own Workset account. You keep their 1RMs and can include their target weights in Together workouts.</p>
-                  {managedAthletes.length>0?<div className="managed-athlete-list">
-                    {managedAthletes.map(athlete=><div key={athlete.id} className="managed-athlete-row">
-                      <div><strong>{athlete.display_name}</strong><span>{['Squat','Bench','Deadlift','Press'].filter(lift=>Number(athlete[lift]||0)>0).map(lift=>lift+' '+Number(athlete[lift]).toFixed(2)).join(' · ')||'No 1RMs saved yet'}</span></div>
-                      <div><button type="button" onClick={()=>openManagedAthleteEditor(athlete)}>Edit</button><button type="button" onClick={()=>deleteManagedAthlete(athlete)}>×</button></div>
-                    </div>)}
-                  </div>:<p className="helper-text">No managed partners yet.</p>}
+                </section>}
+
+                <section className="together-lobby-hero">
+                  <span className="card-label">TRAIN TOGETHER</span>
+                  <h2>Start or join a workout</h2>
+                  <p>Pick who you're training with, choose the workout, and go. Codes and QR are there when you need them.</p>
+                  <div className="together-primary-actions">
+                    <button type="button" className={togetherAction==='start'?'primary-action active':'primary-action'} onClick={()=>setTogetherAction(v=>v==='start'?'':'start')}>Start together</button>
+                    <button type="button" className={togetherAction==='join'?'secondary-action active':'secondary-action'} onClick={()=>setTogetherAction(v=>v==='join'?'':'join')}>Join session</button>
+                  </div>
+                </section>
+
+                <section className="simple-card together-partners-card">
+                  <div className="section-heading">
+                    <div><span className="card-label">PARTNERS</span><h3>Your training partners</h3></div>
+                    <button type="button" className="secondary-action compact-action" onClick={()=>openManagedAthleteEditor(null)}>+ Add</button>
+                  </div>
+                  {managedAthletes.length>0?<div className="together-partner-chips">
+                    {managedAthletes.map(athlete=><button
+                      type="button"
+                      key={athlete.id}
+                      className={selectedManagedAthleteIds.includes(athlete.id)?'selected':''}
+                      onClick={()=>setSelectedManagedAthleteIds(ids=>ids.includes(athlete.id)?ids.filter(id=>id!==athlete.id):[...ids,athlete.id])}
+                    ><strong>{athlete.display_name}</strong><span>{selectedManagedAthleteIds.includes(athlete.id)?'Selected':'Managed'}</span></button>)}
+                  </div>:<p className="helper-text">Add a no-login training partner to keep their 1RMs and target weights in Workset.</p>}
+                  {managedAthletes.length>0&&<button type="button" className="together-manage-link" onClick={()=>{setManagedAthleteEditorOpen(v=>!v);setManagedAthleteDraft({id:null,display_name:'',Squat:'',Bench:'',Deadlift:'',Press:''})}}>{managedAthleteEditorOpen?'Close partner management':'Manage partners'}</button>}
+                  {managedAthleteEditorOpen&&managedAthletes.length>0&&<div className="together-partner-manage-list">
+                    {managedAthletes.map(athlete=><div key={athlete.id}><span>{athlete.display_name}</span><div><button type="button" onClick={()=>openManagedAthleteEditor(athlete)}>Edit</button><button type="button" onClick={()=>deleteManagedAthlete(athlete)}>×</button></div></div>)}
+                  </div>}
                   {managedAthleteEditorOpen&&<div className="managed-athlete-editor">
                     <label><span>Name</span><input value={managedAthleteDraft.display_name} onChange={e=>setManagedAthleteDraft(v=>({...v,display_name:e.target.value}))} placeholder="Tracey"/></label>
                     <div className="managed-athlete-max-grid">
                       {lifts.map(lift=><label key={lift}><span>{lift}</span><div className="input-with-unit"><input type="number" inputMode="decimal" value={managedAthleteDraft[lift]} onChange={e=>setManagedAthleteDraft(v=>({...v,[lift]:e.target.value===''?'':Math.max(0,Number(e.target.value)||0)}))} placeholder="0"/><b>lb</b></div></label>)}
                     </div>
                     <div className="managed-athlete-editor-actions"><button type="button" className="secondary-action" onClick={()=>setManagedAthleteEditorOpen(false)}>Cancel</button><button type="button" className="primary-action" onClick={saveManagedAthlete}>Save partner</button></div>
+                    {managedAthleteDraft.id&&<button type="button" className="danger-lite" onClick={()=>deleteManagedAthlete(managedAthleteDraft)}>Remove partner</button>}
                   </div>}
                 </section>
 
-                <section className="together-start-card">
-                  <span className="card-label">HOST A WORKOUT</span>
-                  <h2>1. Create a session code</h2>
-                  <p>Together shares one workout at a time. Choose the tracked program, week, and workout you want everyone to run.</p>
+                {togetherAction==='start'&&<section className="together-flow-card">
+                  <div className="section-heading"><div><span className="card-label">START TOGETHER</span><h3>Choose the workout</h3></div><button type="button" className="icon-close" onClick={()=>setTogetherAction('')}>×</button></div>
+                  {selectedManagedAthleteIds.length>0&&<div className="together-selected-partners"><span>Training with</span><strong>{managedAthletes.filter(a=>selectedManagedAthleteIds.includes(a.id)).map(a=>a.display_name).join(' · ')}</strong></div>}
                   <div className="together-host-picker">
                     <label><span>Program</span><select value={togetherProgramChoice?.key||''} onChange={e=>{setTogetherProgramKey(e.target.value);setTogetherWeek(1);setTogetherWorkoutIndex(0)}}>{togetherProgramOptions.map(p=><option key={p.key} value={p.key}>{p.name}</option>)}</select></label>
                     <label><span>Week</span><select value={togetherWeek} onChange={e=>{setTogetherWeek(Number(e.target.value));setTogetherWorkoutIndex(0)}}>{Array.from({length:Number(togetherProgramChoice?.weeksCount||1)},(_,i)=>i+1).map(n=><option key={n} value={n}>Week {n}</option>)}</select></label>
                     <label><span>Workout</span><select value={togetherWorkoutIndex} onChange={e=>setTogetherWorkoutIndex(Number(e.target.value))}>{togetherWorkoutChoices.map((d,i)=><option key={i} value={i}>{d.title}</option>)}</select></label>
                   </div>
-                  {managedAthletes.length>0&&<div className="managed-partner-picker">
-                    <span>Include managed partner targets</span>
-                    <div>{managedAthletes.map(athlete=><label key={athlete.id}>
-                      <input type="checkbox" checked={selectedManagedAthleteIds.includes(athlete.id)} onChange={e=>setSelectedManagedAthleteIds(ids=>e.target.checked?[...ids,athlete.id]:ids.filter(id=>id!==athlete.id))}/>
-                      <b>{athlete.display_name}</b>
-                    </label>)}</div>
-                  </div>}
                   <div className="together-workout-preview"><strong>{togetherProgramChoice?.shortName||'Choose a program'}</strong><span>Week {togetherWeek} · {togetherWorkoutChoices[togetherWorkoutIndex]?.title||'Choose workout'}</span></div>
-                  <button className="primary-action" disabled={!togetherProgramChoice||!togetherWorkoutChoices.length} onClick={createTogetherSession}>Create my 6-character code</button>
-                </section>
+                  <button className="primary-action together-start-now" disabled={!togetherProgramChoice||!togetherWorkoutChoices.length} onClick={createTogetherSession}>Start together</button>
+                </section>}
 
-                <section className="together-start-card">
-                  <span className="card-label">JOIN A WORKOUT</span>
-                  <h2>2. Enter the host's code</h2>
-                  <p>If someone else is hosting, open their join link or enter the 6-character code here.</p>
-                  <div className="join-row">
+                {togetherAction==='join'&&<section className="together-flow-card">
+                  <div className="section-heading"><div><span className="card-label">JOIN SESSION</span><h3>Code or QR</h3></div><button type="button" className="icon-close" onClick={()=>{setTogetherAction('');setQrScanning(false)}}>×</button></div>
+                  <div className="join-row together-join-row">
                     <input value={joinCode} onChange={e => setJoinCode(e.target.value.toUpperCase())} maxLength="6" placeholder="ABC123" />
-                    <button onClick={joinTogetherSession}>Join</button>
+                    <button type="button" onClick={()=>joinTogetherSession()}>Join</button>
                   </div>
-                  {togetherMessage && <p className="status-message">{togetherMessage}</p>}
-                </section>
+                  <button type="button" className="secondary-action together-scan-button" onClick={()=>{setQrScanMessage('');setQrScanning(v=>!v)}}>{qrScanning?'Stop camera':'Scan QR code'}</button>
+                  {qrScanning&&<div className="together-qr-scanner"><video ref={qrVideoRef} playsInline muted/><div>Point the camera at a Workset join QR code.</div></div>}
+                  {qrScanMessage&&<p className="status-message">{qrScanMessage}</p>}
+                  {togetherMessage&&<p className="status-message">{togetherMessage}</p>}
+                </section>}
+
+                {recentTogetherSessions.length>0&&<section className="simple-card together-recent-card">
+                  <div className="section-heading"><div><span className="card-label">RECENT</span><h3>Recent sessions</h3></div></div>
+                  <div className="together-recent-list">
+                    {recentTogetherSessions.map(row=><div key={row.id}>
+                      <div><strong>{row.program||'Shared workout'}</strong><span>Week {row.week} · {row.lift}</span></div>
+                      <b>{row.status==='open'?'Live':'Finished'}</b>
+                    </div>)}
+                  </div>
+                </section>}
               </>
             ) : (
               <>
-                <section className="session-hero">
-                  <span className="card-label">{activeSession.status === 'open' ? 'LIVE SESSION' : 'SESSION SUMMARY'}</span>
-                  <div className="session-code">{activeSession.join_code}</div>
-                  <div className="code-help">This is the code your workout partners enter.</div>
-                  <h2>{sharedMeta?.program_name || programs[sharedProgramId]?.shortName || activeSession.program}</h2>
-                  <p>{sharedMeta ? 'Week '+sharedMeta.week+' · '+sharedMeta.workout_title : 'Week '+activeSession.week+' · '+activeSession.lift}</p>
-                  <div className="session-actions">
-                    {activeSession.status === 'open' && <button onClick={shareSession}>Share join link</button>}
-                    <button onClick={() => refreshTogether(activeSession.id)}>Refresh</button>
+                <section className="session-hero together-active-hero">
+                  <div className="together-active-head">
+                    <div>
+                      <span className="card-label">{activeSession.status === 'open' ? 'LIVE NOW' : 'SESSION SUMMARY'}</span>
+                      <h2>{sharedMeta?.program_name || programs[sharedProgramId]?.shortName || activeSession.program}</h2>
+                      <p>{sharedMeta ? 'Week '+sharedMeta.week+' · '+sharedMeta.workout_title : 'Week '+activeSession.week+' · '+activeSession.lift}</p>
+                    </div>
+                    <div className="together-live-count"><strong>{participants.length+sharedManagedPartners.length}</strong><span>people</span></div>
                   </div>
+
+                  {activeSession.status === 'open' && !ownSessionResult?.completed_at&&<button className="primary-action together-resume-button" onClick={openSharedWorkout}>{sharedWorkoutActive?'Resume workout':'Open my workout'}</button>}
+
+                  <div className="together-session-share">
+                    <div className="together-code-compact"><span>Join code</span><strong>{activeSession.join_code}</strong></div>
+                    {activeSession.status==='open'&&<div className="together-share-actions">
+                      <button type="button" onClick={shareSession}>Share</button>
+                      <button type="button" onClick={()=>setShowSessionQr(v=>!v)}>{showSessionQr?'Hide QR':'QR code'}</button>
+                      {activeSession.host_user_id===session.user.id&&<button type="button" onClick={()=>setInvitePanelOpen(v=>!v)}>Notify</button>}
+                    </div>}
+                  </div>
+
+                  {showSessionQr&&<div className="together-qr-card">
+                    {sessionQr?<img src={sessionQr} alt={'QR code to join Workset session '+activeSession.join_code}/>:<div className="qr-loading">Generating QR…</div>}
+                    <div><strong>Scan to join</strong><span>or enter {activeSession.join_code}</span></div>
+                  </div>}
+
+                  {invitePanelOpen&&activeSession.host_user_id===session.user.id&&<div className="together-notify-panel">
+                    <span>Notify a Workset user</span>
+                    <p>Enter their exact Workset account email. They'll get an invite inside Together.</p>
+                    <div><input type="email" value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)} placeholder="name@example.com"/><button type="button" onClick={sendTogetherInvite}>Send invite</button></div>
+                  </div>}
+
+                  {togetherMessage&&<p className="status-message">{togetherMessage}</p>}
                 </section>
 
                 <section className="summary-grid together-summary">
@@ -3288,10 +3514,6 @@ function App() {
                     </div>)}
                   </div>
                 </section>
-
-                {activeSession.status === 'open' && !ownSessionResult?.completed_at && (
-                  <button className="primary-action" onClick={openSharedWorkout}>Open my shared workout</button>
-                )}
 
                 {ownSessionResult?.completed_at && (
                   <div className="completed-callout">✓ Your workout is finished. Your personal history and this shared summary both have it.</div>
@@ -3506,7 +3728,7 @@ function App() {
 
       <nav className="mobile-bottom-nav app-level-mobile-nav" aria-label="Workset mobile navigation">
         <button className={activeTab==='today'?'active':''} onClick={openToday}><b>●</b><span>Today</span></button>
-        <button className={activeTab==='together'?'active':''} onClick={()=>setActiveTab('together')}><b>⇄</b><span>Together</span></button>
+        <button className={activeTab==='together'?'active':''} onClick={()=>setActiveTab('together')}><b>⇄</b><span>Together</span>{incomingTogetherInvites.length>0&&<i className="nav-invite-badge">{incomingTogetherInvites.length}</i>}</button>
         <button className={activeTab==='program'?'active':''} onClick={()=>setActiveTab('program')}><b>▦</b><span>Plan</span></button>
         <button className={activeTab==='whiteboard'?'active':''} onClick={()=>setActiveTab('whiteboard')}><b>□</b><span>Board</span></button>
       </nav>
