@@ -135,11 +135,12 @@ export function PlatformProgress({
     if (!session?.user) return
     if(navigator.onLine===false){
       const cached=readOfflineState(session.user.id,'progress-data',null)
-      if(cached){
+      const toolsCached=readOfflineState(session.user.id,'training-tools-data',null)
+      if(cached||toolsCached){
         setReady(true)
-        setCommunity(cached.community||[])
-        setFlexSessions(cached.flexSessions||[])
-        setMeasurements(cached.measurements||[])
+        setCommunity(cached?.community||[])
+        setFlexSessions(cached?.flexSessions||[])
+        setMeasurements(toolsCached?.measurements||cached?.measurements||[])
       }
       return
     }
@@ -421,11 +422,10 @@ export function PlatformProgress({
     if(result.offline){
       const localRow={...payload,id:existing?.id||'offline-'+date}
       setMeasurements(rows=>[...rows.filter(row=>row.measured_on!==date),localRow].sort((a,b)=>String(a.measured_on).localeCompare(String(b.measured_on))))
-      writeOfflineState(session.user.id,'progress-data',{
-        community,
-        flexSessions,
-        measurements:[...measurements.filter(row=>row.measured_on!==date),localRow].sort((a,b)=>String(a.measured_on).localeCompare(String(b.measured_on))),
-      })
+      const nextMeasurements=[...measurements.filter(row=>row.measured_on!==date),localRow].sort((a,b)=>String(a.measured_on).localeCompare(String(b.measured_on)))
+      writeOfflineState(session.user.id,'progress-data',{community,flexSessions,measurements:nextMeasurements})
+      const toolsCached=readOfflineState(session.user.id,'training-tools-data',{})
+      writeOfflineState(session.user.id,'training-tools-data',{...toolsCached,measurements:[...nextMeasurements].sort((a,b)=>String(b.measured_on).localeCompare(String(a.measured_on)))})
     }
     setQuickWeightSavedValue(value)
     setQuickWeight('')
