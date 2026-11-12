@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './supabase'
 import { MetconTracker } from './advancedFeatures'
-import { offlineUuid, queueUpsert, upsertOfflineFirst, isOfflineError } from './offline'
+import { offlineUuid, queueUpsert, upsertOfflineFirst, isOfflineError, readOfflineState, writeOfflineState } from './offline'
 
 function partnerSetTarget(maxes,set) {
   const lift=set?.weight_lift
@@ -204,14 +204,10 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
   useEffect(()=>{
     if(!planned?.user_id)return
     let cancelled=false
-    Promise.all([
-      supabase.from('training_sessions').select('workout,completed_at').eq('user_id',planned.user_id).not('completed_at','is',null).order('completed_at',{ascending:false}).limit(150),
-      supabase.from('exercise_substitutions').select('*').eq('user_id',planned.user_id),
-      supabase.from('exercise_timer_presets').select('*').eq('user_id',planned.user_id),
-    ]).then(([sessions,subs,timers])=>{
+    const applyMeta=(sessionRows=[],subRows=[],timerRows=[])=>{
       if(cancelled)return
       const map={}
-      for(const row of (sessions.data||[])){
+      for(const row of sessionRows){
         for(const item of (row.workout?.exercises||[])){
           const key=String(item.name||'').trim().toLowerCase()
           const loadedSets=(item.setProgress||[]).map(set=>({weight:setWeight(item,set),reps:repsForSet(item,set),done:Boolean(set.done)})).filter(set=>set.weight&&set.done)
@@ -225,9 +221,24 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       }
       setHistoryByExercise(map)
       const subMap={}
-      for(const x of subs.data||[])(subMap[String(x.exercise||'').trim().toLowerCase()]??=[]).push(x)
+      for(const x of subRows)(subMap[String(x.exercise||'').trim().toLowerCase()]??=[]).push(x)
       setSubstitutions(subMap)
-      setTimerPresets(Object.fromEntries((timers.data||[]).map(x=>[String(x.exercise||'').trim().toLowerCase(),x.seconds])))
+      setTimerPresets(Object.fromEntries(timerRows.map(x=>[String(x.exercise||'').trim().toLowerCase(),x.seconds])))
+    }
+    if(navigator.onLine===false){
+      const cached=readOfflineState(planned.user_id,'runner-meta',null)
+      if(cached)applyMeta(cached.sessions||[],cached.subs||[],cached.timers||[])
+      return()=>{cancelled=true}
+    }
+    Promise.all([
+      supabase.from('training_sessions').select('workout,completed_at').eq('user_id',planned.user_id).not('completed_at','is',null).order('completed_at',{ascending:false}).limit(150),
+      supabase.from('exercise_substitutions').select('*').eq('user_id',planned.user_id),
+      supabase.from('exercise_timer_presets').select('*').eq('user_id',planned.user_id),
+    ]).then(([sessions,subs,timers])=>{
+      if(cancelled)return
+      const sessionRows=sessions.data||[],subRows=subs.data||[],timerRows=timers.data||[]
+      applyMeta(sessionRows,subRows,timerRows)
+      writeOfflineState(planned.user_id,'runner-meta',{sessions:sessionRows,subs:subRows,timers:timerRows})
     })
     return()=>{cancelled=true}
   },[planned?.user_id,planned?.id])
