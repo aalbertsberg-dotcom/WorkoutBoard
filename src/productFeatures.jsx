@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './supabase'
 import { MetconTracker } from './advancedFeatures'
+import { offlineUuid, queueUpsert, upsertOfflineFirst, isOfflineError } from './offline'
 
 function partnerSetTarget(maxes,set) {
   const lift=set?.weight_lift
@@ -235,8 +236,15 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
     if (!planned?.id || saveState !== 'Unsaved') return
     const timer=setTimeout(async()=>{
       setSaveState('Saving…')
-      const {error}=await supabase.from('planned_workouts').update({workout,updated_at:new Date().toISOString()}).eq('id',planned.id)
-      setSaveState(error ? 'Save failed' : 'Saved')
+      const updatedAt=new Date().toISOString()
+      const result=await upsertOfflineFirst(supabase,{
+        userId:planned.user_id,
+        table:'planned_workouts',
+        payload:{...planned,workout,updated_at:updatedAt},
+        onConflict:'id',
+        dedupeKey:'planned:'+planned.id,
+      })
+      setSaveState(result.error ? 'Save failed' : result.offline ? 'Saved offline' : 'Saved')
     },700)
     return ()=>clearTimeout(timer)
   },[workout,planned?.id,saveState])
@@ -383,19 +391,26 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
   const cancelWorkout=async()=>{
     if(!planned?.id || cancelling)return
     setCancelling(true)
-    const {error}=await supabase.from('planned_workouts').update({
-      status:'skipped',
-      updated_at:new Date().toISOString(),
-    }).eq('id',planned.id)
-    if(error){
-      setSaveState('Cancel failed: '+error.message)
+    const result=await upsertOfflineFirst(supabase,{
+      userId:planned.user_id,
+      table:'planned_workouts',
+      payload:{...planned,workout,status:'skipped',updated_at:new Date().toISOString()},
+      onConflict:'id',
+      dedupeKey:'planned:'+planned.id,
+    })
+    if(result.error){
+      setSaveState('Cancel failed: '+result.error.message)
       setCancelling(false)
       return
     }
-    try { localStorage.removeItem('wb-planned-draft-'+planned.id) } catch {}
+    try {
+      localStorage.removeItem('wb-planned-draft-'+planned.id)
+      localStorage.removeItem('wb-planned-draft-ts-'+planned.id)
+    } catch {}
+    setSaveState(result.offline?'Saved offline':'Saved')
     setCancelConfirm(false)
     setCancelling(false)
-    onCancelled?.({planned,sharedSessionId})
+    onCancelled?.({planned,sharedSessionId,offline:Boolean(result.offline)})
   }
 
   const baselineLiftForExercise=item=>{
@@ -435,8 +450,89 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
     setFinishing(true)
     const now=new Date().toISOString()
     const finalWorkout={...workout,complete:true,savedAt:now,baseline_results:baselineResults}
+    const generatedSessionId=offlineUuid()
+    const completedSets=(finalWorkout.exercises||[]).reduce((sum,item)=>sum+(item.setProgress||[]).filter(set=>set.done).length,0)
+    const completedExercises=(finalWorkout.exercises||[]).filter(item=>item.done||(item.setProgress||[]).some(set=>set.done)).length
+    const finishPayload=sessionId=>({
+      id:sessionId,
+      user_id:planned.user_id,
+      planned_workout_id:planned.id,
+      title:planned.title,
+      program:planned.source_program_name||'Custom workout',
+      week:planned.source_week||null,
+      primary_lift:planned.source_day||null,
+      session_date:planned.scheduled_date,
+      workout:finalWorkout,
+      total_volume:Math.round(totalVolume),
+      estimated_1rm:bestEstimated1rm||null,
+      bodyweight:Number(workout.bodyweight||0)||null,
+      shared_session_id:sharedSessionId||null,
+      started_at:planned.created_at||now,
+      completed_at:now,
+      created_at:planned.created_at||now,
+      updated_at:now,
+    })
+    const finishLocally=async(sessionId)=>{
+      queueUpsert({
+        userId:planned.user_id,
+        table:'planned_workouts',
+        payload:{...planned,status:'completed',workout:finalWorkout,updated_at:now},
+        onConflict:'id',
+        dedupeKey:'planned:'+planned.id,
+      })
+      queueUpsert({
+        userId:planned.user_id,
+        table:'training_sessions',
+        payload:finishPayload(sessionId),
+        onConflict:'id',
+        dedupeKey:'training:'+sessionId,
+      })
+      if(sharedSessionId){
+        queueUpsert({
+          userId:planned.user_id,
+          table:'session_results',
+          payload:{
+            session_id:sharedSessionId,
+            user_id:planned.user_id,
+            workout:{...finalWorkout,shared_template:planned.workout?.shared_template||planned.workout,shared_meta:planned.workout?.shared_meta||null},
+            total_volume:Math.round(totalVolume),
+            estimated_1rm:bestEstimated1rm||null,
+            completed_at:now,
+            updated_at:now,
+          },
+          onConflict:'session_id,user_id',
+          dedupeKey:'session-result:'+sharedSessionId+':'+planned.user_id,
+        })
+      }
+      try {
+        localStorage.removeItem('wb-planned-draft-'+planned.id)
+        localStorage.removeItem('wb-planned-draft-ts-'+planned.id)
+      } catch {}
+      setSaveState('Saved offline')
+      onFinished?.({
+        title:planned.title,
+        program:planned.source_program_name||'Custom workout',
+        exercises:completedExercises,
+        sets:completedSets,
+        volume:Math.round(totalVolume),
+        strengthBaseline:Boolean(finalWorkout.strength_baseline),
+        baselinePath:finalWorkout.baseline_path||null,
+        baselineResults,
+        trainingSessionId:sessionId,
+        offline:true,
+      })
+      setFinishing(false)
+    }
+    if(navigator.onLine===false){
+      await finishLocally(generatedSessionId)
+      return
+    }
     const existing=await supabase.from('training_sessions').select('id').eq('planned_workout_id',planned.id).maybeSingle()
-    let error=null
+    if(existing.error&&isOfflineError(existing.error)){
+      await finishLocally(generatedSessionId)
+      return
+    }
+    let error=existing.error||null
     let trainingSessionId=existing.data?.id||null
     if (trainingSessionId) {
       const result=await supabase.from('training_sessions').update({
@@ -449,27 +545,33 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       error=result.error
       trainingSessionId=result.data?.id||trainingSessionId
     } else {
-      const result=await supabase.from('training_sessions').insert({
-        user_id:planned.user_id,planned_workout_id:planned.id,title:planned.title,
-        program:planned.source_program_name||'Custom workout',week:planned.source_week||null,
-        primary_lift:planned.source_day||null,session_date:planned.scheduled_date,workout:finalWorkout,
-        total_volume:Math.round(totalVolume),bodyweight:Number(workout.bodyweight||0)||null,
-        shared_session_id:sharedSessionId||null,
-        started_at:planned.created_at||now,completed_at:now,updated_at:now
-      }).select('id').single()
+      const result=await supabase.from('training_sessions').insert(finishPayload(generatedSessionId)).select('id').single()
       error=result.error
-      trainingSessionId=result.data?.id||null
+      trainingSessionId=result.data?.id||generatedSessionId
+    }
+    if(error&&isOfflineError(error)){
+      await finishLocally(trainingSessionId||generatedSessionId)
+      return
     }
     if (!error) {
-      await supabase.from('planned_workouts').update({status:'completed',workout:finalWorkout,updated_at:now}).eq('id',planned.id)
+      const plannedResult=await upsertOfflineFirst(supabase,{
+        userId:planned.user_id,
+        table:'planned_workouts',
+        payload:{...planned,status:'completed',workout:finalWorkout,updated_at:now},
+        onConflict:'id',
+        dedupeKey:'planned:'+planned.id,
+      })
+      if(plannedResult.error){
+        setSaveState('Finish failed: '+plannedResult.error.message)
+        setFinishing(false)
+        return
+      }
 
       if(trainingSessionId){
         const {data:communityProfile}=await supabase.from('profiles')
           .select('display_name,community_opt_in,community_display_name,community_share_bodyweight')
           .eq('id',planned.user_id).maybeSingle()
         if(communityProfile?.community_opt_in){
-          const completedSets=(finalWorkout.exercises||[]).reduce((sum,item)=>sum+(item.setProgress||[]).filter(set=>set.done).length,0)
-          const completedExercises=(finalWorkout.exercises||[]).filter(item=>item.done||(item.setProgress||[]).some(set=>set.done)).length
           await supabase.from('community_activity').upsert({
             user_id:planned.user_id,
             training_session_id:trainingSessionId,
@@ -503,8 +605,11 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
           updated_at:now,
         },{onConflict:'session_id,user_id'})
       }
-      try { localStorage.removeItem('wb-planned-draft-'+planned.id) } catch {}
-      const completedSets=(finalWorkout.exercises||[]).reduce((sum,item)=>sum+(item.setProgress||[]).filter(set=>set.done).length,0)
+      try {
+        localStorage.removeItem('wb-planned-draft-'+planned.id)
+        localStorage.removeItem('wb-planned-draft-ts-'+planned.id)
+      } catch {}
+      setSaveState(plannedResult.offline?'Saved offline':'Saved')
       onFinished?.({
         title:planned.title,
         program:planned.source_program_name||'Custom workout',
