@@ -3,6 +3,7 @@ import { supabase } from './supabase'
 import { allArchivePrograms, archiveProgramById, makePlannedFromArchive } from './archivePrograms'
 import { ProgressToolbox, WorkoutTemplates } from './trainingTools'
 import { AdvancedProgressCenter, PlannedWorkoutTools, ShareImportPanel, AdminDashboardSummary } from './advancedFeatures'
+import { readOfflineState, writeOfflineState, upsertOfflineFirst } from './offline'
 
 function startOfWeek(date = new Date()) {
   const d = new Date(date)
@@ -132,6 +133,16 @@ export function PlatformProgress({
 
   const loadData = async () => {
     if (!session?.user) return
+    if(navigator.onLine===false){
+      const cached=readOfflineState(session.user.id,'progress-data',null)
+      if(cached){
+        setReady(true)
+        setCommunity(cached.community||[])
+        setFlexSessions(cached.flexSessions||[])
+        setMeasurements(cached.measurements||[])
+      }
+      return
+    }
     const [{data:communityRows,error:communityError},{data:sessionRows},{data:measurementRows}] = await Promise.all([
       supabase.from('community_activity').select('*').order('created_at',{ascending:false}).limit(50),
       supabase.from('training_sessions').select('*').eq('user_id',session.user.id).is('legacy_log_id',null).not('completed_at','is',null).order('completed_at',{ascending:false}).limit(250),
@@ -139,9 +150,17 @@ export function PlatformProgress({
     ])
     if (communityError) { setReady(false); return }
     setReady(true)
-    setCommunity(communityRows || [])
-    setFlexSessions(sessionRows || [])
-    setMeasurements(measurementRows || [])
+    const nextCommunity=communityRows||[]
+    const nextSessions=sessionRows||[]
+    const nextMeasurements=measurementRows||[]
+    setCommunity(nextCommunity)
+    setFlexSessions(nextSessions)
+    setMeasurements(nextMeasurements)
+    writeOfflineState(session.user.id,'progress-data',{
+      community:nextCommunity,
+      flexSessions:nextSessions,
+      measurements:nextMeasurements,
+    })
   }
 
   useEffect(() => { loadData() },[session?.user?.id,effectiveMode])
@@ -375,22 +394,43 @@ export function PlatformProgress({
     setQuickWeightSavedValue(null)
     setQuickWeightStatus('Saving…')
     const date=localDateKey()
-    const {data:existing}=await supabase.from('body_measurements').select('*').eq('user_id',session.user.id).eq('measured_on',date).maybeSingle()
-    const {error}=await supabase.from('body_measurements').upsert({
+    let existing=[...measurements].reverse().find(row=>row.measured_on===date)||null
+    if(navigator.onLine!==false){
+      const lookup=await supabase.from('body_measurements').select('*').eq('user_id',session.user.id).eq('measured_on',date).maybeSingle()
+      if(!lookup.error)existing=lookup.data||existing
+    }
+    const payload={
       ...(existing||{}),
       user_id:session.user.id,
       measured_on:date,
       bodyweight:value,
-    },{onConflict:'user_id,measured_on'})
-    if(error){
+    }
+    if(String(payload.id||'').startsWith('offline-'))delete payload.id
+    const result=await upsertOfflineFirst(supabase,{
+      userId:session.user.id,
+      table:'body_measurements',
+      payload,
+      onConflict:'user_id,measured_on',
+      dedupeKey:'measurement:'+session.user.id+':'+date,
+    })
+    if(result.error){
       setQuickWeightSavedValue(null)
-      setQuickWeightStatus(error.message)
+      setQuickWeightStatus(result.error.message)
       return
+    }
+    if(result.offline){
+      const localRow={...payload,id:existing?.id||'offline-'+date}
+      setMeasurements(rows=>[...rows.filter(row=>row.measured_on!==date),localRow].sort((a,b)=>String(a.measured_on).localeCompare(String(b.measured_on))))
+      writeOfflineState(session.user.id,'progress-data',{
+        community,
+        flexSessions,
+        measurements:[...measurements.filter(row=>row.measured_on!==date),localRow].sort((a,b)=>String(a.measured_on).localeCompare(String(b.measured_on))),
+      })
     }
     setQuickWeightSavedValue(value)
     setQuickWeight('')
     setQuickWeightStatus('Saved.')
-    await loadData()
+    if(!result.offline)await loadData()
   }
 
   if(compact){
