@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase'
+import { readOfflineState, writeOfflineState, upsertOfflineFirst } from './offline'
 
 const pad=n=>String(Math.max(0,Math.floor(n))).padStart(2,'0')
 const fmt=seconds=>`${pad(seconds/60)}:${pad(seconds%60)}`
@@ -273,6 +274,16 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
 
   const load=async()=>{
     if(!session?.user)return
+    if(navigator.onLine===false){
+      const cached=readOfflineState(session.user.id,'training-tools-data',null)
+      if(cached){
+        setGoals(cached.goals||[])
+        setMeasurements(cached.measurements||[])
+        setPlanned(cached.planned||[])
+        setTracking(cached.tracking||[])
+      }
+      return
+    }
     const [g,m,p,t]=await Promise.all([
       supabase.from('training_goals').select('*').eq('user_id',session.user.id).eq('status','active').order('updated_at',{ascending:false}),
       supabase.from('body_measurements').select('*').eq('user_id',session.user.id).order('measured_on',{ascending:false}).limit(100),
@@ -280,8 +291,14 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
       supabase.from('user_program_tracking').select('*').eq('user_id',session.user.id).order('updated_at',{ascending:false}),
     ])
     if(g.error||m.error){setMessage((g.error||m.error).message);return}
+    const goalRows=g.data||[]
     const measurementRows=m.data||[]
-    setGoals(g.data||[]);setMeasurements(measurementRows);setPlanned(p.data||[]);setTracking(t.data||[])
+    const plannedRows=p.data||[]
+    const trackingRows=t.data||[]
+    setGoals(goalRows);setMeasurements(measurementRows);setPlanned(plannedRows);setTracking(trackingRows)
+    writeOfflineState(session.user.id,'training-tools-data',{
+      goals:goalRows,measurements:measurementRows,planned:plannedRows,tracking:trackingRows,
+    })
     const draftDate=measurement.measured_on||today()
     if(measurementDraftLoadedRef.current!==draftDate){
       const existing=measurementRows.find(row=>row.measured_on===draftDate)
@@ -374,16 +391,34 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
       if(measurement[key]!==''&&measurement[key]!=null)changes[key]=Number(measurement[key])
     }
     if(String(measurement.note||'').trim())changes.note=measurement.note.trim()
-    const {data:existing}=await supabase.from('body_measurements').select('*').eq('user_id',session.user.id).eq('measured_on',date).maybeSingle()
+    let existing=measurements.find(row=>row.measured_on===date)||null
+    if(navigator.onLine!==false){
+      const lookup=await supabase.from('body_measurements').select('*').eq('user_id',session.user.id).eq('measured_on',date).maybeSingle()
+      if(!lookup.error)existing=lookup.data||existing
+    }
     const payload=existing?{...existing,...changes}:{...changes}
+    if(String(payload.id||'').startsWith('offline-'))delete payload.id
     setMeasurementSaveStatus('Saving…')
-    const {data:saved,error}=await supabase.from('body_measurements').upsert(payload,{onConflict:'user_id,measured_on'}).select().single()
-    if(error){setMeasurementSaveStatus('');setMessage(error.message);return}
+    const result=await upsertOfflineFirst(supabase,{
+      userId:session.user.id,
+      table:'body_measurements',
+      payload,
+      onConflict:'user_id,measured_on',
+      dedupeKey:'measurement:'+session.user.id+':'+date,
+      select:true,
+      single:true,
+    })
+    if(result.error){setMeasurementSaveStatus('');setMessage(result.error.message);return}
+    const saved=result.offline?{...payload,id:existing?.id||'offline-'+date}:result.data
     setMessage('')
     setMeasurement(measurementDraft(saved,date))
     measurementDraftLoadedRef.current=date
-    setMeasurementSaveStatus('Saved')
-    await load()
+    setMeasurementSaveStatus(result.offline?'Saved offline':'Saved')
+    if(result.offline){
+      const nextRows=[...measurements.filter(row=>row.measured_on!==date),saved].sort((a,b)=>String(b.measured_on).localeCompare(String(a.measured_on)))
+      setMeasurements(nextRows)
+      writeOfflineState(session.user.id,'training-tools-data',{goals,measurements:nextRows,planned,tracking})
+    }else await load()
     await onMeasurementsChanged?.()
   }
 
@@ -417,21 +452,40 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
       return
     }
     setInlineMeasurementStatus('Saving…')
-    const {data:existing}=await supabase.from('body_measurements').select('*').eq('user_id',session.user.id).eq('measured_on',todayKey).maybeSingle()
-    const {data:saved,error}=await supabase.from('body_measurements').upsert({
+    let existing=measurements.find(row=>row.measured_on===todayKey)||null
+    if(navigator.onLine!==false){
+      const lookup=await supabase.from('body_measurements').select('*').eq('user_id',session.user.id).eq('measured_on',todayKey).maybeSingle()
+      if(!lookup.error)existing=lookup.data||existing
+    }
+    const payload={
       ...(existing||{}),
       user_id:session.user.id,
       measured_on:todayKey,
       [key]:value,
-    },{onConflict:'user_id,measured_on'}).select().single()
-    if(error){setInlineMeasurementStatus(error.message);return}
+    }
+    if(String(payload.id||'').startsWith('offline-'))delete payload.id
+    const result=await upsertOfflineFirst(supabase,{
+      userId:session.user.id,
+      table:'body_measurements',
+      payload,
+      onConflict:'user_id,measured_on',
+      dedupeKey:'measurement:'+session.user.id+':'+todayKey,
+      select:true,
+      single:true,
+    })
+    if(result.error){setInlineMeasurementStatus(result.error.message);return}
+    const saved=result.offline?{...payload,id:existing?.id||'offline-'+todayKey}:result.data
     setMeasurement(measurementDraft(saved,todayKey))
     measurementDraftLoadedRef.current=todayKey
     setEditingMeasurementKey('')
     setInlineMeasurementValue('')
     setInlineMeasurementStatus(key)
     onMeasurementMetricChange?.(key)
-    await load()
+    if(result.offline){
+      const nextRows=[...measurements.filter(row=>row.measured_on!==todayKey),saved].sort((a,b)=>String(b.measured_on).localeCompare(String(a.measured_on)))
+      setMeasurements(nextRows)
+      writeOfflineState(session.user.id,'training-tools-data',{goals,measurements:nextRows,planned,tracking})
+    }else await load()
     await onMeasurementsChanged?.()
   }
 
@@ -565,8 +619,8 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
             <strong>{hasCompleteMeasurementSet(measurement)?totalInches(measurement).toFixed(2):'—'}</strong>
             <small>{hasCompleteMeasurementSet(measurement)?'Forearms, neck, arms, waist, hips, thighs, calves and chest.':'Total inches appears after all circumference fields are filled.'}</small>
           </div>
-          <button className="primary-action" disabled={measurementSaveStatus==='Saving…'}>{measurementSaveStatus==='Saving…'?'Saving…':measurementSaveStatus==='Saved'?`✓ Saved for ${new Date(measurement.measured_on+'T12:00:00').toLocaleDateString()}`:'Save measurements'}</button>
-          {measurementSaveStatus==='Saved'&&<div className="measurement-save-success">Saved values stay loaded so you can see or update this date.</div>}
+          <button className="primary-action" disabled={measurementSaveStatus==='Saving…'}>{measurementSaveStatus==='Saving…'?'Saving…':measurementSaveStatus==='Saved'||measurementSaveStatus==='Saved offline'?`✓ Saved for ${new Date(measurement.measured_on+'T12:00:00').toLocaleDateString()}`:'Save measurements'}</button>
+          {(measurementSaveStatus==='Saved'||measurementSaveStatus==='Saved offline')&&<div className="measurement-save-success">{measurementSaveStatus==='Saved offline'?'Saved on this device. It will sync when you are online.':'Saved values stay loaded so you can see or update this date.'}</div>}
         </form>
         </details>
       </section>
