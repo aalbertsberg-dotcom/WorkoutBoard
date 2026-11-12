@@ -3236,13 +3236,21 @@ function App() {
                   {info.complete?<p className="helper-text">Program complete.</p>:<>
                     <div className="tracked-week-choice-head"><span>WEEK {info.currentWeek}</span><strong>Choose today's workout</strong><small>Days can be completed in any order.</small></div>
                     <div className="tracked-week-choice-list">{(info.weekChoices||[]).map((choice,index)=><div className={'tracked-week-choice '+(choice.completed?'completed':'')} key={choice.trackingWorkoutKey}>
-                      <div><span>Day {index+1}</span><strong>{choice.title}</strong>{choice.note&&<small>{choice.note}</small>}</div>
+                      <div className="tracked-week-choice-main">
+                        <span>Day {index+1}</span>
+                        <strong>{choice.title}</strong>
+                        <div className="tracked-day-summary">
+                          {(choice.exercises||[]).slice(0,4).map((exercise,exerciseIndex)=><div key={exerciseIndex}>
+                            <b>{exercise.name}</b>
+                            {exercise.prescription&&<small>{exercise.prescription}</small>}
+                          </div>)}
+                          {(choice.exercises||[]).length>4&&<em>+{choice.exercises.length-4} more exercise{choice.exercises.length-4===1?'':'s'}</em>}
+                          {!(choice.exercises||[]).length&&<em>Workout details available in Plan</em>}
+                        </div>
+                        {choice.note&&<small className="tracked-day-note">{choice.note}</small>}
+                      </div>
                       {choice.completed?<b className="tracked-day-done">✓ Done</b>:<button type="button" onClick={()=>startTrackedWorkout(info,{selectedWorkout:choice})}>Start</button>}
                     </div>)}</div>
-                    {info.upcoming?.[0]&&<details className="tracked-next-preview">
-                      <summary>Preview {info.upcoming[0].title}</summary>
-                      <div className="next-day-exercises">{info.upcoming[0].exercises.map((exercise,index)=><div key={index}><strong>{exercise.name}</strong><span>{exercise.prescription}</span></div>)}</div>
-                    </details>}
                   </>}
                 </section>)}
               </div>
