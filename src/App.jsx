@@ -2460,26 +2460,39 @@ function App() {
     const cleaned=Object.fromEntries(lifts.map(name=>[name,next[name]===''?'':round2(Math.max(0,Number(next[name])||0))]))
     setOneRepMaxes(cleaned)
     if (!session?.user) return {error:null}
-    const results=await Promise.all([
-      supabase.auth.updateUser({data:{...session.user.user_metadata,one_rep_maxes:cleaned}}),
-      supabase.from('one_rep_maxes').upsert({
-        user_id:session.user.id,
-        squat:cleaned.Squat === '' ? null : Number(cleaned.Squat),
-        bench:cleaned.Bench === '' ? null : Number(cleaned.Bench),
-        deadlift:cleaned.Deadlift === '' ? null : Number(cleaned.Deadlift),
-        press:cleaned.Press === '' ? null : Number(cleaned.Press),
-        updated_at:new Date().toISOString(),
+    const updatedAt=new Date().toISOString()
+    const oneRmPayload={
+      user_id:session.user.id,
+      squat:cleaned.Squat === '' ? null : Number(cleaned.Squat),
+      bench:cleaned.Bench === '' ? null : Number(cleaned.Bench),
+      deadlift:cleaned.Deadlift === '' ? null : Number(cleaned.Deadlift),
+      press:cleaned.Press === '' ? null : Number(cleaned.Press),
+      updated_at:updatedAt,
+    }
+    const tmPayload={
+      user_id:session.user.id,
+      squat:cleaned.Squat === '' ? null : round2(Number(cleaned.Squat)*.85),
+      bench:cleaned.Bench === '' ? null : round2(Number(cleaned.Bench)*.85),
+      deadlift:cleaned.Deadlift === '' ? null : round2(Number(cleaned.Deadlift)*.85),
+      press:cleaned.Press === '' ? null : round2(Number(cleaned.Press)*.85),
+      updated_at:updatedAt,
+    }
+    const [oneRmResult,tmResult]=await Promise.all([
+      upsertOfflineFirst(supabase,{
+        userId:session.user.id,table:'one_rep_maxes',payload:oneRmPayload,
+        onConflict:'user_id',dedupeKey:'one-rep-maxes:'+session.user.id,
       }),
-      supabase.from('training_maxes').upsert({
-        user_id:session.user.id,
-        squat:cleaned.Squat === '' ? null : round2(Number(cleaned.Squat)*.85),
-        bench:cleaned.Bench === '' ? null : round2(Number(cleaned.Bench)*.85),
-        deadlift:cleaned.Deadlift === '' ? null : round2(Number(cleaned.Deadlift)*.85),
-        press:cleaned.Press === '' ? null : round2(Number(cleaned.Press)*.85),
-        updated_at:new Date().toISOString(),
-      })
+      upsertOfflineFirst(supabase,{
+        userId:session.user.id,table:'training_maxes',payload:tmPayload,
+        onConflict:'user_id',dedupeKey:'training-maxes:'+session.user.id,
+      }),
     ])
-    return {error:results.find(result=>result?.error)?.error||null}
+    let authError=null
+    if(navigator.onLine!==false&&!session.offline){
+      const authResult=await supabase.auth.updateUser({data:{...session.user.user_metadata,one_rep_maxes:cleaned}})
+      authError=authResult.error||null
+    }
+    return {error:oneRmResult.error||tmResult.error||authError||null,offline:Boolean(oneRmResult.offline||tmResult.offline)}
   }
 
   const setOneRm = async (name,raw,{notify=false}={}) => {
