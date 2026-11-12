@@ -418,6 +418,8 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
       const nextRows=[...measurements.filter(row=>row.measured_on!==date),saved].sort((a,b)=>String(b.measured_on).localeCompare(String(a.measured_on)))
       setMeasurements(nextRows)
       writeOfflineState(session.user.id,'training-tools-data',{goals,measurements:nextRows,planned,tracking})
+      const progressCached=readOfflineState(session.user.id,'progress-data',{})
+      writeOfflineState(session.user.id,'progress-data',{...progressCached,measurements:[...nextRows].sort((a,b)=>String(a.measured_on).localeCompare(String(b.measured_on)))})
     }else await load()
     await onMeasurementsChanged?.()
   }
@@ -485,6 +487,8 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
       const nextRows=[...measurements.filter(row=>row.measured_on!==todayKey),saved].sort((a,b)=>String(b.measured_on).localeCompare(String(a.measured_on)))
       setMeasurements(nextRows)
       writeOfflineState(session.user.id,'training-tools-data',{goals,measurements:nextRows,planned,tracking})
+      const progressCached=readOfflineState(session.user.id,'progress-data',{})
+      writeOfflineState(session.user.id,'progress-data',{...progressCached,measurements:[...nextRows].sort((a,b)=>String(a.measured_on).localeCompare(String(b.measured_on)))})
     }else await load()
     await onMeasurementsChanged?.()
   }
