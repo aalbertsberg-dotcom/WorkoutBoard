@@ -697,6 +697,18 @@ export function PlanPage({
 
   const load = async () => {
     if (!session?.user) return
+    if(navigator.onLine===false){
+      const cached=readOfflineState(session.user.id,'plan-data',null)
+      if(cached){
+        setReady(true)
+        setTrackingReady(true)
+        setPlanned(cached.planned||[])
+        setLibrary(cached.library||[])
+        setTracking(cached.tracking||[])
+        setSessions(cached.sessions||[])
+      }
+      return
+    }
     const [plannedResult,libraryResult,trackingResult,sessionResult] = await Promise.all([
       supabase.from('planned_workouts').select('*').eq('user_id',session.user.id).gte('scheduled_date',start).lte('scheduled_date',end).order('scheduled_date'),
       supabase.from('program_library').select('*').order('created_at',{ascending:false}),
@@ -714,6 +726,7 @@ export function PlanPage({
     setLibrary(libraryResult.data || [])
     setSessions(sessionResult.data || [])
 
+    const nextTracking=trackingResult.error?[]:(trackingResult.data||[])
     if (trackingResult.error) {
       setTrackingReady(false)
       setTrackingError(trackingResult.error.message || 'Program tracking API unavailable')
@@ -721,8 +734,14 @@ export function PlanPage({
     } else {
       setTrackingReady(true)
       setTrackingError('')
-      setTracking(trackingResult.data || [])
+      setTracking(nextTracking)
     }
+    writeOfflineState(session.user.id,'plan-data',{
+      planned:plannedResult.data||[],
+      library:libraryResult.data||[],
+      tracking:nextTracking,
+      sessions:sessionResult.data||[],
+    })
   }
 
   useEffect(() => { load() },[session?.user?.id])
