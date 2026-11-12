@@ -9,14 +9,17 @@ createRoot(document.getElementById('root')).render(
   </StrictMode>
 )
 
-// Disable the offline service worker while Workset is under active development.
+// Keep the app shell available offline. The build ID in the service-worker URL
+// forces phones to pick up a fresh worker whenever Workset is deployed.
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
     try {
-      const regs = await navigator.serviceWorker.getRegistrations()
-      await Promise.all(regs.map(reg => reg.unregister()))
-      const keys = await caches.keys()
-      await Promise.all(keys.filter(key => key.startsWith('workoutboard-')).map(key => caches.delete(key)))
-    } catch {}
+      await navigator.serviceWorker.register(
+        import.meta.env.BASE_URL+'sw.js?build='+encodeURIComponent(__WORKSET_BUILD_ID__),
+        {scope:import.meta.env.BASE_URL}
+      )
+    } catch (error) {
+      console.warn('Offline support could not be registered.',error)
+    }
   })
 }
