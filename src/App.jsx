@@ -6,6 +6,7 @@ import { WhiteboardPage } from './whiteboard'
 import { TrainingTimer } from './trainingTools'
 import { WorkoutCoach, MetconTracker, AccountSecurityPanel, BackupRestorePanel, WorkoutSettingsPanel } from './advancedFeatures'
 import { archiveProgramById, makePlannedFromArchive } from './archivePrograms'
+import { saveOfflineSession, readOfflineSession, clearOfflineSession, writeOfflineState, readOfflineState, getPendingOfflineCount, syncOfflineQueue, offlineUuid, upsertOfflineFirst } from './offline'
 import QRCode from 'qrcode'
 import { BarcodeDetector as BarcodeDetectorPonyfill } from 'barcode-detector/ponyfill'
 
@@ -1197,6 +1198,7 @@ function App() {
   const [programCompletionPrompt,setProgramCompletionPrompt] = useState(null)
   const [oneRmNotice,setOneRmNotice] = useState(null)
   const [releaseUpdate,setReleaseUpdate] = useState(null)
+  const [offlineStatus,setOfflineStatus] = useState(()=>({online:navigator.onLine!==false,pending:0,syncing:false}))
 
   const navigateTo = (tab,{progressSection=null,replace=false}={}) => {
     const section=progressSection || (tab==='progress'?progressStartSection:'Overview')
@@ -1439,16 +1441,51 @@ function App() {
   },[workoutProgramId,week,lift])
 
   useEffect(() => {
-    supabase.auth.getSession().then(({data}) => {
-      setSession(data.session)
+    supabase.auth.getSession().then(({data,error}) => {
+      let nextSession=data?.session||null
+      if(nextSession)saveOfflineSession(nextSession)
+      else if((error||!navigator.onLine))nextSession=readOfflineSession()
+      setSession(nextSession)
+      setAuthLoading(false)
+    }).catch(()=>{
+      setSession(readOfflineSession())
       setAuthLoading(false)
     })
     const {data:listener} = supabase.auth.onAuthStateChange((event,nextSession) => {
       if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
-      setSession(nextSession)
+      if(nextSession)saveOfflineSession(nextSession)
+      if(event==='SIGNED_OUT'&&navigator.onLine)clearOfflineSession()
+      setSession(nextSession || (!navigator.onLine?readOfflineSession():null))
     })
     return () => listener.subscription.unsubscribe()
   },[])
+
+  useEffect(()=>{
+    const userId=session?.user?.id
+    let cancelled=false
+    const refreshStatus=()=>setOfflineStatus(v=>({...v,online:navigator.onLine!==false,pending:getPendingOfflineCount(userId)}))
+    const sync=async()=>{
+      refreshStatus()
+      if(!userId||navigator.onLine===false)return
+      setOfflineStatus(v=>({...v,online:true,syncing:true,pending:getPendingOfflineCount(userId)}))
+      const result=await syncOfflineQueue(supabase,userId)
+      if(cancelled)return
+      setOfflineStatus({online:true,syncing:false,pending:result.pending||0})
+    }
+    const onOnline=()=>sync()
+    const onOffline=()=>refreshStatus()
+    const onQueue=()=>refreshStatus()
+    window.addEventListener('online',onOnline)
+    window.addEventListener('offline',onOffline)
+    window.addEventListener('workset:offline-change',onQueue)
+    sync()
+    return()=>{
+      cancelled=true
+      window.removeEventListener('online',onOnline)
+      window.removeEventListener('offline',onOffline)
+      window.removeEventListener('workset:offline-change',onQueue)
+    }
+  },[session?.user?.id])
 
   useEffect(() => {
     if(!session?.user||!isAdmin)return
@@ -1501,6 +1538,31 @@ function App() {
       setDataLoading(true)
       const userId = session.user.id
       const today = localDateKey()
+      const cached=readOfflineState(userId,'app-core',null)
+      const restoreCached=()=>{
+        if(!cached)return false
+        setProfile(cached.profile||null)
+        setActiveProgram(cached.activeProgram||'andy-hybrid-12')
+        setWeek(cached.week||1)
+        setLift(cached.lift||'Squat')
+        setHistory(cached.history||[])
+        setPlannedToday(cached.plannedToday||null)
+        setTrackedProgramsInfo(cached.trackedProgramsInfo||[])
+        setTrackedTodayInfo(cached.trackedTodayInfo||null)
+        setTodayCompletedWorkouts(cached.todayCompletedWorkouts||[])
+        setCompletedTrainingSessions(cached.completedTrainingSessions||[])
+        setTogetherTracking(cached.togetherTracking||[])
+        setOneRepMaxes(cached.oneRepMaxes||defaultOneRms)
+        setIsAdmin(Boolean(cached.isAdmin))
+        setShowRegularToday(false)
+        setDataLoading(false)
+        return true
+      }
+      if(navigator.onLine===false){
+        restoreCached()
+        setDataLoading(false)
+        return
+      }
       const [{data:profileData},{data:oneRmData},{data:tmData},{data:logsData},{data:todayPlans},{data:trackingData},{data:flexCompleted}] = await Promise.all([
         supabase.from('profiles').select('*').eq('id',userId).single(),
         supabase.from('one_rep_maxes').select('*').eq('user_id',userId).maybeSingle(),
@@ -1626,6 +1688,25 @@ function App() {
     return () => { cancelled = true }
   },[session?.user?.id])
 
+  useEffect(()=>{
+    if(!session?.user||dataLoading)return
+    writeOfflineState(session.user.id,'app-core',{
+      profile,
+      activeProgram,
+      week,
+      lift,
+      history:(history||[]).slice(0,150),
+      plannedToday,
+      trackedProgramsInfo,
+      trackedTodayInfo,
+      todayCompletedWorkouts:(todayCompletedWorkouts||[]).slice(0,25),
+      completedTrainingSessions:(completedTrainingSessions||[]).slice(0,250),
+      togetherTracking,
+      oneRepMaxes,
+      isAdmin,
+    })
+  },[session?.user?.id,dataLoading,profile,activeProgram,week,lift,history,plannedToday,trackedProgramsInfo,trackedTodayInfo,todayCompletedWorkouts,completedTrainingSessions,togetherTracking,oneRepMaxes,isAdmin])
+
   const plannedWorkoutHasProgress = row => {
     const workout=row?.workout||{}
     const exerciseProgress=(workout.exercises||[]).some(item=>{
@@ -1643,6 +1724,7 @@ function App() {
 
   const refreshTrackedProgramsInfo = async () => {
     if(!session?.user)return []
+    if(navigator.onLine===false)return trackedProgramsInfo
     const today=localDateKey()
     const [{data:trackingRows},{data:completedRows}]=await Promise.all([
       supabase.from('user_program_tracking').select('*')
@@ -1670,6 +1752,27 @@ function App() {
     window.scrollTo({top:0,behavior:'smooth'})
   }
 
+  const createPlannedWorkout = async payload => {
+    if(!session?.user)return {data:null,error:new Error('Sign in required.')}
+    const now=new Date().toISOString()
+    const row={
+      id:offlineUuid(),
+      user_id:session.user.id,
+      created_at:now,
+      updated_at:now,
+      ...payload,
+    }
+    return upsertOfflineFirst(supabase,{
+      userId:session.user.id,
+      table:'planned_workouts',
+      payload:row,
+      onConflict:'id',
+      dedupeKey:'planned:'+row.id,
+      select:true,
+      single:true,
+    })
+  }
+
   const startTrackedWorkout = async (trackInfo=trackedTodayInfo,{confirmed=false,selectedWorkout=null}={}) => {
     if(!session?.user || !trackInfo || trackInfo.complete)return
     const chosenWorkout=selectedWorkout||trackInfo.upcoming?.[0]
@@ -1687,8 +1790,7 @@ function App() {
         programId,nextWeek,nextLift,today,oneRepMaxes,
         trackInfo.key,chosenWorkout.trackingWorkoutKey
       )
-      const {data,error}=await supabase.from('planned_workouts')
-        .insert({...plannedPayload,user_id:session.user.id}).select().single()
+      const {data,error}=await createPlannedWorkout(plannedPayload)
       if(error){setWorkoutStartError(error.message);return}
       setActiveProgram(programId)
       setWeek(nextWeek)
@@ -1704,7 +1806,7 @@ function App() {
     const plannedPayload=makePlannedFromArchive(program,next.week,next.dayIndex,today,oneRepMaxes)
     plannedPayload.status='started'
     plannedPayload.workout={...plannedPayload.workout,tracking_program_key:trackInfo.key,tracking_workout_key:next.trackingWorkoutKey,started_explicitly:true}
-    const {data,error}=await supabase.from('planned_workouts').insert({...plannedPayload,user_id:session.user.id}).select().single()
+    const {data,error}=await createPlannedWorkout(plannedPayload)
     if(error){setWorkoutStartError(error.message);return}
     setTrackedTodayInfo(trackInfo)
     activatePlannedWorkout(data)
@@ -1731,8 +1833,7 @@ function App() {
     payload.status='planned'
     payload.workout={...payload.workout,started_explicitly:false}
 
-    const {data,error}=await supabase.from('planned_workouts')
-      .insert({...payload,user_id:session.user.id}).select().single()
+    const {data,error}=await createPlannedWorkout(payload)
     if(error)return {error:error.message}
     if(scheduledDate===localDateKey())await refreshPlannedToday()
     return {data}
@@ -1774,11 +1875,11 @@ function App() {
       conditioningEnabled:false,conditioning_prescribed:false,
       metcon:{name:'',format:'',activity:'',duration:'',workTime:'',restTime:'',interval:'',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx',intensity:'Easy'},
     }
-    const {data,error}=await supabase.from('planned_workouts').insert({
-      user_id:session.user.id,scheduled_date:today,title:label,
+    const {data,error}=await createPlannedWorkout({
+      scheduled_date:today,title:label,
       source_program_name:'Strength Baseline',source_week:null,source_day:path,
       workout,status:'started',
-    }).select().single()
+    })
     if(error){setWorkoutStartError(error.message);return}
     activatePlannedWorkout(data)
     setActiveTab('today')
@@ -1811,7 +1912,7 @@ function App() {
       workout,
       status:'started',
     }
-    const {data,error}=await supabase.from('planned_workouts').insert(payload).select().single()
+    const {data,error}=await createPlannedWorkout(payload)
     if(error){setWorkoutStartError(error.message);return}
     activatePlannedWorkout(data)
   }
@@ -1830,6 +1931,7 @@ function App() {
 
   const refreshPlannedToday = async () => {
     if (!session?.user) return
+    if(navigator.onLine===false)return plannedToday
     const today = localDateKey()
     const [{data:activePlans},{data:completedRows},{data:activeTracking}]=await Promise.all([
       supabase.from('planned_workouts').select('*')
@@ -3951,6 +4053,15 @@ function App() {
         <button className={activeTab==='program'?'active':''} onClick={()=>navigateTo('program')}><b>▦</b><span>Plan</span></button>
         <button className={activeTab==='whiteboard'?'active':''} onClick={()=>navigateTo('whiteboard')}><b>□</b><span>Board</span></button>
       </nav>
+
+      {(!offlineStatus.online||offlineStatus.pending>0||offlineStatus.syncing)&&<div className={'offline-status-toast '+(!offlineStatus.online?'offline':offlineStatus.syncing?'syncing':'pending')} role="status">
+        <strong>{!offlineStatus.online?'Offline':offlineStatus.syncing?'Syncing':'Waiting to sync'}</strong>
+        <span>{!offlineStatus.online
+          ? (offlineStatus.pending?offlineStatus.pending+' change'+(offlineStatus.pending===1?'':'s')+' saved on this device':'Workouts and measurements save on this device')
+          : offlineStatus.syncing
+            ? 'Sending saved changes…'
+            : offlineStatus.pending+' change'+(offlineStatus.pending===1?'':'s')+' waiting'}</span>
+      </div>}
 
       {releaseUpdate&&<div className="release-update-toast" role="status">
         <div><strong>Workset update ready</strong><span>Reload to use the latest version.</span></div>
