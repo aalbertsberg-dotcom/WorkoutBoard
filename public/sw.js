@@ -1,4 +1,4 @@
-const CACHE = 'workoutboard-shell-v4'
+const CACHE = 'workset-offline-v1'
 
 const scopedUrl = path => new URL(path, self.registration.scope).href
 
@@ -17,7 +17,7 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key))))
+      .then(keys => Promise.all(keys.filter(key => key !== CACHE && /^(workset-|workoutboard-)/i.test(key)).map(key => caches.delete(key))))
       .then(() => self.clients.claim())
   )
 })
@@ -38,8 +38,8 @@ self.addEventListener('fetch', event => {
     return
   }
 
-  // During active development, prefer the network for app assets so a phone
-  // refresh cannot remain pinned to an older JS/CSS bundle. Cache is fallback only.
+  // Prefer the network for app assets so refreshes still pick up new releases.
+  // Every successful response is cached and becomes the offline fallback.
   event.respondWith(
     fetch(event.request)
       .then(response => {
