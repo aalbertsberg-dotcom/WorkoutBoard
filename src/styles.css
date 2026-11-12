@@ -6399,3 +6399,56 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
     min-height:32px !important;
   }
 }
+
+
+/* Compact per-day workout summaries */
+.tracked-week-choice-main {
+  display:grid;
+  gap:4px;
+  min-width:0;
+}
+.tracked-day-summary {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:4px 8px;
+  margin-top:3px;
+}
+.tracked-day-summary > div {
+  min-width:0;
+  display:grid;
+  gap:1px;
+}
+.tracked-day-summary b {
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:#dfe7f2;
+  font-size:9px;
+  font-weight:850;
+}
+.tracked-day-summary small {
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:#7f90a7;
+  font-size:8px;
+}
+.tracked-day-summary em {
+  grid-column:1 / -1;
+  color:#9fca57;
+  font-size:8px;
+  font-style:normal;
+  font-weight:850;
+}
+.tracked-day-note {
+  margin-top:2px;
+  color:#75859a !important;
+  font-size:8px !important;
+  line-height:1.35;
+}
+@media (max-width:430px) {
+  .tracked-day-summary {
+    grid-template-columns:1fr 1fr;
+    column-gap:6px;
+  }
+}
