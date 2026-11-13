@@ -1954,6 +1954,8 @@ function App() {
     const metconBase={name:'',format:'',activity:'',duration:'',workTime:'',restTime:'',interval:'',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx',intensity:'Easy'}
     const workout={
       version:2,type:'flexible',standalone:true,started_explicitly:true,
+      quick_cardio:kind!=='free',
+      quick_cardio_kind:kind!=='free'?kind:null,
       exercises:[],
       sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',
       conditioningEnabled:kind!=='free',
@@ -3306,7 +3308,7 @@ function App() {
           <button className={activeTab === 'whiteboard' ? 'active' : ''} onClick={() => navigateTo('whiteboard')}><b>□</b><span>Board</span></button>
         </nav>
 
-        {activeTab === 'today' && <TrainingTimer />}
+        {activeTab === 'today' && !plannedToday?.workout?.quick_cardio && <TrainingTimer />}
 
         {dataLoading ? (
           <div className="loading-card">Loading your workouts…</div>
@@ -3499,15 +3501,18 @@ function App() {
                             const dayNumber=Number(choice.dayIndex||0)+1
                             const isNext=Boolean(nextChoice&&choice.trackingWorkoutKey===nextChoice.trackingWorkoutKey)
                             const selected=choice.trackingWorkoutKey===selectedChoice.trackingWorkoutKey
+                            const shortTitle=choice.title
+                              .replace(/^Day\s*\d+\s*[-–]\s*/i,'')
+                              .replace(/\s*\/\s*(Lower|Upper)\s*(Strength|Hypertrophy)?/i,'')
                             return <button
                               type="button"
                               key={choice.trackingWorkoutKey}
                               className={(selected?'selected ':'')+(isNext?'next ':'')+(choice.completed?'completed':'')}
-                              disabled={choice.completed}
                               onClick={()=>setProgramPreviewChoiceKey(choice.trackingWorkoutKey)}
                             >
                               <span>Day {dayNumber}</span>
-                              <b>{choice.completed?'✓ DONE':isNext?'NEXT':choice.title.replace(/^Day\s*\d+\s*[-–]\s*/i,'')}</b>
+                              <b>{shortTitle}</b>
+                              {(isNext||choice.completed)&&<em>{choice.completed?'✓ DONE':'NEXT'}</em>}
                             </button>
                           })}
                         </div>
@@ -3530,23 +3535,25 @@ function App() {
                           </div>
                           {selectedChoice.note&&<small className="tracked-day-note">{selectedChoice.note}</small>}
                         </div>
-                        <button type="button" className="primary-action tracked-next-start" onClick={()=>startTrackedWorkout(info,{selectedWorkout:selectedChoice})}>
-                          {selectedIsNext?'Start next workout':'Start this day'}
-                        </button>
+                        {selectedChoice.completed
+                          ? <div className="tracked-day-complete-note">✓ Completed</div>
+                          : <button type="button" className="primary-action tracked-next-start" onClick={()=>startTrackedWorkout(info,{selectedWorkout:selectedChoice})}>
+                              {selectedIsNext?'Start next workout':'Start this day'}
+                            </button>}
                       </div>
                     </>}
                   </section>
                 })}
               </div>}
 
-              {!nextDayPreviewOpen&&extraWorkoutOpen&&<section className="simple-card extra-workout-picker baseline-only-picker">
-                <div className="section-heading"><div><span className="card-label">STRENGTH BASELINE</span><h3>Test current strength</h3></div><button className="conditioning-remove" onClick={()=>setExtraWorkoutOpen(false)}>Cancel</button></div>
-                <button onClick={()=>startStrengthBaseline('full')}><strong>All 4</strong><span>Squat, bench, deadlift and press · 4-rep test sets</span></button>
-                <button onClick={()=>startStrengthBaseline('upper')}><strong>Upper</strong><span>Bench + press</span></button>
-                <button onClick={()=>startStrengthBaseline('lower')}><strong>Lower</strong><span>Squat + deadlift</span></button>
-              </section>}
-
-              {!nextDayPreviewOpen&&<button className="secondary-action" onClick={()=>navigateTo('program')}>View full program / plan ahead</button>}
+              {!nextDayPreviewOpen&&extraWorkoutOpen&&<div className="same-day-sheet-backdrop" onClick={()=>setExtraWorkoutOpen(false)}>
+                <section className="same-day-sheet extra-workout-picker baseline-only-picker baseline-choice-sheet" onClick={e=>e.stopPropagation()}>
+                  <div className="section-heading"><div><span className="card-label">STRENGTH BASELINE</span><h3>Test current strength</h3></div><button className="conditioning-remove" onClick={()=>setExtraWorkoutOpen(false)}>×</button></div>
+                  <button onClick={()=>startStrengthBaseline('full')}><strong>All 4</strong><span>Squat, bench, deadlift and press · 4-rep test sets</span></button>
+                  <button onClick={()=>startStrengthBaseline('upper')}><strong>Upper</strong><span>Bench + press</span></button>
+                  <button onClick={()=>startStrengthBaseline('lower')}><strong>Lower</strong><span>Squat + deadlift</span></button>
+                </section>
+              </div>}
 
               {workoutStartError&&<div className="status-message">{workoutStartError}</div>}
             </section>
