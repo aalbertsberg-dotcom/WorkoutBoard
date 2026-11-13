@@ -7171,3 +7171,24 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   font-size:8px;
   line-height:1.35;
 }
+
+
+/* Final cardio/delete polish */
+.quick-cardio-timer-state {
+  color:#b9e97d !important;
+  font-size:9px !important;
+  font-weight:950 !important;
+  letter-spacing:.08em;
+}
+.quick-cardio-timer-hint {
+  margin-top:-2px;
+}
+.delete-workout-error {
+  padding:9px 10px;
+  border:1px solid #8d3f48;
+  border-radius:9px;
+  background:#2a1218;
+  color:#fecdd3 !important;
+  font-size:9px !important;
+  font-weight:800;
+}
