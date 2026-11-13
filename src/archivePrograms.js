@@ -313,6 +313,7 @@ function andyHybridRebuildWeek(week) {
       ex('Lat Pulldown / Pullup',deload?'2x10 easy':'3x10-12','Use a grip that feels good on elbows and shoulders.'),
       ex('Chest-Supported DB Row',deload?'2x10':'3x12','Pause briefly at the top.'),
       ex('Lateral Raise',deload?'2x12':'3x15','Light and controlled.'),
+      ex('Z-Twist',deload?'2x12 easy':'3x12-15','Cable + wide straight bar. Keep elbows high, rotate smoothly, and use a light controlled load.'),
       ex('Curl + Pushdown',deload?'2x10 each':'3x12 each','Superset if desired.'),
       ex('Short Conditioning',deload?'Skip or 5 min easy':'8-12 min moderate','Choose rower, sled, kettlebell, carry or sandbag work. Keep only one hard conditioning session per week.'),
     ],weekNote),
