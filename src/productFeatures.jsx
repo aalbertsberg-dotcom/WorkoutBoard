@@ -173,7 +173,11 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
   const [removeExercisePrompt,setRemoveExercisePrompt]=useState(null)
 
   useEffect(()=>{
-    if(cancelRequestToken>0)setCancelConfirm(true)
+    if(cancelRequestToken<=0)return
+    setCancelConfirm(true)
+    requestAnimationFrame(()=>setTimeout(()=>{
+      document.getElementById('planned-cancel-confirm')?.scrollIntoView({behavior:'smooth',block:'center'})
+    },25))
   },[cancelRequestToken])
 
   useEffect(()=>{
@@ -853,7 +857,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
 
     {onDismiss&&<button className="secondary-action regular-workout-fallback" onClick={onDismiss}>Use regular Today workout</button>}
     <button type="button" className="secondary-action cancel-workout-button" onClick={()=>setCancelConfirm(true)}>Cancel workout</button>
-    {cancelConfirm&&<section className="cancel-workout-confirm">
+    {cancelConfirm&&<section id="planned-cancel-confirm" className="cancel-workout-confirm">
       <strong>Cancel this workout?</strong>
       <p>Your in-progress entries will not count as a completed workout. This will not advance your program.</p>
       <div><button type="button" className="secondary-action" onClick={()=>setCancelConfirm(false)} disabled={cancelling}>Keep workout</button><button type="button" className="danger-action" onClick={cancelWorkout} disabled={cancelling}>{cancelling?'Cancelling…':'Yes, cancel'}</button></div>
