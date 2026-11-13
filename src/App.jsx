@@ -1184,6 +1184,7 @@ function App() {
   const [baselineFinishReview,setBaselineFinishReview] = useState(null)
   const [extraWorkoutOpen,setExtraWorkoutOpen] = useState(false)
   const [nextDayPreviewOpen,setNextDayPreviewOpen] = useState(false)
+  const [programPreviewChoiceKey,setProgramPreviewChoiceKey] = useState('')
   const nextDayPreviewRef=useRef(false)
   nextDayPreviewRef.current=nextDayPreviewOpen
   const [plannedBackCancelRequest,setPlannedBackCancelRequest] = useState(0)
@@ -1793,6 +1794,8 @@ function App() {
     setCompletionSummary(null)
     setExtraWorkoutOpen(false)
     setNextDayPreviewOpen(false)
+    setProgramPreviewChoiceKey('')
+    setPlannedBackCancelRequest(0)
     setPendingWorkoutStart(null)
     plannedTodayRef.current=data
     setPlannedToday(data)
@@ -2100,6 +2103,7 @@ function App() {
   }
 
   const openProgramContinuation = () => {
+    setProgramPreviewChoiceKey('')
     setNextDayPreviewOpen(true)
     const state=window.history.state||{}
     const url=new URL(window.location.href)
@@ -3318,6 +3322,7 @@ function App() {
                 plannedTodayRef.current=null
                 setPlannedToday(null)
                 setResumeStandalonePlan(null)
+                setPlannedBackCancelRequest(0)
                 const state=window.history.state||{}
                 const cleanUrl=new URL(window.location.href)
                 cleanUrl.hash=''
@@ -3337,6 +3342,7 @@ function App() {
               onFinished={async(summary) => {
                 plannedTodayRef.current=null
                 setResumeStandalonePlan(null)
+                setPlannedBackCancelRequest(0)
                 const historyState=window.history.state||{}
                 const cleanUrl=new URL(window.location.href)
                 cleanUrl.hash=''
@@ -3476,53 +3482,58 @@ function App() {
                 <button type="button" className="today-program-back" onClick={()=>window.history.back()}>← What are we doing today?</button>
                 {trackedProgramsInfo.map(info=>{
                   const nextChoice=info.upcoming?.[0]||null
-                  const nextWeekChoices=(info.weekChoices||[]).filter(choice=>!choice.completed&&choice.trackingWorkoutKey!==nextChoice?.trackingWorkoutKey)
+                  const weekChoices=info.weekChoices||[]
+                  const selectedChoice=weekChoices.find(choice=>choice.trackingWorkoutKey===programPreviewChoiceKey&&!choice.completed)||nextChoice
+                  const selectedIsNext=Boolean(selectedChoice&&nextChoice&&selectedChoice.trackingWorkoutKey===nextChoice.trackingWorkoutKey)
                   return <section className="simple-card tracked-program-today-card continue-program-card" key={info.key}>
                     <div className="section-heading">
                       <div><span className="card-label">CONTINUE WITH PROGRAM</span><h3>{info.name}</h3><small>{info.category}{info.durationLabel?' · '+info.durationLabel:''}</small></div>
                       <div className="progress-badge">{info.completed}/{info.total}</div>
                     </div>
                     <div className="program-progress-track"><div style={{width:(info.total?Math.min(100,info.completed/info.total*100):0)+'%'}}/></div>
-                    {info.complete?<p className="helper-text">Program complete.</p>:nextChoice&&<>
+                    {info.complete?<p className="helper-text">Program complete.</p>:selectedChoice&&<>
+                      <section className="tracked-week-preview">
+                        <div className="tracked-week-preview-head"><span>WEEK {info.currentWeek}</span><small>Tap a day to preview it</small></div>
+                        <div className="tracked-week-preview-days">
+                          {weekChoices.map(choice=>{
+                            const dayNumber=Number(choice.dayIndex||0)+1
+                            const isNext=Boolean(nextChoice&&choice.trackingWorkoutKey===nextChoice.trackingWorkoutKey)
+                            const selected=choice.trackingWorkoutKey===selectedChoice.trackingWorkoutKey
+                            return <button
+                              type="button"
+                              key={choice.trackingWorkoutKey}
+                              className={(selected?'selected ':'')+(isNext?'next ':'')+(choice.completed?'completed':'')}
+                              disabled={choice.completed}
+                              onClick={()=>setProgramPreviewChoiceKey(choice.trackingWorkoutKey)}
+                            >
+                              <span>Day {dayNumber}</span>
+                              <b>{choice.completed?'✓ DONE':isNext?'NEXT':choice.title.replace(/^Day\s*\d+\s*[-–]\s*/i,'')}</b>
+                            </button>
+                          })}
+                        </div>
+                      </section>
+
                       <div className="tracked-next-workout">
-                        <div className="tracked-next-label"><b>NEXT</b><span>Week {nextChoice.week} · Day {Number(nextChoice.dayIndex||0)+1}</span></div>
+                        <div className="tracked-next-label">
+                          {selectedIsNext?<b>NEXT</b>:<b className="alternate-day-badge">SELECTED</b>}
+                          <span>Week {selectedChoice.week} · Day {Number(selectedChoice.dayIndex||0)+1}</span>
+                        </div>
                         <div className="tracked-next-content">
-                          <strong>{nextChoice.title}</strong>
+                          <strong>{selectedChoice.title}</strong>
                           <div className="tracked-day-summary">
-                            {(nextChoice.exercises||[]).slice(0,4).map((exercise,exerciseIndex)=><div key={exerciseIndex}>
+                            {(selectedChoice.exercises||[]).slice(0,4).map((exercise,exerciseIndex)=><div key={exerciseIndex}>
                               <b>{exercise.name}</b>
                               {exercise.prescription&&<small>{exercise.prescription}</small>}
                             </div>)}
-                            {(nextChoice.exercises||[]).length>4&&<em>+{nextChoice.exercises.length-4} more exercise{nextChoice.exercises.length-4===1?'':'s'}</em>}
-                            {!(nextChoice.exercises||[]).length&&<em>Workout details available in Plan</em>}
+                            {(selectedChoice.exercises||[]).length>4&&<em>+{selectedChoice.exercises.length-4} more exercise{selectedChoice.exercises.length-4===1?'':'s'}</em>}
+                            {!(selectedChoice.exercises||[]).length&&<em>Workout details available in Plan</em>}
                           </div>
-                          {nextChoice.note&&<small className="tracked-day-note">{nextChoice.note}</small>}
+                          {selectedChoice.note&&<small className="tracked-day-note">{selectedChoice.note}</small>}
                         </div>
-                        <button type="button" className="primary-action tracked-next-start" onClick={()=>startTrackedWorkout(info,{selectedWorkout:nextChoice})}>Start next workout</button>
+                        <button type="button" className="primary-action tracked-next-start" onClick={()=>startTrackedWorkout(info,{selectedWorkout:selectedChoice})}>
+                          {selectedIsNext?'Start next workout':'Start this day'}
+                        </button>
                       </div>
-
-                      <details className="tracked-pick-another-day">
-                        <summary>Pick another day from Week {info.currentWeek}</summary>
-                        <div className="tracked-week-choice-list">
-                          {nextWeekChoices.length?nextWeekChoices.map(choice=>{
-                            const dayNumber=Number(choice.dayIndex||0)+1
-                            return <div className="tracked-week-choice" key={choice.trackingWorkoutKey}>
-                              <div className="tracked-week-choice-main">
-                                <span>Day {dayNumber}</span>
-                                <strong>{choice.title}</strong>
-                                <div className="tracked-day-summary">
-                                  {(choice.exercises||[]).slice(0,4).map((exercise,exerciseIndex)=><div key={exerciseIndex}>
-                                    <b>{exercise.name}</b>
-                                    {exercise.prescription&&<small>{exercise.prescription}</small>}
-                                  </div>)}
-                                  {(choice.exercises||[]).length>4&&<em>+{choice.exercises.length-4} more exercise{choice.exercises.length-4===1?'':'s'}</em>}
-                                </div>
-                              </div>
-                              <button type="button" onClick={()=>startTrackedWorkout(info,{selectedWorkout:choice})}>Start</button>
-                            </div>
-                          }):<p className="helper-text">No other incomplete days in this week.</p>}
-                        </div>
-                      </details>
                     </>}
                   </section>
                 })}
