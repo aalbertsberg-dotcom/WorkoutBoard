@@ -1767,7 +1767,8 @@ function App() {
       Number(conditioning.reps||0) ||
       Number(conditioning.calories||0)
     )
-    return exerciseProgress || conditioningProgress || Boolean(String(workout.note||'').trim())
+    const timerProgress=Number(workout.quick_timer_elapsed_seconds||0)>0 || Boolean(workout.quick_timer_started_at)
+    return exerciseProgress || conditioningProgress || timerProgress || Boolean(String(workout.note||'').trim())
   }
 
   const refreshTrackedProgramsInfo = async () => {
