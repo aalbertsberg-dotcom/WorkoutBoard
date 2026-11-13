@@ -4138,7 +4138,7 @@ function App() {
                       )
                     })}
                     {sharedManagedPartners.map(athlete=><div className="partner-row managed" key={'managed:'+athlete.id}>
-                      <div><strong>{athlete.display_name}</strong><span>Managed partner · targets shown in workout</span></div>
+                      <div><strong>{athlete.display_name}</strong><span>My Team · targets shown in workout</span></div>
                       <div><strong>—</strong><span>No login required</span></div>
                     </div>)}
                   </div>
