@@ -2062,16 +2062,54 @@ function App() {
   }
 
   const deleteCompletedWorkout = async row => {
-    if(!session?.user || !row?.id || deletingCompletedWorkout)return
+    if(!session?.user || !row || deletingCompletedWorkout)return
     setDeletingCompletedWorkout(true)
-    const {data:sessionRow,error:lookupError}=await supabase.from('training_sessions')
-      .select('id,planned_workout_id')
-      .eq('id',row.id)
-      .eq('user_id',session.user.id)
-      .maybeSingle()
+    setWorkoutStartError('')
 
-    if(lookupError || !sessionRow){
-      setWorkoutStartError(lookupError?.message||'Could not find that completed workout.')
+    let sessionRow=null
+    const preferredId=row.training_session_id || (!String(row.id||'').startsWith('just-finished-') ? row.id : null)
+
+    if(preferredId){
+      const lookup=await supabase.from('training_sessions')
+        .select('id,planned_workout_id,title,completed_at')
+        .eq('id',preferredId)
+        .eq('user_id',session.user.id)
+        .maybeSingle()
+      if(lookup.error){
+        setWorkoutStartError(lookup.error.message)
+        setDeletingCompletedWorkout(false)
+        return
+      }
+      sessionRow=lookup.data||null
+    }
+
+    // Older just-finished cards used a temporary UI id. Resolve those by owner,
+    // title, and a tight completion-time window instead of failing the delete.
+    if(!sessionRow){
+      let query=supabase.from('training_sessions')
+        .select('id,planned_workout_id,title,completed_at')
+        .eq('user_id',session.user.id)
+        .eq('title',row.title||'')
+        .order('completed_at',{ascending:false})
+        .limit(5)
+
+      const around=new Date(row.completed_at||Date.now())
+      if(!Number.isNaN(around.getTime())){
+        query=query
+          .gte('completed_at',new Date(around.getTime()-5*60*1000).toISOString())
+          .lte('completed_at',new Date(around.getTime()+5*60*1000).toISOString())
+      }
+      const lookup=await query
+      if(lookup.error){
+        setWorkoutStartError(lookup.error.message)
+        setDeletingCompletedWorkout(false)
+        return
+      }
+      sessionRow=lookup.data?.[0]||null
+    }
+
+    if(!sessionRow){
+      setWorkoutStartError('Could not find that completed workout. Refresh Today and try again.')
       setDeletingCompletedWorkout(false)
       return
     }
@@ -2102,7 +2140,12 @@ function App() {
       }
     }
 
-    setTodayCompletedWorkouts(rows=>rows.filter(item=>item.id!==row.id))
+    setTodayCompletedWorkouts(rows=>rows.filter(item=>
+      item.id!==row.id &&
+      item.id!==sessionRow.id &&
+      item.training_session_id!==sessionRow.id
+    ))
+    setCompletedTrainingSessions(rows=>rows.filter(item=>item.id!==sessionRow.id))
     setCompletedDeletePrompt(null)
     setCompletionSummary(null)
     setBaselineFinishReview(null)
@@ -3404,7 +3447,8 @@ function App() {
                   if(programWillComplete)setProgramCompletionPrompt({name:finishedTrack?.name||summary?.program||'Program'})
                   if(summary){
                     setTodayCompletedWorkouts(rows=>[{
-                      id:'just-finished-'+Date.now(),
+                      id:summary.trainingSessionId||('just-finished-'+Date.now()),
+                      training_session_id:summary.trainingSessionId||null,
                       title:summary.title,
                       program:summary.program,
                       total_volume:summary.volume||0,
@@ -3958,7 +4002,7 @@ function App() {
                     {managedAthletes.map(athlete=><div key={athlete.id}><span>{athlete.display_name}</span><div><button type="button" onClick={()=>openManagedAthleteEditor(athlete)}>Edit</button><button type="button" onClick={()=>deleteManagedAthlete(athlete)}>×</button></div></div>)}
                   </div>}
                   {managedAthleteEditorOpen&&<div className="managed-athlete-editor">
-                    <label><span>Name</span><input value={managedAthleteDraft.display_name} onChange={e=>setManagedAthleteDraft(v=>({...v,display_name:e.target.value}))} placeholder="Tracey"/></label>
+                    <label><span>Name</span><input value={managedAthleteDraft.display_name} onChange={e=>setManagedAthleteDraft(v=>({...v,display_name:e.target.value}))} placeholder="Partner name"/></label>
                     <div className="managed-athlete-max-grid">
                       {lifts.map(lift=><label key={lift}><span>{lift}</span><div className="input-with-unit"><input type="number" inputMode="decimal" value={managedAthleteDraft[lift]} onChange={e=>setManagedAthleteDraft(v=>({...v,[lift]:e.target.value===''?'':Math.max(0,Number(e.target.value)||0)}))} placeholder="0"/><b>lb</b></div></label>)}
                     </div>
