@@ -2360,7 +2360,7 @@ function App() {
   },[session?.user?.id,profile?.id,togetherReady])
 
   const refreshManagedAthletes = async () => {
-    if(!session?.user)return
+    if(!session?.user||!isAdmin){setManagedAthletes([]);return}
     const {data,error}=await supabase.from('managed_athletes')
       .select('*').eq('owner_user_id',session.user.id).order('updated_at',{ascending:false})
     if(error)return
@@ -2375,19 +2375,24 @@ function App() {
   }
 
   useEffect(()=>{
-    if(!session?.user)return
+    if(!session?.user||!isAdmin){
+      setManagedAthletes([])
+      setSelectedManagedAthleteIds([])
+      return
+    }
     refreshManagedAthletes()
-  },[session?.user?.id])
+  },[session?.user?.id,isAdmin])
 
   const openManagedAthleteEditor = athlete => {
+    if(!isAdmin)return
     setManagedAthleteDraft(athlete ? {...athlete} : {id:null,display_name:'',Squat:'',Bench:'',Deadlift:'',Press:''})
     setManagedAthleteEditorOpen(true)
   }
 
   const saveManagedAthlete = async () => {
-    if(!session?.user)return
+    if(!session?.user||!isAdmin)return
     const name=String(managedAthleteDraft.display_name||'').trim()
-    if(!name){setTogetherMessage('Partner name is required.');return}
+    if(!name){setTogetherMessage('Team member name is required.');return}
     const num=value=>value===''?null:round2(Math.max(0,Number(value)||0))
     const payload={
       owner_user_id:session.user.id,
@@ -2410,8 +2415,8 @@ function App() {
   }
 
   const deleteManagedAthlete = async athlete => {
-    if(!session?.user||!athlete?.id)return
-    if(!window.confirm('Remove '+athlete.display_name+' from your managed training partners?'))return
+    if(!session?.user||!isAdmin||!athlete?.id)return
+    if(!window.confirm('Remove '+athlete.display_name+' from My Team?'))return
     const {error}=await supabase.from('managed_athletes').delete()
       .eq('id',athlete.id).eq('owner_user_id',session.user.id)
     if(error){setTogetherMessage(error.message);return}
@@ -3968,39 +3973,42 @@ function App() {
                   <h2>{selectedFriendIds.length||selectedManagedAthleteIds.length?'Ready to train together?':'Start or join a workout'}</h2>
                   <p>{selectedFriendIds.length
                     ? 'Your selected friends will receive a Workset invite when you start.'
-                    : 'Choose friends above, add a no-account partner below, or start and share a code / QR.'}</p>
+                    : isAdmin
+                      ? 'Choose friends above, add someone from My Team, or start and share a code / QR.'
+                      : 'Choose friends above, or start and share a code / QR.'}</p>
                   <div className="together-primary-actions">
                     <button type="button" className={togetherAction==='start'?'primary-action active':'primary-action'} onClick={()=>setTogetherAction(v=>v==='start'?'':'start')}>Start together</button>
                     <button type="button" className={togetherAction==='join'?'secondary-action active':'secondary-action'} onClick={()=>setTogetherAction(v=>v==='join'?'':'join')}>Join session</button>
                   </div>
                 </section>
 
-                <section className="simple-card together-partners-card managed-partners-compact">
+                {isAdmin&&<section className="simple-card together-partners-card managed-partners-compact my-team-card">
                   <div className="section-heading">
-                    <div><span className="card-label">NO ACCOUNT PARTNERS</span><h3>Managed partners</h3></div>
-                    <button type="button" className="secondary-action compact-action" onClick={()=>openManagedAthleteEditor(null)}>+ Managed</button>
+                    <div><span className="card-label">MY TEAM</span><h3>People I track</h3></div>
+                    <button type="button" className="secondary-action compact-action" onClick={()=>openManagedAthleteEditor(null)}>+ Add person</button>
                   </div>
+                  <p className="helper-text">For coaching or leading a group when someone does not have their own Workset account. You maintain their training targets here.</p>
                   {managedAthletes.length>0?<div className="together-partner-chips">
                     {managedAthletes.map(athlete=><button
                       type="button"
                       key={athlete.id}
                       className={selectedManagedAthleteIds.includes(athlete.id)?'selected':''}
                       onClick={()=>setSelectedManagedAthleteIds(ids=>ids.includes(athlete.id)?ids.filter(id=>id!==athlete.id):[...ids,athlete.id])}
-                    ><strong>{athlete.display_name}</strong><span>{selectedManagedAthleteIds.includes(athlete.id)?'Training with you':'Managed'}</span></button>)}
-                  </div>:<p className="helper-text">For someone training beside you who doesn't use Workset. You maintain their 1RMs and target weights.</p>}
-                  {managedAthletes.length>0&&<button type="button" className="together-manage-link" onClick={()=>{setManagedAthleteEditorOpen(v=>!v);setManagedAthleteDraft({id:null,display_name:'',Squat:'',Bench:'',Deadlift:'',Press:''})}}>{managedAthleteEditorOpen?'Close managed partners':'Manage partners'}</button>}
+                    ><strong>{athlete.display_name}</strong><span>{selectedManagedAthleteIds.includes(athlete.id)?'Training today':'Team member'}</span></button>)}
+                  </div>:<div className="my-team-empty"><strong>No team members yet</strong><span>Add someone you are coaching or tracking for.</span></div>}
+                  {managedAthletes.length>0&&<button type="button" className="together-manage-link" onClick={()=>{setManagedAthleteEditorOpen(v=>!v);setManagedAthleteDraft({id:null,display_name:'',Squat:'',Bench:'',Deadlift:'',Press:''})}}>{managedAthleteEditorOpen?'Close team management':'Manage My Team'}</button>}
                   {managedAthleteEditorOpen&&managedAthletes.length>0&&<div className="together-partner-manage-list">
                     {managedAthletes.map(athlete=><div key={athlete.id}><span>{athlete.display_name}</span><div><button type="button" onClick={()=>openManagedAthleteEditor(athlete)}>Edit</button><button type="button" onClick={()=>deleteManagedAthlete(athlete)}>×</button></div></div>)}
                   </div>}
                   {managedAthleteEditorOpen&&<div className="managed-athlete-editor">
-                    <label><span>Name</span><input value={managedAthleteDraft.display_name} onChange={e=>setManagedAthleteDraft(v=>({...v,display_name:e.target.value}))} placeholder="Partner name"/></label>
+                    <label><span>Name</span><input value={managedAthleteDraft.display_name} onChange={e=>setManagedAthleteDraft(v=>({...v,display_name:e.target.value}))} placeholder="Team member name"/></label>
                     <div className="managed-athlete-max-grid">
                       {lifts.map(lift=><label key={lift}><span>{lift}</span><div className="input-with-unit"><input type="number" inputMode="decimal" value={managedAthleteDraft[lift]} onChange={e=>setManagedAthleteDraft(v=>({...v,[lift]:e.target.value===''?'':Math.max(0,Number(e.target.value)||0)}))} placeholder="0"/><b>lb</b></div></label>)}
                     </div>
-                    <div className="managed-athlete-editor-actions"><button type="button" className="secondary-action" onClick={()=>setManagedAthleteEditorOpen(false)}>Cancel</button><button type="button" className="primary-action" onClick={saveManagedAthlete}>Save partner</button></div>
-                    {managedAthleteDraft.id&&<button type="button" className="danger-lite" onClick={()=>deleteManagedAthlete(managedAthleteDraft)}>Remove partner</button>}
+                    <div className="managed-athlete-editor-actions"><button type="button" className="secondary-action" onClick={()=>setManagedAthleteEditorOpen(false)}>Cancel</button><button type="button" className="primary-action" onClick={saveManagedAthlete}>Save team member</button></div>
+                    {managedAthleteDraft.id&&<button type="button" className="danger-lite" onClick={()=>deleteManagedAthlete(managedAthleteDraft)}>Remove from My Team</button>}
                   </div>}
-                </section>
+                </section>}
 
                 {togetherAction==='start'&&<section className="together-flow-card">
                   <div className="section-heading"><div><span className="card-label">START TOGETHER</span><h3>Choose the workout</h3></div><button type="button" className="icon-close" onClick={()=>setTogetherAction('')}>×</button></div>
