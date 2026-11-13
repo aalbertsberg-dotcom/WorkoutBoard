@@ -714,7 +714,10 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       <section className="simple-card quick-cardio-intensity-card">
         <span className="quick-cardio-section-label">How hard?</span>
         <div className="quick-intensity">
-          {['Easy','Moderate','Hard'].map(level=><button type="button" key={level} className={(workout.metcon?.intensity||'Easy')===level?'active':''} onClick={()=>setQuickMetcon('intensity',level)}>{level}</button>)}
+          {['Light','Moderate','Hard'].map(level=>{
+            const current=(workout.metcon?.intensity==='Easy'?'Light':workout.metcon?.intensity)||'Light'
+            return <button type="button" key={level} className={current===level?'active':''} onClick={()=>setQuickMetcon('intensity',level)}>{level}</button>
+          })}
         </div>
       </section>
 
