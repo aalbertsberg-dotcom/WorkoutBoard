@@ -1887,7 +1887,7 @@ function App() {
 
   const startStandaloneWorkout = async (kind,{confirmed=false}={}) => {
     if(!session?.user)return
-    const labels={free:'Free workout',run:'Run / Walk',conditioning:'Conditioning / Metcon'}
+    const labels={free:'Free workout',walk:'Walk',run:'Run',bike:'Bike Ride',conditioning:'Conditioning / Metcon'}
     if((trackedTodayInfo?.workoutsToday||0)>0 && !confirmed){
       setPendingWorkoutStart({kind,label:labels[kind]||'another workout'})
       return
@@ -1900,7 +1900,10 @@ function App() {
       sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',
       conditioningEnabled:kind!=='free',
       conditioning_prescribed:kind!=='free',
-      metcon:kind==='run'?{...metconBase,format:'Distance',activity:'Run'}:metconBase,
+      metcon:kind==='walk'?{...metconBase,format:'Easy cardio',activity:'Walk',intensity:'Easy'}
+        :kind==='run'?{...metconBase,format:'Easy cardio',activity:'Run',intensity:'Easy'}
+        :kind==='bike'?{...metconBase,format:'Easy cardio',activity:'Bike',intensity:'Easy'}
+        :metconBase,
     }
     const payload={
       user_id:session.user.id,
@@ -3377,9 +3380,11 @@ function App() {
                 <button onClick={()=>startStrengthBaseline('full')}><strong>Strength baseline · All 4</strong><span>Squat, bench, deadlift and press · 4-rep test sets</span></button>
                 <button onClick={()=>startStrengthBaseline('upper')}><strong>Strength baseline · Upper</strong><span>Bench + press</span></button>
                 <button onClick={()=>startStrengthBaseline('lower')}><strong>Strength baseline · Lower</strong><span>Squat + deadlift</span></button>
+                <button onClick={()=>startStandaloneWorkout('walk')}><strong>Walk</strong><span>Just go for a walk · track time, distance or both</span></button>
+                <button onClick={()=>startStandaloneWorkout('run')}><strong>Run</strong><span>Easy run or whatever distance you feel like doing</span></button>
+                <button onClick={()=>startStandaloneWorkout('bike')}><strong>Bike ride</strong><span>Outdoor or stationary bike · track time and distance</span></button>
                 <button onClick={()=>startStandaloneWorkout('free')}><strong>Free workout</strong><span>Add whatever exercises you want</span></button>
-                <button onClick={()=>startStandaloneWorkout('run')}><strong>Run / Walk</strong><span>Track distance and time</span></button>
-                <button onClick={()=>startStandaloneWorkout('conditioning')}><strong>Conditioning / Metcon</strong><span>Intervals, AMRAP, EMOM, cardio, etc.</span></button>
+                <button onClick={()=>startStandaloneWorkout('conditioning')}><strong>Other cardio / Conditioning</strong><span>Row, elliptical, intervals, AMRAP, EMOM, sled, etc.</span></button>
               </section>}
 
               <button className="secondary-action" onClick={()=>navigateTo('program')}>View full program / plan ahead</button>
