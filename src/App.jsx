@@ -1967,7 +1967,7 @@ function App() {
       return
     }
     const today=localDateKey()
-    const metconBase={name:'',format:'',activity:'',duration:'',workTime:'',restTime:'',interval:'',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx',intensity:'Easy'}
+    const metconBase={name:'',format:'',activity:'',duration:'',workTime:'',restTime:'',interval:'',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx',intensity:'Light'}
     const workout={
       version:2,type:'flexible',standalone:true,started_explicitly:true,
       quick_cardio:kind!=='free',
@@ -1976,9 +1976,9 @@ function App() {
       sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',
       conditioningEnabled:kind!=='free',
       conditioning_prescribed:kind!=='free',
-      metcon:kind==='walk'?{...metconBase,format:'Easy cardio',activity:'Walk',intensity:'Easy'}
-        :kind==='run'?{...metconBase,format:'Easy cardio',activity:'Run',intensity:'Easy'}
-        :kind==='bike'?{...metconBase,format:'Easy cardio',activity:'Bike',intensity:'Easy'}
+      metcon:kind==='walk'?{...metconBase,format:'Easy cardio',activity:'Walk',intensity:'Light'}
+        :kind==='run'?{...metconBase,format:'Easy cardio',activity:'Run',intensity:'Light'}
+        :kind==='bike'?{...metconBase,format:'Easy cardio',activity:'Bike',intensity:'Light'}
         :metconBase,
     }
     const payload={
@@ -3518,7 +3518,7 @@ function App() {
                 {trackedProgramsInfo.map(info=>{
                   const nextChoice=info.upcoming?.[0]||null
                   const weekChoices=info.weekChoices||[]
-                  const selectedChoice=weekChoices.find(choice=>choice.trackingWorkoutKey===programPreviewChoiceKey&&!choice.completed)||nextChoice
+                  const selectedChoice=weekChoices.find(choice=>choice.trackingWorkoutKey===programPreviewChoiceKey)||nextChoice
                   const selectedIsNext=Boolean(selectedChoice&&nextChoice&&selectedChoice.trackingWorkoutKey===nextChoice.trackingWorkoutKey)
                   return <section className="simple-card tracked-program-today-card continue-program-card" key={info.key}>
                     <div className="section-heading">
@@ -3617,13 +3617,13 @@ function App() {
                     <span className="quick-start-icon">▦</span><strong>Choose a program</strong><small>Start or track a training plan</small>
                   </button>
                   <button type="button" onClick={()=>startStandaloneWorkout('walk')}>
-                    <span className="quick-start-icon">●</span><strong>Walk</strong><small>Time, distance or both</small>
+                    <span className="quick-start-icon activity-icon">🚶</span><strong>Walk</strong><small>Time, distance or both</small>
                   </button>
                   <button type="button" onClick={()=>startStandaloneWorkout('run')}>
-                    <span className="quick-start-icon">↗</span><strong>Run</strong><small>Easy run or any distance</small>
+                    <span className="quick-start-icon activity-icon">🏃</span><strong>Run</strong><small>Easy run or any distance</small>
                   </button>
                   <button type="button" onClick={()=>startStandaloneWorkout('bike')}>
-                    <span className="quick-start-icon">◉</span><strong>Bike</strong><small>Outdoor or stationary</small>
+                    <span className="quick-start-icon activity-icon">🚴</span><strong>Bike</strong><small>Outdoor or stationary</small>
                   </button>
                   <button type="button" onClick={()=>startStandaloneWorkout('free')}>
                     <span className="quick-start-icon">＋</span><strong>Free workout</strong><small>Add exercises as you go</small>
