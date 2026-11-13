@@ -6504,3 +6504,81 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
     bottom:18px;
   }
 }
+
+
+/* Today quick start when no program is tracked */
+.no-program-today {
+  display:grid;
+  gap:14px;
+}
+.today-quick-start-card {
+  border-color:#3c4e68;
+}
+.today-quick-start-card .section-heading h2 {
+  margin:2px 0 0;
+  font-size:24px;
+}
+.today-quick-start-grid {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px;
+  margin-top:12px;
+}
+.today-quick-start-grid > button {
+  display:grid;
+  grid-template-columns:34px 1fr;
+  grid-template-rows:auto auto;
+  align-items:center;
+  column-gap:9px;
+  min-height:72px;
+  padding:11px 12px;
+  border:1px solid #34465f;
+  border-radius:12px;
+  background:#0d1728;
+  color:#fff;
+  text-align:left;
+}
+.today-quick-start-grid > button:active {
+  border-color:#6ea832;
+  background:#14200f;
+}
+.quick-start-icon {
+  grid-row:1 / 3;
+  display:grid;
+  place-items:center;
+  width:32px;
+  height:32px;
+  border-radius:10px;
+  background:#17253a;
+  color:#c8f56d;
+  font-size:18px;
+  font-weight:950;
+}
+.today-quick-start-grid strong {
+  font-size:13px;
+  line-height:1.15;
+}
+.today-quick-start-grid small {
+  margin-top:2px;
+  color:#8292a7;
+  font-size:9px;
+  line-height:1.25;
+}
+.today-choose-program {
+  width:100%;
+  margin-top:12px;
+}
+.today-classic-workout-link {
+  width:100%;
+  margin-top:6px;
+  border:0;
+  background:transparent;
+  color:#77879d;
+  font-size:9px;
+  text-decoration:underline;
+}
+@media (max-width:390px) {
+  .today-quick-start-grid {
+    grid-template-columns:1fr;
+  }
+}
