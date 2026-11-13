@@ -6773,3 +6773,29 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
     grid-column:auto;
   }
 }
+
+
+.today-choice-grid .today-choice-resume {
+  grid-column:1 / -1;
+  min-height:74px;
+  border-color:#556a3f;
+  background:#132015;
+}
+.today-program-back {
+  width:100%;
+  min-height:40px;
+  margin-bottom:10px;
+  border:1px solid #34465f;
+  border-radius:10px;
+  background:#101a2c;
+  color:#c5d0dd;
+  font-size:10px;
+  font-weight:900;
+  text-align:left;
+  padding:0 12px;
+}
+@media (max-width:360px) {
+  .today-choice-grid .today-choice-resume {
+    grid-column:auto;
+  }
+}
