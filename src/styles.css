@@ -6582,3 +6582,26 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
     grid-template-columns:1fr;
   }
 }
+
+
+/* Always-visible quick starts on Today */
+.tracked-quick-start-card {
+  margin-top:2px;
+}
+.tracked-quick-start-card .section-heading {
+  margin-bottom:2px;
+}
+.today-more-options {
+  width:100%;
+  margin-top:8px;
+  min-height:34px;
+  border:1px solid #34465f;
+  border-radius:9px;
+  background:#101a2c;
+  color:#91a2b9;
+  font-size:9px;
+  font-weight:850;
+}
+.baseline-only-picker {
+  margin-top:-4px;
+}
