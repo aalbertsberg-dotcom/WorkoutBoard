@@ -3467,7 +3467,7 @@ function App() {
               {todayCompletedWorkouts.length>0&&<details className="today-completed-workouts" open>
                 <summary><span><b>Today’s workouts</b><small>{todayCompletedWorkouts.length} completed</small></span></summary>
                 <div className="today-completed-list">{todayCompletedWorkouts.map(row=><article key={row.id}>
-                  <button type="button" className="completed-workout-delete" aria-label={'Delete '+(row.title||'workout')} onClick={()=>setCompletedDeletePrompt(row)}>×</button>
+                  <button type="button" className="completed-workout-delete" aria-label={'Delete '+(row.title||'workout')} onClick={()=>{setWorkoutStartError('');setCompletedDeletePrompt(row)}}>×</button>
                   <div><strong>{row.title||'Workout'}</strong><span>{row.program||'Workout'}{row.completed_at?' · '+new Date(row.completed_at).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):''}</span></div>
                   <b>{Number(row.total_volume||0)>0?Number(row.total_volume).toLocaleString()+' lb':'Completed'}</b>
                   {row.workout?.exercises?.length>0&&<details><summary>Exercises</summary><p>{row.workout.exercises.map(x=>x.name).filter(Boolean).join(' · ')}</p></details>}
@@ -3630,7 +3630,7 @@ function App() {
               {todayCompletedWorkouts.length>0&&<details className="today-completed-workouts" open>
                 <summary><span><b>Today’s workouts</b><small>{todayCompletedWorkouts.length} completed</small></span></summary>
                 <div className="today-completed-list">{todayCompletedWorkouts.map(row=><article key={row.id}>
-                  <button type="button" className="completed-workout-delete" aria-label={'Delete '+(row.title||'workout')} onClick={()=>setCompletedDeletePrompt(row)}>×</button>
+                  <button type="button" className="completed-workout-delete" aria-label={'Delete '+(row.title||'workout')} onClick={()=>{setWorkoutStartError('');setCompletedDeletePrompt(row)}}>×</button>
                   <div><strong>{row.title||'Workout'}</strong><span>{row.program||'Workout'}{row.completed_at?' · '+new Date(row.completed_at).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):''}</span></div>
                   <b>{Number(row.total_volume||0)>0?Number(row.total_volume).toLocaleString()+' lb':'Completed'}</b>
                 </article>)}</div>
@@ -4382,6 +4382,7 @@ function App() {
           <h3>Delete this completed workout?</h3>
           <p>{completedDeletePrompt.title||'Workout'}{completedDeletePrompt.completed_at?' · '+new Date(completedDeletePrompt.completed_at).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):''}</p>
           <p>This removes it from your history and Community. This cannot be undone.</p>
+          {workoutStartError&&<p className="delete-workout-error">{workoutStartError}</p>}
           <div>
             <button className="secondary-action" type="button" disabled={deletingCompletedWorkout} onClick={()=>setCompletedDeletePrompt(null)}>Keep workout</button>
             <button className="danger-action" type="button" disabled={deletingCompletedWorkout} onClick={()=>deleteCompletedWorkout(completedDeletePrompt)}>{deletingCompletedWorkout?'Deleting…':'Delete workout'}</button>
