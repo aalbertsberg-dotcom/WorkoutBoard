@@ -2022,6 +2022,8 @@ function App() {
   }
 
   const openToday = async () => {
+    setNextDayPreviewOpen(false)
+    setExtraWorkoutOpen(false)
     await refreshTrackedProgramsInfo()
     await refreshPlannedToday()
     navigateTo('today')
