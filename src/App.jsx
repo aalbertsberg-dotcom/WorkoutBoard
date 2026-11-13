@@ -1888,7 +1888,7 @@ function App() {
   const startStandaloneWorkout = async (kind,{confirmed=false}={}) => {
     if(!session?.user)return
     const labels={free:'Free workout',walk:'Walk',run:'Run',bike:'Bike Ride',conditioning:'Conditioning / Metcon'}
-    if((trackedTodayInfo?.workoutsToday||0)>0 && !confirmed){
+    if(((todayCompletedWorkouts.length||0)+(trackedTodayInfo?.workoutsToday||0))>0 && !confirmed){
       setPendingWorkoutStart({kind,label:labels[kind]||'another workout'})
       return
     }
@@ -3388,6 +3388,47 @@ function App() {
               </section>}
 
               <button className="secondary-action" onClick={()=>navigateTo('program')}>View full program / plan ahead</button>
+
+              {workoutStartError&&<div className="status-message">{workoutStartError}</div>}
+            </section>
+          ) : !trackedProgramsInfo.length && !showRegularToday && !sharedWorkoutActive ? (
+            <section className="page-section no-program-today">
+              {todayCompletedWorkouts.length>0&&<details className="today-completed-workouts" open>
+                <summary><span><b>Today’s workouts</b><small>{todayCompletedWorkouts.length} completed</small></span></summary>
+                <div className="today-completed-list">{todayCompletedWorkouts.map(row=><article key={row.id}>
+                  <button type="button" className="completed-workout-delete" aria-label={'Delete '+(row.title||'workout')} onClick={()=>setCompletedDeletePrompt(row)}>×</button>
+                  <div><strong>{row.title||'Workout'}</strong><span>{row.program||'Workout'}{row.completed_at?' · '+new Date(row.completed_at).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):''}</span></div>
+                  <b>{Number(row.total_volume||0)>0?Number(row.total_volume).toLocaleString()+' lb':'Completed'}</b>
+                </article>)}</div>
+              </details>}
+
+              <section className="simple-card today-quick-start-card">
+                <div className="section-heading">
+                  <div><span className="card-label">TODAY</span><h2>What are we doing today?</h2></div>
+                </div>
+                <p className="helper-text">No program is being tracked. Pick something simple, start a free workout, or choose a program.</p>
+
+                <div className="today-quick-start-grid">
+                  <button type="button" onClick={()=>startStandaloneWorkout('walk')}>
+                    <span className="quick-start-icon">●</span><strong>Walk</strong><small>Time, distance or both</small>
+                  </button>
+                  <button type="button" onClick={()=>startStandaloneWorkout('run')}>
+                    <span className="quick-start-icon">↗</span><strong>Run</strong><small>Easy run or any distance</small>
+                  </button>
+                  <button type="button" onClick={()=>startStandaloneWorkout('bike')}>
+                    <span className="quick-start-icon">◉</span><strong>Bike</strong><small>Outdoor or stationary</small>
+                  </button>
+                  <button type="button" onClick={()=>startStandaloneWorkout('free')}>
+                    <span className="quick-start-icon">＋</span><strong>Free workout</strong><small>Add exercises as you go</small>
+                  </button>
+                  <button type="button" onClick={()=>startStandaloneWorkout('conditioning')}>
+                    <span className="quick-start-icon">◇</span><strong>Other cardio</strong><small>Row, elliptical, sled, intervals</small>
+                  </button>
+                </div>
+
+                <button type="button" className="primary-action today-choose-program" onClick={()=>navigateTo('program')}>Choose a program</button>
+                <button type="button" className="today-classic-workout-link" onClick={()=>setShowRegularToday(true)}>Use classic Workset workout</button>
+              </section>
 
               {workoutStartError&&<div className="status-message">{workoutStartError}</div>}
             </section>
