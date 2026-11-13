@@ -7192,3 +7192,26 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   font-size:9px !important;
   font-weight:800;
 }
+
+
+/* Admin My Team */
+.my-team-card {
+  border-style:solid;
+  border-color:#435879;
+}
+.my-team-empty {
+  display:grid;
+  gap:3px;
+  padding:12px;
+  border:1px dashed #34465f;
+  border-radius:11px;
+  background:#0d1728;
+}
+.my-team-empty strong {
+  font-size:11px;
+  color:#e6edf5;
+}
+.my-team-empty span {
+  font-size:9px;
+  color:#8393a8;
+}
