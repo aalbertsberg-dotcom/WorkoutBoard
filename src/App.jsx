@@ -3984,7 +3984,7 @@ function App() {
 
                 {isAdmin&&<section className="simple-card together-partners-card managed-partners-compact my-team-card">
                   <div className="section-heading">
-                    <div><span className="card-label">MY TEAM</span><h3>People I track</h3></div>
+                    <div><span className="card-label">MY TEAM</span><h3>People</h3></div>
                     <button type="button" className="secondary-action compact-action" onClick={()=>openManagedAthleteEditor(null)}>+ Add person</button>
                   </div>
                   <p className="helper-text">For coaching or leading a group when someone does not have their own Workset account. You maintain their training targets here.</p>
