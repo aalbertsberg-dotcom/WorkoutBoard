@@ -6687,3 +6687,89 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
 .tracked-pick-another-day .tracked-week-choice-list {
   margin-top:8px;
 }
+
+
+/* Today is the chooser, not a card inside a dashboard */
+.today-choice-screen {
+  display:grid;
+  gap:14px;
+  padding:4px 0 8px;
+}
+.today-choice-heading {
+  padding:2px 2px 0;
+}
+.today-choice-heading h2 {
+  margin:3px 0 4px;
+  font-size:26px;
+  line-height:1.08;
+}
+.today-choice-heading p {
+  margin:0;
+  color:#8fa0b5;
+  font-size:11px;
+}
+.today-choice-grid {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:9px;
+}
+.today-choice-grid > button {
+  display:grid;
+  grid-template-columns:36px 1fr;
+  grid-template-rows:auto auto;
+  align-items:center;
+  column-gap:10px;
+  min-height:76px;
+  padding:12px;
+  border:1px solid #34465f;
+  border-radius:13px;
+  background:#0d1728;
+  color:#fff;
+  text-align:left;
+}
+.today-choice-grid > button:active {
+  border-color:#6ea832;
+  background:#14200f;
+}
+.today-choice-grid .today-choice-program {
+  grid-column:1 / -1;
+  min-height:82px;
+  border-color:#526b3d;
+  background:#111d18;
+}
+.today-choice-grid strong {
+  font-size:13px;
+  line-height:1.15;
+}
+.today-choice-grid small {
+  margin-top:2px;
+  color:#8292a7;
+  font-size:9px;
+  line-height:1.25;
+}
+.today-choice-utility {
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.today-choice-utility button {
+  flex:1 1 140px;
+  min-height:34px;
+  border:1px solid #2f4057;
+  border-radius:9px;
+  background:#101a2c;
+  color:#8fa0b5;
+  font-size:9px;
+  font-weight:850;
+}
+.today-program-continue-panel {
+  margin-top:0;
+}
+@media (max-width:360px) {
+  .today-choice-grid {
+    grid-template-columns:1fr;
+  }
+  .today-choice-grid .today-choice-program {
+    grid-column:auto;
+  }
+}
