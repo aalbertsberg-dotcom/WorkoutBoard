@@ -171,6 +171,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
   const [activeExerciseIndex,setActiveExerciseIndex]=useState(0)
   const [activeSetByExercise,setActiveSetByExercise]=useState({})
   const [removeExercisePrompt,setRemoveExercisePrompt]=useState(null)
+  const [quickClock,setQuickClock]=useState(()=>Date.now())
 
   const lastCancelRequestRef=useRef(cancelRequestToken)
   useEffect(()=>{
@@ -178,6 +179,13 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
     lastCancelRequestRef.current=cancelRequestToken
     if(cancelRequestToken>0)setCancelConfirm(true)
   },[cancelRequestToken])
+
+  useEffect(()=>{
+    if(!workout?.quick_cardio || !workout?.quick_timer_started_at)return
+    setQuickClock(Date.now())
+    const id=setInterval(()=>setQuickClock(Date.now()),1000)
+    return()=>clearInterval(id)
+  },[workout?.quick_cardio,workout?.quick_timer_started_at])
 
   useEffect(()=>{
     let cached=null
@@ -274,6 +282,38 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
     setWorkout(v=>({...v,exercises:(v.exercises||[]).map((item,i)=>i===index?{...item,...patch}:item)}))
   }
   const change=(key,value)=>{ setSaveState('Unsaved'); setWorkout(v=>({...v,[key]:value})) }
+
+  const quickCardio=Boolean(workout.quick_cardio)
+  const quickStartedAt=workout.quick_timer_started_at ? new Date(workout.quick_timer_started_at).getTime() : 0
+  const quickElapsedSeconds=Math.max(0,Math.round(
+    Number(workout.quick_timer_elapsed_seconds||0) +
+    (quickStartedAt ? Math.max(0,(quickClock-quickStartedAt)/1000) : 0)
+  ))
+  const formatQuickTime=seconds=>{
+    const total=Math.max(0,Math.round(Number(seconds)||0))
+    const h=Math.floor(total/3600)
+    const m=Math.floor((total%3600)/60)
+    const sec=total%60
+    return h ? `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}` : `${m}:${String(sec).padStart(2,'0')}`
+  }
+  const setQuickFields=patch=>{
+    setSaveState('Unsaved')
+    setWorkout(v=>({...v,...patch}))
+  }
+  const setQuickMetcon=(key,value)=>{
+    setSaveState('Unsaved')
+    setWorkout(v=>({...v,conditioningEnabled:true,metcon:{...(v.metcon||{}),[key]:value}}))
+  }
+  const startQuickTimer=()=>{
+    if(workout.quick_timer_started_at)return
+    setQuickFields({quick_timer_started_at:new Date().toISOString()})
+    setQuickClock(Date.now())
+  }
+  const pauseQuickTimer=()=>{
+    if(!workout.quick_timer_started_at)return
+    setQuickFields({quick_timer_started_at:null,quick_timer_elapsed_seconds:quickElapsedSeconds})
+  }
+  const resetQuickTimer=()=>setQuickFields({quick_timer_started_at:null,quick_timer_elapsed_seconds:0})
 
   const exerciseIncomplete=item=>Boolean(
     item && !item.done && (
@@ -469,7 +509,16 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
     if (!planned?.id || finishing) return
     setFinishing(true)
     const now=new Date().toISOString()
-    const finalWorkout={...workout,complete:true,savedAt:now,baseline_results:baselineResults}
+    const quickDurationText=quickCardio&&quickElapsedSeconds>0 ? formatQuickTime(quickElapsedSeconds) : ''
+    const finalWorkout={
+      ...workout,
+      ...(quickCardio?{
+        quick_timer_started_at:null,
+        quick_timer_elapsed_seconds:quickElapsedSeconds,
+        metcon:{...(workout.metcon||{}),duration:String(workout.metcon?.duration||'').trim()||quickDurationText},
+      }:{}),
+      complete:true,savedAt:now,baseline_results:baselineResults
+    }
     const generatedSessionId=offlineUuid()
     const completedSets=(finalWorkout.exercises||[]).reduce((sum,item)=>sum+(item.setProgress||[]).filter(set=>set.done).length,0)
     const completedExercises=(finalWorkout.exercises||[]).filter(item=>item.done||(item.setProgress||[]).some(set=>set.done)).length
@@ -645,6 +694,84 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       setSaveState('Finish failed: '+error.message)
     }
     setFinishing(false)
+  }
+
+  if(quickCardio){
+    const activity=String(workout.metcon?.activity||planned.title||'Cardio')
+    const isGeneric=String(workout.quick_cardio_kind||'')==='conditioning'
+    return <section className="flex-runner quick-cardio-runner">
+      <button type="button" className="quick-cardio-back" onClick={()=>setCancelConfirm(true)}>← Today</button>
+
+      <div className="quick-cardio-head">
+        <div>
+          <span className="card-label">QUICK CARDIO</span>
+          <h2>{planned.title}</h2>
+          <p>Keep it simple. Track what matters and finish.</p>
+        </div>
+        <span className="save-pill">{saveState}</span>
+      </div>
+
+      <section className="quick-cardio-timer">
+        <span>{workout.quick_timer_started_at?'IN PROGRESS':'ELAPSED TIME'}</span>
+        <strong>{formatQuickTime(quickElapsedSeconds)}</strong>
+        <div>
+          {workout.quick_timer_started_at
+            ? <button type="button" className="primary-action" onClick={pauseQuickTimer}>Pause</button>
+            : <button type="button" className="primary-action" onClick={startQuickTimer}>{quickElapsedSeconds?'Resume':'Start timer'}</button>}
+          {quickElapsedSeconds>0&&<button type="button" className="secondary-action" onClick={resetQuickTimer}>Reset</button>}
+        </div>
+      </section>
+
+      <section className="simple-card quick-cardio-fields">
+        {isGeneric&&<label className="quick-cardio-field">
+          <span>Activity</span>
+          <input value={activity} onChange={e=>setQuickMetcon('activity',e.target.value)} placeholder="Row, elliptical, sled, hike…"/>
+        </label>}
+        {!isGeneric&&<div className="quick-cardio-activity"><span>Activity</span><strong>{activity}</strong></div>}
+
+        <div className="quick-cardio-two-col">
+          <label className="quick-cardio-field">
+            <span>Duration</span>
+            <input value={workout.metcon?.duration||''} onChange={e=>setQuickMetcon('duration',e.target.value)} placeholder={quickElapsedSeconds?formatQuickTime(quickElapsedSeconds):'e.g. 30 min'}/>
+          </label>
+          <label className="quick-cardio-field">
+            <span>Distance <small>optional</small></span>
+            <input value={workout.metcon?.distance||''} onChange={e=>setQuickMetcon('distance',e.target.value)} placeholder="e.g. 2.5 mi"/>
+          </label>
+        </div>
+
+        <div className="quick-cardio-field">
+          <span>Intensity</span>
+          <div className="quick-intensity">
+            {['Easy','Moderate','Hard'].map(level=><button type="button" key={level} className={(workout.metcon?.intensity||'Easy')===level?'active':''} onClick={()=>setQuickMetcon('intensity',level)}>{level}</button>)}
+          </div>
+        </div>
+
+        <label className="quick-cardio-field quick-calories">
+          <span>Calories <small>optional</small></span>
+          <input type="number" inputMode="numeric" value={workout.metcon?.calories||''} onChange={e=>setQuickMetcon('calories',e.target.value)} placeholder="Calories"/>
+        </label>
+
+        <label className="quick-cardio-field">
+          <span>Notes <small>optional</small></span>
+          <textarea value={workout.note||''} onChange={e=>change('note',e.target.value)} placeholder="Route, how it felt, anything worth remembering…"/>
+        </label>
+      </section>
+
+      <div className="quick-cardio-actions">
+        <button type="button" className="secondary-action" onClick={()=>setCancelConfirm(true)}>Cancel</button>
+        <button type="button" className="finish" onClick={finish} disabled={finishing||cancelling}>{finishing?'FINISHING…':'FINISH'}</button>
+      </div>
+
+      {cancelConfirm&&<div className="same-day-sheet-backdrop workout-cancel-backdrop" onClick={()=>!cancelling&&setCancelConfirm(false)}>
+        <section className="same-day-sheet cancel-workout-confirm cancel-workout-modal" onClick={e=>e.stopPropagation()}>
+          <span className="card-label">ACTIVE WORKOUT</span>
+          <h3>Cancel this {String(planned.title||'workout').toLowerCase()}?</h3>
+          <p>This discards this unfinished workout and returns to Today.</p>
+          <div><button type="button" className="secondary-action" onClick={()=>setCancelConfirm(false)} disabled={cancelling}>Keep it</button><button type="button" className="danger-action" onClick={cancelWorkout} disabled={cancelling}>{cancelling?'Cancelling…':'Yes, cancel'}</button></div>
+        </section>
+      </div>}
+    </section>
   }
 
   return <section className="flex-runner">
