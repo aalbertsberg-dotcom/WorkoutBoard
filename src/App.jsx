@@ -3373,18 +3373,35 @@ function App() {
                 </section>)}
               </div>
 
-              {!extraWorkoutOpen&&<button className="secondary-action" onClick={()=>setExtraWorkoutOpen(true)}>+ Start a non-program workout</button>}
+              <section className="simple-card today-quick-start-card tracked-quick-start-card">
+                <div className="section-heading">
+                  <div><span className="card-label">OR DO SOMETHING ELSE</span><h3>What are we doing today?</h3></div>
+                </div>
+                <div className="today-quick-start-grid">
+                  <button type="button" onClick={()=>startStandaloneWorkout('walk')}>
+                    <span className="quick-start-icon">●</span><strong>Walk</strong><small>Time, distance or both</small>
+                  </button>
+                  <button type="button" onClick={()=>startStandaloneWorkout('run')}>
+                    <span className="quick-start-icon">↗</span><strong>Run</strong><small>Easy run or any distance</small>
+                  </button>
+                  <button type="button" onClick={()=>startStandaloneWorkout('bike')}>
+                    <span className="quick-start-icon">◉</span><strong>Bike</strong><small>Outdoor or stationary</small>
+                  </button>
+                  <button type="button" onClick={()=>startStandaloneWorkout('free')}>
+                    <span className="quick-start-icon">＋</span><strong>Free workout</strong><small>Add exercises as you go</small>
+                  </button>
+                  <button type="button" onClick={()=>startStandaloneWorkout('conditioning')}>
+                    <span className="quick-start-icon">◇</span><strong>Other cardio</strong><small>Row, elliptical, sled, intervals</small>
+                  </button>
+                </div>
+                <button type="button" className="today-more-options" onClick={()=>setExtraWorkoutOpen(v=>!v)}>{extraWorkoutOpen?'Hide strength baseline options':'Strength baseline options'}</button>
+              </section>
 
-              {extraWorkoutOpen&&<section className="simple-card extra-workout-picker">
-                <div className="section-heading"><div><span className="card-label">ANOTHER WORKOUT</span><h3>What are you tracking?</h3></div><button className="conditioning-remove" onClick={()=>setExtraWorkoutOpen(false)}>Cancel</button></div>
-                <button onClick={()=>startStrengthBaseline('full')}><strong>Strength baseline · All 4</strong><span>Squat, bench, deadlift and press · 4-rep test sets</span></button>
-                <button onClick={()=>startStrengthBaseline('upper')}><strong>Strength baseline · Upper</strong><span>Bench + press</span></button>
-                <button onClick={()=>startStrengthBaseline('lower')}><strong>Strength baseline · Lower</strong><span>Squat + deadlift</span></button>
-                <button onClick={()=>startStandaloneWorkout('walk')}><strong>Walk</strong><span>Just go for a walk · track time, distance or both</span></button>
-                <button onClick={()=>startStandaloneWorkout('run')}><strong>Run</strong><span>Easy run or whatever distance you feel like doing</span></button>
-                <button onClick={()=>startStandaloneWorkout('bike')}><strong>Bike ride</strong><span>Outdoor or stationary bike · track time and distance</span></button>
-                <button onClick={()=>startStandaloneWorkout('free')}><strong>Free workout</strong><span>Add whatever exercises you want</span></button>
-                <button onClick={()=>startStandaloneWorkout('conditioning')}><strong>Other cardio / Conditioning</strong><span>Row, elliptical, intervals, AMRAP, EMOM, sled, etc.</span></button>
+              {extraWorkoutOpen&&<section className="simple-card extra-workout-picker baseline-only-picker">
+                <div className="section-heading"><div><span className="card-label">STRENGTH BASELINE</span><h3>Test current strength</h3></div><button className="conditioning-remove" onClick={()=>setExtraWorkoutOpen(false)}>Cancel</button></div>
+                <button onClick={()=>startStrengthBaseline('full')}><strong>All 4</strong><span>Squat, bench, deadlift and press · 4-rep test sets</span></button>
+                <button onClick={()=>startStrengthBaseline('upper')}><strong>Upper</strong><span>Bench + press</span></button>
+                <button onClick={()=>startStrengthBaseline('lower')}><strong>Lower</strong><span>Squat + deadlift</span></button>
               </section>}
 
               <button className="secondary-action" onClick={()=>navigateTo('program')}>View full program / plan ahead</button>
