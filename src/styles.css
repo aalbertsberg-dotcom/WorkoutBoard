@@ -6890,3 +6890,241 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
     grid-template-columns:repeat(2,minmax(0,1fr));
   }
 }
+
+
+/* Quick cardio: purpose-built instead of the full gym-workout editor */
+.quick-cardio-runner {
+  display:grid;
+  gap:12px;
+}
+.quick-cardio-back {
+  width:max-content;
+  min-height:34px;
+  padding:0 11px;
+  border:1px solid #34465f;
+  border-radius:9px;
+  background:#101a2c;
+  color:#c8d3df;
+  font-size:10px;
+  font-weight:900;
+}
+.quick-cardio-head {
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  padding:2px 2px 0;
+}
+.quick-cardio-head h2 {
+  margin:3px 0 2px;
+  font-size:27px;
+  line-height:1;
+}
+.quick-cardio-head p {
+  margin:0;
+  color:#8495aa;
+  font-size:10px;
+}
+.quick-cardio-timer {
+  display:grid;
+  place-items:center;
+  gap:8px;
+  padding:16px;
+  border:1px solid #40536b;
+  border-radius:16px;
+  background:#0f192a;
+}
+.quick-cardio-timer > span {
+  color:#8ea0b6;
+  font-size:9px;
+  font-weight:950;
+  letter-spacing:.08em;
+}
+.quick-cardio-timer > strong {
+  font-size:42px;
+  line-height:1;
+  font-variant-numeric:tabular-nums;
+}
+.quick-cardio-timer > div {
+  display:flex;
+  gap:8px;
+}
+.quick-cardio-timer button {
+  min-width:112px;
+}
+.quick-cardio-fields {
+  display:grid;
+  gap:12px;
+}
+.quick-cardio-field,
+.quick-cardio-activity {
+  display:grid;
+  gap:6px;
+}
+.quick-cardio-field > span,
+.quick-cardio-activity > span {
+  color:#95a5b9;
+  font-size:9px;
+  font-weight:950;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+}
+.quick-cardio-field > span small {
+  text-transform:none;
+  font-weight:700;
+  letter-spacing:0;
+  opacity:.75;
+}
+.quick-cardio-field input,
+.quick-cardio-field textarea {
+  width:100%;
+  min-height:48px;
+  padding:0 12px;
+  border:1px solid #34465f;
+  border-radius:11px;
+  background:#0b1423;
+  color:#fff;
+  font:inherit;
+  box-sizing:border-box;
+}
+.quick-cardio-field textarea {
+  min-height:76px;
+  padding-top:11px;
+  resize:vertical;
+}
+.quick-cardio-activity strong {
+  min-height:48px;
+  display:flex;
+  align-items:center;
+  padding:0 12px;
+  border:1px solid #34465f;
+  border-radius:11px;
+  background:#0b1423;
+  font-size:17px;
+}
+.quick-cardio-two-col {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:9px;
+}
+.quick-intensity {
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:7px;
+}
+.quick-intensity button {
+  min-height:42px;
+  border:1px solid #34465f;
+  border-radius:10px;
+  background:#101a2c;
+  color:#aebacd;
+  font-size:10px;
+  font-weight:900;
+}
+.quick-intensity button.active {
+  border-color:#76a73f;
+  background:#172817;
+  color:#dff7b7;
+}
+.quick-cardio-actions {
+  display:grid;
+  grid-template-columns:minmax(100px,.7fr) 1.3fr;
+  gap:8px;
+  position:sticky;
+  bottom:92px;
+  z-index:40;
+  padding:8px 0 2px;
+  background:linear-gradient(to bottom,rgba(9,17,29,0),#09111d 28%);
+}
+.quick-cardio-actions .finish {
+  min-height:48px;
+}
+.baseline-choice-sheet {
+  display:grid;
+  gap:8px;
+}
+.baseline-choice-sheet > button {
+  display:grid;
+  gap:2px;
+  width:100%;
+  min-height:58px;
+  padding:10px 12px;
+  border:1px solid #34465f;
+  border-radius:10px;
+  background:#101a2c;
+  color:#fff;
+  text-align:left;
+}
+.baseline-choice-sheet > button span {
+  color:#8495aa;
+  font-size:9px;
+}
+
+/* Make the week selector scannable: title first, status as a badge */
+.tracked-week-preview-days button {
+  position:relative;
+  display:grid;
+  gap:3px;
+  align-content:center;
+}
+.tracked-week-preview-days button b {
+  white-space:normal;
+  line-height:1.15;
+  font-size:9px;
+}
+.tracked-week-preview-days button em {
+  display:inline-flex;
+  justify-self:center;
+  align-items:center;
+  min-height:16px;
+  padding:0 5px;
+  border-radius:999px;
+  background:#527a26;
+  color:#e8f7d3;
+  font-size:7px;
+  font-style:normal;
+  font-weight:950;
+  letter-spacing:.05em;
+}
+.tracked-week-preview-days button.completed em {
+  background:#2c4056;
+  color:#afbdd0;
+}
+.tracked-day-complete-note {
+  min-height:38px;
+  display:grid;
+  place-items:center;
+  border:1px solid #36513b;
+  border-radius:10px;
+  background:#132018;
+  color:#b9e37e;
+  font-size:10px;
+  font-weight:900;
+}
+
+/* Today should lead with choices, not the utility timer */
+.training-timer-panel:not([open]) {
+  margin-bottom:4px;
+}
+.training-timer-panel:not([open]) > summary {
+  min-height:42px;
+  padding:7px 11px;
+}
+.training-timer-panel:not([open]) > summary b {
+  font-size:11px;
+}
+.training-timer-panel:not([open]) > summary small {
+  font-size:8px;
+}
+
+@media (max-width:390px) {
+  .quick-cardio-two-col {
+    grid-template-columns:1fr;
+  }
+  .quick-cardio-timer > strong {
+    font-size:38px;
+  }
+  .quick-cardio-timer button {
+    min-width:96px;
+  }
+}
