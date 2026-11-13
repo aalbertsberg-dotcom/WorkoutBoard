@@ -77,6 +77,7 @@ function loadFieldForExercise(name) {
   if(/dead bug|bird dog|side plank|plank|pallof press/.test(value)) return null
   if(/suitcase carry/.test(value)) return {label:'Load carried',placeholder:'lb',optional:false}
   if(/farmer carry/.test(value)) return {label:'Load carried',placeholder:'lb',optional:false}
+  if(/z[-\s]?twist/.test(value)) return {label:'Cable weight',placeholder:'lb',optional:false}
   if(/bulgarian split squat|reverse lunge|step-up|glute bridge/.test(value)) return {label:'Weight used',placeholder:'Optional lb',optional:true}
   return {label:'Weight used',placeholder:'lb',optional:false}
 }
@@ -119,6 +120,7 @@ function bestLoadedSet(item) {
 
 function plannedAlternatives(name) {
   const value=String(name||'').toLowerCase()
+  if(/z[-\s]?twist/.test(value)) return ['Face Pull','Cable External Rotation','Band External Rotation','Band Pull-Apart']
   if(/front squat|\bsquat\b/.test(value)) return ['Goblet Squat','Safety-Bar Squat','Leg Press','Box Squat']
   if(/bulgarian split squat|split squat|lunge/.test(value)) return ['Reverse Lunge','Step-Up','Goblet Split Squat','Single-Leg Press']
   if(/chest-supported.*row|\brow\b/.test(value)) return ['Cable Row','Ring Row','One-Arm DB Row','Lat Pulldown']
