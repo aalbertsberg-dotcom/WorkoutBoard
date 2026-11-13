@@ -271,19 +271,56 @@ function andyHybridRebuildWeek(week) {
   const main=mainByWeek[w]
   const deload=w===4
   const peak=w===8
-  const lowerAssistance=deload?'2 sets each, easy':'3 sets each'
-  const upperAssistance=deload?'2 sets each, easy':'3-4 sets each'
+
+  // Deadlift block inspired by accumulation -> intensification -> heavy strength -> performance.
+  // The second weekly pull starts as deficit/technique volume and becomes genuinely heavy only late in the cycle.
+  const deadliftMainByWeek={
+    1:'4x6 @65-70% e1RM · MODERATE',
+    2:'5x5 @70-72.5% e1RM · MODERATE',
+    3:'5x4 @75% e1RM · MODERATE-HEAVY',
+    4:'3x5 @55-60% e1RM · LIGHT DELOAD',
+    5:'5x5 @75% e1RM · MODERATE-HEAVY',
+    6:'5x4 @80% e1RM · HEAVY',
+    7:'6x3 @82.5-85% e1RM · HEAVY',
+    8:'Top set 3-5 @RPE 8 · HEAVY, then 2x5 @70% · MODERATE',
+  }
+  const secondaryDeadliftByWeek={
+    1:{name:'Deficit Deadlift',rx:'3x5 @55-60% e1RM · LIGHT',note:'LIGHT second pull. Stand on a small 1-2 in deficit, reset every rep, and keep bar speed high.'},
+    2:{name:'Deficit Deadlift',rx:'3x5 @60% e1RM · LIGHT-MODERATE',note:'LIGHT-MODERATE second pull. Same clean setup every rep; this is technique and strength-endurance work, not a grind.'},
+    3:{name:'Deficit Deadlift',rx:'3x4 @65% e1RM · MODERATE',note:'MODERATE second pull. Keep the deficit small and stop the set if position or speed changes.'},
+    4:{name:'Deficit Deadlift',rx:'2x3 @50-55% e1RM · LIGHT DELOAD',note:'LIGHT DELOAD. Technique only. Fast reps and no fatigue.'},
+    5:{name:'Deficit Deadlift',rx:'3x3 @70-72.5% e1RM · MODERATE',note:'MODERATE second pull. Last deficit week; clean triples only and leave plenty in reserve.'},
+    6:{name:'Deadlift - Secondary Heavy Exposure',rx:'4x2 @80% e1RM · HEAVY',note:'HEAVY second deadlift day. Full reset between reps, 3-4 min rest, and no grinders.'},
+    7:{name:'Deadlift - Secondary Heavy Exposure',rx:'3x2 @82.5% e1RM · HEAVY',note:'HEAVY second deadlift day. Treat every rep like a competition setup. Stop if bar speed falls sharply.'},
+    8:{name:'Deadlift - Secondary Exposure',rx:'2x2 @75% e1RM · MODERATE',note:'MODERATE only. Keep these crisp so they support the performance week instead of competing with it.'},
+  }
+  const secondaryDeadlift=secondaryDeadliftByWeek[w]
+  const frontSquatByWeek={
+    1:'3x8 · MODERATE',2:'3x8 · MODERATE',3:'3x8 · MODERATE',
+    4:'2x8 · LIGHT',5:'2x6 · MODERATE',6:'2x5 · LIGHT-MODERATE',
+    7:'2x5 · LIGHT',8:'2x5 · LIGHT / optional',
+  }
+  const lowerAccessoryByWeek={
+    1:'3 sets',2:'3 sets',3:'3 sets',4:'2 easy sets',
+    5:'2-3 sets',6:'2 sets',7:'2 light sets',8:'1-2 light sets',
+  }
+  const phase=w<=3?'ACCUMULATION'
+    : w===4?'DELOAD'
+    : w<=6?'INTENSIFICATION'
+    : w===7?'HEAVY STRENGTH'
+    : 'PERFORMANCE'
   const weekNote=deload
-    ? 'Deload. Keep every rep fast and easy. Cut optional conditioning if you feel beat up.'
+    ? 'DELOAD / LIGHT. Keep every rep fast and easy. Cut optional conditioning if you feel beat up.'
     : peak
-      ? 'Performance week. Stop the top set at RPE 8. No grinders. Back-off work stays crisp.'
-      : 'Add load only when the last main-lift set stays at or below RPE 8. Leave 1-2 reps in reserve on assistance.'
+      ? 'PERFORMANCE. Main deadlift has one HEAVY top set capped at RPE 8; everything else stays MODERATE or LIGHT. No grinders.'
+      : 'Phase: '+phase+'. Deadlift notes explicitly mark LIGHT, MODERATE, or HEAVY. Add load only when position and bar speed stay clean.'
 
   return [
-    day('Day 1 - Squat / Lower Strength',[
-      ex('Back Squat',main,'Main lift. Use a current e1RM or current training max, not an old PR.'),
-      ex('Romanian Deadlift',deload?'2x8 light':'3x8','Controlled hinge; keep the bar close.'),
-      ex('Bulgarian Split Squat',deload?'2x8/leg easy':'3x10/leg','Use load only if balance and knee position stay solid.'),
+    day('Day 1 - Squat / Lower Strength + Deadlift',[
+      ex('Back Squat',main,'Main squat lift. Use a current e1RM or current training max, not an old PR.'),
+      ex(secondaryDeadlift.name,secondaryDeadlift.rx,secondaryDeadlift.note),
+      ex('Romanian Deadlift',deload?'2x8 · LIGHT':w>=6?'2x8 · LIGHT':'3x8 · MODERATE','Accessory hinge only. Controlled reps; this should not feel like another heavy deadlift slot.'),
+      ex('Bulgarian Split Squat',deload?'2x8/leg · LIGHT':w>=6?'2x8/leg · LIGHT-MODERATE':'3x10/leg · MODERATE','Use load only if balance and knee position stay solid.'),
       ex('Calf Raise',deload?'2x12':'3x15','Full range and controlled pause.'),
       ex('Dead Bug / Leg Raise',deload?'2x8/side':'3x10/side','Brace hard and keep the low back controlled.'),
       ex('Suitcase Carry / Sled',deload?'6 min easy':'8-10 min easy','Easy conditioning only on this day.'),
@@ -298,13 +335,21 @@ function andyHybridRebuildWeek(week) {
       ex('Pallof Press',deload?'2x8/side':'3x10/side','Pause fully extended.'),
     ],weekNote),
 
-    day('Day 3 - Deadlift / Lower Hypertrophy',[
-      ex('Deadlift',main,'Main lift. Reset every rep and stop before technique changes.'),
-      ex('Front Squat',deload?'2x8 light':'3x8','Upright torso and controlled depth.'),
-      ex('Hamstring Curl',deload?'2x10':'3x12','Smooth reps.'),
-      ex('Reverse Lunge',deload?'2x8/leg easy':'3x10/leg','Controlled step and stable knee.'),
-      ex('Farmer Carry',deload?'3x30 yd easy':'4x40 yd','Heavy enough to challenge grip without changing posture.'),
-      ex('Zone 2 Row / Walk',deload?'10 min easy':'15-20 min easy','Optional. Keep it conversational.'),
+    day('Day 3 - Deadlift / Lower',[
+      ex('Deadlift',deadliftMainByWeek[w],w<=2
+        ? 'MODERATE primary deadlift day. Accumulate clean volume, reset every rep, and finish with reps in reserve.'
+        : w===3||w===5
+          ? 'MODERATE-HEAVY primary deadlift day. Strong work, but stop before technique or bar speed changes.'
+          : w===4
+            ? 'LIGHT DELOAD. Fast, technically perfect reps only.'
+            : w===6||w===7
+              ? 'HEAVY primary deadlift day. Full reset, longer rest, and absolutely no grinders.'
+              : 'HEAVY top set capped at RPE 8, then MODERATE back-off work. Finish feeling like another good rep was possible.'),
+      ex('Front Squat',frontSquatByWeek[w],w>=6?'Keep this LIGHT enough that it does not interfere with the two deadlift exposures.':'Upright torso and controlled depth.'),
+      ex('Hamstring Curl',w===4?'2x10 · LIGHT':w>=6?'2x10 · LIGHT-MODERATE':'3x12 · MODERATE','Smooth reps. Reduce effort as deadlift intensity rises.'),
+      ex('Reverse Lunge',w===4?'2x8/leg · LIGHT':w>=6?'2x8/leg · LIGHT':'3x10/leg · MODERATE','Controlled step and stable knee.'),
+      ex('Farmer Carry',w===4?'3x30 yd · LIGHT':w>=6?'3x30-40 yd · MODERATE':'4x40 yd · MODERATE','Challenge grip without changing posture or draining the next deadlift session.'),
+      ex('Zone 2 Row / Walk',w===4?'10 min · LIGHT':w>=6?'10-15 min · LIGHT / optional':'15-20 min · LIGHT','Optional. Keep it conversational.'),
     ],weekNote),
 
     day('Day 4 - Press / Upper Hypertrophy',[
@@ -713,7 +758,7 @@ export const archivePrograms = [
   {id:'street-parking-public-extras',name:'Street Parking - Public Extra Samples',category:'General + Conditioning',difficulty:'Beginner / Intermediate',weeksCount:1,daysPerWeek:6,source:'Street Parking official public Sample Workouts page',description:'Public samples from Dumbbell Strength, 5K, Bodyweight Strength, and On Ramp.',getWeek:()=>streetParkingPublicExtras},
   {id:'soflete-public-dailies',name:'SOFLETE - Public Daily Samples',category:'Tactical + Strength + Conditioning',difficulty:'Intermediate / Advanced',weeksCount:1,daysPerWeek:5,source:'SOFLETE official public daily workout posts',description:'Five non-periodized public SOFLETE daily sample workouts. These are samples, not subscription programming.',getWeek:()=>sofletePublicDailySamples},
   {id:'soflete-assaulter-public-sample',name:'SOFLETE - Assaulter Public Sample',category:'Tactical Strength',difficulty:'Advanced',weeksCount:1,daysPerWeek:1,source:'SOFLETE official training-app public demo',description:'One detailed upper-body Assaulter demo session publicly shown by SOFLETE; not the full paid cycle.',getWeek:()=>sofleteAssaulterPublicSample},
-  {id:'andy-hybrid-rebuild',name:'Hybrid Powerbuilding Rebuild',category:'Powerbuilding + Stability',difficulty:'Intermediate',weeksCount:8,daysPerWeek:4,durationLabel:'45-60 min/session',source:'Workout archive + WorkoutBoard rebuild',description:'Built from repeated 5/3/1, 5x5 and powerbuilding patterns: squat, bench, deadlift and press anchors with familiar unilateral work, rows/pullups, carries, core and short conditioning. Progression is capped around RPE 8 with a deload to avoid stacking too much intensity.',getWeek:andyHybridRebuildWeek},
+  {id:'andy-hybrid-rebuild',name:'Hybrid Powerbuilding Rebuild',category:'Powerbuilding + Stability',difficulty:'Intermediate',weeksCount:8,daysPerWeek:4,durationLabel:'45-65 min/session',source:'Workout archive + WorkoutBoard rebuild',description:'Eight-week powerbuilding rebuild with two weekly deadlift exposures: early deficit/strength-endurance work progresses into a second heavy pull in Weeks 6-7, while the primary deadlift day moves through accumulation, deload, intensification, heavy strength and performance phases. Assistance volume drops as deadlift intensity rises.',getWeek:andyHybridRebuildWeek},
   {id:'strength-stability-builder',name:'Strength + Stability Builder',category:'Strength + Stability',difficulty:'Beginner / Intermediate',weeksCount:6,daysPerWeek:3,durationLabel:'35-50 min/session',source:'WorkoutBoard custom program',description:'A stronger step up from Beginner Core & Stability: three full-body lifting days with squat, hinge, press, pull, unilateral work, carries, core stability and optional conditioning. Six weeks with a progressive build and a final deload.',getWeek:strengthStabilityBuilderWeek},
   {id:'beginner-core-stability',name:'Beginner Core & Stability',category:'Core + Stability',difficulty:'Beginner',weeksCount:6,daysPerWeek:3,source:'WorkoutBoard custom program',description:'Six-week beginner stability block using familiar unilateral leg work, hinges, rows, presses, carries, core bracing and easy conditioning.',getWeek:w=>beginnerCoreStabilityWeeks[Math.max(1,Math.min(6,w))]},
   {id:'squatober',name:'Squatober',category:'Specialization',difficulty:'Intermediate',weeksCount:3,daysPerWeek:2,source:'FEB SQUATOBER.pdf',description:'Squat-focused block with bench, deadlift, pulling, and accessories.',getWeek:w=>squatoberWeeks[Math.max(1,Math.min(3,w))]},
