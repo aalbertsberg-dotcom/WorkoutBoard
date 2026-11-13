@@ -172,12 +172,11 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
   const [activeSetByExercise,setActiveSetByExercise]=useState({})
   const [removeExercisePrompt,setRemoveExercisePrompt]=useState(null)
 
+  const lastCancelRequestRef=useRef(cancelRequestToken)
   useEffect(()=>{
-    if(cancelRequestToken<=0)return
-    setCancelConfirm(true)
-    requestAnimationFrame(()=>setTimeout(()=>{
-      document.getElementById('planned-cancel-confirm')?.scrollIntoView({behavior:'smooth',block:'center'})
-    },25))
+    if(cancelRequestToken===lastCancelRequestRef.current)return
+    lastCancelRequestRef.current=cancelRequestToken
+    if(cancelRequestToken>0)setCancelConfirm(true)
   },[cancelRequestToken])
 
   useEffect(()=>{
@@ -857,11 +856,14 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
 
     {onDismiss&&<button className="secondary-action regular-workout-fallback" onClick={onDismiss}>Use regular Today workout</button>}
     <button type="button" className="secondary-action cancel-workout-button" onClick={()=>setCancelConfirm(true)}>Cancel workout</button>
-    {cancelConfirm&&<section id="planned-cancel-confirm" className="cancel-workout-confirm">
-      <strong>Cancel this workout?</strong>
-      <p>Your in-progress entries will not count as a completed workout. This will not advance your program.</p>
-      <div><button type="button" className="secondary-action" onClick={()=>setCancelConfirm(false)} disabled={cancelling}>Keep workout</button><button type="button" className="danger-action" onClick={cancelWorkout} disabled={cancelling}>{cancelling?'Cancelling…':'Yes, cancel'}</button></div>
-    </section>}
+    {cancelConfirm&&<div className="same-day-sheet-backdrop workout-cancel-backdrop" onClick={()=>!cancelling&&setCancelConfirm(false)}>
+      <section id="planned-cancel-confirm" className="same-day-sheet cancel-workout-confirm cancel-workout-modal" onClick={e=>e.stopPropagation()}>
+        <span className="card-label">ACTIVE WORKOUT</span>
+        <h3>Cancel this workout?</h3>
+        <p>Your in-progress entries will not count as a completed workout. This will not advance your program.</p>
+        <div><button type="button" className="secondary-action" onClick={()=>setCancelConfirm(false)} disabled={cancelling}>Keep workout</button><button type="button" className="danger-action" onClick={cancelWorkout} disabled={cancelling}>{cancelling?'Cancelling…':'Yes, cancel'}</button></div>
+      </section>
+    </div>}
     <div className="finish-wrap planned-finish-wrap">
       <button className="finish" onClick={finish} disabled={finishing||cancelling}>{finishing?'FINISHING…':'FINISH WORKOUT'}</button>
     </div>
