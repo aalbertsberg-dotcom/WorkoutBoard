@@ -1613,13 +1613,12 @@ function App() {
       const multipleTrackedPrograms=activeSupportedTracks.length>1
       const workoutsToday=(flexCompleted||[]).filter(row=>(row.session_date||localDateKey(row.completed_at))===today).length
       const activeTrackKeys=new Set(activeArchiveTracks.map(row=>row.program_key))
-      let resolvedTodayPlan=multipleTrackedPrograms
-        ? (todayPlans||[]).find(row=>
-            row.workout?.started_explicitly ||
-            plannedWorkoutHasProgress(row) ||
-            ((row.status==='started'||row.status==='planned')&&!row.workout?.tracking_program_key)
-          ) || null
-        : (todayPlans||[]).find(row=>row.status==='planned'||row.status==='started') || null
+      let resolvedTodayPlan=(todayPlans||[]).find(row=>
+        row.workout?.started_explicitly ||
+        row.workout?.scheduled_explicitly ||
+        plannedWorkoutHasProgress(row) ||
+        ((row.status==='started'||row.status==='planned')&&!row.workout?.tracking_program_key)
+      ) || null
 
       if(multipleTrackedPrograms){
         const staleAutoRows=(todayPlans||[]).filter(row=>
@@ -1636,34 +1635,20 @@ function App() {
       const trackInfos=activeSupportedTracks
         .map(track=>buildTrackedProgramInfo(track,flexCompleted||[],today))
         .filter(Boolean)
-      for(const activeArchiveTrack of activeArchiveTracks){
-        const info=trackInfos.find(item=>item.key===activeArchiveTrack.program_key)
-        const trackedProgram=archiveProgramById[info?.archiveId]
-        if(!info||!trackedProgram)continue
-        const completedCount=info.completed
-        const completedToday=info.completedToday
-        const total=info.total
-        const nextWeek=info.nextWeek
-        const nextDayIndex=info.nextDayIndex
-        const nextDay=info.upcoming?.[0] ? trackedProgram.getWeek(nextWeek)?.[nextDayIndex] : null
-
-        if(!multipleTrackedPrograms){
-          const staleTrackedToday=workoutsToday>0 &&
-            resolvedTodayPlan?.workout?.tracking_program_key===activeArchiveTrack.program_key &&
-            !resolvedTodayPlan?.workout?.started_explicitly &&
-            !plannedWorkoutHasProgress(resolvedTodayPlan)
-          if(staleTrackedToday){
-            await supabase.from('planned_workouts').update({status:'skipped',updated_at:new Date().toISOString()}).eq('id',resolvedTodayPlan.id)
-            resolvedTodayPlan=null
-          }
-          const cancelledTrackedToday=(todayPlans||[]).some(row=>row.status==='skipped'&&row.workout?.tracking_program_key===activeArchiveTrack.program_key)
-          if(!resolvedTodayPlan && !completedToday && !cancelledTrackedToday && completedCount<total && nextDay){
-            const plannedPayload=makePlannedFromArchive(trackedProgram,nextWeek,nextDayIndex,today,loadedOneRms)
-            plannedPayload.workout={...plannedPayload.workout,tracking_program_key:activeArchiveTrack.program_key}
-            const inserted=await supabase.from('planned_workouts').insert({...plannedPayload,user_id:userId}).select().single()
-            if(!inserted.error)resolvedTodayPlan=inserted.data
-          }
-        }
+      // Tracked-program workouts are no longer auto-created on Today load.
+      // The next program day is only instantiated after the user explicitly taps Start.
+      const staleAutoRows=(todayPlans||[]).filter(row=>
+        row.workout?.tracking_program_key &&
+        !row.workout?.started_explicitly &&
+        !row.workout?.scheduled_explicitly &&
+        !plannedWorkoutHasProgress(row) &&
+        (row.status==='planned'||row.status==='started')
+      )
+      if(staleAutoRows.length){
+        await Promise.all(staleAutoRows.map(row=>supabase.from('planned_workouts').update({
+          status:'skipped',
+          updated_at:new Date().toISOString(),
+        }).eq('id',row.id)))
       }
 
       setPlannedToday(resolvedTodayPlan)
@@ -1831,7 +1816,7 @@ function App() {
       trackingWorkoutKey
     )
     payload.status='planned'
-    payload.workout={...payload.workout,started_explicitly:false}
+    payload.workout={...payload.workout,started_explicitly:false,scheduled_explicitly:true}
 
     const {data,error}=await createPlannedWorkout(payload)
     if(error)return {error:error.message}
@@ -3344,38 +3329,9 @@ function App() {
                 <div><span className="card-label">{trackedProgramsInfo.length>1?'TRACKED PROGRAMS':'TRACKED PROGRAM'}</span><h2>{trackedProgramsInfo.length>1?trackedProgramsInfo.length+' active programs':trackedProgramsInfo[0]?.name}</h2><p>{trackedProgramsInfo.length>1?'Choose which track you want to train today.':trackedProgramsInfo[0]?.completedToday?'Workout tracked today':'Ready to train'}</p></div>
               </section>}
 
-              <div className="tracked-programs-today-list">
-                {trackedProgramsInfo.map(info=><section className="simple-card tracked-program-today-card" key={info.key}>
-                  <div className="section-heading">
-                    <div><span className="card-label">{info.category}{info.durationLabel?' · '+info.durationLabel:''}</span><h3>{info.name}</h3></div>
-                    <div className="progress-badge">{info.completed}/{info.total}</div>
-                  </div>
-                  <div className="program-progress-track"><div style={{width:(info.total?Math.min(100,info.completed/info.total*100):0)+'%'}}/></div>
-                  {info.complete?<p className="helper-text">Program complete.</p>:<>
-                    <div className="tracked-week-choice-head"><span>WEEK {info.currentWeek}</span><strong>Choose today's workout</strong><small>Days can be completed in any order.</small></div>
-                    <div className="tracked-week-choice-list">{(info.weekChoices||[]).map((choice,index)=><div className={'tracked-week-choice '+(choice.completed?'completed':'')} key={choice.trackingWorkoutKey}>
-                      <div className="tracked-week-choice-main">
-                        <span>Day {index+1}</span>
-                        <strong>{choice.title}</strong>
-                        <div className="tracked-day-summary">
-                          {(choice.exercises||[]).slice(0,4).map((exercise,exerciseIndex)=><div key={exerciseIndex}>
-                            <b>{exercise.name}</b>
-                            {exercise.prescription&&<small>{exercise.prescription}</small>}
-                          </div>)}
-                          {(choice.exercises||[]).length>4&&<em>+{choice.exercises.length-4} more exercise{choice.exercises.length-4===1?'':'s'}</em>}
-                          {!(choice.exercises||[]).length&&<em>Workout details available in Plan</em>}
-                        </div>
-                        {choice.note&&<small className="tracked-day-note">{choice.note}</small>}
-                      </div>
-                      {choice.completed?<b className="tracked-day-done">✓ Done</b>:<button type="button" onClick={()=>startTrackedWorkout(info,{selectedWorkout:choice})}>Start</button>}
-                    </div>)}</div>
-                  </>}
-                </section>)}
-              </div>
-
               <section className="simple-card today-quick-start-card tracked-quick-start-card">
                 <div className="section-heading">
-                  <div><span className="card-label">OR DO SOMETHING ELSE</span><h3>What are we doing today?</h3></div>
+                  <div><span className="card-label">TODAY</span><h3>What are we doing today?</h3></div>
                 </div>
                 <div className="today-quick-start-grid">
                   <button type="button" onClick={()=>startStandaloneWorkout('walk')}>
@@ -3396,6 +3352,61 @@ function App() {
                 </div>
                 <button type="button" className="today-more-options" onClick={()=>setExtraWorkoutOpen(v=>!v)}>{extraWorkoutOpen?'Hide strength baseline options':'Strength baseline options'}</button>
               </section>
+
+              <div className="tracked-programs-today-list">
+                {trackedProgramsInfo.map(info=>{
+                  const nextChoice=info.upcoming?.[0]||null
+                  const nextWeekChoices=(info.weekChoices||[]).filter(choice=>!choice.completed&&choice.trackingWorkoutKey!==nextChoice?.trackingWorkoutKey)
+                  return <section className="simple-card tracked-program-today-card continue-program-card" key={info.key}>
+                    <div className="section-heading">
+                      <div><span className="card-label">CONTINUE WITH PROGRAM</span><h3>{info.name}</h3><small>{info.category}{info.durationLabel?' · '+info.durationLabel:''}</small></div>
+                      <div className="progress-badge">{info.completed}/{info.total}</div>
+                    </div>
+                    <div className="program-progress-track"><div style={{width:(info.total?Math.min(100,info.completed/info.total*100):0)+'%'}}/></div>
+                    {info.complete?<p className="helper-text">Program complete.</p>:nextChoice&&<>
+                      <div className="tracked-next-workout">
+                        <div className="tracked-next-label"><b>NEXT</b><span>Week {nextChoice.week} · Day {Number(nextChoice.dayIndex||0)+1}</span></div>
+                        <div className="tracked-next-content">
+                          <strong>{nextChoice.title}</strong>
+                          <div className="tracked-day-summary">
+                            {(nextChoice.exercises||[]).slice(0,4).map((exercise,exerciseIndex)=><div key={exerciseIndex}>
+                              <b>{exercise.name}</b>
+                              {exercise.prescription&&<small>{exercise.prescription}</small>}
+                            </div>)}
+                            {(nextChoice.exercises||[]).length>4&&<em>+{nextChoice.exercises.length-4} more exercise{nextChoice.exercises.length-4===1?'':'s'}</em>}
+                            {!(nextChoice.exercises||[]).length&&<em>Workout details available in Plan</em>}
+                          </div>
+                          {nextChoice.note&&<small className="tracked-day-note">{nextChoice.note}</small>}
+                        </div>
+                        <button type="button" className="primary-action tracked-next-start" onClick={()=>startTrackedWorkout(info,{selectedWorkout:nextChoice})}>Start next workout</button>
+                      </div>
+
+                      <details className="tracked-pick-another-day">
+                        <summary>Pick another day from Week {info.currentWeek}</summary>
+                        <div className="tracked-week-choice-list">
+                          {nextWeekChoices.length?nextWeekChoices.map(choice=>{
+                            const dayNumber=Number(choice.dayIndex||0)+1
+                            return <div className="tracked-week-choice" key={choice.trackingWorkoutKey}>
+                              <div className="tracked-week-choice-main">
+                                <span>Day {dayNumber}</span>
+                                <strong>{choice.title}</strong>
+                                <div className="tracked-day-summary">
+                                  {(choice.exercises||[]).slice(0,4).map((exercise,exerciseIndex)=><div key={exerciseIndex}>
+                                    <b>{exercise.name}</b>
+                                    {exercise.prescription&&<small>{exercise.prescription}</small>}
+                                  </div>)}
+                                  {(choice.exercises||[]).length>4&&<em>+{choice.exercises.length-4} more exercise{choice.exercises.length-4===1?'':'s'}</em>}
+                                </div>
+                              </div>
+                              <button type="button" onClick={()=>startTrackedWorkout(info,{selectedWorkout:choice})}>Start</button>
+                            </div>
+                          }):<p className="helper-text">No other incomplete days in this week.</p>}
+                        </div>
+                      </details>
+                    </>}
+                  </section>
+                })}
+              </div>
 
               {extraWorkoutOpen&&<section className="simple-card extra-workout-picker baseline-only-picker">
                 <div className="section-heading"><div><span className="card-label">STRENGTH BASELINE</span><h3>Test current strength</h3></div><button className="conditioning-remove" onClick={()=>setExtraWorkoutOpen(false)}>Cancel</button></div>
