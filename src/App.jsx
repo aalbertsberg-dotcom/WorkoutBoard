@@ -1564,7 +1564,14 @@ function App() {
         setWeek(cached.week||1)
         setLift(cached.lift||'Squat')
         setHistory(cached.history||[])
-        setPlannedToday(cached.plannedToday||null)
+        const cachedPlan=cached.plannedToday||null
+        if(cachedPlan?.workout?.standalone){
+          setPlannedToday(null)
+          setResumeStandalonePlan(standaloneWorkoutHasUserProgress(cachedPlan)?cachedPlan:null)
+        }else{
+          setPlannedToday(cachedPlan)
+          setResumeStandalonePlan(cached.resumeStandalonePlan||null)
+        }
         setTrackedProgramsInfo(cached.trackedProgramsInfo||[])
         setTrackedTodayInfo(cached.trackedTodayInfo||null)
         setTodayCompletedWorkouts(cached.todayCompletedWorkouts||[])
@@ -1636,8 +1643,8 @@ function App() {
         row.workout?.standalone &&
         !row.workout?.tracking_program_key
       )
-      const progressedStandalone=[...standaloneRows].reverse().find(row=>plannedWorkoutHasProgress(row))||null
-      const emptyStandalone=standaloneRows.filter(row=>!plannedWorkoutHasProgress(row))
+      const progressedStandalone=[...standaloneRows].reverse().find(row=>standaloneWorkoutHasUserProgress(row))||null
+      const emptyStandalone=standaloneRows.filter(row=>!standaloneWorkoutHasUserProgress(row))
       if(emptyStandalone.length){
         await Promise.all(emptyStandalone.map(row=>supabase.from('planned_workouts').update({
           status:'skipped',updated_at:new Date().toISOString(),
@@ -1715,6 +1722,7 @@ function App() {
       lift,
       history:(history||[]).slice(0,150),
       plannedToday,
+      resumeStandalonePlan,
       trackedProgramsInfo,
       trackedTodayInfo,
       todayCompletedWorkouts:(todayCompletedWorkouts||[]).slice(0,25),
@@ -1723,7 +1731,7 @@ function App() {
       oneRepMaxes,
       isAdmin,
     })
-  },[session?.user?.id,dataLoading,profile,activeProgram,week,lift,history,plannedToday,trackedProgramsInfo,trackedTodayInfo,todayCompletedWorkouts,completedTrainingSessions,togetherTracking,oneRepMaxes,isAdmin])
+  },[session?.user?.id,dataLoading,profile,activeProgram,week,lift,history,plannedToday,resumeStandalonePlan,trackedProgramsInfo,trackedTodayInfo,todayCompletedWorkouts,completedTrainingSessions,togetherTracking,oneRepMaxes,isAdmin])
 
   const plannedWorkoutHasProgress = row => {
     const workout=row?.workout||{}
@@ -1736,6 +1744,27 @@ function App() {
       conditioning.format || conditioning.name || conditioning.activity || conditioning.duration ||
       conditioning.workTime || conditioning.restTime || conditioning.interval || conditioning.time ||
       conditioning.rounds || conditioning.reps || conditioning.distance || conditioning.calories
+    )
+    return exerciseProgress || conditioningProgress || Boolean(String(workout.note||'').trim())
+  }
+
+  const standaloneWorkoutHasUserProgress = row => {
+    const workout=row?.workout||{}
+    const exerciseProgress=(workout.exercises||[]).some(item=>{
+      if(item.done || String(item.result||'').trim() || Number(item.load||0))return true
+      return (item.setProgress||[]).some(set=>set.done || Number(set.weight||0) || Number(set.actualReps||0))
+    })
+    const conditioning=workout.metcon||{}
+    const conditioningProgress=Boolean(
+      String(conditioning.duration||'').trim() ||
+      String(conditioning.workTime||'').trim() ||
+      String(conditioning.restTime||'').trim() ||
+      String(conditioning.interval||'').trim() ||
+      String(conditioning.time||'').trim() ||
+      String(conditioning.distance||'').trim() ||
+      Number(conditioning.rounds||0) ||
+      Number(conditioning.reps||0) ||
+      Number(conditioning.calories||0)
     )
     return exerciseProgress || conditioningProgress || Boolean(String(workout.note||'').trim())
   }
@@ -1974,8 +2003,8 @@ function App() {
     ])
     const multipleTracks=(activeTracking||[]).filter(row=>/^(archive|classic):/.test(String(row.program_key||''))).length>1
     const standaloneRows=(activePlans||[]).filter(row=>row.workout?.standalone&&!row.workout?.tracking_program_key)
-    const progressedStandalone=[...standaloneRows].reverse().find(row=>plannedWorkoutHasProgress(row))||null
-    const emptyStandalone=standaloneRows.filter(row=>!plannedWorkoutHasProgress(row))
+    const progressedStandalone=[...standaloneRows].reverse().find(row=>standaloneWorkoutHasUserProgress(row))||null
+    const emptyStandalone=standaloneRows.filter(row=>!standaloneWorkoutHasUserProgress(row))
     if(emptyStandalone.length){
       await Promise.all(emptyStandalone.map(row=>supabase.from('planned_workouts').update({
         status:'skipped',updated_at:new Date().toISOString(),
@@ -3400,7 +3429,7 @@ function App() {
                 </section>}
               </section>}
 
-              <section className="today-choice-screen">
+              {!nextDayPreviewOpen&&<section className="today-choice-screen">
                 <div className="today-choice-heading">
                   <span className="card-label">TODAY</span>
                   <h2>What are we doing today?</h2>
@@ -3441,9 +3470,10 @@ function App() {
                   <button type="button" onClick={()=>setExtraWorkoutOpen(v=>!v)}>{extraWorkoutOpen?'Hide strength baseline':'Strength baseline'}</button>
                   <button type="button" onClick={()=>navigateTo('program')}>Plan / programs</button>
                 </div>
-              </section>
+              </section>}
 
               {nextDayPreviewOpen&&<div id="today-program-continue" className="tracked-programs-today-list today-program-continue-panel">
+                <button type="button" className="today-program-back" onClick={()=>window.history.back()}>← What are we doing today?</button>
                 {trackedProgramsInfo.map(info=>{
                   const nextChoice=info.upcoming?.[0]||null
                   const nextWeekChoices=(info.weekChoices||[]).filter(choice=>!choice.completed&&choice.trackingWorkoutKey!==nextChoice?.trackingWorkoutKey)
@@ -3498,14 +3528,14 @@ function App() {
                 })}
               </div>}
 
-              {extraWorkoutOpen&&<section className="simple-card extra-workout-picker baseline-only-picker">
+              {!nextDayPreviewOpen&&extraWorkoutOpen&&<section className="simple-card extra-workout-picker baseline-only-picker">
                 <div className="section-heading"><div><span className="card-label">STRENGTH BASELINE</span><h3>Test current strength</h3></div><button className="conditioning-remove" onClick={()=>setExtraWorkoutOpen(false)}>Cancel</button></div>
                 <button onClick={()=>startStrengthBaseline('full')}><strong>All 4</strong><span>Squat, bench, deadlift and press · 4-rep test sets</span></button>
                 <button onClick={()=>startStrengthBaseline('upper')}><strong>Upper</strong><span>Bench + press</span></button>
                 <button onClick={()=>startStrengthBaseline('lower')}><strong>Lower</strong><span>Squat + deadlift</span></button>
               </section>}
 
-              <button className="secondary-action" onClick={()=>navigateTo('program')}>View full program / plan ahead</button>
+              {!nextDayPreviewOpen&&<button className="secondary-action" onClick={()=>navigateTo('program')}>View full program / plan ahead</button>}
 
               {workoutStartError&&<div className="status-message">{workoutStartError}</div>}
             </section>
