@@ -704,14 +704,28 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
 
       <div className="quick-cardio-head">
         <div>
-          <span className="card-label">QUICK CARDIO</span>
+          <span className="card-label">CARDIO</span>
           <h2>{planned.title}</h2>
-          <p>Keep it simple. Track what matters and finish.</p>
+          <p>{isGeneric?'Pick your effort, start the timer, then log the details.':'Pick your effort, start the timer, and go.'}</p>
         </div>
         <span className="save-pill">{saveState}</span>
       </div>
 
+      <section className="simple-card quick-cardio-intensity-card">
+        <span className="quick-cardio-section-label">How hard?</span>
+        <div className="quick-intensity">
+          {['Easy','Moderate','Hard'].map(level=><button type="button" key={level} className={(workout.metcon?.intensity||'Easy')===level?'active':''} onClick={()=>setQuickMetcon('intensity',level)}>{level}</button>)}
+        </div>
+      </section>
+
       <section className="quick-cardio-timer">
+        <p className="quick-cardio-timer-hint">
+          {workout.quick_timer_started_at
+            ? 'Timer is running. Go do your workout — Workset is tracking the elapsed time.'
+            : quickElapsedSeconds
+              ? 'Timer is paused. Resume when you start moving again.'
+              : 'Start the timer when you actually begin. Workset will use it for your workout duration.'}
+        </p>
         <span>{workout.quick_timer_started_at?'IN PROGRESS':'ELAPSED TIME'}</span>
         <strong>{formatQuickTime(quickElapsedSeconds)}</strong>
         <div>
@@ -723,34 +737,34 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       </section>
 
       <section className="simple-card quick-cardio-fields">
-        {isGeneric&&<label className="quick-cardio-field">
-          <span>Activity</span>
-          <input value={activity} onChange={e=>setQuickMetcon('activity',e.target.value)} placeholder="Row, elliptical, sled, hike…"/>
-        </label>}
-        {!isGeneric&&<div className="quick-cardio-activity"><span>Activity</span><strong>{activity}</strong></div>}
+        <div className="quick-cardio-details-head">
+          <span className="quick-cardio-section-label">Workout details</span>
+          <small>Enter these during or after your workout.</small>
+        </div>
+
+        <label className="quick-cardio-field">
+          <span>Duration</span>
+          <input value={workout.metcon?.duration||''} onChange={e=>setQuickMetcon('duration',e.target.value)} placeholder={quickElapsedSeconds?formatQuickTime(quickElapsedSeconds):'e.g. 30 min'}/>
+          <small>{quickElapsedSeconds
+            ? 'Leave blank to use the timer ('+formatQuickTime(quickElapsedSeconds)+').'
+            : 'Enter your time manually if you do not use the timer.'}</small>
+        </label>
 
         <div className="quick-cardio-two-col">
-          <label className="quick-cardio-field">
-            <span>Duration</span>
-            <input value={workout.metcon?.duration||''} onChange={e=>setQuickMetcon('duration',e.target.value)} placeholder={quickElapsedSeconds?formatQuickTime(quickElapsedSeconds):'e.g. 30 min'}/>
-          </label>
           <label className="quick-cardio-field">
             <span>Distance <small>optional</small></span>
             <input value={workout.metcon?.distance||''} onChange={e=>setQuickMetcon('distance',e.target.value)} placeholder="e.g. 2.5 mi"/>
           </label>
+          <label className="quick-cardio-field quick-calories">
+            <span>Calories <small>optional</small></span>
+            <input type="number" inputMode="numeric" value={workout.metcon?.calories||''} onChange={e=>setQuickMetcon('calories',e.target.value)} placeholder="Calories"/>
+          </label>
         </div>
 
-        <div className="quick-cardio-field">
-          <span>Intensity</span>
-          <div className="quick-intensity">
-            {['Easy','Moderate','Hard'].map(level=><button type="button" key={level} className={(workout.metcon?.intensity||'Easy')===level?'active':''} onClick={()=>setQuickMetcon('intensity',level)}>{level}</button>)}
-          </div>
-        </div>
-
-        <label className="quick-cardio-field quick-calories">
-          <span>Calories <small>optional</small></span>
-          <input type="number" inputMode="numeric" value={workout.metcon?.calories||''} onChange={e=>setQuickMetcon('calories',e.target.value)} placeholder="Calories"/>
-        </label>
+        {isGeneric&&<label className="quick-cardio-field">
+          <span>Activity <small>optional</small></span>
+          <input value={workout.metcon?.activity||''} onChange={e=>setQuickMetcon('activity',e.target.value)} placeholder="Row, elliptical, sled, hike…"/>
+        </label>}
 
         <label className="quick-cardio-field">
           <span>Notes <small>optional</small></span>
