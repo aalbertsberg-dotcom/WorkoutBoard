@@ -145,7 +145,7 @@ function PlannedAlternatives({name}) {
   </span>
 }
 
-export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,sharedSessionId=null,partnerOneRms={},oneRepMaxes={}}) {
+export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,sharedSessionId=null,partnerOneRms={},oneRepMaxes={},cancelRequestToken=0}) {
   const [workout,setWorkout]=useState(()=>{
     let cached=null
     try {
@@ -171,6 +171,10 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
   const [activeExerciseIndex,setActiveExerciseIndex]=useState(0)
   const [activeSetByExercise,setActiveSetByExercise]=useState({})
   const [removeExercisePrompt,setRemoveExercisePrompt]=useState(null)
+
+  useEffect(()=>{
+    if(cancelRequestToken>0)setCancelConfirm(true)
+  },[cancelRequestToken])
 
   useEffect(()=>{
     let cached=null
