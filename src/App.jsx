@@ -2114,14 +2114,8 @@ function App() {
       return
     }
 
-    const communityResult=await supabase.from('community_activity')
-      .delete().eq('training_session_id',sessionRow.id)
-    if(communityResult.error){
-      setWorkoutStartError(communityResult.error.message)
-      setDeletingCompletedWorkout(false)
-      return
-    }
-
+    // community_activity and workout_edit_audit rows cascade automatically
+    // from training_sessions, so one authoritative delete is more reliable.
     const sessionResult=await supabase.from('training_sessions')
       .delete().eq('id',sessionRow.id).eq('user_id',session.user.id)
     if(sessionResult.error){
@@ -2130,14 +2124,11 @@ function App() {
       return
     }
 
+    // The completed session is already gone at this point. Clean up its planned
+    // source row when present, but do not make that secondary cleanup block the UI.
     if(sessionRow.planned_workout_id){
-      const planResult=await supabase.from('planned_workouts')
+      await supabase.from('planned_workouts')
         .delete().eq('id',sessionRow.planned_workout_id).eq('user_id',session.user.id)
-      if(planResult.error){
-        setWorkoutStartError(planResult.error.message)
-        setDeletingCompletedWorkout(false)
-        return
-      }
     }
 
     setTodayCompletedWorkouts(rows=>rows.filter(item=>
