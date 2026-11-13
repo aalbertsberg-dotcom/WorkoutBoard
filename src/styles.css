@@ -6799,3 +6799,94 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
     grid-column:auto;
   }
 }
+
+
+/* Continue-program week preview */
+.tracked-week-preview {
+  margin-top:12px;
+}
+.tracked-week-preview-head {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  margin-bottom:7px;
+}
+.tracked-week-preview-head span {
+  color:#a9e25a;
+  font-size:10px;
+  font-weight:950;
+  letter-spacing:.08em;
+}
+.tracked-week-preview-head small {
+  color:#7f91a8;
+  font-size:9px;
+}
+.tracked-week-preview-days {
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:6px;
+}
+.tracked-week-preview-days button {
+  min-width:0;
+  min-height:52px;
+  padding:7px 5px;
+  border:1px solid #34465f;
+  border-radius:10px;
+  background:#0d1728;
+  color:#aebacd;
+  text-align:center;
+}
+.tracked-week-preview-days button span,
+.tracked-week-preview-days button b {
+  display:block;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.tracked-week-preview-days button span {
+  font-size:8px;
+  font-weight:850;
+}
+.tracked-week-preview-days button b {
+  margin-top:3px;
+  font-size:8px;
+  white-space:nowrap;
+}
+.tracked-week-preview-days button.next {
+  border-color:#6c913c;
+}
+.tracked-week-preview-days button.selected {
+  background:#172817;
+  border-color:#82b446;
+  color:#e9f8d2;
+}
+.tracked-week-preview-days button.completed {
+  opacity:.55;
+}
+.alternate-day-badge {
+  background:#2c405b !important;
+}
+
+/* Back/cancel should appear where the user is, not force-scroll the workout */
+.workout-cancel-backdrop {
+  z-index:1400;
+}
+.cancel-workout-modal {
+  max-width:420px;
+}
+.cancel-workout-modal > div {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+  margin-top:14px;
+}
+.cancel-workout-modal .secondary-action,
+.cancel-workout-modal .danger-action {
+  width:100%;
+  min-height:42px;
+}
+@media (max-width:390px) {
+  .tracked-week-preview-days {
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+}
