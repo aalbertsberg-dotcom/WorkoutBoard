@@ -1183,6 +1183,8 @@ function App() {
   const [completionSummary,setCompletionSummary] = useState(null)
   const [baselineFinishReview,setBaselineFinishReview] = useState(null)
   const [extraWorkoutOpen,setExtraWorkoutOpen] = useState(false)
+  const extraWorkoutOpenRef=useRef(false)
+  extraWorkoutOpenRef.current=extraWorkoutOpen
   const [nextDayPreviewOpen,setNextDayPreviewOpen] = useState(false)
   const [programPreviewChoiceKey,setProgramPreviewChoiceKey] = useState('')
   const nextDayPreviewRef=useRef(false)
@@ -1240,15 +1242,28 @@ function App() {
   useEffect(()=>{
     const state=window.history.state||{}
     if(state.worksetApp&&state.tab){
+      const openingWorkout=Boolean(state.worksetWorkout)
+      const openingToday=state.tab==='today'
+      if(openingToday&&!openingWorkout){
+        const cleanUrl=new URL(window.location.href)
+        cleanUrl.hash=''
+        window.history.replaceState({...state,todayView:'chooser',todayOverlay:null},'',cleanUrl.toString())
+        setNextDayPreviewOpen(false)
+        setExtraWorkoutOpen(false)
+      }
       setActiveTab(state.tab)
       setProgressStartSection(state.progressSection||'Overview')
       setAppNavDepth(Number(state.worksetDepth||0))
     }else{
-      window.history.replaceState({...state,worksetApp:true,tab:activeTab,progressSection:progressStartSection,worksetDepth:0},'',window.location.href)
+      window.history.replaceState({...state,worksetApp:true,tab:activeTab,progressSection:progressStartSection,worksetDepth:0,todayView:'chooser'},'',window.location.href)
       setAppNavDepth(0)
     }
     const onPopState=e=>{
       const next=e.state
+      if(extraWorkoutOpenRef.current && next?.todayOverlay!=='baseline'){
+        setExtraWorkoutOpen(false)
+        return
+      }
       if(plannedTodayRef.current && !next?.worksetWorkout){
         const url=new URL(window.location.href)
         url.hash='workout-'+plannedTodayRef.current.id
@@ -2103,6 +2118,23 @@ function App() {
       startStrengthBaseline(baselineTestChoice)
     }
     setBaselineTestChoice('')
+  }
+
+  const openStrengthBaselineOptions = () => {
+    if(extraWorkoutOpen)return
+    setExtraWorkoutOpen(true)
+    const state=window.history.state||{}
+    const url=new URL(window.location.href)
+    url.hash='today-baseline'
+    window.history.pushState({...state,worksetApp:true,tab:'today',todayOverlay:'baseline'},'',url.toString())
+  }
+
+  const closeStrengthBaselineOptions = () => {
+    if(window.history.state?.todayOverlay==='baseline'){
+      window.history.back()
+    }else{
+      setExtraWorkoutOpen(false)
+    }
   }
 
   const openProgramContinuation = () => {
@@ -3459,13 +3491,13 @@ function App() {
                       : (trackedProgramsInfo[0]?.nextTitle||trackedProgramsInfo[0]?.name||'Open your program')}</small>
                   </button>
                   <button type="button" onClick={()=>startStandaloneWorkout('walk')}>
-                    <span className="quick-start-icon">●</span><strong>Walk</strong><small>Time, distance or both</small>
+                    <span className="quick-start-icon activity-icon">🚶</span><strong>Walk</strong><small>Time, distance or both</small>
                   </button>
                   <button type="button" onClick={()=>startStandaloneWorkout('run')}>
-                    <span className="quick-start-icon">↗</span><strong>Run</strong><small>Easy run or any distance</small>
+                    <span className="quick-start-icon activity-icon">🏃</span><strong>Run</strong><small>Easy run or any distance</small>
                   </button>
                   <button type="button" onClick={()=>startStandaloneWorkout('bike')}>
-                    <span className="quick-start-icon">◉</span><strong>Bike</strong><small>Outdoor or stationary</small>
+                    <span className="quick-start-icon activity-icon">🚴</span><strong>Bike</strong><small>Outdoor or stationary</small>
                   </button>
                   <button type="button" onClick={()=>startStandaloneWorkout('free')}>
                     <span className="quick-start-icon">＋</span><strong>Free workout</strong><small>Add exercises as you go</small>
@@ -3476,7 +3508,7 @@ function App() {
                 </div>
 
                 <div className="today-choice-utility">
-                  <button type="button" onClick={()=>setExtraWorkoutOpen(v=>!v)}>{extraWorkoutOpen?'Hide strength baseline':'Strength baseline'}</button>
+                  <button type="button" onClick={openStrengthBaselineOptions}>Strength baseline</button>
                   <button type="button" onClick={()=>navigateTo('program')}>Plan / programs</button>
                 </div>
               </section>}
@@ -3547,9 +3579,9 @@ function App() {
                 })}
               </div>}
 
-              {!nextDayPreviewOpen&&extraWorkoutOpen&&<div className="same-day-sheet-backdrop" onClick={()=>setExtraWorkoutOpen(false)}>
+              {!nextDayPreviewOpen&&extraWorkoutOpen&&<div className="same-day-sheet-backdrop" onClick={closeStrengthBaselineOptions}>
                 <section className="same-day-sheet extra-workout-picker baseline-only-picker baseline-choice-sheet" onClick={e=>e.stopPropagation()}>
-                  <div className="section-heading"><div><span className="card-label">STRENGTH BASELINE</span><h3>Test current strength</h3></div><button className="conditioning-remove" onClick={()=>setExtraWorkoutOpen(false)}>×</button></div>
+                  <div className="section-heading"><div><span className="card-label">STRENGTH BASELINE</span><h3>Test current strength</h3></div><button className="conditioning-remove" onClick={closeStrengthBaselineOptions}>×</button></div>
                   <button onClick={()=>startStrengthBaseline('full')}><strong>All 4</strong><span>Squat, bench, deadlift and press · 4-rep test sets</span></button>
                   <button onClick={()=>startStrengthBaseline('upper')}><strong>Upper</strong><span>Bench + press</span></button>
                   <button onClick={()=>startStrengthBaseline('lower')}><strong>Lower</strong><span>Squat + deadlift</span></button>
