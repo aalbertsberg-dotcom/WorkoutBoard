@@ -1183,6 +1183,9 @@ function App() {
   const [baselineFinishReview,setBaselineFinishReview] = useState(null)
   const [extraWorkoutOpen,setExtraWorkoutOpen] = useState(false)
   const [nextDayPreviewOpen,setNextDayPreviewOpen] = useState(false)
+  const [plannedBackCancelRequest,setPlannedBackCancelRequest] = useState(0)
+  const plannedTodayRef=useRef(null)
+  plannedTodayRef.current=plannedToday
   const [pendingWorkoutStart,setPendingWorkoutStart] = useState(null)
   const [todayCompletedWorkouts,setTodayCompletedWorkouts] = useState([])
   const [completedDeletePrompt,setCompletedDeletePrompt] = useState(null)
@@ -1242,6 +1245,13 @@ function App() {
     }
     const onPopState=e=>{
       const next=e.state
+      if(plannedTodayRef.current && !next?.worksetWorkout){
+        const current={...(next||{}),worksetApp:true,tab:'today',progressSection:'Overview',worksetDepth:Number(next?.worksetDepth||0),worksetWorkout:true,workoutId:plannedTodayRef.current.id}
+        window.history.pushState(current,'',window.location.href)
+        setActiveTab('today')
+        setPlannedBackCancelRequest(v=>v+1)
+        return
+      }
       if(!next?.worksetApp)return
       setActiveTab(next.tab||'today')
       setProgressStartSection(next.progressSection||'Overview')
@@ -1732,8 +1742,13 @@ function App() {
     setExtraWorkoutOpen(false)
     setNextDayPreviewOpen(false)
     setPendingWorkoutStart(null)
+    plannedTodayRef.current=data
     setPlannedToday(data)
     setShowRegularToday(false)
+    const state=window.history.state||{}
+    if(!state.worksetWorkout || state.workoutId!==data?.id){
+      window.history.pushState({...state,worksetApp:true,tab:'today',worksetWorkout:true,workoutId:data?.id||null},'',window.location.href)
+    }
     window.scrollTo({top:0,behavior:'smooth'})
   }
 
@@ -2019,6 +2034,13 @@ function App() {
       startStrengthBaseline(baselineTestChoice)
     }
     setBaselineTestChoice('')
+  }
+
+  const openProgramContinuation = () => {
+    setNextDayPreviewOpen(true)
+    requestAnimationFrame(()=>setTimeout(()=>{
+      document.getElementById('today-program-continue')?.scrollIntoView({behavior:'smooth',block:'start'})
+    },25))
   }
 
   const openToday = async () => {
@@ -3226,9 +3248,15 @@ function App() {
               oneRepMaxes={oneRepMaxes}
               sharedSessionId={sharedWorkoutActive&&activeSession ? activeSession.id : null}
               partnerOneRms={sharedWorkoutActive ? {...sessionOneRms,...sharedManagedPartnerOneRms} : {}}
+              cancelRequestToken={plannedBackCancelRequest}
               onCancelled={async() => {
+                plannedTodayRef.current=null
                 setPlannedToday(null)
+                const state=window.history.state||{}
+                if(state.worksetWorkout)window.history.replaceState({...state,worksetWorkout:false,workoutId:null},'',window.location.href)
                 setShowRegularToday(false)
+                setNextDayPreviewOpen(false)
+                setExtraWorkoutOpen(false)
                 setCompletionSummary(null)
                 setBaselineFinishReview(null)
                 setWorkoutStartError('')
@@ -3239,6 +3267,9 @@ function App() {
                 }
               }}
               onFinished={async(summary) => {
+                plannedTodayRef.current=null
+                const historyState=window.history.state||{}
+                if(historyState.worksetWorkout)window.history.replaceState({...historyState,worksetWorkout:false,workoutId:null},'',window.location.href)
                 const finishedTrackingKey=plannedToday?.workout?.tracking_program_key||null
                 const finishedTrack=finishedTrackingKey?trackedProgramsInfo.find(info=>info.key===finishedTrackingKey):null
                 const programWillComplete=Boolean(finishedTrack&&finishedTrack.completed+1>=finishedTrack.total)
@@ -3335,7 +3366,7 @@ function App() {
                 </div>
 
                 <div className="today-choice-grid">
-                  <button type="button" className="today-choice-program" onClick={()=>setNextDayPreviewOpen(v=>!v)}>
+                  <button type="button" className="today-choice-program" onClick={openProgramContinuation}>
                     <span className="quick-start-icon">▦</span>
                     <strong>{trackedProgramsInfo.length>1?'Continue a program':'Continue with program'}</strong>
                     <small>{trackedProgramsInfo.length>1
@@ -3365,7 +3396,7 @@ function App() {
                 </div>
               </section>
 
-              {nextDayPreviewOpen&&<div className="tracked-programs-today-list today-program-continue-panel">
+              {nextDayPreviewOpen&&<div id="today-program-continue" className="tracked-programs-today-list today-program-continue-panel">
                 {trackedProgramsInfo.map(info=>{
                   const nextChoice=info.upcoming?.[0]||null
                   const nextWeekChoices=(info.weekChoices||[]).filter(choice=>!choice.completed&&choice.trackingWorkoutKey!==nextChoice?.trackingWorkoutKey)
