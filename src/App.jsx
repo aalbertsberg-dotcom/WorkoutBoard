@@ -1170,6 +1170,7 @@ function App() {
   const [sharedWorkoutActive,setSharedWorkoutActive] = useState(false)
   const [isAdmin,setIsAdmin] = useState(false)
   const [plannedToday,setPlannedToday] = useState(null)
+  const [resumeStandalonePlan,setResumeStandalonePlan] = useState(null)
   const [showRegularToday,setShowRegularToday] = useState(false)
   const [togetherTracking,setTogetherTracking] = useState([])
   const [togetherProgramKey,setTogetherProgramKey] = useState('')
@@ -1183,6 +1184,8 @@ function App() {
   const [baselineFinishReview,setBaselineFinishReview] = useState(null)
   const [extraWorkoutOpen,setExtraWorkoutOpen] = useState(false)
   const [nextDayPreviewOpen,setNextDayPreviewOpen] = useState(false)
+  const nextDayPreviewRef=useRef(false)
+  nextDayPreviewRef.current=nextDayPreviewOpen
   const [plannedBackCancelRequest,setPlannedBackCancelRequest] = useState(0)
   const plannedTodayRef=useRef(null)
   plannedTodayRef.current=plannedToday
@@ -1246,11 +1249,16 @@ function App() {
     const onPopState=e=>{
       const next=e.state
       if(plannedTodayRef.current && !next?.worksetWorkout){
+        const url=new URL(window.location.href)
+        url.hash='workout-'+plannedTodayRef.current.id
         const current={...(next||{}),worksetApp:true,tab:'today',progressSection:'Overview',worksetDepth:Number(next?.worksetDepth||0),worksetWorkout:true,workoutId:plannedTodayRef.current.id}
-        window.history.pushState(current,'',window.location.href)
+        window.history.pushState(current,'',url.toString())
         setActiveTab('today')
         setPlannedBackCancelRequest(v=>v+1)
         return
+      }
+      if(nextDayPreviewRef.current && next?.todayView!=='program'){
+        setNextDayPreviewOpen(false)
       }
       if(!next?.worksetApp)return
       setActiveTab(next.tab||'today')
@@ -1623,11 +1631,26 @@ function App() {
       const multipleTrackedPrograms=activeSupportedTracks.length>1
       const workoutsToday=(flexCompleted||[]).filter(row=>(row.session_date||localDateKey(row.completed_at))===today).length
       const activeTrackKeys=new Set(activeArchiveTracks.map(row=>row.program_key))
+      const standaloneRows=(todayPlans||[]).filter(row=>
+        (row.status==='started'||row.status==='planned') &&
+        row.workout?.standalone &&
+        !row.workout?.tracking_program_key
+      )
+      const progressedStandalone=[...standaloneRows].reverse().find(row=>plannedWorkoutHasProgress(row))||null
+      const emptyStandalone=standaloneRows.filter(row=>!plannedWorkoutHasProgress(row))
+      if(emptyStandalone.length){
+        await Promise.all(emptyStandalone.map(row=>supabase.from('planned_workouts').update({
+          status:'skipped',updated_at:new Date().toISOString(),
+        }).eq('id',row.id)))
+      }
+      setResumeStandalonePlan(progressedStandalone)
       let resolvedTodayPlan=(todayPlans||[]).find(row=>
-        row.workout?.started_explicitly ||
-        row.workout?.scheduled_explicitly ||
-        plannedWorkoutHasProgress(row) ||
-        ((row.status==='started'||row.status==='planned')&&!row.workout?.tracking_program_key)
+        !row.workout?.standalone && (
+          row.workout?.started_explicitly ||
+          row.workout?.scheduled_explicitly ||
+          plannedWorkoutHasProgress(row) ||
+          ((row.status==='started'||row.status==='planned')&&!row.workout?.tracking_program_key)
+        )
       ) || null
 
       if(multipleTrackedPrograms){
@@ -1744,10 +1767,13 @@ function App() {
     setPendingWorkoutStart(null)
     plannedTodayRef.current=data
     setPlannedToday(data)
+    if(resumeStandalonePlan?.id===data?.id)setResumeStandalonePlan(null)
     setShowRegularToday(false)
     const state=window.history.state||{}
     if(!state.worksetWorkout || state.workoutId!==data?.id){
-      window.history.pushState({...state,worksetApp:true,tab:'today',worksetWorkout:true,workoutId:data?.id||null},'',window.location.href)
+      const url=new URL(window.location.href)
+      url.hash='workout-'+(data?.id||'active')
+      window.history.pushState({...state,worksetApp:true,tab:'today',worksetWorkout:true,workoutId:data?.id||null},'',url.toString())
     }
     window.scrollTo({top:0,behavior:'smooth'})
   }
@@ -1947,15 +1973,23 @@ function App() {
         .eq('user_id',session.user.id).eq('status','tracking')
     ])
     const multipleTracks=(activeTracking||[]).filter(row=>/^(archive|classic):/.test(String(row.program_key||''))).length>1
-    let activePlan=multipleTracks
-      ? (activePlans||[]).find(row=>
-          row.workout?.started_explicitly ||
-          plannedWorkoutHasProgress(row) ||
-          ((row.status==='started'||row.status==='planned')&&!row.workout?.tracking_program_key)
-        ) || null
-      : (activePlans||[]).find(row=>row.status==='started'||row.workout?.started_explicitly||plannedWorkoutHasProgress(row))
-        || (activePlans||[]).find(row=>row.status==='planned')
-        || null
+    const standaloneRows=(activePlans||[]).filter(row=>row.workout?.standalone&&!row.workout?.tracking_program_key)
+    const progressedStandalone=[...standaloneRows].reverse().find(row=>plannedWorkoutHasProgress(row))||null
+    const emptyStandalone=standaloneRows.filter(row=>!plannedWorkoutHasProgress(row))
+    if(emptyStandalone.length){
+      await Promise.all(emptyStandalone.map(row=>supabase.from('planned_workouts').update({
+        status:'skipped',updated_at:new Date().toISOString(),
+      }).eq('id',row.id)))
+    }
+    setResumeStandalonePlan(progressedStandalone)
+    let activePlan=(activePlans||[]).find(row=>
+      !row.workout?.standalone && (
+        row.workout?.started_explicitly ||
+        row.workout?.scheduled_explicitly ||
+        plannedWorkoutHasProgress(row) ||
+        ((row.status==='started'||row.status==='planned')&&!row.workout?.tracking_program_key)
+      )
+    ) || null
     const staleAutoPlans=multipleTracks
       ? (activePlans||[]).filter(row=>
           row.workout?.tracking_program_key &&
@@ -2038,9 +2072,11 @@ function App() {
 
   const openProgramContinuation = () => {
     setNextDayPreviewOpen(true)
-    requestAnimationFrame(()=>setTimeout(()=>{
-      document.getElementById('today-program-continue')?.scrollIntoView({behavior:'smooth',block:'start'})
-    },25))
+    const state=window.history.state||{}
+    const url=new URL(window.location.href)
+    url.hash='today-program'
+    window.history.pushState({...state,worksetApp:true,tab:'today',todayView:'program'},'',url.toString())
+    window.scrollTo({top:0,behavior:'smooth'})
   }
 
   const openToday = async () => {
@@ -3252,8 +3288,11 @@ function App() {
               onCancelled={async() => {
                 plannedTodayRef.current=null
                 setPlannedToday(null)
+                setResumeStandalonePlan(null)
                 const state=window.history.state||{}
-                if(state.worksetWorkout)window.history.replaceState({...state,worksetWorkout:false,workoutId:null},'',window.location.href)
+                const cleanUrl=new URL(window.location.href)
+                cleanUrl.hash=''
+                window.history.replaceState({...state,worksetWorkout:false,workoutId:null,todayView:'chooser'},'',cleanUrl.toString())
                 setShowRegularToday(false)
                 setNextDayPreviewOpen(false)
                 setExtraWorkoutOpen(false)
@@ -3268,8 +3307,11 @@ function App() {
               }}
               onFinished={async(summary) => {
                 plannedTodayRef.current=null
+                setResumeStandalonePlan(null)
                 const historyState=window.history.state||{}
-                if(historyState.worksetWorkout)window.history.replaceState({...historyState,worksetWorkout:false,workoutId:null},'',window.location.href)
+                const cleanUrl=new URL(window.location.href)
+                cleanUrl.hash=''
+                window.history.replaceState({...historyState,worksetWorkout:false,workoutId:null,todayView:'chooser'},'',cleanUrl.toString())
                 const finishedTrackingKey=plannedToday?.workout?.tracking_program_key||null
                 const finishedTrack=finishedTrackingKey?trackedProgramsInfo.find(info=>info.key===finishedTrackingKey):null
                 const programWillComplete=Boolean(finishedTrack&&finishedTrack.completed+1>=finishedTrack.total)
@@ -3366,6 +3408,11 @@ function App() {
                 </div>
 
                 <div className="today-choice-grid">
+                  {resumeStandalonePlan&&<button type="button" className="today-choice-resume" onClick={()=>activatePlannedWorkout(resumeStandalonePlan)}>
+                    <span className="quick-start-icon">↻</span>
+                    <strong>Resume {resumeStandalonePlan.title||'workout'}</strong>
+                    <small>You have an unfinished workout from today</small>
+                  </button>}
                   <button type="button" className="today-choice-program" onClick={openProgramContinuation}>
                     <span className="quick-start-icon">▦</span>
                     <strong>{trackedProgramsInfo.length>1?'Continue a program':'Continue with program'}</strong>
@@ -3480,6 +3527,11 @@ function App() {
                   <p>Pick something simple, start a workout, or choose a program.</p>
                 </div>
                 <div className="today-choice-grid">
+                  {resumeStandalonePlan&&<button type="button" className="today-choice-resume" onClick={()=>activatePlannedWorkout(resumeStandalonePlan)}>
+                    <span className="quick-start-icon">↻</span>
+                    <strong>Resume {resumeStandalonePlan.title||'workout'}</strong>
+                    <small>You have an unfinished workout from today</small>
+                  </button>}
                   <button type="button" className="today-choice-program" onClick={()=>navigateTo('program')}>
                     <span className="quick-start-icon">▦</span><strong>Choose a program</strong><small>Start or track a training plan</small>
                   </button>
