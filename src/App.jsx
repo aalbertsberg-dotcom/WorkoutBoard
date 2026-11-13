@@ -3325,15 +3325,21 @@ function App() {
                 </section>}
               </section>}
 
-              {!completionSummary&&<section className="today-card multi-track-heading">
-                <div><span className="card-label">{trackedProgramsInfo.length>1?'TRACKED PROGRAMS':'TRACKED PROGRAM'}</span><h2>{trackedProgramsInfo.length>1?trackedProgramsInfo.length+' active programs':trackedProgramsInfo[0]?.name}</h2><p>{trackedProgramsInfo.length>1?'Choose which track you want to train today.':trackedProgramsInfo[0]?.completedToday?'Workout tracked today':'Ready to train'}</p></div>
-              </section>}
-
-              <section className="simple-card today-quick-start-card tracked-quick-start-card">
-                <div className="section-heading">
-                  <div><span className="card-label">TODAY</span><h3>What are we doing today?</h3></div>
+              <section className="today-choice-screen">
+                <div className="today-choice-heading">
+                  <span className="card-label">TODAY</span>
+                  <h2>What are we doing today?</h2>
+                  <p>Choose the thing you actually want to do today.</p>
                 </div>
-                <div className="today-quick-start-grid">
+
+                <div className="today-choice-grid">
+                  <button type="button" className="today-choice-program" onClick={()=>setNextDayPreviewOpen(v=>!v)}>
+                    <span className="quick-start-icon">▦</span>
+                    <strong>{trackedProgramsInfo.length>1?'Continue a program':'Continue with program'}</strong>
+                    <small>{trackedProgramsInfo.length>1
+                      ? trackedProgramsInfo.length+' programs tracked'
+                      : (trackedProgramsInfo[0]?.nextTitle||trackedProgramsInfo[0]?.name||'Open your program')}</small>
+                  </button>
                   <button type="button" onClick={()=>startStandaloneWorkout('walk')}>
                     <span className="quick-start-icon">●</span><strong>Walk</strong><small>Time, distance or both</small>
                   </button>
@@ -3350,10 +3356,14 @@ function App() {
                     <span className="quick-start-icon">◇</span><strong>Other cardio</strong><small>Row, elliptical, sled, intervals</small>
                   </button>
                 </div>
-                <button type="button" className="today-more-options" onClick={()=>setExtraWorkoutOpen(v=>!v)}>{extraWorkoutOpen?'Hide strength baseline options':'Strength baseline options'}</button>
+
+                <div className="today-choice-utility">
+                  <button type="button" onClick={()=>setExtraWorkoutOpen(v=>!v)}>{extraWorkoutOpen?'Hide strength baseline':'Strength baseline'}</button>
+                  <button type="button" onClick={()=>navigateTo('program')}>Plan / programs</button>
+                </div>
               </section>
 
-              <div className="tracked-programs-today-list">
+              {nextDayPreviewOpen&&<div className="tracked-programs-today-list today-program-continue-panel">
                 {trackedProgramsInfo.map(info=>{
                   const nextChoice=info.upcoming?.[0]||null
                   const nextWeekChoices=(info.weekChoices||[]).filter(choice=>!choice.completed&&choice.trackingWorkoutKey!==nextChoice?.trackingWorkoutKey)
@@ -3406,7 +3416,7 @@ function App() {
                     </>}
                   </section>
                 })}
-              </div>
+              </div>}
 
               {extraWorkoutOpen&&<section className="simple-card extra-workout-picker baseline-only-picker">
                 <div className="section-heading"><div><span className="card-label">STRENGTH BASELINE</span><h3>Test current strength</h3></div><button className="conditioning-remove" onClick={()=>setExtraWorkoutOpen(false)}>Cancel</button></div>
@@ -3430,13 +3440,16 @@ function App() {
                 </article>)}</div>
               </details>}
 
-              <section className="simple-card today-quick-start-card">
-                <div className="section-heading">
-                  <div><span className="card-label">TODAY</span><h2>What are we doing today?</h2></div>
+              <section className="today-choice-screen">
+                <div className="today-choice-heading">
+                  <span className="card-label">TODAY</span>
+                  <h2>What are we doing today?</h2>
+                  <p>Pick something simple, start a workout, or choose a program.</p>
                 </div>
-                <p className="helper-text">No program is being tracked. Pick something simple, start a free workout, or choose a program.</p>
-
-                <div className="today-quick-start-grid">
+                <div className="today-choice-grid">
+                  <button type="button" className="today-choice-program" onClick={()=>navigateTo('program')}>
+                    <span className="quick-start-icon">▦</span><strong>Choose a program</strong><small>Start or track a training plan</small>
+                  </button>
                   <button type="button" onClick={()=>startStandaloneWorkout('walk')}>
                     <span className="quick-start-icon">●</span><strong>Walk</strong><small>Time, distance or both</small>
                   </button>
@@ -3453,9 +3466,9 @@ function App() {
                     <span className="quick-start-icon">◇</span><strong>Other cardio</strong><small>Row, elliptical, sled, intervals</small>
                   </button>
                 </div>
-
-                <button type="button" className="primary-action today-choose-program" onClick={()=>navigateTo('program')}>Choose a program</button>
-                <button type="button" className="today-classic-workout-link" onClick={()=>setShowRegularToday(true)}>Use classic Workset workout</button>
+                <div className="today-choice-utility">
+                  <button type="button" onClick={()=>setShowRegularToday(true)}>Classic Workset workout</button>
+                </div>
               </section>
 
               {workoutStartError&&<div className="status-message">{workoutStartError}</div>}
