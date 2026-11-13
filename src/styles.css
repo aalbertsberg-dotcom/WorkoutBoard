@@ -6605,3 +6605,85 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
 .baseline-only-picker {
   margin-top:-4px;
 }
+
+
+/* Explicit program continuation on Today */
+.continue-program-card {
+  border-color:#40536e;
+}
+.continue-program-card .section-heading small {
+  display:block;
+  margin-top:3px;
+  color:#8292a7;
+  font-size:9px;
+}
+.tracked-next-workout {
+  display:grid;
+  gap:9px;
+  margin-top:11px;
+  padding:12px;
+  border:1px solid #4d6837;
+  border-radius:13px;
+  background:#111d18;
+}
+.tracked-next-label {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+}
+.tracked-next-label b {
+  display:inline-flex;
+  align-items:center;
+  min-height:22px;
+  padding:0 8px;
+  border-radius:999px;
+  background:#5aa900;
+  color:#fff;
+  font-size:9px;
+  font-weight:950;
+  letter-spacing:.06em;
+}
+.tracked-next-label span {
+  color:#91a2b9;
+  font-size:9px;
+  font-weight:850;
+}
+.tracked-next-content {
+  display:grid;
+  gap:6px;
+}
+.tracked-next-content > strong {
+  color:#f1f5f9;
+  font-size:16px;
+  line-height:1.2;
+}
+.tracked-next-start {
+  width:100%;
+  min-height:42px;
+}
+.tracked-pick-another-day {
+  margin-top:9px;
+  border-top:1px solid #2c3d55;
+  padding-top:8px;
+}
+.tracked-pick-another-day > summary {
+  cursor:pointer;
+  list-style:none;
+  color:#a9b8ca;
+  font-size:10px;
+  font-weight:900;
+}
+.tracked-pick-another-day > summary::-webkit-details-marker {
+  display:none;
+}
+.tracked-pick-another-day > summary::after {
+  content:' +';
+  color:#9fca57;
+}
+.tracked-pick-another-day[open] > summary::after {
+  content:' −';
+}
+.tracked-pick-another-day .tracked-week-choice-list {
+  margin-top:8px;
+}
