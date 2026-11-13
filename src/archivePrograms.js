@@ -2,6 +2,12 @@ import {verifiedSourcePrograms} from './programSources/sourcePrograms'
 
 const ex = (name, prescription, note='') => ({name,prescription,note})
 const day = (title, exercises, note='') => ({title,exercises,note})
+const cardioDay = (title,activity,duration,intensity='Easy',note='') => ({
+  title,
+  exercises:[],
+  note,
+  cardio:{format:'Easy cardio',activity,duration,intensity,distance:'',calories:'',name:'',workTime:'',restTime:'',interval:'',rounds:'',reps:'',time:'',scale:'Rx'}
+})
 
 const squatoberWeeks = {
   1:[
@@ -749,7 +755,51 @@ const sofleteAssaulterPublicSample = [
   ],'SOFLETE Assaulter public app-demo session. The paid cycle contains additional programming not reproduced here.'),
 ]
 
+function simpleWalkingWeek(week) {
+  const w=Math.max(1,Math.min(8,Number(week)||1))
+  const add=Math.floor((w-1)/2)*5
+  return [
+    cardioDay('Easy Walk','Walk',(20+add)+' min','Easy','Comfortable pace. You should be able to talk normally.'),
+    cardioDay('Steady Walk','Walk',(30+add)+' min',w>=5?'Moderate':'Easy','Walk with purpose, but keep it sustainable.'),
+    cardioDay('Longer Walk','Walk',(40+add)+' min','Easy','Easy longer walk. Distance is optional; time is enough.'),
+  ]
+}
+
+function simpleRunningWeek(week) {
+  const w=Math.max(1,Math.min(8,Number(week)||1))
+  const add=Math.floor((w-1)/2)*5
+  return [
+    cardioDay('Easy Run','Run',(20+add)+' min','Easy','Easy conversational run. Slow down or walk as needed.'),
+    cardioDay('Steady Run','Run',(25+add)+' min',w>=5?'Moderate':'Easy','Comfortable steady effort. This is not a race.'),
+    cardioDay('Longer Easy Run','Run',(30+add)+' min','Easy','Keep the effort easy even as duration increases.'),
+  ]
+}
+
+function simpleCyclingWeek(week) {
+  const w=Math.max(1,Math.min(8,Number(week)||1))
+  const add=Math.floor((w-1)/2)*5
+  return [
+    cardioDay('Easy Ride','Bike',(30+add)+' min','Easy','Easy spin. Keep resistance comfortable.'),
+    cardioDay('Steady Ride','Bike',(40+add)+' min',w>=5?'Moderate':'Easy','Steady aerobic ride; avoid turning it into intervals.'),
+    cardioDay('Longer Ride','Bike',(50+add)+' min','Easy','Longer easy ride. Distance is optional; duration is the goal.'),
+  ]
+}
+
+function simpleCardioChoiceWeek(week) {
+  const w=Math.max(1,Math.min(8,Number(week)||1))
+  const add=Math.floor((w-1)/2)*5
+  return [
+    cardioDay('Easy Cardio - Your Choice','Walk / Run / Bike',(20+add)+' min','Easy','Choose walking, running, biking, rowing, elliptical, or another easy cardio option.'),
+    cardioDay('Steady Cardio - Your Choice','Walk / Run / Bike',(30+add)+' min','Moderate','Pick the activity you feel like doing today.'),
+    cardioDay('Long Easy Cardio - Your Choice','Walk / Run / Bike',(40+add)+' min','Easy','Keep it easy and accumulate time.'),
+  ]
+}
+
 export const archivePrograms = [
+  {id:'simple-walking',name:'Simple Walking - Just Go Walk',category:'Cardio',difficulty:'Beginner / Easy',weeksCount:8,daysPerWeek:3,durationLabel:'20-55 min',source:'Workset simple cardio',description:'Simple walking program. Three easy-to-follow walks each week with gradual time increases. Search walking, walk, steps, cardio, easy cardio, or recovery.',getWeek:simpleWalkingWeek},
+  {id:'simple-running',name:'Simple Running - Just Go Run',category:'Cardio',difficulty:'Beginner / Scalable',weeksCount:8,daysPerWeek:3,durationLabel:'20-45 min',source:'Workset simple cardio',description:'Simple running program with easy, steady, and longer conversational runs. Walk breaks are completely fine.',getWeek:simpleRunningWeek},
+  {id:'simple-cycling',name:'Simple Cycling - Just Go Ride',category:'Cardio',difficulty:'Beginner / Easy',weeksCount:8,daysPerWeek:3,durationLabel:'30-65 min',source:'Workset simple cardio',description:'Simple bike program with easy aerobic rides. Works for outdoor cycling or a stationary bike.',getWeek:simpleCyclingWeek},
+  {id:'simple-cardio-choice',name:'Simple Cardio - Walk / Run / Bike',category:'Cardio',difficulty:'Beginner / Scalable',weeksCount:8,daysPerWeek:3,durationLabel:'20-55 min',source:'Workset simple cardio',description:'No-fuss cardio plan. Pick walking, running, biking, rowing, elliptical, or another cardio activity each day.',getWeek:simpleCardioChoiceWeek},
   {id:'hybrid-calisthenics-quick',name:'Hybrid Calisthenics 2.0 - Quick Daily Track',category:'Calisthenics',difficulty:'Beginner / Scalable',weeksCount:12,daysPerWeek:6,durationLabel:'5-15 min/day',source:'Hybrid Calisthenics public Hybrid Routine 2.0',description:'Short six-day bodyweight track: two movements per day. Uses two working sets by default with an optional third set so it can live beside a lifting program.',getWeek:()=>hybridCalisthenicsQuickDays},
   {id:'reddit-bwf-minimalist',name:'r/bodyweightfitness - Minimalist Routine',category:'Calisthenics',difficulty:'Beginner / Scalable',weeksCount:8,daysPerWeek:3,durationLabel:'Minimalist',source:'r/bodyweightfitness public Minimalist Routine wiki',description:'Public minimalist full-body routine built around lunges, pushups, rows and plank shoulder taps. WorkoutBoard defaults to three circuits; add/remove sets to scale within the source\'s 2-6 circuit range.',getWeek:()=>redditMinimalistDays},
   {id:'reddit-bwf-recommended',name:'r/bodyweightfitness - Recommended Routine',category:'Calisthenics',difficulty:'Beginner / Intermediate',weeksCount:8,daysPerWeek:3,durationLabel:'~60 min/session',source:'r/bodyweightfitness public Recommended Routine wiki',description:'Full public bodyweight strength routine with pull, squat, dip, hinge, row, push and three core progressions.',getWeek:()=>redditRecommendedRoutineDays},
@@ -965,6 +1015,9 @@ export function makePlannedFromArchive(program, week, dayIndex, scheduledDate, o
           ...(setProgress?{setProgress}:{})
         }
       }),
+      conditioningEnabled:Boolean(chosen.cardio),
+      conditioning_prescribed:Boolean(chosen.cardio),
+      metcon:chosen.cardio ? {...chosen.cardio} : {name:'',format:'',activity:'',duration:'',workTime:'',restTime:'',interval:'',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx',intensity:'Easy'},
       sleep:'', energy:'', pain:'', rpe:'', bodyweight:'', note:'',
     },
     status:'planned',
