@@ -722,19 +722,21 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       </section>
 
       <section className="quick-cardio-timer">
+        <span className="quick-cardio-timer-state">
+          {workout.quick_timer_started_at ? 'TIMING NOW' : quickElapsedSeconds ? 'PAUSED' : 'READY'}
+        </span>
+        <strong>{formatQuickTime(quickElapsedSeconds)}</strong>
         <p className="quick-cardio-timer-hint">
           {workout.quick_timer_started_at
-            ? 'Timer is running. Go do your workout — Workset is tracking the elapsed time.'
+            ? 'Your time is being tracked.'
             : quickElapsedSeconds
-              ? 'Timer is paused. Resume when you start moving again.'
-              : 'Start the timer when you actually begin. Workset will use it for your workout duration.'}
+              ? 'Resume when you start moving again.'
+              : 'Tap Start when you begin.'}
         </p>
-        <span>{workout.quick_timer_started_at?'IN PROGRESS':'ELAPSED TIME'}</span>
-        <strong>{formatQuickTime(quickElapsedSeconds)}</strong>
         <div>
           {workout.quick_timer_started_at
             ? <button type="button" className="primary-action" onClick={pauseQuickTimer}>Pause</button>
-            : <button type="button" className="primary-action" onClick={startQuickTimer}>{quickElapsedSeconds?'Resume':'Start timer'}</button>}
+            : <button type="button" className="primary-action" onClick={startQuickTimer}>{quickElapsedSeconds?'Resume':'Start'}</button>}
           {quickElapsedSeconds>0&&<button type="button" className="secondary-action" onClick={resetQuickTimer}>Reset</button>}
         </div>
       </section>
@@ -749,8 +751,8 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
           <span>Duration</span>
           <input value={workout.metcon?.duration||''} onChange={e=>setQuickMetcon('duration',e.target.value)} placeholder={quickElapsedSeconds?formatQuickTime(quickElapsedSeconds):'e.g. 30 min'}/>
           <small>{quickElapsedSeconds
-            ? 'Leave blank to use the timer ('+formatQuickTime(quickElapsedSeconds)+').'
-            : 'Enter your time manually if you do not use the timer.'}</small>
+            ? 'Timer: '+formatQuickTime(quickElapsedSeconds)+' · leave blank to use it automatically.'
+            : 'Only enter this manually if you did not use the timer.'}</small>
         </label>
 
         <div className="quick-cardio-two-col">
