@@ -3,6 +3,7 @@ import { supabase } from './supabase'
 import { MetconTracker } from './advancedFeatures'
 import { offlineUuid, queueUpsert, upsertOfflineFirst, isOfflineError, readOfflineState, writeOfflineState } from './offline'
 import { OutdoorTracker, emptyOutdoorTrack, outdoorActivityKind, outdoorMetrics } from './outdoorTracking'
+import { effectiveSteps } from './stepTracking'
 import { validWeightDraft,validRepsDraft,displayedSetWeight,recordedWeightValue,canFinishQuickCardio,withoutUnreliableRoute } from './trackingRules'
 
 function partnerSetTarget(maxes,set) {
@@ -281,7 +282,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       inFlightSaveRef.current=save
       const result=await save
       if(!cancelRequestedRef.current)setSaveState(result.error ? 'Save failed' : result.offline ? 'Saved offline' : 'Saved')
-    },700)
+    },workout.quick_cardio?2200:700)
     return ()=>clearTimeout(timer)
   },[workout,planned?.id,saveState])
 
@@ -537,6 +538,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
     const quickDurationText=quickCardio&&quickElapsedSeconds>0 ? formatQuickTime(quickElapsedSeconds) : ''
     const reliableOutdoor=quickOutdoorKind ? withoutUnreliableRoute(workout.outdoor||emptyOutdoorTrack(quickOutdoorKind)) : null
     const quickOutdoorMetrics=quickOutdoorKind ? outdoorMetrics(reliableOutdoor,quickElapsedSeconds,quickOutdoorKind) : null
+    const quickStepCount=quickOutdoorKind==='walk'||quickOutdoorKind==='run'?effectiveSteps(reliableOutdoor):0
     const gpsDistanceText=quickOutdoorMetrics?.miles>0
       ? quickOutdoorMetrics.miles.toFixed(quickOutdoorMetrics.miles<10?2:1)+' mi'
       : ''
@@ -562,13 +564,14 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       }:{}),
       complete:true,savedAt:now,baseline_results:baselineResults
     }
-    const completionOutdoor=quickOutdoorMetrics&&quickOutdoorMetrics.distanceM>0 ? {
+    const completionOutdoor=quickOutdoorMetrics&&(quickOutdoorMetrics.distanceM>0||quickStepCount>0) ? {
       kind:quickOutdoorKind,
       miles:quickOutdoorMetrics.miles,
       elapsedSeconds:quickElapsedSeconds,
       avgPaceSecPerMile:quickOutdoorMetrics.avgPaceSecPerMile,
       avgMph:quickOutdoorMetrics.avgMph,
       elevationFt:quickOutdoorMetrics.elevationGainM*3.28084,
+      steps:quickStepCount,
       points:quickOutdoorMetrics.points,
       splits:quickOutdoorMetrics.splits,
     } : null
