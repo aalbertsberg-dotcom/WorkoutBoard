@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {
   validWeightDraft,validRepsDraft,displayedSetWeight,recordedWeightValue,
   canFinishQuickCardio,hasReliableOutdoorRoute,paceIsMeaningful,withoutUnreliableRoute,
-  hasLiveGpsFix,gpsJitterFloorMeters,outdoorDistancePresentation,carryEditedWeight
+  hasLiveGpsFix,gpsJitterFloorMeters,outdoorDistancePresentation
 } from '../src/trackingRules.js'
 
 test('erasing 135 stays erased even when a previous set offers 135',()=>{
@@ -103,12 +103,16 @@ test('longer credible GPS track remains route-eligible',()=>{
   assert.equal(outdoorDistancePresentation(saved).hasRoute,true)
 })
 
-test('manually adjusted load carries forward only when prescribed target is unchanged',()=>{
-  const previous={done:true,weight_edited:true,weight:'155'}
-  assert.equal(carryEditedWeight(previous,'140 lb','140 lb'),155)
-  assert.equal(carryEditedWeight(previous,'140 lb','160 lb'),0)
-  assert.equal(carryEditedWeight({...previous,done:false},'140 lb','140 lb'),0)
-  assert.equal(carryEditedWeight({...previous,weight_edited:false},'140 lb','140 lb'),0)
-  assert.equal(displayedSetWeight({weight:''},[carryEditedWeight(previous,'140 lb','140 lb'),140]),'155')
-  assert.equal(displayedSetWeight({weight:'',weight_edited:true},[155,140]),'')
+test('each untouched set defaults to its own programmed 1RM percentage',()=>{
+  const previousSet={weight:'155',weight_edited:true,done:true}
+  const currentSet={weight:''}
+  // Next set is independently prescribed 140 lb, even after a 155 lb override.
+  assert.equal(displayedSetWeight(currentSet,[140,Number(previousSet.weight)]),'140')
+  // When prescription changes to 160 lb, do not inherit 155 lb either.
+  assert.equal(displayedSetWeight(currentSet,[160,Number(previousSet.weight)]),'160')
+  // Intentionally entered weight still overrides this set's target.
+  assert.equal(displayedSetWeight({weight:'150',weight_edited:true},[140,155]),'150')
+  assert.equal(displayedSetWeight({weight:'',weight_edited:true},[140,155]),'')
+  // Previous-set fallback remains available when there is no programmed target.
+  assert.equal(displayedSetWeight(currentSet,[0,155]),'155')
 })

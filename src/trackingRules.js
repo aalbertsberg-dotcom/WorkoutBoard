@@ -91,12 +91,3 @@ export function outdoorDistancePresentation(outdoor={}) {
   const label=miles.toFixed(miles<10?2:1)+' mi'
   return {meters,miles,hasRoute:true,estimated:false,label,milesLabel:label,note:'GPS route recorded'}
 }
-
-/** A manual weight override carries to the next set only when the programmed
- * target is unchanged. A rising/falling prescribed load retains its own target. */
-export function carryEditedWeight(previousSet, previousTarget, nextTarget) {
-  if(!previousSet?.done || !previousSet?.weight_edited)return 0
-  const weight=Number(previousSet.weight)
-  if(!Number.isFinite(weight)||weight<=0)return 0
-  return String(previousTarget||'')===String(nextTarget||'')?weight:0
-}
