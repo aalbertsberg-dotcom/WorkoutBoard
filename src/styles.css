@@ -7365,3 +7365,276 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
     grid-template-columns:repeat(4,minmax(0,1fr));
   }
 }
+
+
+/* Progress 2.0 */
+.progress-visual-hero {
+  display:grid;
+  gap:14px;
+  padding:18px;
+  border:1px solid #38506f;
+  border-radius:16px;
+  background:
+    radial-gradient(circle at 100% 0%,rgba(142,197,80,.14),transparent 42%),
+    radial-gradient(circle at 0% 100%,rgba(58,103,158,.16),transparent 46%),
+    #0b1524;
+}
+.progress-visual-hero-copy {
+  display:grid;
+  gap:5px;
+}
+.progress-visual-hero-copy h2 {
+  margin:0;
+  color:#f3f7fb;
+  font-size:22px;
+  line-height:1.05;
+}
+.progress-visual-hero-copy p {
+  margin:0;
+  color:#8fa1b6;
+  font-size:10px;
+  line-height:1.45;
+}
+.progress-hero-kpis {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px;
+}
+.progress-hero-kpis > div {
+  display:grid;
+  gap:2px;
+  min-height:73px;
+  padding:10px 11px;
+  border:1px solid #2c405b;
+  border-radius:12px;
+  background:rgba(8,16,28,.72);
+}
+.progress-hero-kpis span {
+  color:#71849a;
+  font-size:8px;
+  font-weight:950;
+  letter-spacing:.055em;
+  text-transform:uppercase;
+}
+.progress-hero-kpis strong {
+  color:#eef6ff;
+  font-size:19px;
+  line-height:1.05;
+}
+.progress-hero-kpis small {
+  color:#6f8198;
+  font-size:8px;
+}
+.consistency-card {
+  display:grid;
+  gap:10px;
+}
+.consistency-heatmap {
+  display:grid;
+  grid-template-columns:repeat(14,minmax(0,1fr));
+  gap:4px;
+}
+.consistency-heatmap > span {
+  aspect-ratio:1;
+  min-width:0;
+  border-radius:3px;
+  background:#172337;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.025);
+}
+.consistency-heatmap > span.done {
+  background:#9ad15e;
+  box-shadow:0 0 9px rgba(154,209,94,.22);
+}
+.consistency-legend {
+  display:flex;
+  justify-content:space-between;
+  color:#66788e;
+  font-size:8px;
+}
+.visual-program-progress-list {
+  display:grid;
+  gap:9px;
+}
+.visual-program-progress-list article {
+  display:grid;
+  grid-template-columns:58px minmax(0,1fr);
+  align-items:center;
+  gap:11px;
+  padding:10px;
+  border:1px solid #263a54;
+  border-radius:12px;
+  background:#0b1524;
+}
+.program-progress-ring {
+  --program-progress:0%;
+  display:grid;
+  place-items:center;
+  width:54px;
+  height:54px;
+  border-radius:50%;
+  background:conic-gradient(#9ad15e var(--program-progress),#203047 0);
+  position:relative;
+}
+.program-progress-ring::after {
+  content:'';
+  position:absolute;
+  inset:6px;
+  border-radius:50%;
+  background:#0b1524;
+}
+.program-progress-ring strong {
+  position:relative;
+  z-index:1;
+  color:#eef7ff;
+  font-size:11px;
+}
+.visual-program-progress-list article > div:last-child {
+  display:grid;
+  gap:3px;
+}
+.visual-program-progress-list article > div:last-child > strong {
+  color:#e8eef7;
+  font-size:11px;
+}
+.visual-program-progress-list article > div:last-child > span {
+  color:#94a4b6;
+  font-size:9px;
+}
+.visual-program-progress-list article > div:last-child > small {
+  color:#6f8196;
+  font-size:8px;
+}
+.milestone-grid {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px;
+}
+.milestone-grid article {
+  display:grid;
+  grid-template-columns:28px minmax(0,1fr);
+  gap:8px;
+  padding:10px;
+  border:1px solid #2c405b;
+  border-radius:12px;
+  background:#0b1524;
+}
+.milestone-grid i {
+  display:grid;
+  place-items:center;
+  width:28px;
+  height:28px;
+  border-radius:9px;
+  background:#172942;
+  color:#a9db6b;
+  font-size:14px;
+  font-style:normal;
+}
+.milestone-grid article > div {
+  display:grid;
+  gap:2px;
+}
+.milestone-grid span {
+  color:#6f8198;
+  font-size:7px;
+  font-weight:900;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+}
+.milestone-grid strong {
+  color:#eef4fb;
+  font-size:10px;
+}
+.milestone-grid small {
+  color:#7e90a4;
+  font-size:8px;
+  line-height:1.3;
+}
+.cardio-progress-hero {
+  margin-bottom:0;
+}
+.outdoor-history-focus {
+  display:grid;
+  gap:10px;
+}
+.outdoor-history-stats {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:7px;
+}
+.outdoor-history-stats > div {
+  display:grid;
+  gap:2px;
+  padding:9px;
+  border:1px solid #273b55;
+  border-radius:10px;
+  background:#0b1524;
+}
+.outdoor-history-stats span {
+  color:#71849a;
+  font-size:8px;
+  font-weight:900;
+  text-transform:uppercase;
+}
+.outdoor-history-stats strong {
+  color:#edf5fe;
+  font-size:12px;
+}
+.outdoor-activity-history > div:last-child {
+  display:grid;
+  gap:6px;
+}
+.outdoor-activity-history button {
+  display:grid;
+  grid-template-columns:32px minmax(0,1fr) auto;
+  align-items:center;
+  gap:9px;
+  width:100%;
+  padding:9px;
+  border:1px solid #24364d;
+  border-radius:10px;
+  background:#0b1524;
+  color:inherit;
+  text-align:left;
+}
+.outdoor-activity-history button.active {
+  border-color:#7eae4d;
+  background:#101e2d;
+}
+.outdoor-activity-history button > span:nth-child(2),
+.outdoor-activity-history button > span:nth-child(3) {
+  display:grid;
+  gap:2px;
+}
+.outdoor-activity-history button > span:nth-child(3) {
+  text-align:right;
+}
+.outdoor-activity-history button strong {
+  color:#e8eff8;
+  font-size:10px;
+}
+.outdoor-activity-history button small {
+  color:#75879d;
+  font-size:8px;
+}
+.outdoor-history-icon {
+  font-size:18px;
+}
+.cardio-distance-chart .bar-fill {
+  min-width:2px;
+}
+
+@media (min-width:700px){
+  .progress-visual-hero {
+    grid-template-columns:minmax(0,1.2fr) minmax(360px,1fr);
+    align-items:center;
+  }
+  .progress-hero-kpis {
+    grid-template-columns:repeat(4,minmax(0,1fr));
+  }
+  .consistency-heatmap {
+    grid-template-columns:repeat(28,minmax(0,1fr));
+  }
+  .outdoor-history-stats {
+    grid-template-columns:repeat(4,minmax(0,1fr));
+  }
+}
