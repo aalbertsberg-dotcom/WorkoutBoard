@@ -173,6 +173,8 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
   const [activeSetByExercise,setActiveSetByExercise]=useState({})
   const [removeExercisePrompt,setRemoveExercisePrompt]=useState(null)
   const [quickClock,setQuickClock]=useState(()=>Date.now())
+  const cancelRequestedRef=useRef(false)
+  const inFlightSaveRef=useRef(Promise.resolve())
 
   const lastCancelRequestRef=useRef(cancelRequestToken)
   useEffect(()=>{
@@ -202,6 +204,8 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
         }
       }
     } catch {}
+    cancelRequestedRef.current=false
+    inFlightSaveRef.current=Promise.resolve()
     setWorkout(withSetProgress({exercises:[],sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',circuit_rounds:'',conditioningEnabled:false,metcon:{name:'',format:'',activity:'',duration:'',workTime:'',restTime:'',interval:'',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx',intensity:'Easy'},...(planned?.workout||{}),...(cached||{})}))
     setConditioningOpen(Boolean(planned?.workout?.conditioning_prescribed))
     setExerciseAdderOpen(false)
@@ -262,18 +266,21 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
   },[planned?.user_id,planned?.id])
 
   useEffect(()=>{
-    if (!planned?.id || saveState !== 'Unsaved') return
+    if (!planned?.id || saveState !== 'Unsaved' || cancelRequestedRef.current) return
     const timer=setTimeout(async()=>{
+      if(cancelRequestedRef.current)return
       setSaveState('Saving…')
       const updatedAt=new Date().toISOString()
-      const result=await upsertOfflineFirst(supabase,{
+      const save=upsertOfflineFirst(supabase,{
         userId:planned.user_id,
         table:'planned_workouts',
         payload:{...planned,workout,updated_at:updatedAt},
         onConflict:'id',
         dedupeKey:'planned:'+planned.id,
       })
-      setSaveState(result.error ? 'Save failed' : result.offline ? 'Saved offline' : 'Saved')
+      inFlightSaveRef.current=save
+      const result=await save
+      if(!cancelRequestedRef.current)setSaveState(result.error ? 'Save failed' : result.offline ? 'Saved offline' : 'Saved')
     },700)
     return ()=>clearTimeout(timer)
   },[workout,planned?.id,saveState])
@@ -463,15 +470,20 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
 
   const cancelWorkout=async()=>{
     if(!planned?.id || cancelling)return
+    cancelRequestedRef.current=true
     setCancelling(true)
+    // Wait for any earlier save to settle so it cannot overwrite cancellation.
+    try{await inFlightSaveRef.current}catch{}
+    const cancelledAt=new Date().toISOString()
     const result=await upsertOfflineFirst(supabase,{
       userId:planned.user_id,
       table:'planned_workouts',
-      payload:{...planned,workout,status:'skipped',updated_at:new Date().toISOString()},
+      payload:{...planned,workout:{...workout,cancelled_explicitly:true,cancelled_at:cancelledAt},status:'skipped',updated_at:cancelledAt},
       onConflict:'id',
       dedupeKey:'planned:'+planned.id,
     })
     if(result.error){
+      cancelRequestedRef.current=false
       setSaveState('Cancel failed: '+result.error.message)
       setCancelling(false)
       return
