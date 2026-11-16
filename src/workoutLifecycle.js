@@ -2,6 +2,7 @@
 // Keep this module free of React/Supabase so refresh behavior can be regression-tested.
 const ACTIVE_PREFIX='workset-current-workout-v1:'
 const CANCEL_PREFIX='workset-cancelled-workouts-v1:'
+const CANCEL_BARRIER_PREFIX='workset-cancel-barrier-v1:'
 const activeStatus=new Set(['started','planned'])
 
 function storage(){
@@ -32,10 +33,18 @@ export function cancelledWorkoutIds(userId) {
   return safeRead(CANCEL_PREFIX+userId,[])
 }
 
+export function getWorkoutCancellationBarrier(userId) {
+  if(!userId)return 0
+  return Number(safeRead(CANCEL_BARRIER_PREFIX+userId,0))||0
+}
+
 export function rememberWorkoutCancellation(userId,id) {
   if(!userId||!id)return
   const ids=[id,...cancelledWorkoutIds(userId).filter(item=>item!==id)].slice(0,150)
-  try{storage()?.setItem(CANCEL_PREFIX+userId,JSON.stringify(ids))}catch{}
+  try{
+    storage()?.setItem(CANCEL_PREFIX+userId,JSON.stringify(ids))
+    storage()?.setItem(CANCEL_BARRIER_PREFIX+userId,JSON.stringify(Date.now()))
+  }catch{}
   clearActiveWorkoutId(userId,id)
 }
 
@@ -44,10 +53,15 @@ export function isOpenWorkout(row,cancelledIds=[]) {
     !row.workout?.cancelled_explicitly && !cancelledIds.includes(row.id))
 }
 
-export function selectWorkoutToRestore(rows,{preferredId=null,cancelledIds=[],eligible=null}={}) {
-  const available=(rows||[]).filter(row=>
-    isOpenWorkout(row,cancelledIds) && (typeof eligible!=='function'||eligible(row))
-  )
+export function selectWorkoutToRestore(rows,{preferredId=null,cancelledIds=[],cancelledBefore=0,eligible=null}={}) {
+  const available=(rows||[]).filter(row=>{
+    if(!isOpenWorkout(row,cancelledIds) || (typeof eligible==='function'&&!eligible(row)))return false
+    if(row.id===preferredId)return true
+    const created=Date.parse(row.created_at||'')
+    // When a user cancels the current workout, do not automatically reopen
+    // older orphaned 'started' sessions. They can still be opened deliberately.
+    return !(cancelledBefore&&Number.isFinite(created)&&created<=cancelledBefore)
+  })
   const preferred=available.find(row=>row.id===preferredId)
   if(preferred)return preferred
   return available.sort((a,b)=>{
