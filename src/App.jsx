@@ -8,7 +8,7 @@ import { WorkoutCoach, MetconTracker, AccountSecurityPanel, BackupRestorePanel, 
 import { archiveProgramById, makePlannedFromArchive } from './archivePrograms'
 import { saveOfflineSession, readOfflineSession, clearOfflineSession, writeOfflineState, readOfflineState, getPendingOfflineCount, syncOfflineQueue, offlineUuid, upsertOfflineFirst } from './offline'
 import { RouteMap, formatPace, formatOutdoorDuration } from './outdoorTracking'
-import { getActiveWorkoutId,setActiveWorkoutId,clearActiveWorkoutId,cancelledWorkoutIds,rememberWorkoutCancellation,isOpenWorkout,selectWorkoutToRestore } from './workoutLifecycle'
+import { getActiveWorkoutId,setActiveWorkoutId,clearActiveWorkoutId,cancelledWorkoutIds,getWorkoutCancellationBarrier,rememberWorkoutCancellation,isOpenWorkout,selectWorkoutToRestore } from './workoutLifecycle'
 import QRCode from 'qrcode'
 import { BarcodeDetector as BarcodeDetectorPonyfill } from 'barcode-detector/ponyfill'
 
@@ -1584,10 +1584,12 @@ function App() {
         setHistory(cached.history||[])
         const cancelledIds=cancelledWorkoutIds(userId)
         const cachedPlan=cached.plannedToday||null
-        const resumable=isOpenWorkout(cachedPlan,cancelledIds)?cachedPlan:null
+        const opts={preferredId:getActiveWorkoutId(userId),cancelledIds,
+          cancelledBefore:getWorkoutCancellationBarrier(userId)}
+        const resumable=selectWorkoutToRestore(cachedPlan?[cachedPlan]:[],opts)
         setPlannedToday(resumable)
         setResumeStandalonePlan(resumable?.workout?.standalone?null:
-          isOpenWorkout(cached.resumeStandalonePlan,cancelledIds)?cached.resumeStandalonePlan:null)
+          selectWorkoutToRestore(cached.resumeStandalonePlan?[cached.resumeStandalonePlan]:[],opts))
         setTrackedProgramsInfo(cached.trackedProgramsInfo||[])
         setTrackedTodayInfo(cached.trackedTodayInfo||null)
         setTodayCompletedWorkouts(cached.todayCompletedWorkouts||[])
@@ -1663,7 +1665,7 @@ function App() {
         !row.workout?.tracking_program_key
       const resolvedTodayPlan=selectWorkoutToRestore(activeRows,{
         preferredId:getActiveWorkoutId(userId),
-        cancelledIds,eligible
+        cancelledIds,cancelledBefore:getWorkoutCancellationBarrier(userId),eligible
       })
       // An explicitly started Walk remains the active workout after refresh.
       const standaloneRows=activeRows.filter(row=>row.workout?.standalone&&!row.workout?.tracking_program_key)
@@ -2035,7 +2037,7 @@ function App() {
       plannedWorkoutHasProgress(row) || !row.workout?.tracking_program_key
     let activePlan=selectWorkoutToRestore(activePlans,{
       preferredId:getActiveWorkoutId(session.user.id)||plannedTodayRef.current?.id,
-      cancelledIds,eligible
+      cancelledIds,cancelledBefore:getWorkoutCancellationBarrier(session.user.id),eligible
     })
     const standaloneRows=(activePlans||[]).filter(row=>
       isOpenWorkout(row,cancelledIds)&&row.workout?.standalone&&!row.workout?.tracking_program_key
