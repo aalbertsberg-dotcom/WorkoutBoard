@@ -3512,7 +3512,7 @@ function App() {
                       ? (completionSummary.outdoor.avgMph?Number(completionSummary.outdoor.avgMph).toFixed(1)+' mph':'—')
                       : formatPace(completionSummary.outdoor.avgPaceSecPerMile)}</strong></div>
                     <div><span>Elevation</span><strong>{Math.round(Number(completionSummary.outdoor.elevationFt||0))} ft</strong></div>
-                     {(completionSummary.outdoor.steps||0)>0&&<div><span>Steps</span><strong>{Number(completionSummary.outdoor.steps).toLocaleString()}</strong></div>
+                     {(completionSummary.outdoor.steps||0)>0&&<div><span>Steps</span><strong>{Number(completionSummary.outdoor.steps).toLocaleString()}</strong></div>}
                   </div>
                 </div>:<div className="completion-stats">
                   <div><span>Exercises</span><strong>{completionSummary.exercises||0}</strong></div>
