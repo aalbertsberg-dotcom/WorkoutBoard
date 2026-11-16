@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import { MIN_MOVING_SPEED_MPS,paceIsMeaningful,hasReliableOutdoorRoute } from './trackingRules'
 
 export const METERS_PER_MILE=1609.344
 
@@ -48,13 +49,14 @@ export function outdoorMetrics(outdoor={},elapsedSeconds=0,activity='walk'){
   const distanceM=Math.max(0,Number(outdoor?.distance_m||points.at(-1)?.d||0))
   const miles=distanceM/METERS_PER_MILE
   const seconds=Math.max(0,Number(elapsedSeconds||outdoor?.elapsed_seconds||0))
-  const speeds=points.map(p=>Number(p.s||0)).filter(v=>Number.isFinite(v)&&v>0)
+  const validRoute=points.length>=2&&paceIsMeaningful(distanceM,seconds)
+  const speeds=points.map(p=>Number(p.s||0)).filter(v=>Number.isFinite(v)&&v>=MIN_MOVING_SPEED_MPS)
   const lastPoint=points.at(-1)
   const lastSpeed=Number(lastPoint?.s)
   const lastPointAge=Date.now()-Number(lastPoint?.t||0)
-  const currentSpeed=lastPointAge>=0&&lastPointAge<8000&&Number.isFinite(lastSpeed)&&lastSpeed>0?lastSpeed:0
-  const maxSpeed=speeds.length?Math.max(...speeds):0
-  const avgSpeed=seconds>0?distanceM/seconds:0
+  const currentSpeed=validRoute&&lastPointAge>=0&&lastPointAge<8000&&Number.isFinite(lastSpeed)&&lastSpeed>=MIN_MOVING_SPEED_MPS?lastSpeed:0
+  const maxSpeed=validRoute&&speeds.length?Math.max(...speeds):0
+  const avgSpeed=validRoute&&seconds>0?distanceM/seconds:0
   return {
     activity,
     points,
@@ -68,7 +70,7 @@ export function outdoorMetrics(outdoor={},elapsedSeconds=0,activity='walk'){
     currentMph:currentSpeed*2.236936,
     avgMph:avgSpeed*2.236936,
     maxMph:maxSpeed*2.236936,
-    avgPaceSecPerMile:miles>0&&seconds>0?seconds/miles:0,
+    avgPaceSecPerMile:validRoute&&miles>0?seconds/miles:0,
     currentPaceSecPerMile:currentSpeed>0?METERS_PER_MILE/currentSpeed:0,
     splits:Array.isArray(outdoor?.splits)?outdoor.splits:[],
   }
@@ -86,14 +88,16 @@ function haversineMeters(a,b){
 
 function pointFromPosition(position){
   const c=position.coords||{}
+  const optionalNumber=value=>value==null||value===''||!Number.isFinite(Number(value))?null:Number(value)
+  const measuredSpeed=optionalNumber(c.speed)
   return {
     lat:Number(c.latitude),
     lng:Number(c.longitude),
-    alt:Number.isFinite(Number(c.altitude))?Number(c.altitude):null,
-    aa:Number.isFinite(Number(c.altitudeAccuracy))?Number(c.altitudeAccuracy):null,
-    a:Number.isFinite(Number(c.accuracy))?Number(c.accuracy):null,
-    s:Number.isFinite(Number(c.speed))?Math.max(0,Number(c.speed)):null,
-    h:Number.isFinite(Number(c.heading))?Number(c.heading):null,
+    alt:optionalNumber(c.altitude),
+    aa:optionalNumber(c.altitudeAccuracy),
+    a:optionalNumber(c.accuracy),
+    s:measuredSpeed==null?null:Math.max(0,measuredSpeed),
+    h:optionalNumber(c.heading),
     t:Number(position.timestamp||Date.now()),
   }
 }
@@ -116,7 +120,8 @@ export function RouteMap({points=[],compact=false}){
       requestAnimationFrame(()=>map.invalidateSize())
     }
     const map=mapRef.current
-    const coords=(points||[]).filter(p=>Number.isFinite(Number(p.lat))&&Number.isFinite(Number(p.lng))).map(p=>[Number(p.lat),Number(p.lng)])
+    const validPoints=(points||[]).filter(p=>Number.isFinite(Number(p.lat))&&Number.isFinite(Number(p.lng)))
+    const coords=validPoints.map(p=>[Number(p.lat),Number(p.lng)])
     if(routeRef.current){routeRef.current.remove();routeRef.current=null}
     for(const marker of markersRef.current)marker.remove()
     markersRef.current=[]
@@ -127,8 +132,15 @@ export function RouteMap({points=[],compact=false}){
     if(coords.length===1){
       map.setView(coords[0],16)
     }else{
-      routeRef.current=L.polyline(coords,{weight:5,opacity:.9,lineJoin:'round'}).addTo(map)
-      map.fitBounds(routeRef.current.getBounds(),{padding:[22,22],maxZoom:17})
+      const sections=[]
+      for(const point of validPoints){
+        if(!sections.length||point.break_before)sections.push([])
+        sections[sections.length-1].push([Number(point.lat),Number(point.lng)])
+      }
+      routeRef.current=L.layerGroup(sections.filter(section=>section.length>1).map(section=>
+        L.polyline(section,{weight:5,opacity:.9,lineJoin:'round'})
+      )).addTo(map)
+      map.fitBounds(L.latLngBounds(coords),{padding:[22,22],maxZoom:17})
     }
     const start=L.circleMarker(coords[0],{radius:6,weight:3,fillOpacity:1}).addTo(map).bindTooltip('Start')
     markersRef.current.push(start)
@@ -150,10 +162,12 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
   const elapsedRef=useRef(elapsedSeconds)
   const watchRef=useRef(null)
   const wakeLockRef=useRef(null)
+  const runningRef=useRef(running)
   const [message,setMessage]=useState('')
   const [permission,setPermission]=useState('prompt')
   outdoorRef.current=current
   elapsedRef.current=elapsedSeconds
+  runningRef.current=running
 
   const metrics=useMemo(()=>outdoorMetrics(current,elapsedSeconds,activity),[current,elapsedSeconds,activity])
 
@@ -170,9 +184,10 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
   },[])
 
   const pushPosition=position=>{
+    if(!runningRef.current)return
     const nextPoint=pointFromPosition(position)
     if(!Number.isFinite(nextPoint.lat)||!Number.isFinite(nextPoint.lng))return
-    if(nextPoint.a!=null&&nextPoint.a>100){
+    if(nextPoint.a!=null&&nextPoint.a>50){
       setMessage('Waiting for a better GPS signal…')
       return
     }
@@ -182,19 +197,26 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
     let segment=0
     let speed=nextPoint.s
     if(last){
-      segment=haversineMeters(last,nextPoint)
-      const dt=Math.max(.1,(nextPoint.t-Number(last.t||nextPoint.t))/1000)
-      const calculated=segment/dt
-      if(!Number.isFinite(speed)||speed<=0)speed=calculated
-      const maxReasonable=activity==='bike'?45:activity==='run'?15:8
-      if(calculated>maxReasonable&&segment>25){
-        setMessage('GPS jump ignored.')
-        return
-      }
-      const jitterFloor=Math.max(2,Math.min(8,Number(nextPoint.a||0)*.12))
-      if(segment<jitterFloor){
-        setMessage('GPS locked')
-        return
+      if(prev.status==='paused'){
+        // Resume from this fix; don't count motion while the timer was paused.
+        segment=0
+        nextPoint.break_before=true
+        speed=0
+      }else{
+        segment=haversineMeters(last,nextPoint)
+        const dt=Math.max(.1,(nextPoint.t-Number(last.t||nextPoint.t))/1000)
+        const calculated=segment/dt
+        if(!Number.isFinite(speed)||speed<=0)speed=calculated
+        const maxReasonable=activity==='bike'?45:activity==='run'?15:8
+        if(calculated>maxReasonable&&segment>25){
+          setMessage('GPS jump ignored.')
+          return
+        }
+        const jitterFloor=Math.max(4,Math.min(16,Number(nextPoint.a||0)*.35+Number(last.a||0)*.25))
+        if(segment<jitterFloor){
+          setMessage('GPS locked')
+          return
+        }
       }
     }
     nextPoint.s=Number.isFinite(Number(speed))?Number(speed):null
@@ -202,7 +224,7 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
     nextPoint.d=distance
 
     let elevation=Math.max(0,Number(prev.elevation_gain_m||0))
-    if(last&&nextPoint.alt!=null&&last.alt!=null){
+    if(last&&!nextPoint.break_before&&nextPoint.alt!=null&&last.alt!=null){
       const quality=(nextPoint.aa==null||nextPoint.aa<=30)&&(last.aa==null||last.aa<=30)
       const gain=nextPoint.alt-last.alt
       if(quality&&gain>=1.5&&gain<40)elevation+=gain
@@ -264,6 +286,7 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
     try{
       if(navigator.wakeLock?.request)wakeLockRef.current=await navigator.wakeLock.request('screen')
     }catch{}
+    if(!runningRef.current){await releaseWakeLock();return}
     watchRef.current=navigator.geolocation.watchPosition(
       pushPosition,
       error=>{
@@ -306,7 +329,7 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
     <div className="outdoor-live-grid">
       <div><span>Distance</span><strong>{metrics.miles?metrics.miles.toFixed(metrics.miles<10?2:1):'0.00'} mi</strong></div>
       <div><span>{paceMode?'Avg pace':'Avg speed'}</span><strong>{paceMode?formatPace(metrics.avgPaceSecPerMile):(metrics.avgMph?metrics.avgMph.toFixed(1)+' mph':'—')}</strong></div>
-      <div><span>{paceMode?'Current pace':'Current speed'}</span><strong>{paceMode?formatPace(metrics.currentPaceSecPerMile):(metrics.currentMph?metrics.currentMph.toFixed(1)+' mph':'—')}</strong></div>
+      <div><span>{paceMode?'Current pace':'Current speed'}</span><strong>{!running?'—':paceMode?formatPace(metrics.currentPaceSecPerMile):(metrics.currentMph?metrics.currentMph.toFixed(1)+' mph':'—')}</strong></div>
       <div><span>Elevation</span><strong>{Math.round(metrics.elevationGainM*3.28084)} ft</strong></div>
     </div>
 
@@ -316,9 +339,12 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
       {signal!=null&&<small>±{Math.round(signal)} m</small>}
     </div>
 
-    {(current.points||[]).length>0
+    {hasReliableOutdoorRoute(current)
       ? <RouteMap points={current.points}/>
-      : <div className="outdoor-map-placeholder"><strong>Your route will appear here</strong><span>Allow location when you tap Start.</span></div>}
+      : <div className="outdoor-map-placeholder">
+          <strong>{(current.points||[]).length?'Waiting for meaningful GPS movement':'Your route will appear here'}</strong>
+          <span>{(current.points||[]).length?'A route appears after a short, reliable distance.':'Allow location when you tap Start.'}</span>
+        </div>}
 
     {metrics.splits.length>0&&<div className="outdoor-splits">
       <div className="quick-cardio-details-head"><span className="quick-cardio-section-label">Splits</span><small>Per mile</small></div>

@@ -5,6 +5,7 @@ import { ProgressToolbox, WorkoutTemplates } from './trainingTools'
 import { AdvancedProgressCenter, PlannedWorkoutTools, ShareImportPanel, AdminDashboardSummary } from './advancedFeatures'
 import { readOfflineState, writeOfflineState, upsertOfflineFirst } from './offline'
 import { RouteMap, outdoorMetrics, formatPace, formatOutdoorDuration, outdoorActivityKind } from './outdoorTracking'
+import { hasReliableOutdoorRoute } from './trackingRules'
 
 function startOfWeek(date = new Date()) {
   const d = new Date(date)
@@ -389,7 +390,7 @@ export function PlatformProgress({
   const outdoorSessions=useMemo(()=>flexSessions
     .filter(row=>{
       const outdoor=row.workout?.outdoor
-      return outdoor && (Number(outdoor.distance_m||0)>0 || (outdoor.points||[]).length>1)
+      return hasReliableOutdoorRoute(outdoor)
     })
     .map(row=>{
       const kind=outdoorActivityKind(row.workout?.quick_cardio_kind||row.workout?.metcon?.activity||row.title)||'walk'
@@ -634,7 +635,7 @@ export function PlatformProgress({
             <h2>{outdoorSessions.length?'Distance, pace and routes':'Your outdoor history starts here'}</h2>
             <p>{outdoorSessions.length
               ? outdoor30.count+' outdoor activit'+(outdoor30.count===1?'y':'ies')+' in the last 30 days'
-              : 'Start a Walk, Run or Bike from Today. GPS distance, pace, elevation, splits and route will appear here automatically.'}</p>
+              : 'Start a Walk, Run or Bike from Today. Valid GPS routes appear here; short or manual-only activities remain in workout history.'}</p>
           </div>
           <div className="progress-hero-kpis">
             <div><span>Activities</span><strong>{outdoor30.count}</strong><small>Last 30 days</small></div>

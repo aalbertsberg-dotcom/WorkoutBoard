@@ -3,6 +3,7 @@ import { supabase } from './supabase'
 import { MetconTracker } from './advancedFeatures'
 import { offlineUuid, queueUpsert, upsertOfflineFirst, isOfflineError, readOfflineState, writeOfflineState } from './offline'
 import { OutdoorTracker, emptyOutdoorTrack, outdoorActivityKind, outdoorMetrics } from './outdoorTracking'
+import { validWeightDraft,validRepsDraft,displayedSetWeight,recordedWeightValue,canFinishQuickCardio,withoutUnreliableRoute } from './trackingRules'
 
 function partnerSetTarget(maxes,set) {
   const lift=set?.weight_lift
@@ -92,8 +93,7 @@ function legacyLoad(item) {
 }
 
 function setWeight(item,set) {
-  if(set?.weight!==undefined && set?.weight!=='') return Number(set.weight)||0
-  return legacyLoad(item)
+  return recordedWeightValue(set,legacyLoad(item))
 }
 
 function repsForSet(item,set) {
@@ -306,6 +306,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
     setWorkout(v=>({...v,conditioningEnabled:true,metcon:{...(v.metcon||{}),[key]:value}}))
   }
   const quickOutdoorKind=quickCardio ? outdoorActivityKind(workout.quick_cardio_kind||workout.metcon?.activity||planned?.title) : ''
+  const canFinishCardio=canFinishQuickCardio(quickElapsedSeconds,workout.metcon?.duration)
   const setQuickOutdoor=value=>{
     setSaveState('Unsaved')
     setWorkout(v=>({...v,outdoor:value}))
@@ -518,11 +519,12 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
   },[workout])
 
   const finish=async()=>{
-    if (!planned?.id || finishing) return
+    if (!planned?.id || finishing || (quickCardio&&!canFinishCardio)) return
     setFinishing(true)
     const now=new Date().toISOString()
     const quickDurationText=quickCardio&&quickElapsedSeconds>0 ? formatQuickTime(quickElapsedSeconds) : ''
-    const quickOutdoorMetrics=quickOutdoorKind ? outdoorMetrics(workout.outdoor||{},quickElapsedSeconds,quickOutdoorKind) : null
+    const reliableOutdoor=quickOutdoorKind ? withoutUnreliableRoute(workout.outdoor||emptyOutdoorTrack(quickOutdoorKind)) : null
+    const quickOutdoorMetrics=quickOutdoorKind ? outdoorMetrics(reliableOutdoor,quickElapsedSeconds,quickOutdoorKind) : null
     const gpsDistanceText=quickOutdoorMetrics?.miles>0
       ? quickOutdoorMetrics.miles.toFixed(quickOutdoorMetrics.miles<10?2:1)+' mi'
       : ''
@@ -533,7 +535,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
         quick_timer_elapsed_seconds:quickElapsedSeconds,
         ...(quickOutdoorKind?{
           outdoor:{
-            ...(workout.outdoor||emptyOutdoorTrack(quickOutdoorKind)),
+            ...reliableOutdoor,
             status:'completed',
             elapsed_seconds:quickElapsedSeconds,
             completed_at:now,
@@ -829,9 +831,10 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
 
       <div className="quick-cardio-actions">
         <button type="button" className="secondary-action" onClick={()=>setCancelConfirm(true)}>Cancel</button>
-        <button type="button" className="finish" onClick={finish} disabled={finishing||cancelling}>{finishing?'FINISHING…':'FINISH'}</button>
+        <button type="button" className="finish" onClick={finish} disabled={finishing||cancelling||!canFinishCardio}>{finishing?'FINISHING…':'FINISH'}</button>
       </div>
 
+      {!canFinishCardio&&<small className="quick-cardio-finish-hint">Start the timer or enter a workout duration before finishing.</small>}
       {cancelConfirm&&<div className="same-day-sheet-backdrop workout-cancel-backdrop" onClick={()=>!cancelling&&setCancelConfirm(false)}>
         <section className="same-day-sheet cancel-workout-confirm cancel-workout-modal" onClick={e=>e.stopPropagation()}>
           <span className="card-label">ACTIVE WORKOUT</span>
@@ -923,13 +926,12 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
           const selectedSet=Number.isInteger(selectedSetIndex)&&item.setProgress[selectedSetIndex]&&!item.setProgress[selectedSetIndex].done ? selectedSetIndex : -1
           const activeIndex=selectedSet>=0 ? selectedSet : item.setProgress.findIndex(set=>!set.done)
           const activeSet=activeIndex>=0?item.setProgress[activeIndex]:null
-          const activeWeight=activeSet?.weight!==undefined&&activeSet?.weight!=='' ? Number(activeSet.weight)||0 : 0
           const programmedTargetText=activeSet ? partnerSetTarget(oneRepMaxes,activeSet) : ''
           const programmedTarget=Number(String(programmedTargetText||'').match(/^\d+/)?.[0]||0)
           const previousWeight=activeIndex>0 ? Number(item.setProgress[activeIndex-1]?.weight||0) : 0
           const lastTimeWeight=activeIndex>=0 ? Number(hist?.lastWeights?.[Math.min(activeIndex,(hist?.lastWeights?.length||1)-1)]||0) : 0
           const legacyWeight=item.load!==undefined&&item.load!=='' ? Number(item.load)||0 : 0
-          const shownWeight=activeWeight||programmedTarget||previousWeight||lastTimeWeight||legacyWeight||''
+          const shownWeight=displayedSetWeight(activeSet,[programmedTarget,previousWeight,lastTimeWeight,legacyWeight])
           return <>
             {activeSet&&i===focusedExerciseIndex&&<section className="current-set-panel">
               <div className="current-set-panel-head">
@@ -940,14 +942,15 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
                 {loadField&&<label className="current-set-weight">
                   <span>{loadField.label}{loadField.optional?' (optional)':''}</span>
                   <div>
-                    <input type="number" inputMode="decimal" enterKeyHint="done" value={shownWeight}
+                    <input type="text" inputMode="decimal" pattern="[0-9]*[.]?[0-9]*" autoComplete="off" enterKeyHint="done" value={shownWeight}
                       onFocus={e=>e.currentTarget.select()}
                       onChange={e=>{
-                        const value=e.target.value===''?'':Number(e.target.value)
+                        const value=e.target.value
+                        if(!validWeightDraft(value))return
                         changeExercise(i,{
                           load:value,
                           result:'',
-                          setProgress:item.setProgress.map((sp,k)=>k===activeIndex?{...sp,weight:value}:sp)
+                          setProgress:item.setProgress.map((sp,k)=>k===activeIndex?{...sp,weight:value,weight_edited:true}:sp)
                         })
                       }}
                       onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur()}}
@@ -958,10 +961,12 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
                 {activeSet&&!isDistanceExercise(item.name)&&<label className="current-set-weight current-set-reps">
                   <span>Reps</span>
                   <div>
-                    <input type="number" inputMode="numeric" enterKeyHint="done" min="0" step="1"
+                    <input type="text" inputMode="numeric" enterKeyHint="done" pattern="[0-9]*" autoComplete="off"
                       value={activeSet.actual_reps??''}
+                      onFocus={e=>e.currentTarget.select()}
                       onChange={e=>{
-                        const value=e.target.value===''?'':Math.max(0,Math.floor(Number(e.target.value)||0))
+                        const value=e.target.value
+                        if(!validRepsDraft(value))return
                         changeExercise(i,{setProgress:item.setProgress.map((sp,k)=>k===activeIndex?{...sp,actual_reps:value}:sp)})
                       }}
                       onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur()}}
@@ -973,9 +978,8 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
               {activeSet&&!isDistanceExercise(item.name)&&<small className="rep-default-hint">Leave blank = programmed reps. Enter only if different.</small>}
               <div className="current-set-actions">
               <button type="button" className="primary-action complete-current-set" onClick={()=>{
-                const currentWeight=loadField ? Number(shownWeight||0) : 0
                 const nextSetIndex=item.setProgress.findIndex((sp,k)=>k!==activeIndex&&!sp.done)
-                changeExercise(i,{load:shownWeight,setProgress:item.setProgress.map((sp,k)=>k===activeIndex?{...sp,done:true,weight:currentWeight||sp.weight}:sp)})
+                changeExercise(i,{load:shownWeight,setProgress:item.setProgress.map((sp,k)=>k===activeIndex?{...sp,done:true,weight:loadField?shownWeight:sp.weight}:sp)})
                 if(nextSetIndex>=0){
                   setActiveSetByExercise(v=>({...v,[exerciseKey]:nextSetIndex}))
                   requestAnimationFrame(()=>document.getElementById('workout-exercise-'+i)?.scrollIntoView({behavior:'smooth',block:'nearest'}))
