@@ -7656,3 +7656,7 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
 /* Keep the quick-cardio finish gate visible without overlapping the controls. */
 .quick-cardio-finish-hint { display:block; text-align:center; margin:5px 8px 12px; font-size:12px; color:#9eafc2; }
 .quick-cardio-actions .finish:disabled { opacity:.5; cursor:not-allowed; }
+
+/* Short GPS walks: reveal live feedback without treating a preview as verified history. */
+.outdoor-short-distance { display:block; margin-top:3px; font-size:11px; color:#aab9ce; font-weight:600; }
+.outdoor-route-preview-note { margin:5px 0 10px; font-size:11px; line-height:1.45; color:#9cacc1; }

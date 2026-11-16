@@ -4,6 +4,22 @@ export const MIN_RELIABLE_ROUTE_METERS = 30
 export const MIN_PACE_SECONDS = 15
 export const MIN_MOVING_SPEED_MPS = 0.45
 
+// Live preview is deliberately separate from the stricter persisted-route quality gate.
+// One GPS fix can locate the user; a longer, credible track is needed for saved routes.
+export function hasLiveGpsFix(outdoor) {
+  return Array.isArray(outdoor?.points) && outdoor.points.some(p=>
+    Number.isFinite(p?.lat) && Number.isFinite(p?.lng) &&
+    Math.abs(p.lat)<=90 && Math.abs(p.lng)<=180
+  )
+}
+
+// Use smaller adaptive noise filtering for short walks without trusting large jumps.
+export function gpsJitterFloorMeters(currentAccuracy,lastAccuracy) {
+  const current=Number.isFinite(Number(currentAccuracy))?Math.max(0,Number(currentAccuracy)):12
+  const previous=Number.isFinite(Number(lastAccuracy))?Math.max(0,Number(lastAccuracy)):12
+  return Math.max(2.5,Math.min(8,(current+previous)*0.15))
+}
+
 export function validWeightDraft(value) {
   return /^\d*(?:\.\d*)?$/.test(String(value))
 }
