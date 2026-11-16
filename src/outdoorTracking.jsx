@@ -380,7 +380,7 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
   }
 
   const setManualSteps=value=>{
-    if(!/^\\d*$/.test(String(value)))return
+    if(!/^\d*$/.test(String(value)))return
     const prev=outdoorRef.current||emptyOutdoorTrack(activity)
     const next={...prev,step_tracking:{...(prev.step_tracking||{}),manual_steps:value}}
     outdoorRef.current=next
