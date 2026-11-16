@@ -60,6 +60,34 @@ export function paceIsMeaningful(distanceMeters,seconds) {
 }
 
 export function withoutUnreliableRoute(outdoor) {
-  if(hasReliableOutdoorRoute(outdoor))return outdoor
-  return {...outdoor,points:[],distance_m:0,elevation_gain_m:0,splits:[],last_accuracy_m:null}
+  // Keep the measured short-distance estimate; only remove the unreliable
+  // route geometry/elevation/splits that would imply a validated GPS track.
+  if(hasReliableOutdoorRoute(outdoor))return {...outdoor,distance_quality:'route'}
+  const distanceM=Math.max(0,Number(outdoor?.distance_m||0))
+  return {
+    ...outdoor,
+    distance_m:distanceM,
+    distance_quality:distanceM>0?'estimated':'none',
+    points:[],
+    elevation_gain_m:0,
+    splits:[],
+  }
+}
+
+export function outdoorDistancePresentation(outdoor={}) {
+  const meters=Math.max(0,Number(outdoor?.distance_m||0))
+  const miles=meters/1609.344
+  const hasRoute=hasReliableOutdoorRoute(outdoor)
+  if(meters===0)return {
+    meters,miles,hasRoute:false,estimated:false,
+    label:'0.00 mi',milesLabel:'0.00 mi',note:'No GPS distance recorded'
+  }
+  if(!hasRoute)return {
+    meters,miles,hasRoute:false,estimated:true,
+    label:'≈'+Math.round(meters*3.28084)+' ft',
+    milesLabel:'≈'+miles.toFixed(2)+' mi',
+    note:'Short GPS estimate · route not saved'
+  }
+  const label=miles.toFixed(miles<10?2:1)+' mi'
+  return {meters,miles,hasRoute:true,estimated:false,label,milesLabel:label,note:'GPS route recorded'}
 }
