@@ -4,6 +4,7 @@ import { allArchivePrograms, archiveProgramById, makePlannedFromArchive } from '
 import { ProgressToolbox, WorkoutTemplates } from './trainingTools'
 import { AdvancedProgressCenter, PlannedWorkoutTools, ShareImportPanel, AdminDashboardSummary } from './advancedFeatures'
 import { readOfflineState, writeOfflineState, upsertOfflineFirst } from './offline'
+import { RouteMap, outdoorMetrics, formatPace, formatOutdoorDuration, outdoorActivityKind } from './outdoorTracking'
 
 function startOfWeek(date = new Date()) {
   const d = new Date(date)
@@ -130,6 +131,7 @@ export function PlatformProgress({
   const [quickWeightSavedValue,setQuickWeightSavedValue] = useState(null)
   const [bodyTrendRange,setBodyTrendRange] = useState('3M')
   const [bodyTrendMetric,setBodyTrendMetric] = useState('waist')
+  const [selectedOutdoorId,setSelectedOutdoorId] = useState(null)
 
   const loadData = async () => {
     if (!session?.user) return
@@ -383,6 +385,64 @@ export function PlatformProgress({
     }
     return events.sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,3)
   },[progress.completed,flexSessions])
+
+  const outdoorSessions=useMemo(()=>flexSessions
+    .filter(row=>{
+      const outdoor=row.workout?.outdoor
+      return outdoor && (Number(outdoor.distance_m||0)>0 || (outdoor.points||[]).length>1)
+    })
+    .map(row=>{
+      const kind=outdoorActivityKind(row.workout?.quick_cardio_kind||row.workout?.metcon?.activity||row.title)||'walk'
+      const elapsed=Number(row.workout?.quick_timer_elapsed_seconds||row.workout?.outdoor?.elapsed_seconds||0)
+      return {...row,_outdoorKind:kind,_outdoor:outdoorMetrics(row.workout.outdoor,elapsed,kind)}
+    })
+    .sort((a,b)=>String(b.completed_at||b.session_date).localeCompare(String(a.completed_at||a.session_date)))
+  ,[flexSessions])
+
+  const outdoor30=useMemo(()=>{
+    const cutoff=Date.now()-30*dayMs
+    const rows=outdoorSessions.filter(row=>new Date(row.completed_at||row.session_date).getTime()>=cutoff)
+    return {
+      rows,
+      count:rows.length,
+      miles:rows.reduce((sum,row)=>sum+Number(row._outdoor.miles||0),0),
+      seconds:rows.reduce((sum,row)=>sum+Number(row._outdoor.elapsedSeconds||0),0),
+      elevationFt:rows.reduce((sum,row)=>sum+Number(row._outdoor.elevationGainM||0)*3.28084,0),
+    }
+  },[outdoorSessions])
+
+  const cardioWeekly=useMemo(()=>Array.from({length:8},(_,i)=>{
+    const end=now-(7-i)*7*dayMs
+    const start=end-7*dayMs
+    const rows=outdoorSessions.filter(row=>{
+      const t=new Date(row.completed_at||row.session_date).getTime()
+      return t>start&&t<=end
+    })
+    return {
+      label:i===7?'This week':(7-i)+'w ago',
+      miles:rows.reduce((sum,row)=>sum+Number(row._outdoor.miles||0),0),
+      minutes:rows.reduce((sum,row)=>sum+Number(row._outdoor.elapsedSeconds||0)/60,0),
+      workouts:rows.length,
+    }
+  }),[outdoorSessions])
+  const maxCardioMiles=Math.max(.01,...cardioWeekly.map(row=>row.miles))
+
+  const completedDateKeys=useMemo(()=>new Set([
+    ...progress.completed.map(row=>localDateKey(row.completed_at)),
+    ...flexSessions.map(row=>localDateKey(row.completed_at||row.session_date)),
+  ].filter(Boolean)),[progress.completed,flexSessions])
+  const consistencyDays=useMemo(()=>Array.from({length:84},(_,index)=>{
+    const d=new Date()
+    d.setHours(12,0,0,0)
+    d.setDate(d.getDate()-(83-index))
+    const key=localDateKey(d)
+    return {key,label:d.toLocaleDateString(undefined,{month:'short',day:'numeric'}),done:completedDateKeys.has(key)}
+  }),[completedDateKeys])
+  const consistencyCount=consistencyDays.filter(day=>day.done).length
+
+  const activeProgramProgress=(trackedProgramsInfo.length?trackedProgramsInfo:[trackedProgramInfo]).filter(Boolean)
+  const selectedOutdoor=outdoorSessions.find(row=>row.id===selectedOutdoorId)||outdoorSessions[0]||null
+
 
   const saveQuickWeight=async e=>{
     e.preventDefault()
