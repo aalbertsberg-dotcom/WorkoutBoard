@@ -7215,3 +7215,153 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   font-size:9px;
   color:#8393a8;
 }
+
+
+/* Outdoor activity tracking */
+.outdoor-tracker {
+  display:grid;
+  gap:10px;
+}
+.outdoor-live-grid {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px;
+}
+.outdoor-live-grid > div {
+  display:grid;
+  gap:3px;
+  min-height:68px;
+  padding:11px 12px;
+  border:1px solid #2d405c;
+  border-radius:12px;
+  background:#0c1626;
+}
+.outdoor-live-grid span {
+  color:#7f91a8;
+  font-size:9px;
+  font-weight:900;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+}
+.outdoor-live-grid strong {
+  color:#f4f7fb;
+  font-size:19px;
+  line-height:1.05;
+}
+.outdoor-gps-status {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-height:34px;
+  padding:8px 10px;
+  border:1px solid #2d405c;
+  border-radius:10px;
+  background:#0a1320;
+}
+.outdoor-gps-status > span {
+  color:#8190a4;
+  font-size:9px;
+  font-weight:950;
+  letter-spacing:.05em;
+}
+.outdoor-gps-status > span.live {
+  color:#a8e063;
+}
+.outdoor-gps-status b {
+  flex:1;
+  color:#d8e1ec;
+  font-size:9px;
+  font-weight:800;
+}
+.outdoor-gps-status small {
+  color:#6f8198;
+  font-size:8px;
+}
+.outdoor-route-map {
+  width:100%;
+  height:230px;
+  overflow:hidden;
+  border:1px solid #304563;
+  border-radius:14px;
+  background:#0b1422;
+}
+.outdoor-route-map.compact {
+  height:150px;
+}
+.outdoor-route-map .leaflet-control-attribution {
+  font-size:7px;
+}
+.outdoor-route-map .leaflet-control-zoom a {
+  background:#101d31;
+  color:#e5edf7;
+  border-color:#2f4360;
+}
+.outdoor-route-map .leaflet-control-zoom a:hover {
+  background:#172943;
+  color:#fff;
+}
+.outdoor-route-map .leaflet-interactive {
+  stroke:#9ad15e;
+}
+.outdoor-route-map .leaflet-pane .leaflet-marker-pane path:first-child {
+  stroke:#9ad15e;
+  fill:#9ad15e;
+}
+.outdoor-map-placeholder {
+  display:grid;
+  place-items:center;
+  gap:4px;
+  min-height:145px;
+  padding:18px;
+  border:1px dashed #304563;
+  border-radius:14px;
+  background:radial-gradient(circle at 50% 30%,rgba(78,118,165,.16),transparent 62%),#0b1422;
+  text-align:center;
+}
+.outdoor-map-placeholder strong {
+  color:#e7eef7;
+  font-size:11px;
+}
+.outdoor-map-placeholder span {
+  color:#77889d;
+  font-size:9px;
+}
+.outdoor-splits {
+  display:grid;
+  gap:6px;
+  padding:11px;
+  border:1px solid #2d405c;
+  border-radius:12px;
+  background:#0b1524;
+}
+.outdoor-splits > div:not(.quick-cardio-details-head) {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:7px 0;
+  border-top:1px solid #1e2c41;
+}
+.outdoor-splits > div:not(.quick-cardio-details-head):first-of-type {
+  border-top:0;
+}
+.outdoor-splits span {
+  color:#9aa9bb;
+  font-size:9px;
+}
+.outdoor-splits strong {
+  color:#edf5ff;
+  font-size:11px;
+}
+.outdoor-web-note {
+  margin:0;
+  color:#687b92;
+  font-size:8px;
+  line-height:1.45;
+  text-align:center;
+}
+
+@media (min-width:700px){
+  .outdoor-live-grid {
+    grid-template-columns:repeat(4,minmax(0,1fr));
+  }
+}
