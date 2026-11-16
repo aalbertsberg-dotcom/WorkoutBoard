@@ -7,6 +7,7 @@ import { TrainingTimer } from './trainingTools'
 import { WorkoutCoach, MetconTracker, AccountSecurityPanel, BackupRestorePanel, WorkoutSettingsPanel } from './advancedFeatures'
 import { archiveProgramById, makePlannedFromArchive } from './archivePrograms'
 import { saveOfflineSession, readOfflineSession, clearOfflineSession, writeOfflineState, readOfflineState, getPendingOfflineCount, syncOfflineQueue, offlineUuid, upsertOfflineFirst } from './offline'
+import { RouteMap, formatPace, formatOutdoorDuration } from './outdoorTracking'
 import QRCode from 'qrcode'
 import { BarcodeDetector as BarcodeDetectorPonyfill } from 'barcode-detector/ponyfill'
 
@@ -3449,6 +3450,7 @@ function App() {
                       program:summary.program,
                       total_volume:summary.volume||0,
                       completed_at:new Date().toISOString(),
+                      outdoor_summary:summary.outdoor||null,
                       workout:{exercises:[]},
                     },...rows])
                   }
@@ -3474,18 +3476,34 @@ function App() {
                 <div className="today-completed-list">{todayCompletedWorkouts.map(row=><article key={row.id}>
                   <button type="button" className="completed-workout-delete" aria-label={'Delete '+(row.title||'workout')} onClick={()=>{setWorkoutStartError('');setCompletedDeletePrompt(row)}}>×</button>
                   <div><strong>{row.title||'Workout'}</strong><span>{row.program||'Workout'}{row.completed_at?' · '+new Date(row.completed_at).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):''}</span></div>
-                  <b>{Number(row.total_volume||0)>0?Number(row.total_volume).toLocaleString()+' lb':'Completed'}</b>
+                  <b>{Number(row.total_volume||0)>0
+                    ? Number(row.total_volume).toLocaleString()+' lb'
+                    : row.outdoor_summary?.miles
+                      ? Number(row.outdoor_summary.miles).toFixed(2)+' mi'
+                      : Number(row.workout?.outdoor?.distance_m||0)>0
+                        ? (Number(row.workout.outdoor.distance_m)/1609.344).toFixed(2)+' mi'
+                        : 'Completed'}</b>
                   {row.workout?.exercises?.length>0&&<details><summary>Exercises</summary><p>{row.workout.exercises.map(x=>x.name).filter(Boolean).join(' · ')}</p></details>}
                 </article>)}</div>
               </details>}
               {completionSummary&&<section className="workout-complete-summary">
                 <div className="completion-check">✓</div>
                 <div><span className="card-label">WORKOUT COMPLETE</span><h2>{completionSummary.title||'Workout complete'}</h2><p>{completionSummary.program||trackedProgramsInfo.find(x=>x.key===plannedToday?.workout?.tracking_program_key)?.name||trackedTodayInfo?.name||'Workout'}</p></div>
-                <div className="completion-stats">
+                {completionSummary.outdoor?<div className="completion-outdoor-summary">
+                  {completionSummary.outdoor.points?.length>1&&<RouteMap points={completionSummary.outdoor.points} compact/>}
+                  <div className="completion-stats outdoor-completion-stats">
+                    <div><span>Distance</span><strong>{Number(completionSummary.outdoor.miles||0).toFixed(2)} mi</strong></div>
+                    <div><span>Time</span><strong>{formatOutdoorDuration(completionSummary.outdoor.elapsedSeconds)}</strong></div>
+                    <div><span>{completionSummary.outdoor.kind==='bike'?'Avg speed':'Avg pace'}</span><strong>{completionSummary.outdoor.kind==='bike'
+                      ? (completionSummary.outdoor.avgMph?Number(completionSummary.outdoor.avgMph).toFixed(1)+' mph':'—')
+                      : formatPace(completionSummary.outdoor.avgPaceSecPerMile)}</strong></div>
+                    <div><span>Elevation</span><strong>{Math.round(Number(completionSummary.outdoor.elevationFt||0))} ft</strong></div>
+                  </div>
+                </div>:<div className="completion-stats">
                   <div><span>Exercises</span><strong>{completionSummary.exercises||0}</strong></div>
                   <div><span>Sets</span><strong>{completionSummary.sets||0}</strong></div>
                   <div><span>Volume</span><strong>{Number(completionSummary.volume||0).toLocaleString()} lb</strong></div>
-                </div>
+                </div>}
                 {baselineFinishReview?.results?.length>0&&<section className="baseline-finish-review">
                   <div className="section-heading"><div><span className="card-label">STRENGTH BASELINE</span><h3>Review your calculated 1RMs</h3></div></div>
                   <p className="helper-text">Calculated from the best completed set for each tested lift using your actual reps. Nothing changes until you choose Use.</p>

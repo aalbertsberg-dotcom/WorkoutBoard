@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase'
 import { MetconTracker } from './advancedFeatures'
 import { offlineUuid, queueUpsert, upsertOfflineFirst, isOfflineError, readOfflineState, writeOfflineState } from './offline'
+import { OutdoorTracker, emptyOutdoorTrack, outdoorActivityKind, outdoorMetrics } from './outdoorTracking'
 
 function partnerSetTarget(maxes,set) {
   const lift=set?.weight_lift
@@ -304,16 +305,27 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
     setSaveState('Unsaved')
     setWorkout(v=>({...v,conditioningEnabled:true,metcon:{...(v.metcon||{}),[key]:value}}))
   }
+  const quickOutdoorKind=quickCardio ? outdoorActivityKind(workout.quick_cardio_kind||workout.metcon?.activity||planned?.title) : ''
+  const setQuickOutdoor=value=>{
+    setSaveState('Unsaved')
+    setWorkout(v=>({...v,outdoor:value}))
+  }
   const startQuickTimer=()=>{
     if(workout.quick_timer_started_at)return
-    setQuickFields({quick_timer_started_at:new Date().toISOString()})
+    const patch={quick_timer_started_at:new Date().toISOString()}
+    if(quickOutdoorKind&&!workout.outdoor)patch.outdoor=emptyOutdoorTrack(quickOutdoorKind)
+    setQuickFields(patch)
     setQuickClock(Date.now())
   }
   const pauseQuickTimer=()=>{
     if(!workout.quick_timer_started_at)return
     setQuickFields({quick_timer_started_at:null,quick_timer_elapsed_seconds:quickElapsedSeconds})
   }
-  const resetQuickTimer=()=>setQuickFields({quick_timer_started_at:null,quick_timer_elapsed_seconds:0})
+  const resetQuickTimer=()=>setQuickFields({
+    quick_timer_started_at:null,
+    quick_timer_elapsed_seconds:0,
+    ...(quickOutdoorKind?{outdoor:emptyOutdoorTrack(quickOutdoorKind)}:{})
+  })
 
   const exerciseIncomplete=item=>Boolean(
     item && !item.done && (
@@ -510,15 +522,42 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
     setFinishing(true)
     const now=new Date().toISOString()
     const quickDurationText=quickCardio&&quickElapsedSeconds>0 ? formatQuickTime(quickElapsedSeconds) : ''
+    const quickOutdoorMetrics=quickOutdoorKind ? outdoorMetrics(workout.outdoor||{},quickElapsedSeconds,quickOutdoorKind) : null
+    const gpsDistanceText=quickOutdoorMetrics?.miles>0
+      ? quickOutdoorMetrics.miles.toFixed(quickOutdoorMetrics.miles<10?2:1)+' mi'
+      : ''
     const finalWorkout={
       ...workout,
       ...(quickCardio?{
         quick_timer_started_at:null,
         quick_timer_elapsed_seconds:quickElapsedSeconds,
-        metcon:{...(workout.metcon||{}),duration:String(workout.metcon?.duration||'').trim()||quickDurationText},
+        ...(quickOutdoorKind?{
+          outdoor:{
+            ...(workout.outdoor||emptyOutdoorTrack(quickOutdoorKind)),
+            status:'completed',
+            elapsed_seconds:quickElapsedSeconds,
+            completed_at:now,
+            updated_at:now,
+          }
+        }:{}),
+        metcon:{
+          ...(workout.metcon||{}),
+          duration:String(workout.metcon?.duration||'').trim()||quickDurationText,
+          distance:String(workout.metcon?.distance||'').trim()||gpsDistanceText,
+        },
       }:{}),
       complete:true,savedAt:now,baseline_results:baselineResults
     }
+    const completionOutdoor=quickOutdoorMetrics&&quickOutdoorMetrics.distanceM>0 ? {
+      kind:quickOutdoorKind,
+      miles:quickOutdoorMetrics.miles,
+      elapsedSeconds:quickElapsedSeconds,
+      avgPaceSecPerMile:quickOutdoorMetrics.avgPaceSecPerMile,
+      avgMph:quickOutdoorMetrics.avgMph,
+      elevationFt:quickOutdoorMetrics.elevationGainM*3.28084,
+      points:quickOutdoorMetrics.points,
+      splits:quickOutdoorMetrics.splits,
+    } : null
     const generatedSessionId=offlineUuid()
     const completedSets=(finalWorkout.exercises||[]).reduce((sum,item)=>sum+(item.setProgress||[]).filter(set=>set.done).length,0)
     const completedExercises=(finalWorkout.exercises||[]).filter(item=>item.done||(item.setProgress||[]).some(set=>set.done)).length
@@ -588,6 +627,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
         baselinePath:finalWorkout.baseline_path||null,
         baselineResults,
         trainingSessionId:sessionId,
+        outdoor:completionOutdoor,
         offline:true,
       })
       setFinishing(false)
@@ -689,6 +729,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
         baselinePath:finalWorkout.baseline_path||null,
         baselineResults:baselineResults,
         trainingSessionId,
+        outdoor:completionOutdoor,
       })
     } else {
       setSaveState('Finish failed: '+error.message)
@@ -741,6 +782,14 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
         </div>
       </section>
 
+      {quickOutdoorKind&&<OutdoorTracker
+        activity={quickOutdoorKind}
+        outdoor={workout.outdoor||emptyOutdoorTrack(quickOutdoorKind)}
+        onChange={setQuickOutdoor}
+        running={Boolean(workout.quick_timer_started_at)}
+        elapsedSeconds={quickElapsedSeconds}
+      />}
+
       <section className="simple-card quick-cardio-fields">
         <div className="quick-cardio-details-head">
           <span className="quick-cardio-section-label">Workout details</span>
@@ -757,8 +806,9 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
 
         <div className="quick-cardio-two-col">
           <label className="quick-cardio-field">
-            <span>Distance <small>optional</small></span>
-            <input value={workout.metcon?.distance||''} onChange={e=>setQuickMetcon('distance',e.target.value)} placeholder="e.g. 2.5 mi"/>
+            <span>Distance <small>{quickOutdoorKind?'GPS or manual':'optional'}</small></span>
+            <input value={workout.metcon?.distance||''} onChange={e=>setQuickMetcon('distance',e.target.value)} placeholder={quickOutdoorKind&&Number(workout.outdoor?.distance_m||0)>0 ? (Number(workout.outdoor.distance_m)/1609.344).toFixed(2)+' mi from GPS' : 'e.g. 2.5 mi'}/>
+            {quickOutdoorKind&&<small>{Number(workout.outdoor?.distance_m||0)>0?'Leave blank to use GPS distance automatically.':'If GPS is unavailable, enter distance manually.'}</small>}
           </label>
           <label className="quick-cardio-field quick-calories">
             <span>Calories <small>optional</small></span>
