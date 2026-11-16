@@ -443,6 +443,16 @@ export function PlatformProgress({
   const activeProgramProgress=(trackedProgramsInfo.length?trackedProgramsInfo:[trackedProgramInfo]).filter(Boolean)
   const selectedOutdoor=outdoorSessions.find(row=>row.id===selectedOutdoorId)||outdoorSessions[0]||null
 
+  const milestoneItems=useMemo(()=>{
+    const items=[]
+    if(recentPrs[0])items.push({icon:'★',label:'Personal best',value:recentPrs[0].label,detail:recentPrs[0].set?recentPrs[0].set.weight+' × '+recentPrs[0].set.reps:'e1RM '+formatWeight(recentPrs[0].e1rm)+' lb'})
+    if(activeWeekStreak>=2)items.push({icon:'◆',label:'Consistency',value:activeWeekStreak+' week streak',detail:'At least one completed workout each week'})
+    const totalMilestone=[100,75,50,25,10].find(mark=>totalWorkouts>=mark)
+    if(totalMilestone)items.push({icon:'✓',label:'Training milestone',value:totalMilestone+' workouts',detail:totalWorkouts+' completed workouts recorded'})
+    if(outdoor30.miles>=5)items.push({icon:'↗',label:'Outdoor work',value:outdoor30.miles.toFixed(1)+' miles',detail:'Last 30 days'})
+    return items.slice(0,4)
+  },[recentPrs,activeWeekStreak,totalWorkouts,outdoor30.miles,formatWeight])
+
 
   const saveQuickWeight=async e=>{
     e.preventDefault()
@@ -525,10 +535,34 @@ export function PlatformProgress({
 
     {effectiveMode==='mine'?<>
       <div className="progress-section-tabs">
-        {['Overview','Strength','Weight & Measurements','History'].map(section=><button key={section} className={progressSection===section?'active':''} onClick={()=>selectProgressSection(section)}>{section}</button>)}
+        {['Overview','Strength','Cardio','Weight & Measurements','History'].map(section=><button key={section} className={progressSection===section?'active':''} onClick={()=>selectProgressSection(section)}>{section}</button>)}
       </div>
 
       {progressSection==='Overview'&&<>
+        <section className="progress-visual-hero">
+          <div className="progress-visual-hero-copy">
+            <span className="card-label">YOUR PROGRESS</span>
+            <h2>{totalWorkouts?'Your work is adding up':'Start building your history'}</h2>
+            <p>{totalWorkouts
+              ? consistencyCount+' training day'+(consistencyCount===1?'':'s')+' in the last 12 weeks · '+totalWorkouts+' workouts recorded'
+              : 'Every completed workout builds your strength, consistency, cardio and body trends here.'}</p>
+          </div>
+          <div className="progress-hero-kpis">
+            <div><span>Workouts</span><strong>{thisMonth}</strong><small>This month</small></div>
+            <div><span>Volume</span><strong>{formatWeight(volume30)}</strong><small>Last 30 days · lb</small></div>
+            <div><span>Streak</span><strong>{activeWeekStreak}</strong><small>Consecutive weeks</small></div>
+            <div><span>Outdoor</span><strong>{outdoor30.miles?outdoor30.miles.toFixed(1):'0'}</strong><small>Miles · 30 days</small></div>
+          </div>
+        </section>
+
+        <section className="simple-card consistency-card">
+          <div className="section-heading"><div><span className="card-label">CONSISTENCY</span><h3>Last 12 weeks</h3></div><strong>{consistencyCount} active days</strong></div>
+          <div className="consistency-heatmap" aria-label="Workout consistency over the last 12 weeks">
+            {consistencyDays.map(day=><span key={day.key} className={day.done?'done':''} title={day.label+(day.done?' · workout completed':'')}/>)}
+          </div>
+          <div className="consistency-legend"><span>12 weeks ago</span><span>Today</span></div>
+        </section>
+
         <section className="summary-grid progress-home-kpis">
           <div><span>Workouts this month</span><strong>{thisMonth}</strong></div>
           <div><span>30-day volume</span><strong>{formatWeight(volume30)} lb</strong></div>
@@ -536,12 +570,15 @@ export function PlatformProgress({
           <div><span>Current weight</span><strong>{latestBodyweight?latestBodyweight+' lb':'—'}</strong></div>
         </section>
 
-        {(trackedProgramsInfo.length||trackedProgramInfo)&&<section className="simple-card progress-current-program">
-          <div className="section-heading"><div><span className="card-label">{trackedProgramsInfo.length>1?'TRACKED PROGRAMS':'CURRENT PROGRAM'}</span><h3>{trackedProgramsInfo.length>1?'Your active programs':(trackedProgramsInfo[0]||trackedProgramInfo)?.name}</h3></div></div>
-          <div className="progress-program-list">{(trackedProgramsInfo.length?trackedProgramsInfo:[trackedProgramInfo]).filter(Boolean).map(info=><div key={info.key||info.name}>
-            <div><strong>{info.name}</strong><span>{info.complete?'Program complete':info.nextTitle?'Next: '+info.nextTitle:'Tracking in progress'}</span></div>
-            <div><b>{info.completed}/{info.total}</b><div className="program-progress-track"><div style={{width:(info.total?Math.min(100,info.completed/info.total*100):0)+'%'}}/></div></div>
-          </div>)}</div>
+        {activeProgramProgress.length>0&&<section className="simple-card progress-current-program">
+          <div className="section-heading"><div><span className="card-label">{activeProgramProgress.length>1?'TRACKED PROGRAMS':'CURRENT PROGRAM'}</span><h3>{activeProgramProgress.length>1?'Your active programs':activeProgramProgress[0]?.name}</h3></div></div>
+          <div className="visual-program-progress-list">{activeProgramProgress.map(info=>{
+            const pct=info.total?Math.round(Math.min(100,Number(info.completed||0)/Number(info.total)*100)):0
+            return <article key={info.key||info.name}>
+              <div className="program-progress-ring" style={{'--program-progress':pct+'%'}}><strong>{pct}%</strong></div>
+              <div><strong>{info.name}</strong><span>{info.complete?'Program complete':info.nextTitle?'Next: '+info.nextTitle:'Tracking in progress'}</span><small>{info.completed}/{info.total||'—'} workouts complete</small></div>
+            </article>
+          })}</div>
         </section>}
 
         <section className="simple-card recent-pr-home">
@@ -549,7 +586,12 @@ export function PlatformProgress({
           {recentPrs.length?<div className="recent-pr-list">{recentPrs.map((pr,i)=><div key={pr.key+'-'+i}><div><strong>{pr.label}</strong><span>{new Date(pr.date).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span></div><b>{pr.set?pr.set.weight+' × '+pr.set.reps:'e1RM '+formatWeight(pr.e1rm)}</b></div>)}</div>:<div className="empty-state action-empty"><strong>No PRs yet.</strong><span>Complete weighted sets and your bests will appear here automatically.</span></div>}
         </section>
 
-        <section className="analytics-dashboard-grid">
+        {milestoneItems.length>0&&<section className="simple-card milestone-card">
+          <div className="section-heading"><div><span className="card-label">MILESTONES</span><h3>Reasons to keep going</h3></div></div>
+          <div className="milestone-grid">{milestoneItems.map((item,index)=><article key={item.label+'-'+index}><i>{item.icon}</i><div><span>{item.label}</span><strong>{item.value}</strong><small>{item.detail}</small></div></article>)}</div>
+        </section>}
+
+                <section className="analytics-dashboard-grid">
           <section className="simple-card analytics-chart-card">
             <div className="section-heading"><div><span className="card-label">TRAINING VOLUME</span><h3>Last 8 weeks</h3></div></div>
             <div className="volume-chart">{weeklyAnalytics.map(item=><div className="volume-bar-row" key={item.label}><span>{item.label}</span><div className="bar-track"><div className="bar-fill" style={{width:(item.volume/maxWeeklyVolume*100)+'%'}}/></div><strong>{formatWeight(item.volume)}</strong></div>)}</div>
@@ -583,6 +625,51 @@ export function PlatformProgress({
         </section>
 
         <ProgressToolbox session={session} legacyHistory={progress.completed} flexSessions={flexSessions} formatWeight={formatWeight} onlyTab="PRs"/>
+      </>}
+
+      {progressSection==='Cardio'&&<>
+        <section className="progress-visual-hero cardio-progress-hero">
+          <div className="progress-visual-hero-copy">
+            <span className="card-label">OUTDOOR PROGRESS</span>
+            <h2>{outdoorSessions.length?'Distance, pace and routes':'Your outdoor history starts here'}</h2>
+            <p>{outdoorSessions.length
+              ? outdoor30.count+' outdoor activit'+(outdoor30.count===1?'y':'ies')+' in the last 30 days'
+              : 'Start a Walk, Run or Bike from Today. GPS distance, pace, elevation, splits and route will appear here automatically.'}</p>
+          </div>
+          <div className="progress-hero-kpis">
+            <div><span>Activities</span><strong>{outdoor30.count}</strong><small>Last 30 days</small></div>
+            <div><span>Distance</span><strong>{outdoor30.miles.toFixed(1)}</strong><small>Miles · 30 days</small></div>
+            <div><span>Time</span><strong>{Math.round(outdoor30.seconds/60)}</strong><small>Minutes · 30 days</small></div>
+            <div><span>Elevation</span><strong>{Math.round(outdoor30.elevationFt)}</strong><small>Feet gained</small></div>
+          </div>
+        </section>
+
+        <section className="simple-card analytics-chart-card">
+          <div className="section-heading"><div><span className="card-label">DISTANCE</span><h3>Last 8 weeks</h3></div></div>
+          {outdoorSessions.length
+            ? <div className="volume-chart cardio-distance-chart">{cardioWeekly.map(item=><div className="volume-bar-row" key={item.label}><span>{item.label}</span><div className="bar-track"><div className="bar-fill" style={{width:(item.miles/maxCardioMiles*100)+'%'}}/></div><strong>{item.miles.toFixed(1)} mi</strong></div>)}</div>
+            : <div className="empty-state action-empty"><strong>No outdoor activities yet.</strong><span>Walk, Run and Bike workouts will build this chart automatically.</span></div>}
+        </section>
+
+        {selectedOutdoor&&<section className="simple-card outdoor-history-focus">
+          <div className="section-heading"><div><span className="card-label">LATEST ROUTE</span><h3>{selectedOutdoor.title}</h3></div><span>{new Date(selectedOutdoor.completed_at||selectedOutdoor.session_date).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span></div>
+          <RouteMap points={selectedOutdoor.workout?.outdoor?.points||[]}/>
+          <div className="outdoor-history-stats">
+            <div><span>Distance</span><strong>{selectedOutdoor._outdoor.miles.toFixed(2)} mi</strong></div>
+            <div><span>Time</span><strong>{formatOutdoorDuration(selectedOutdoor._outdoor.elapsedSeconds)}</strong></div>
+            <div><span>{selectedOutdoor._outdoorKind==='bike'?'Avg speed':'Avg pace'}</span><strong>{selectedOutdoor._outdoorKind==='bike'?(selectedOutdoor._outdoor.avgMph?selectedOutdoor._outdoor.avgMph.toFixed(1)+' mph':'—'):formatPace(selectedOutdoor._outdoor.avgPaceSecPerMile)}</strong></div>
+            <div><span>Elevation</span><strong>{Math.round(selectedOutdoor._outdoor.elevationGainM*3.28084)} ft</strong></div>
+          </div>
+        </section>}
+
+        <section className="simple-card outdoor-activity-history">
+          <div className="section-heading"><div><span className="card-label">ACTIVITY HISTORY</span><h3>Walks, runs & rides</h3></div></div>
+          {outdoorSessions.length?<div>{outdoorSessions.slice(0,12).map(row=><button type="button" key={row.id} className={selectedOutdoor?.id===row.id?'active':''} onClick={()=>setSelectedOutdoorId(row.id)}>
+            <span className="outdoor-history-icon">{row._outdoorKind==='bike'?'🚴':row._outdoorKind==='run'?'🏃':'🚶'}</span>
+            <span><strong>{row.title}</strong><small>{new Date(row.completed_at||row.session_date).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</small></span>
+            <span><strong>{row._outdoor.miles.toFixed(2)} mi</strong><small>{row._outdoorKind==='bike'?(row._outdoor.avgMph?row._outdoor.avgMph.toFixed(1)+' mph':'—'):formatPace(row._outdoor.avgPaceSecPerMile)}</small></span>
+          </button>)}</div>:<div className="empty-state action-empty"><strong>Nothing to show yet.</strong><span>Your first GPS-tracked outdoor workout will appear here.</span></div>}
+        </section>
       </>}
 
       {progressSection==='Weight & Measurements'&&<>
