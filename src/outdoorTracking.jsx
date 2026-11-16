@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { MIN_MOVING_SPEED_MPS,paceIsMeaningful,hasReliableOutdoorRoute } from './trackingRules'
+import { MIN_MOVING_SPEED_MPS,paceIsMeaningful,hasReliableOutdoorRoute,hasLiveGpsFix,gpsJitterFloorMeters } from './trackingRules'
 
 export const METERS_PER_MILE=1609.344
 
@@ -102,7 +102,7 @@ function pointFromPosition(position){
   }
 }
 
-export function RouteMap({points=[],compact=false}){
+export function RouteMap({points=[],compact=false,provisional=false}){
   const elementRef=useRef(null)
   const mapRef=useRef(null)
   const routeRef=useRef(null)
@@ -138,7 +138,7 @@ export function RouteMap({points=[],compact=false}){
         sections[sections.length-1].push([Number(point.lat),Number(point.lng)])
       }
       routeRef.current=L.layerGroup(sections.filter(section=>section.length>1).map(section=>
-        L.polyline(section,{weight:5,opacity:.9,lineJoin:'round'})
+        L.polyline(section,{weight:provisional?3:5,opacity:provisional?.6:.9,lineJoin:'round',...(provisional?{dashArray:'5, 8'}:{})})
       )).addTo(map)
       map.fitBounds(L.latLngBounds(coords),{padding:[22,22],maxZoom:17})
     }
@@ -149,7 +149,7 @@ export function RouteMap({points=[],compact=false}){
       markersRef.current.push(finish)
     }
     requestAnimationFrame(()=>map.invalidateSize())
-  },[points,compact])
+  },[points,compact,provisional])
 
   useEffect(()=>()=>{mapRef.current?.remove();mapRef.current=null},[])
 
@@ -212,7 +212,7 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
           setMessage('GPS jump ignored.')
           return
         }
-        const jitterFloor=Math.max(4,Math.min(16,Number(nextPoint.a||0)*.35+Number(last.a||0)*.25))
+        const jitterFloor=gpsJitterFloorMeters(nextPoint.a,last.a)
         if(segment<jitterFloor){
           setMessage('GPS locked')
           return
@@ -325,9 +325,12 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
 
   const paceMode=activity!=='bike'
   const signal=current?.last_accuracy_m
+  const liveFix=hasLiveGpsFix(current)
+  const credibleRoute=hasReliableOutdoorRoute(current)
+  const feetTracked=Math.round(metrics.distanceM*3.28084)
   return <section className="outdoor-tracker">
     <div className="outdoor-live-grid">
-      <div><span>Distance</span><strong>{metrics.miles?metrics.miles.toFixed(metrics.miles<10?2:1):'0.00'} mi</strong></div>
+      <div><span>Distance</span><strong>{metrics.miles?metrics.miles.toFixed(metrics.miles<10?2:1):'0.00'} mi</strong>{feetTracked>0&&metrics.miles<0.1&&<small className="outdoor-short-distance">{feetTracked} ft tracked</small>}</div>
       <div><span>{paceMode?'Avg pace':'Avg speed'}</span><strong>{paceMode?formatPace(metrics.avgPaceSecPerMile):(metrics.avgMph?metrics.avgMph.toFixed(1)+' mph':'—')}</strong></div>
       <div><span>{paceMode?'Current pace':'Current speed'}</span><strong>{!running?'—':paceMode?formatPace(metrics.currentPaceSecPerMile):(metrics.currentMph?metrics.currentMph.toFixed(1)+' mph':'—')}</strong></div>
       <div><span>Elevation</span><strong>{Math.round(metrics.elevationGainM*3.28084)} ft</strong></div>
@@ -339,11 +342,13 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
       {signal!=null&&<small>±{Math.round(signal)} m</small>}
     </div>
 
-    {hasReliableOutdoorRoute(current)
-      ? <RouteMap points={current.points}/>
+    {liveFix
+      ? <><RouteMap points={current.points} provisional={!credibleRoute}/>
+          {!credibleRoute&&<p className="outdoor-route-preview-note">Live GPS preview · short distances are approximate. A longer, reliable route is needed to save the map.</p>}
+        </>
       : <div className="outdoor-map-placeholder">
-          <strong>{(current.points||[]).length?'Waiting for meaningful GPS movement':'Your route will appear here'}</strong>
-          <span>{(current.points||[]).length?'A route appears after a short, reliable distance.':'Allow location when you tap Start.'}</span>
+          <strong>Your live location will appear here</strong>
+          <span>Allow location when you tap Start. Indoor GPS can be inaccurate.</span>
         </div>}
 
     {metrics.splits.length>0&&<div className="outdoor-splits">
