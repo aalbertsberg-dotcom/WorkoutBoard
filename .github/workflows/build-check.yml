@@ -2,7 +2,7 @@ name: Workset Build Check
 
 on:
   push:
-    branches: [main, 'feature/**']
+    branches: [main, 'feature/**', 'redo/**']
   workflow_dispatch:
 
 permissions:
