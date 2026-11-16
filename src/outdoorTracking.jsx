@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { MIN_MOVING_SPEED_MPS,paceIsMeaningful } from './trackingRules'
+import { MIN_MOVING_SPEED_MPS,paceIsMeaningful,hasReliableOutdoorRoute } from './trackingRules'
 
 export const METERS_PER_MILE=1609.344
 
@@ -224,7 +224,7 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
     nextPoint.d=distance
 
     let elevation=Math.max(0,Number(prev.elevation_gain_m||0))
-    if(last&&nextPoint.alt!=null&&last.alt!=null){
+    if(last&&!nextPoint.break_before&&nextPoint.alt!=null&&last.alt!=null){
       const quality=(nextPoint.aa==null||nextPoint.aa<=30)&&(last.aa==null||last.aa<=30)
       const gain=nextPoint.alt-last.alt
       if(quality&&gain>=1.5&&gain<40)elevation+=gain
@@ -286,6 +286,7 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
     try{
       if(navigator.wakeLock?.request)wakeLockRef.current=await navigator.wakeLock.request('screen')
     }catch{}
+    if(!runningRef.current){await releaseWakeLock();return}
     watchRef.current=navigator.geolocation.watchPosition(
       pushPosition,
       error=>{
@@ -338,9 +339,12 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
       {signal!=null&&<small>±{Math.round(signal)} m</small>}
     </div>
 
-    {(current.points||[]).length>0
+    {hasReliableOutdoorRoute(current)
       ? <RouteMap points={current.points}/>
-      : <div className="outdoor-map-placeholder"><strong>Your route will appear here</strong><span>Allow location when you tap Start.</span></div>}
+      : <div className="outdoor-map-placeholder">
+          <strong>{(current.points||[]).length?'Waiting for meaningful GPS movement':'Your route will appear here'}</strong>
+          <span>{(current.points||[]).length?'A route appears after a short, reliable distance.':'Allow location when you tap Start.'}</span>
+        </div>}
 
     {metrics.splits.length>0&&<div className="outdoor-splits">
       <div className="quick-cardio-details-head"><span className="quick-cardio-section-label">Splits</span><small>Per mile</small></div>
