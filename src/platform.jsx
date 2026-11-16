@@ -6,7 +6,7 @@ import { AdvancedProgressCenter, PlannedWorkoutTools, ShareImportPanel, AdminDas
 import { readOfflineState, writeOfflineState, upsertOfflineFirst } from './offline'
 import { RouteMap, outdoorMetrics, formatPace, formatOutdoorDuration, outdoorActivityKind } from './outdoorTracking'
 import { effectiveSteps } from './stepTracking'
-import { hasReliableOutdoorRoute } from './trackingRules'
+import { hasReliableOutdoorRoute,outdoorDistancePresentation } from './trackingRules'
 
 function startOfWeek(date = new Date()) {
   const d = new Date(date)
@@ -391,12 +391,14 @@ export function PlatformProgress({
   const outdoorSessions=useMemo(()=>flexSessions
     .filter(row=>{
       const outdoor=row.workout?.outdoor
-      return hasReliableOutdoorRoute(outdoor)
+      const kind=outdoorActivityKind(row.workout?.quick_cardio_kind||row.workout?.metcon?.activity||row.title)
+      return Boolean(kind&&outdoor&&(Number(outdoor.distance_m||0)>0||effectiveSteps(outdoor)>0))
     })
     .map(row=>{
       const kind=outdoorActivityKind(row.workout?.quick_cardio_kind||row.workout?.metcon?.activity||row.title)||'walk'
       const elapsed=Number(row.workout?.quick_timer_elapsed_seconds||row.workout?.outdoor?.elapsed_seconds||0)
-      return {...row,_outdoorKind:kind,_outdoor:outdoorMetrics(row.workout.outdoor,elapsed,kind)}
+      return {...row,_outdoorKind:kind,_outdoor:outdoorMetrics(row.workout.outdoor,elapsed,kind),
+        _routeReady:hasReliableOutdoorRoute(row.workout.outdoor)}
     })
     .sort((a,b)=>String(b.completed_at||b.session_date).localeCompare(String(a.completed_at||a.session_date)))
   ,[flexSessions])
@@ -407,9 +409,9 @@ export function PlatformProgress({
     return {
       rows,
       count:rows.length,
-      miles:rows.reduce((sum,row)=>sum+Number(row._outdoor.miles||0),0),
+      miles:rows.reduce((sum,row)=>sum+(row._routeReady?Number(row._outdoor.miles||0):0),0),
       seconds:rows.reduce((sum,row)=>sum+Number(row._outdoor.elapsedSeconds||0),0),
-      elevationFt:rows.reduce((sum,row)=>sum+Number(row._outdoor.elevationGainM||0)*3.28084,0),
+      elevationFt:rows.reduce((sum,row)=>sum+(row._routeReady?Number(row._outdoor.elevationGainM||0)*3.28084:0),0),
     }
   },[outdoorSessions])
 
@@ -428,7 +430,7 @@ export function PlatformProgress({
     const start=end-7*dayMs
     const rows=outdoorSessions.filter(row=>{
       const t=new Date(row.completed_at||row.session_date).getTime()
-      return t>start&&t<=end
+      return row._routeReady&&t>start&&t<=end
     })
     return {
       label:i===7?'This week':(7-i)+'w ago',
@@ -643,14 +645,14 @@ export function PlatformProgress({
         <section className="progress-visual-hero cardio-progress-hero">
           <div className="progress-visual-hero-copy">
             <span className="card-label">OUTDOOR PROGRESS</span>
-            <h2>{outdoorSessions.length?'Distance, pace and routes':'Your outdoor history starts here'}</h2>
+            <h2>{outdoorSessions.length?'Walks, rides and GPS routes':'Your outdoor history starts here'}</h2>
             <p>{outdoorSessions.length
               ? outdoor30.count+' outdoor activit'+(outdoor30.count===1?'y':'ies')+' in the last 30 days'
-              : 'Start a Walk, Run or Bike from Today. Valid GPS routes appear here; short or manual-only activities remain in workout history.'}</p>
+              : 'Start a Walk, Run or Bike from Today. Short GPS estimates stay in activity history without counting as recorded routes.'}</p>
           </div>
           <div className="progress-hero-kpis">
             <div><span>Activities</span><strong>{outdoor30.count}</strong><small>Last 30 days</small></div>
-            <div><span>Distance</span><strong>{outdoor30.miles.toFixed(1)}</strong><small>Miles · 30 days</small></div>
+            <div><span>Route distance</span><strong>{outdoor30.miles.toFixed(1)}</strong><small>Route miles · 30 days</small></div>
             <div><span>Time</span><strong>{Math.round(outdoor30.seconds/60)}</strong><small>Minutes · 30 days</small></div>
             <div><span>Elevation</span><strong>{Math.round(outdoor30.elevationFt)}</strong><small>Feet gained</small></div>
           </div>
@@ -667,17 +669,19 @@ export function PlatformProgress({
           </div>}
         </section>
         <section className="simple-card analytics-chart-card">
-          <div className="section-heading"><div><span className="card-label">DISTANCE</span><h3>Last 8 weeks</h3></div></div>
+          <div className="section-heading"><div><span className="card-label">GPS ROUTE DISTANCE</span><h3>Last 8 weeks</h3></div></div>
           {outdoorSessions.length
             ? <div className="volume-chart cardio-distance-chart">{cardioWeekly.map(item=><div className="volume-bar-row" key={item.label}><span>{item.label}</span><div className="bar-track"><div className="bar-fill" style={{width:(item.miles/maxCardioMiles*100)+'%'}}/></div><strong>{item.miles.toFixed(1)} mi</strong></div>)}</div>
             : <div className="empty-state action-empty"><strong>No outdoor activities yet.</strong><span>Walk, Run and Bike workouts will build this chart automatically.</span></div>}
         </section>
 
         {selectedOutdoor&&<section className="simple-card outdoor-history-focus">
-          <div className="section-heading"><div><span className="card-label">LATEST ROUTE</span><h3>{selectedOutdoor.title}</h3></div><span>{new Date(selectedOutdoor.completed_at||selectedOutdoor.session_date).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span></div>
-          <RouteMap points={selectedOutdoor.workout?.outdoor?.points||[]}/>
+          <div className="section-heading"><div><span className="card-label">ACTIVITY DETAILS</span><h3>{selectedOutdoor.title}</h3></div><span>{new Date(selectedOutdoor.completed_at||selectedOutdoor.session_date).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span></div>
+          {selectedOutdoor._routeReady
+            ? <RouteMap points={selectedOutdoor.workout?.outdoor?.points||[]}/>
+            : <p className="outdoor-estimated-distance-note">{outdoorDistancePresentation(selectedOutdoor.workout?.outdoor).note}. No saved route or pace is shown for short GPS estimates.</p>}
           <div className="outdoor-history-stats">
-            <div><span>Distance</span><strong>{selectedOutdoor._outdoor.miles.toFixed(2)} mi</strong></div>
+            <div><span>Distance</span><strong>{outdoorDistancePresentation(selectedOutdoor.workout?.outdoor).label}</strong></div>
             <div><span>Time</span><strong>{formatOutdoorDuration(selectedOutdoor._outdoor.elapsedSeconds)}</strong></div>
             <div><span>{selectedOutdoor._outdoorKind==='bike'?'Avg speed':'Avg pace'}</span><strong>{selectedOutdoor._outdoorKind==='bike'?(selectedOutdoor._outdoor.avgMph?selectedOutdoor._outdoor.avgMph.toFixed(1)+' mph':'—'):formatPace(selectedOutdoor._outdoor.avgPaceSecPerMile)}</strong></div>
             <div><span>Elevation</span><strong>{Math.round(selectedOutdoor._outdoor.elevationGainM*3.28084)} ft</strong></div>
@@ -689,7 +693,7 @@ export function PlatformProgress({
           {outdoorSessions.length?<div>{outdoorSessions.slice(0,12).map(row=><button type="button" key={row.id} className={selectedOutdoor?.id===row.id?'active':''} onClick={()=>setSelectedOutdoorId(row.id)}>
             <span className="outdoor-history-icon">{row._outdoorKind==='bike'?'🚴':row._outdoorKind==='run'?'🏃':'🚶'}</span>
             <span><strong>{row.title}</strong><small>{new Date(row.completed_at||row.session_date).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</small></span>
-            <span><strong>{row._outdoor.miles.toFixed(2)} mi</strong><small>{row._outdoorKind==='bike'?(row._outdoor.avgMph?row._outdoor.avgMph.toFixed(1)+' mph':'—'):formatPace(row._outdoor.avgPaceSecPerMile)}</small></span>
+            <span><strong>{outdoorDistancePresentation(row.workout?.outdoor).label}</strong><small>{!row._routeReady?'Approximate · no saved route':row._outdoorKind==='bike'?(row._outdoor.avgMph?row._outdoor.avgMph.toFixed(1)+' mph':'—'):formatPace(row._outdoor.avgPaceSecPerMile)}</small></span>
           </button>)}</div>:<div className="empty-state action-empty"><strong>Nothing to show yet.</strong><span>Your first GPS-tracked outdoor workout will appear here.</span></div>}
         </section>
       </>}
