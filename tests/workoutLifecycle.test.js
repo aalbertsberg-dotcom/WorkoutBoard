@@ -34,3 +34,12 @@ test('legacy scheduled workout still restores if no active workout exists',()=>{
   assert.equal(selectWorkoutToRestore([scheduled])?.id,'scheduled')
   assert.equal(selectWorkoutToRestore([{...scheduled,status:'completed'}]),null)
 })
+
+test('cancel barrier suppresses older orphaned sessions without blocking new ones',()=>{
+  const oldWalk=row('old-walk','started','2026-11-16T12:00:00Z',true)
+  const newerWalk=row('new-walk','started','2026-11-16T13:30:00Z',true)
+  const barrier=Date.parse('2026-11-16T13:00:00Z')
+  assert.equal(selectWorkoutToRestore([oldWalk],{cancelledBefore:barrier}),null)
+  assert.equal(selectWorkoutToRestore([oldWalk,newerWalk],{cancelledBefore:barrier})?.id,'new-walk')
+  assert.equal(selectWorkoutToRestore([oldWalk],{preferredId:'old-walk',cancelledBefore:barrier})?.id,'old-walk')
+})
