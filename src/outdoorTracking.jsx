@@ -138,7 +138,7 @@ export function RouteMap({points=[],compact=false,provisional=false}){
         sections[sections.length-1].push([Number(point.lat),Number(point.lng)])
       }
       routeRef.current=L.layerGroup(sections.filter(section=>section.length>1).map(section=>
-        L.polyline(section,{weight:provisional?3:5,opacity:provisional?.6:.9,lineJoin:'round',...(provisional?{dashArray:'5, 8'}:{})})
+        L.polyline(section,{weight:provisional?3:5,opacity:provisional?0.6:0.9,lineJoin:'round',...(provisional?{dashArray:'5, 8'}:{})})
       )).addTo(map)
       map.fitBounds(L.latLngBounds(coords),{padding:[22,22],maxZoom:17})
     }
