@@ -8,6 +8,7 @@ import { WorkoutCoach, MetconTracker, AccountSecurityPanel, BackupRestorePanel, 
 import { archiveProgramById, makePlannedFromArchive } from './archivePrograms'
 import { saveOfflineSession, readOfflineSession, clearOfflineSession, writeOfflineState, readOfflineState, getPendingOfflineCount, syncOfflineQueue, offlineUuid, upsertOfflineFirst } from './offline'
 import { RouteMap, formatPace, formatOutdoorDuration } from './outdoorTracking'
+import { outdoorDistancePresentation } from './trackingRules'
 import { getActiveWorkoutId,setActiveWorkoutId,clearActiveWorkoutId,cancelledWorkoutIds,getWorkoutCancellationBarrier,rememberWorkoutCancellation,isOpenWorkout,selectWorkoutToRestore } from './workoutLifecycle'
 import QRCode from 'qrcode'
 import { BarcodeDetector as BarcodeDetectorPonyfill } from 'barcode-detector/ponyfill'
@@ -3494,10 +3495,10 @@ function App() {
                   <div><strong>{row.title||'Workout'}</strong><span>{row.program||'Workout'}{row.completed_at?' · '+new Date(row.completed_at).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):''}</span></div>
                   <b>{Number(row.total_volume||0)>0
                     ? Number(row.total_volume).toLocaleString()+' lb'
-                    : row.outdoor_summary?.miles
-                      ? Number(row.outdoor_summary.miles).toFixed(2)+' mi'
-                      : Number(row.workout?.outdoor?.distance_m||0)>0
-                        ? (Number(row.workout.outdoor.distance_m)/1609.344).toFixed(2)+' mi'
+                    : Number(row.workout?.outdoor?.distance_m||0)>0
+                      ? outdoorDistancePresentation(row.workout.outdoor).label
+                      : row.outdoor_summary?.miles
+                        ? Number(row.outdoor_summary.miles).toFixed(2)+' mi'
                         : 'Completed'}</b>
                   {row.workout?.exercises?.length>0&&<details><summary>Exercises</summary><p>{row.workout.exercises.map(x=>x.name).filter(Boolean).join(' · ')}</p></details>}
                 </article>)}</div>
@@ -3506,9 +3507,10 @@ function App() {
                 <div className="completion-check">✓</div>
                 <div><span className="card-label">WORKOUT COMPLETE</span><h2>{completionSummary.title||'Workout complete'}</h2><p>{completionSummary.program||trackedProgramsInfo.find(x=>x.key===plannedToday?.workout?.tracking_program_key)?.name||trackedTodayInfo?.name||'Workout'}</p></div>
                 {completionSummary.outdoor?<div className="completion-outdoor-summary">
-                  {completionSummary.outdoor.points?.length>1&&<RouteMap points={completionSummary.outdoor.points} compact/>}
+                  {completionSummary.outdoor.routeAvailable&&completionSummary.outdoor.points?.length>1&&<RouteMap points={completionSummary.outdoor.points} compact/>}
+                  {completionSummary.outdoor.distanceEstimated&&<p className="completion-gps-note">Approximate GPS distance. A reliable route and pace were not recorded for this short walk.</p>}
                   <div className="completion-stats outdoor-completion-stats">
-                    <div><span>Distance</span><strong>{Number(completionSummary.outdoor.miles||0).toFixed(2)} mi</strong></div>
+                    <div><span>Distance{completionSummary.outdoor.distanceEstimated?' (estimate)':''}</span><strong>{completionSummary.outdoor.distanceLabel||Number(completionSummary.outdoor.miles||0).toFixed(2)+' mi'}</strong></div>
                     <div><span>Time</span><strong>{formatOutdoorDuration(completionSummary.outdoor.elapsedSeconds)}</strong></div>
                     <div><span>{completionSummary.outdoor.kind==='bike'?'Avg speed':'Avg pace'}</span><strong>{completionSummary.outdoor.kind==='bike'
                       ? (completionSummary.outdoor.avgMph?Number(completionSummary.outdoor.avgMph).toFixed(1)+' mph':'—')
