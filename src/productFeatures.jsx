@@ -548,6 +548,16 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       }:{}),
       complete:true,savedAt:now,baseline_results:baselineResults
     }
+    const completionOutdoor=quickOutdoorMetrics&&quickOutdoorMetrics.distanceM>0 ? {
+      kind:quickOutdoorKind,
+      miles:quickOutdoorMetrics.miles,
+      elapsedSeconds:quickElapsedSeconds,
+      avgPaceSecPerMile:quickOutdoorMetrics.avgPaceSecPerMile,
+      avgMph:quickOutdoorMetrics.avgMph,
+      elevationFt:quickOutdoorMetrics.elevationGainM*3.28084,
+      points:quickOutdoorMetrics.points,
+      splits:quickOutdoorMetrics.splits,
+    } : null
     const generatedSessionId=offlineUuid()
     const completedSets=(finalWorkout.exercises||[]).reduce((sum,item)=>sum+(item.setProgress||[]).filter(set=>set.done).length,0)
     const completedExercises=(finalWorkout.exercises||[]).filter(item=>item.done||(item.setProgress||[]).some(set=>set.done)).length
@@ -617,6 +627,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
         baselinePath:finalWorkout.baseline_path||null,
         baselineResults,
         trainingSessionId:sessionId,
+        outdoor:completionOutdoor,
         offline:true,
       })
       setFinishing(false)
@@ -718,6 +729,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
         baselinePath:finalWorkout.baseline_path||null,
         baselineResults:baselineResults,
         trainingSessionId,
+        outdoor:completionOutdoor,
       })
     } else {
       setSaveState('Finish failed: '+error.message)
