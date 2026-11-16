@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {
   validWeightDraft,validRepsDraft,displayedSetWeight,recordedWeightValue,
   canFinishQuickCardio,hasReliableOutdoorRoute,paceIsMeaningful,withoutUnreliableRoute,
-  hasLiveGpsFix,gpsJitterFloorMeters
+  hasLiveGpsFix,gpsJitterFloorMeters,outdoorDistancePresentation
 } from '../src/trackingRules.js'
 
 test('erasing 135 stays erased even when a previous set offers 135',()=>{
@@ -46,7 +46,10 @@ test('tiny GPS drift is not a credible route or pace',()=>{
 test('plausible movement is retained but stationary pseudo-pace is hidden',()=>{
   const route={distance_m:120,points:[{lat:1,lng:2},{lat:1.001,lng:2}]}
   assert.equal(hasReliableOutdoorRoute(route),true)
-  assert.deepEqual(withoutUnreliableRoute(route),route)
+  const kept=withoutUnreliableRoute(route)
+  assert.equal(kept.distance_m,120)
+  assert.equal(kept.distance_quality,'route')
+  assert.deepEqual(kept.points,route.points)
   assert.equal(paceIsMeaningful(120,90),true)
   assert.equal(paceIsMeaningful(30,600),false)
 })
@@ -66,4 +69,36 @@ test('short movement uses adaptive GPS noise filter instead of a fixed 4–16 me
   assert.equal(gpsJitterFloorMeters(5,5),2.5)
   assert.equal(gpsJitterFloorMeters(15,15),4.5)
   assert.equal(gpsJitterFloorMeters(40,40),8)
+})
+
+test('short GPS walk keeps 74 ft estimate while discarding unsupported route and pace',()=>{
+  const raw={distance_m:22.56,points:[{lat:30,lng:-88},{lat:30.0002,lng:-88}],step_tracking:{sensor_steps:57},elevation_gain_m:2,splits:[]}
+  const saved=withoutUnreliableRoute(raw)
+  assert.equal(saved.distance_m,22.56)
+  assert.equal(saved.distance_quality,'estimated')
+  assert.equal(saved.step_tracking.sensor_steps,57)
+  assert.deepEqual(saved.points,[])
+  assert.equal(saved.elevation_gain_m,0)
+  assert.equal(hasReliableOutdoorRoute(saved),false)
+  const display=outdoorDistancePresentation(saved)
+  assert.equal(display.label,'≈74 ft')
+  assert.equal(display.milesLabel,'≈0.01 mi')
+  assert.equal(display.estimated,true)
+  assert.equal(display.hasRoute,false)
+})
+test('no GPS points or distance does not become a phantom estimated walk',()=>{
+  const saved=withoutUnreliableRoute({distance_m:0,points:[],step_tracking:{manual_steps:'57'}})
+  assert.equal(saved.distance_quality,'none')
+  assert.equal(saved.distance_m,0)
+  assert.equal(saved.step_tracking.manual_steps,'57')
+  assert.equal(outdoorDistancePresentation(saved).label,'0.00 mi')
+  assert.equal(outdoorDistancePresentation(saved).estimated,false)
+})
+test('longer credible GPS track remains route-eligible',()=>{
+  const route={distance_m:170,points:[{lat:30,lng:-88},{lat:30.001,lng:-88}]}
+  const saved=withoutUnreliableRoute(route)
+  assert.equal(saved.distance_quality,'route')
+  assert.equal(hasReliableOutdoorRoute(saved),true)
+  assert.equal(outdoorDistancePresentation(saved).estimated,false)
+  assert.equal(outdoorDistancePresentation(saved).hasRoute,true)
 })
