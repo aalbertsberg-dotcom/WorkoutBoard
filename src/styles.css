@@ -7638,3 +7638,17 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
     grid-template-columns:repeat(4,minmax(0,1fr));
   }
 }
+
+
+.completion-outdoor-summary {
+  display:grid;
+  gap:10px;
+}
+.outdoor-completion-stats {
+  grid-template-columns:repeat(2,minmax(0,1fr));
+}
+@media (min-width:700px){
+  .outdoor-completion-stats {
+    grid-template-columns:repeat(4,minmax(0,1fr));
+  }
+}
