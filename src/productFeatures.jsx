@@ -4,7 +4,7 @@ import { MetconTracker } from './advancedFeatures'
 import { offlineUuid, queueUpsert, upsertOfflineFirst, isOfflineError, readOfflineState, writeOfflineState } from './offline'
 import { OutdoorTracker, emptyOutdoorTrack, outdoorActivityKind, outdoorMetrics } from './outdoorTracking'
 import { effectiveSteps } from './stepTracking'
-import { validWeightDraft,validRepsDraft,displayedSetWeight,recordedWeightValue,canFinishQuickCardio,withoutUnreliableRoute } from './trackingRules'
+import { validWeightDraft,validRepsDraft,displayedSetWeight,recordedWeightValue,canFinishQuickCardio,withoutUnreliableRoute,outdoorDistancePresentation } from './trackingRules'
 
 function partnerSetTarget(maxes,set) {
   const lift=set?.weight_lift
@@ -538,9 +538,10 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
     const quickDurationText=quickCardio&&quickElapsedSeconds>0 ? formatQuickTime(quickElapsedSeconds) : ''
     const reliableOutdoor=quickOutdoorKind ? withoutUnreliableRoute(workout.outdoor||emptyOutdoorTrack(quickOutdoorKind)) : null
     const quickOutdoorMetrics=quickOutdoorKind ? outdoorMetrics(reliableOutdoor,quickElapsedSeconds,quickOutdoorKind) : null
+    const distanceDisplay=quickOutdoorKind?outdoorDistancePresentation(reliableOutdoor):null
     const quickStepCount=quickOutdoorKind==='walk'||quickOutdoorKind==='run'?effectiveSteps(reliableOutdoor):0
-    const gpsDistanceText=quickOutdoorMetrics?.miles>0
-      ? quickOutdoorMetrics.miles.toFixed(quickOutdoorMetrics.miles<10?2:1)+' mi'
+    const gpsDistanceText=distanceDisplay?.meters>0
+      ? distanceDisplay.label+(distanceDisplay.estimated?' (GPS estimate)':'')
       : ''
     const finalWorkout={
       ...workout,
@@ -567,6 +568,12 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
     const completionOutdoor=quickOutdoorMetrics&&(quickOutdoorMetrics.distanceM>0||quickStepCount>0) ? {
       kind:quickOutdoorKind,
       miles:quickOutdoorMetrics.miles,
+      distanceM:quickOutdoorMetrics.distanceM,
+      distanceLabel:distanceDisplay.label,
+      distanceMilesLabel:distanceDisplay.milesLabel,
+      distanceNote:distanceDisplay.note,
+      distanceEstimated:distanceDisplay.estimated,
+      routeAvailable:distanceDisplay.hasRoute,
       elapsedSeconds:quickElapsedSeconds,
       avgPaceSecPerMile:quickOutdoorMetrics.avgPaceSecPerMile,
       avgMph:quickOutdoorMetrics.avgMph,
