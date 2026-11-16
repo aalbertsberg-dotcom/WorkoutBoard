@@ -2,9 +2,19 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { MIN_MOVING_SPEED_MPS,paceIsMeaningful,hasReliableOutdoorRoute,hasLiveGpsFix,gpsJitterFloorMeters } from './trackingRules'
-import { createMotionStepCounter,effectiveSteps,readMotionMagnitude } from './stepTracking'
+import { createMotionStepCounter,effectiveSteps,readMotionMagnitude,initialMotionAccess,gpsMarkerCount } from './stepTracking'
 
 export const METERS_PER_MILE=1609.344
+const MOTION_ACCESS_HINT_KEY='workset-browser-motion-granted-v1'
+const rememberedMotionAccess=()=>{
+  try{return window.localStorage.getItem(MOTION_ACCESS_HINT_KEY)==='granted'}catch{return false}
+}
+const saveMotionAccessHint=granted=>{
+  try{
+    if(granted)window.localStorage.setItem(MOTION_ACCESS_HINT_KEY,'granted')
+    else window.localStorage.removeItem(MOTION_ACCESS_HINT_KEY)
+  }catch{}
+}
 
 export function emptyOutdoorTrack(activity='walk'){
   return {
@@ -143,11 +153,14 @@ export function RouteMap({points=[],compact=false,provisional=false}){
       )).addTo(map)
       map.fitBounds(L.latLngBounds(coords),{padding:[22,22],maxZoom:17})
     }
-    const start=L.circleMarker(coords[0],{radius:6,weight:3,fillOpacity:1}).addTo(map).bindTooltip('Start')
-    markersRef.current.push(start)
-    if(coords.length>1){
-      const finish=L.circleMarker(coords.at(-1),{radius:6,weight:3,fillOpacity:1}).addTo(map).bindTooltip('Current')
-      markersRef.current.push(finish)
+    const markerCount=gpsMarkerCount(coords.length,provisional)
+    if(markerCount===1){
+      const current=L.circleMarker(coords.at(-1),{radius:6,weight:3,fillOpacity:1}).addTo(map).bindTooltip('Current location')
+      markersRef.current.push(current)
+    }else if(markerCount===2){
+      const start=L.circleMarker(coords[0],{radius:6,weight:3,fillOpacity:1}).addTo(map).bindTooltip('Start')
+      const finish=L.circleMarker(coords.at(-1),{radius:6,weight:3,fillOpacity:1}).addTo(map).bindTooltip('Current location')
+      markersRef.current.push(start,finish)
     }
     requestAnimationFrame(()=>map.invalidateSize())
   },[points,compact,provisional])
@@ -167,7 +180,10 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
   const onChangeRef=useRef(onChange)
   const motionSupported=typeof window!=='undefined'&&typeof window.DeviceMotionEvent!=='undefined'
   const motionNeedsPermission=motionSupported&&typeof window.DeviceMotionEvent.requestPermission==='function'
-  const [motionPermission,setMotionPermission]=useState(motionNeedsPermission?'required':'automatic')
+  const [motionPermission,setMotionPermission]=useState(()=>initialMotionAccess({
+    supported:motionSupported,requiresPermission:motionNeedsPermission,
+    previouslyGranted:rememberedMotionAccess()
+  }))
   const [motionFeedback,setMotionFeedback]=useState(motionSupported?'Motion sensor starts with the timer':'Motion sensor not available')
   const [message,setMessage]=useState('')
   const [permission,setPermission]=useState('prompt')
@@ -354,8 +370,16 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
     }
     window.addEventListener('devicemotion',onMotion,{passive:true})
     const timeout=setTimeout(()=>{
-      if(!heardMotion)setMotionFeedback('No motion data received · enter steps manually')
-    },5500)
+      if(heardMotion)return
+      if(motionPermission==='remembered'&&motionNeedsPermission&&document.visibilityState==='visible'){
+        // Some browsers require a fresh gesture each time the page is loaded.
+        saveMotionAccessHint(false)
+        setMotionPermission('required')
+        setMotionFeedback('Motion access needs permission again on this browser')
+      }else{
+        setMotionFeedback('No motion data received · enter steps manually')
+      }
+    },6000)
     return()=>{window.removeEventListener('devicemotion',onMotion);clearTimeout(timeout)}
   },[running,motionSupported,motionPermission,activity])
 
@@ -366,14 +390,17 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
         // Must be called directly from the button gesture.
         const granted=await window.DeviceMotionEvent.requestPermission()
         if(granted!=='granted'){
+          saveMotionAccessHint(false)
           setMotionPermission('denied')
           setMotionFeedback('Motion permission denied · enter steps manually')
           return
         }
       }
+      saveMotionAccessHint(true)
       setMotionPermission('granted')
       setMotionFeedback('Motion access enabled · start walking')
     }catch{
+      saveMotionAccessHint(false)
       setMotionPermission('denied')
       setMotionFeedback('Motion unavailable · enter steps manually')
     }
