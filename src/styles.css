@@ -7679,3 +7679,6 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
 .cardio-steps-recent { display:grid; gap:7px; }
 .cardio-steps-recent > div { display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap; padding:8px 0; border-top:1px solid #29384d; font-size:12px; }
 .cardio-steps-recent strong { white-space:nowrap; color:#e7effb; }
+
+/* Short GPS activity: retain approximate distance without implying a recorded route. */
+.completion-gps-note,.outdoor-estimated-distance-note { margin:10px 0; padding:10px 12px; border:1px solid #34465f; border-radius:10px; color:#aab9ce; background:#111c2d; font-size:12px; line-height:1.5; }
