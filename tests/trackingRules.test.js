@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {
   validWeightDraft,validRepsDraft,displayedSetWeight,recordedWeightValue,
   canFinishQuickCardio,hasReliableOutdoorRoute,paceIsMeaningful,withoutUnreliableRoute,
-  hasLiveGpsFix,gpsJitterFloorMeters,outdoorDistancePresentation
+  hasLiveGpsFix,gpsJitterFloorMeters,outdoorDistancePresentation,carryEditedWeight
 } from '../src/trackingRules.js'
 
 test('erasing 135 stays erased even when a previous set offers 135',()=>{
@@ -101,4 +101,14 @@ test('longer credible GPS track remains route-eligible',()=>{
   assert.equal(hasReliableOutdoorRoute(saved),true)
   assert.equal(outdoorDistancePresentation(saved).estimated,false)
   assert.equal(outdoorDistancePresentation(saved).hasRoute,true)
+})
+
+test('manually adjusted load carries forward only when prescribed target is unchanged',()=>{
+  const previous={done:true,weight_edited:true,weight:'155'}
+  assert.equal(carryEditedWeight(previous,'140 lb','140 lb'),155)
+  assert.equal(carryEditedWeight(previous,'140 lb','160 lb'),0)
+  assert.equal(carryEditedWeight({...previous,done:false},'140 lb','140 lb'),0)
+  assert.equal(carryEditedWeight({...previous,weight_edited:false},'140 lb','140 lb'),0)
+  assert.equal(displayedSetWeight({weight:''},[carryEditedWeight(previous,'140 lb','140 lb'),140]),'155')
+  assert.equal(displayedSetWeight({weight:'',weight_edited:true},[155,140]),'')
 })
