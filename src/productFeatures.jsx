@@ -3,6 +3,7 @@ import { supabase } from './supabase'
 import { MetconTracker } from './advancedFeatures'
 import { offlineUuid, queueUpsert, upsertOfflineFirst, isOfflineError, readOfflineState, writeOfflineState } from './offline'
 import { OutdoorTracker, emptyOutdoorTrack, outdoorActivityKind, outdoorMetrics } from './outdoorTracking'
+import { effectiveSteps } from './stepTracking'
 import { validWeightDraft,validRepsDraft,displayedSetWeight,recordedWeightValue,canFinishQuickCardio,withoutUnreliableRoute } from './trackingRules'
 
 function partnerSetTarget(maxes,set) {
@@ -173,6 +174,8 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
   const [activeSetByExercise,setActiveSetByExercise]=useState({})
   const [removeExercisePrompt,setRemoveExercisePrompt]=useState(null)
   const [quickClock,setQuickClock]=useState(()=>Date.now())
+  const cancelRequestedRef=useRef(false)
+  const inFlightSaveRef=useRef(Promise.resolve())
 
   const lastCancelRequestRef=useRef(cancelRequestToken)
   useEffect(()=>{
@@ -202,6 +205,8 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
         }
       }
     } catch {}
+    cancelRequestedRef.current=false
+    inFlightSaveRef.current=Promise.resolve()
     setWorkout(withSetProgress({exercises:[],sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',circuit_rounds:'',conditioningEnabled:false,metcon:{name:'',format:'',activity:'',duration:'',workTime:'',restTime:'',interval:'',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx',intensity:'Easy'},...(planned?.workout||{}),...(cached||{})}))
     setConditioningOpen(Boolean(planned?.workout?.conditioning_prescribed))
     setExerciseAdderOpen(false)
@@ -262,19 +267,22 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
   },[planned?.user_id,planned?.id])
 
   useEffect(()=>{
-    if (!planned?.id || saveState !== 'Unsaved') return
+    if (!planned?.id || saveState !== 'Unsaved' || cancelRequestedRef.current) return
     const timer=setTimeout(async()=>{
+      if(cancelRequestedRef.current)return
       setSaveState('Saving…')
       const updatedAt=new Date().toISOString()
-      const result=await upsertOfflineFirst(supabase,{
+      const save=upsertOfflineFirst(supabase,{
         userId:planned.user_id,
         table:'planned_workouts',
         payload:{...planned,workout,updated_at:updatedAt},
         onConflict:'id',
         dedupeKey:'planned:'+planned.id,
       })
-      setSaveState(result.error ? 'Save failed' : result.offline ? 'Saved offline' : 'Saved')
-    },700)
+      inFlightSaveRef.current=save
+      const result=await save
+      if(!cancelRequestedRef.current)setSaveState(result.error ? 'Save failed' : result.offline ? 'Saved offline' : 'Saved')
+    },workout.quick_cardio?2200:700)
     return ()=>clearTimeout(timer)
   },[workout,planned?.id,saveState])
 
@@ -463,15 +471,20 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
 
   const cancelWorkout=async()=>{
     if(!planned?.id || cancelling)return
+    cancelRequestedRef.current=true
     setCancelling(true)
+    // Wait for any earlier save to settle so it cannot overwrite cancellation.
+    try{await inFlightSaveRef.current}catch{}
+    const cancelledAt=new Date().toISOString()
     const result=await upsertOfflineFirst(supabase,{
       userId:planned.user_id,
       table:'planned_workouts',
-      payload:{...planned,workout,status:'skipped',updated_at:new Date().toISOString()},
+      payload:{...planned,workout:{...workout,cancelled_explicitly:true,cancelled_at:cancelledAt},status:'skipped',updated_at:cancelledAt},
       onConflict:'id',
       dedupeKey:'planned:'+planned.id,
     })
     if(result.error){
+      cancelRequestedRef.current=false
       setSaveState('Cancel failed: '+result.error.message)
       setCancelling(false)
       return
@@ -525,6 +538,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
     const quickDurationText=quickCardio&&quickElapsedSeconds>0 ? formatQuickTime(quickElapsedSeconds) : ''
     const reliableOutdoor=quickOutdoorKind ? withoutUnreliableRoute(workout.outdoor||emptyOutdoorTrack(quickOutdoorKind)) : null
     const quickOutdoorMetrics=quickOutdoorKind ? outdoorMetrics(reliableOutdoor,quickElapsedSeconds,quickOutdoorKind) : null
+    const quickStepCount=quickOutdoorKind==='walk'||quickOutdoorKind==='run'?effectiveSteps(reliableOutdoor):0
     const gpsDistanceText=quickOutdoorMetrics?.miles>0
       ? quickOutdoorMetrics.miles.toFixed(quickOutdoorMetrics.miles<10?2:1)+' mi'
       : ''
@@ -550,13 +564,14 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       }:{}),
       complete:true,savedAt:now,baseline_results:baselineResults
     }
-    const completionOutdoor=quickOutdoorMetrics&&quickOutdoorMetrics.distanceM>0 ? {
+    const completionOutdoor=quickOutdoorMetrics&&(quickOutdoorMetrics.distanceM>0||quickStepCount>0) ? {
       kind:quickOutdoorKind,
       miles:quickOutdoorMetrics.miles,
       elapsedSeconds:quickElapsedSeconds,
       avgPaceSecPerMile:quickOutdoorMetrics.avgPaceSecPerMile,
       avgMph:quickOutdoorMetrics.avgMph,
       elevationFt:quickOutdoorMetrics.elevationGainM*3.28084,
+      steps:quickStepCount,
       points:quickOutdoorMetrics.points,
       splits:quickOutdoorMetrics.splits,
     } : null

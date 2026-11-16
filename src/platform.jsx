@@ -5,6 +5,7 @@ import { ProgressToolbox, WorkoutTemplates } from './trainingTools'
 import { AdvancedProgressCenter, PlannedWorkoutTools, ShareImportPanel, AdminDashboardSummary } from './advancedFeatures'
 import { readOfflineState, writeOfflineState, upsertOfflineFirst } from './offline'
 import { RouteMap, outdoorMetrics, formatPace, formatOutdoorDuration, outdoorActivityKind } from './outdoorTracking'
+import { effectiveSteps } from './stepTracking'
 import { hasReliableOutdoorRoute } from './trackingRules'
 
 function startOfWeek(date = new Date()) {
@@ -412,6 +413,16 @@ export function PlatformProgress({
     }
   },[outdoorSessions])
 
+  const stepsHistory=useMemo(()=>flexSessions
+    .filter(row=>['walk','run'].includes(outdoorActivityKind(row.workout?.quick_cardio_kind||row.workout?.metcon?.activity||row.title)))
+    .map(row=>({...row,_steps:effectiveSteps(row.workout?.outdoor)}))
+    .filter(row=>row._steps>0)
+    .sort((a,b)=>String(b.completed_at||b.session_date).localeCompare(String(a.completed_at||a.session_date)))
+  ,[flexSessions])
+  const steps30=stepsHistory.filter(row=>
+    new Date(row.completed_at||row.session_date).getTime()>=Date.now()-30*dayMs
+  ).reduce((sum,row)=>sum+row._steps,0)
+
   const cardioWeekly=useMemo(()=>Array.from({length:8},(_,i)=>{
     const end=now-(7-i)*7*dayMs
     const start=end-7*dayMs
@@ -645,6 +656,16 @@ export function PlatformProgress({
           </div>
         </section>
 
+        <section className="simple-card cardio-steps-history">
+          <div className="section-heading"><div><span className="card-label">STEP PROGRESS</span><h3>Walks & runs</h3></div><strong>{steps30.toLocaleString()} steps · last 30 days</strong></div>
+          <p>Phone-motion estimates or manually entered steps. Indoor walks count even without a saved GPS route.</p>
+          {stepsHistory.length>0&&<div className="cardio-steps-recent">
+            {stepsHistory.slice(0,6).map(row=><div key={row.id}>
+              <span>{row.title||'Walk'} · {new Date(row.completed_at||row.session_date).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span>
+              <strong>{row._steps.toLocaleString()} steps</strong>
+            </div>)}
+          </div>}
+        </section>
         <section className="simple-card analytics-chart-card">
           <div className="section-heading"><div><span className="card-label">DISTANCE</span><h3>Last 8 weeks</h3></div></div>
           {outdoorSessions.length

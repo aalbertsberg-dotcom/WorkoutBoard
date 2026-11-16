@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { MIN_MOVING_SPEED_MPS,paceIsMeaningful,hasReliableOutdoorRoute,hasLiveGpsFix,gpsJitterFloorMeters } from './trackingRules'
+import { createMotionStepCounter,effectiveSteps,readMotionMagnitude } from './stepTracking'
 
 export const METERS_PER_MILE=1609.344
 
@@ -163,11 +164,17 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
   const watchRef=useRef(null)
   const wakeLockRef=useRef(null)
   const runningRef=useRef(running)
+  const onChangeRef=useRef(onChange)
+  const motionSupported=typeof window!=='undefined'&&typeof window.DeviceMotionEvent!=='undefined'
+  const motionNeedsPermission=motionSupported&&typeof window.DeviceMotionEvent.requestPermission==='function'
+  const [motionPermission,setMotionPermission]=useState(motionNeedsPermission?'required':'automatic')
+  const [motionFeedback,setMotionFeedback]=useState(motionSupported?'Motion sensor starts with the timer':'Motion sensor not available')
   const [message,setMessage]=useState('')
   const [permission,setPermission]=useState('prompt')
   outdoorRef.current=current
   elapsedRef.current=elapsedSeconds
   runningRef.current=running
+  onChangeRef.current=onChange
 
   const metrics=useMemo(()=>outdoorMetrics(current,elapsedSeconds,activity),[current,elapsedSeconds,activity])
 
@@ -323,6 +330,63 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
     return()=>document.removeEventListener('visibilitychange',onVisible)
   },[running,activity])
 
+  // Motion sensors are an optional, approximate step counter in supporting browsers.
+  // They work only while the page can receive motion events (not reliably screen-off).
+  useEffect(()=>{
+    if(!running||!motionSupported||motionPermission==='required'||motionPermission==='denied')return
+    let heardMotion=false
+    const detector=createMotionStepCounter()
+    setMotionFeedback('Listening for phone motion…')
+    const onMotion=event=>{
+      if(!runningRef.current)return
+      if(!readMotionMagnitude(event))return
+      if(!heardMotion){heardMotion=true;setMotionFeedback('Phone motion detected · estimating steps')}
+      const delta=detector.sample(event,Date.now())
+      if(delta<=0)return
+      const prev=outdoorRef.current||emptyOutdoorTrack(activity)
+      const steps=prev.step_tracking||{}
+      const next={...prev,step_tracking:{
+        ...steps,sensor_steps:Math.max(0,Number(steps.sensor_steps||0))+delta,
+        updated_at:new Date().toISOString()
+      }}
+      outdoorRef.current=next
+      onChangeRef.current?.(next)
+    }
+    window.addEventListener('devicemotion',onMotion,{passive:true})
+    const timeout=setTimeout(()=>{
+      if(!heardMotion)setMotionFeedback('No motion data received · enter steps manually')
+    },5500)
+    return()=>{window.removeEventListener('devicemotion',onMotion);clearTimeout(timeout)}
+  },[running,motionSupported,motionPermission,activity])
+
+  const enableMotion=async()=>{
+    if(!motionSupported){setMotionFeedback('Motion sensor not supported · enter steps manually');return}
+    try{
+      if(motionNeedsPermission){
+        // Must be called directly from the button gesture.
+        const granted=await window.DeviceMotionEvent.requestPermission()
+        if(granted!=='granted'){
+          setMotionPermission('denied')
+          setMotionFeedback('Motion permission denied · enter steps manually')
+          return
+        }
+      }
+      setMotionPermission('granted')
+      setMotionFeedback('Motion access enabled · start walking')
+    }catch{
+      setMotionPermission('denied')
+      setMotionFeedback('Motion unavailable · enter steps manually')
+    }
+  }
+
+  const setManualSteps=value=>{
+    if(!/^\d*$/.test(String(value)))return
+    const prev=outdoorRef.current||emptyOutdoorTrack(activity)
+    const next={...prev,step_tracking:{...(prev.step_tracking||{}),manual_steps:value}}
+    outdoorRef.current=next
+    onChangeRef.current?.(next)
+  }
+
   const paceMode=activity!=='bike'
   const signal=current?.last_accuracy_m
   const liveFix=hasLiveGpsFix(current)
@@ -350,6 +414,23 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
           <strong>Your live location will appear here</strong>
           <span>Allow location when you tap Start. Indoor GPS can be inaccurate.</span>
         </div>}
+
+    {(activity==='walk'||activity==='run')&&<section className="outdoor-steps-card">
+      <div className="outdoor-steps-header">
+        <div><span className="card-label">STEPS</span><strong>{effectiveSteps(current).toLocaleString()} steps</strong></div>
+        <small>{motionFeedback}</small>
+      </div>
+      {motionNeedsPermission&&motionPermission==='required'&&
+        <button type="button" className="secondary-action" onClick={enableMotion}>Enable phone motion</button>}
+      <label className="outdoor-step-manual">
+        <span>Manual steps <small>optional override</small></span>
+        <input type="text" inputMode="numeric" pattern="[0-9]*"
+          placeholder="Enter steps if motion is unavailable"
+          value={current.step_tracking?.manual_steps??''}
+          onChange={e=>setManualSteps(e.target.value)}/>
+      </label>
+      <p>Steps are estimated from phone movement while WorkSet is open. GPS distance remains separate.</p>
+    </section>}
 
     {metrics.splits.length>0&&<div className="outdoor-splits">
       <div className="quick-cardio-details-head"><span className="quick-cardio-section-label">Splits</span><small>Per mile</small></div>
