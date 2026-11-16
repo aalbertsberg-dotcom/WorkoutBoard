@@ -4,7 +4,7 @@ import { MetconTracker } from './advancedFeatures'
 import { offlineUuid, queueUpsert, upsertOfflineFirst, isOfflineError, readOfflineState, writeOfflineState } from './offline'
 import { OutdoorTracker, emptyOutdoorTrack, outdoorActivityKind, outdoorMetrics } from './outdoorTracking'
 import { effectiveSteps } from './stepTracking'
-import { validWeightDraft,validRepsDraft,displayedSetWeight,recordedWeightValue,canFinishQuickCardio,withoutUnreliableRoute,outdoorDistancePresentation } from './trackingRules'
+import { validWeightDraft,validRepsDraft,displayedSetWeight,recordedWeightValue,canFinishQuickCardio,withoutUnreliableRoute,outdoorDistancePresentation,carryEditedWeight } from './trackingRules'
 
 function partnerSetTarget(maxes,set) {
   const lift=set?.weight_lift
@@ -950,10 +950,13 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
           const activeSet=activeIndex>=0?item.setProgress[activeIndex]:null
           const programmedTargetText=activeSet ? partnerSetTarget(oneRepMaxes,activeSet) : ''
           const programmedTarget=Number(String(programmedTargetText||'').match(/^\d+/)?.[0]||0)
-          const previousWeight=activeIndex>0 ? Number(item.setProgress[activeIndex-1]?.weight||0) : 0
+          const priorSet=activeIndex>0 ? item.setProgress[activeIndex-1] : null
+          const previousWeight=Number(priorSet?.weight||0)
+          const priorTarget=priorSet?partnerSetTarget(oneRepMaxes,priorSet):''
+          const editedCarry=carryEditedWeight(priorSet,priorTarget,programmedTargetText)
           const lastTimeWeight=activeIndex>=0 ? Number(hist?.lastWeights?.[Math.min(activeIndex,(hist?.lastWeights?.length||1)-1)]||0) : 0
           const legacyWeight=item.load!==undefined&&item.load!=='' ? Number(item.load)||0 : 0
-          const shownWeight=displayedSetWeight(activeSet,[programmedTarget,previousWeight,lastTimeWeight,legacyWeight])
+          const shownWeight=displayedSetWeight(activeSet,[editedCarry,programmedTarget,previousWeight,lastTimeWeight,legacyWeight])
           return <>
             {activeSet&&i===focusedExerciseIndex&&<section className="current-set-panel">
               <div className="current-set-panel-head">

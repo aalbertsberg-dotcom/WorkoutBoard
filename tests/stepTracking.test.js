@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {createMotionStepCounter,effectiveSteps,readMotionMagnitude} from '../src/stepTracking.js'
+import {createMotionStepCounter,effectiveSteps,readMotionMagnitude,initialMotionAccess,gpsMarkerCount} from '../src/stepTracking.js'
 
 const gravityPulse=m=>({accelerationIncludingGravity:{x:0,y:0,z:m}})
 test('motion steps are not inferred without sensor samples',()=>{
@@ -30,4 +30,20 @@ test('paused or unsupported motion can be entered manually',()=>{
   assert.equal(effectiveSteps(o),42)
   assert.equal(effectiveSteps({step_tracking:{sensor_steps:18,manual_steps:''}}),18)
   assert.equal(effectiveSteps({}),0)
+})
+
+test('previously granted motion starts listening after refresh without a new click',()=>{
+  assert.equal(initialMotionAccess({supported:true,requiresPermission:true,previouslyGranted:true}),'remembered')
+  assert.equal(initialMotionAccess({supported:true,requiresPermission:true,previouslyGranted:false}),'required')
+  assert.equal(initialMotionAccess({supported:true,requiresPermission:false,previouslyGranted:false}),'automatic')
+  assert.equal(initialMotionAccess({supported:false,requiresPermission:false,previouslyGranted:true}),'unavailable')
+})
+
+test('provisional GPS preview has one marker until there is a reliable route',()=>{
+  assert.equal(gpsMarkerCount(0,true),0)
+  assert.equal(gpsMarkerCount(1,true),1)
+  assert.equal(gpsMarkerCount(2,true),1)
+  assert.equal(gpsMarkerCount(20,true),1)
+  assert.equal(gpsMarkerCount(1,false),1)
+  assert.equal(gpsMarkerCount(2,false),2)
 })

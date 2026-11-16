@@ -48,3 +48,19 @@ export function effectiveSteps(outdoor={}){
   }
   return Math.max(0,Math.floor(Number(outdoor?.step_tracking?.sensor_steps||0)))
 }
+
+/** A browser may remember motion permission across a reload, but not all
+ * browsers do. Try the previously granted sensor stream without a new click;
+ * if events do not arrive, require a fresh user gesture instead. */
+export function initialMotionAccess({supported=false,requiresPermission=false,previouslyGranted=false}={}) {
+  if(!supported)return 'unavailable'
+  if(!requiresPermission)return 'automatic'
+  return previouslyGranted?'remembered':'required'
+}
+
+/** Live provisional GPS has only one location marker. Start and Current
+ * markers are separate only once a route has passed the quality threshold. */
+export function gpsMarkerCount(pointCount,provisional=false) {
+  if(pointCount<=0)return 0
+  return provisional||pointCount===1?1:2
+}
