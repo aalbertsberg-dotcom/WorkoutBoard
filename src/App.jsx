@@ -8,6 +8,7 @@ import { WorkoutCoach, MetconTracker, AccountSecurityPanel, BackupRestorePanel, 
 import { archiveProgramById, makePlannedFromArchive } from './archivePrograms'
 import { saveOfflineSession, readOfflineSession, clearOfflineSession, writeOfflineState, readOfflineState, getPendingOfflineCount, syncOfflineQueue, offlineUuid, upsertOfflineFirst } from './offline'
 import { RouteMap, formatPace, formatOutdoorDuration } from './outdoorTracking'
+import { getActiveWorkoutId,setActiveWorkoutId,clearActiveWorkoutId,cancelledWorkoutIds,rememberWorkoutCancellation,isOpenWorkout,selectWorkoutToRestore } from './workoutLifecycle'
 import QRCode from 'qrcode'
 import { BarcodeDetector as BarcodeDetectorPonyfill } from 'barcode-detector/ponyfill'
 
@@ -1581,14 +1582,12 @@ function App() {
         setWeek(cached.week||1)
         setLift(cached.lift||'Squat')
         setHistory(cached.history||[])
+        const cancelledIds=cancelledWorkoutIds(userId)
         const cachedPlan=cached.plannedToday||null
-        if(cachedPlan?.workout?.standalone){
-          setPlannedToday(null)
-          setResumeStandalonePlan(standaloneWorkoutHasUserProgress(cachedPlan)?cachedPlan:null)
-        }else{
-          setPlannedToday(cachedPlan)
-          setResumeStandalonePlan(cached.resumeStandalonePlan||null)
-        }
+        const resumable=isOpenWorkout(cachedPlan,cancelledIds)?cachedPlan:null
+        setPlannedToday(resumable)
+        setResumeStandalonePlan(resumable?.workout?.standalone?null:
+          isOpenWorkout(cached.resumeStandalonePlan,cancelledIds)?cached.resumeStandalonePlan:null)
         setTrackedProgramsInfo(cached.trackedProgramsInfo||[])
         setTrackedTodayInfo(cached.trackedTodayInfo||null)
         setTodayCompletedWorkouts(cached.todayCompletedWorkouts||[])
@@ -1610,7 +1609,7 @@ function App() {
         supabase.from('one_rep_maxes').select('*').eq('user_id',userId).maybeSingle(),
         supabase.from('training_maxes').select('*').eq('user_id',userId).single(),
         supabase.from('workout_logs').select('*').eq('user_id',userId).order('updated_at',{ascending:false}),
-        supabase.from('planned_workouts').select('*').eq('user_id',userId).eq('scheduled_date',today).in('status',['planned','started','skipped']).order('created_at'),
+        supabase.from('planned_workouts').select('*').eq('user_id',userId).eq('scheduled_date',today).in('status',['planned','started']).order('created_at'),
         supabase.from('user_program_tracking').select('*').eq('user_id',userId).eq('status','tracking').order('updated_at',{ascending:false}),
         supabase.from('training_sessions').select('id,title,program,week,primary_lift,workout,session_date,completed_at').eq('user_id',userId).not('completed_at','is',null).order('completed_at',{ascending:false}).limit(1000),
       ])
@@ -1655,27 +1654,32 @@ function App() {
       const multipleTrackedPrograms=activeSupportedTracks.length>1
       const workoutsToday=(flexCompleted||[]).filter(row=>(row.session_date||localDateKey(row.completed_at))===today).length
       const activeTrackKeys=new Set(activeArchiveTracks.map(row=>row.program_key))
-      const standaloneRows=(todayPlans||[]).filter(row=>
-        (row.status==='started'||row.status==='planned') &&
-        row.workout?.standalone &&
+      const cancelledIds=cancelledWorkoutIds(userId)
+      const activeRows=(todayPlans||[]).filter(row=>isOpenWorkout(row,cancelledIds))
+      const eligible=row=>row.workout?.standalone ||
+        row.workout?.started_explicitly ||
+        row.workout?.scheduled_explicitly ||
+        plannedWorkoutHasProgress(row) ||
         !row.workout?.tracking_program_key
+      const resolvedTodayPlan=selectWorkoutToRestore(activeRows,{
+        preferredId:getActiveWorkoutId(userId),
+        cancelledIds,eligible
+      })
+      // An explicitly started Walk remains the active workout after refresh.
+      const standaloneRows=activeRows.filter(row=>row.workout?.standalone&&!row.workout?.tracking_program_key)
+      const progressedStandalone=[...standaloneRows].reverse().find(row=>
+        row.id!==resolvedTodayPlan?.id&&standaloneWorkoutHasUserProgress(row)
+      )||null
+      setResumeStandalonePlan(resolvedTodayPlan?.workout?.standalone?null:progressedStandalone)
+      const emptyStandalone=standaloneRows.filter(row=>
+        row.id!==resolvedTodayPlan?.id&&!standaloneWorkoutHasUserProgress(row)
       )
-      const progressedStandalone=[...standaloneRows].reverse().find(row=>standaloneWorkoutHasUserProgress(row))||null
-      const emptyStandalone=standaloneRows.filter(row=>!standaloneWorkoutHasUserProgress(row))
       if(emptyStandalone.length){
         await Promise.all(emptyStandalone.map(row=>supabase.from('planned_workouts').update({
           status:'skipped',updated_at:new Date().toISOString(),
         }).eq('id',row.id)))
       }
-      setResumeStandalonePlan(progressedStandalone)
-      let resolvedTodayPlan=(todayPlans||[]).find(row=>
-        !row.workout?.standalone && (
-          row.workout?.started_explicitly ||
-          row.workout?.scheduled_explicitly ||
-          plannedWorkoutHasProgress(row) ||
-          ((row.status==='started'||row.status==='planned')&&!row.workout?.tracking_program_key)
-        )
-      ) || null
+      if(resolvedTodayPlan?.status==='started')setActiveWorkoutId(userId,resolvedTodayPlan.id)
 
       if(multipleTrackedPrograms){
         const staleAutoRows=(todayPlans||[]).filter(row=>
@@ -1815,6 +1819,7 @@ function App() {
     setPlannedBackCancelRequest(0)
     setPendingWorkoutStart(null)
     plannedTodayRef.current=data
+    setActiveWorkoutId(session?.user?.id,data?.id)
     setPlannedToday(data)
     if(resumeStandalonePlan?.id===data?.id)setResumeStandalonePlan(null)
     setShowRegularToday(false)
@@ -2024,23 +2029,30 @@ function App() {
         .eq('user_id',session.user.id).eq('status','tracking')
     ])
     const multipleTracks=(activeTracking||[]).filter(row=>/^(archive|classic):/.test(String(row.program_key||''))).length>1
-    const standaloneRows=(activePlans||[]).filter(row=>row.workout?.standalone&&!row.workout?.tracking_program_key)
-    const progressedStandalone=[...standaloneRows].reverse().find(row=>standaloneWorkoutHasUserProgress(row))||null
-    const emptyStandalone=standaloneRows.filter(row=>!standaloneWorkoutHasUserProgress(row))
+    const cancelledIds=cancelledWorkoutIds(session.user.id)
+    const eligible=row=>row.workout?.standalone ||
+      row.workout?.started_explicitly || row.workout?.scheduled_explicitly ||
+      plannedWorkoutHasProgress(row) || !row.workout?.tracking_program_key
+    let activePlan=selectWorkoutToRestore(activePlans,{
+      preferredId:getActiveWorkoutId(session.user.id)||plannedTodayRef.current?.id,
+      cancelledIds,eligible
+    })
+    const standaloneRows=(activePlans||[]).filter(row=>
+      isOpenWorkout(row,cancelledIds)&&row.workout?.standalone&&!row.workout?.tracking_program_key
+    )
+    const progressedStandalone=[...standaloneRows].reverse().find(row=>
+      row.id!==activePlan?.id&&standaloneWorkoutHasUserProgress(row)
+    )||null
+    const emptyStandalone=standaloneRows.filter(row=>
+      row.id!==activePlan?.id&&!standaloneWorkoutHasUserProgress(row)
+    )
     if(emptyStandalone.length){
       await Promise.all(emptyStandalone.map(row=>supabase.from('planned_workouts').update({
         status:'skipped',updated_at:new Date().toISOString(),
       }).eq('id',row.id)))
     }
-    setResumeStandalonePlan(progressedStandalone)
-    let activePlan=(activePlans||[]).find(row=>
-      !row.workout?.standalone && (
-        row.workout?.started_explicitly ||
-        row.workout?.scheduled_explicitly ||
-        plannedWorkoutHasProgress(row) ||
-        ((row.status==='started'||row.status==='planned')&&!row.workout?.tracking_program_key)
-      )
-    ) || null
+    setResumeStandalonePlan(activePlan?.workout?.standalone?null:progressedStandalone)
+    if(activePlan?.status==='started')setActiveWorkoutId(session.user.id,activePlan.id)
     const staleAutoPlans=multipleTracks
       ? (activePlans||[]).filter(row=>
           row.workout?.tracking_program_key &&
@@ -3393,7 +3405,8 @@ function App() {
               sharedSessionId={sharedWorkoutActive&&activeSession ? activeSession.id : null}
               partnerOneRms={sharedWorkoutActive ? {...sessionOneRms,...sharedManagedPartnerOneRms} : {}}
               cancelRequestToken={plannedBackCancelRequest}
-              onCancelled={async() => {
+              onCancelled={async({planned}={}) => {
+                rememberWorkoutCancellation(session?.user?.id,planned?.id)
                 plannedTodayRef.current=null
                 setPlannedToday(null)
                 setResumeStandalonePlan(null)
@@ -3415,6 +3428,7 @@ function App() {
                 }
               }}
               onFinished={async(summary) => {
+                clearActiveWorkoutId(session?.user?.id,plannedTodayRef.current?.id)
                 plannedTodayRef.current=null
                 setResumeStandalonePlan(null)
                 setPlannedBackCancelRequest(0)
