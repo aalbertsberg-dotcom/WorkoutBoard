@@ -37,8 +37,9 @@ export function formatOutdoorDuration(seconds){
 export function formatPace(secondsPerMile){
   const value=Number(secondsPerMile||0)
   if(!Number.isFinite(value)||value<=0)return '—'
-  const minutes=Math.floor(value/60)
-  const seconds=Math.round(value%60)
+  const rounded=Math.max(0,Math.round(value))
+  const minutes=Math.floor(rounded/60)
+  const seconds=rounded%60
   return `${minutes}:${String(seconds).padStart(2,'0')}/mi`
 }
 
@@ -48,7 +49,10 @@ export function outdoorMetrics(outdoor={},elapsedSeconds=0,activity='walk'){
   const miles=distanceM/METERS_PER_MILE
   const seconds=Math.max(0,Number(elapsedSeconds||outdoor?.elapsed_seconds||0))
   const speeds=points.map(p=>Number(p.s||0)).filter(v=>Number.isFinite(v)&&v>0)
-  const currentSpeed=speeds.at(-1)||0
+  const lastPoint=points.at(-1)
+  const lastSpeed=Number(lastPoint?.s)
+  const lastPointAge=Date.now()-Number(lastPoint?.t||0)
+  const currentSpeed=lastPointAge>=0&&lastPointAge<8000&&Number.isFinite(lastSpeed)&&lastSpeed>0?lastSpeed:0
   const maxSpeed=speeds.length?Math.max(...speeds):0
   const avgSpeed=seconds>0?distanceM/seconds:0
   return {
