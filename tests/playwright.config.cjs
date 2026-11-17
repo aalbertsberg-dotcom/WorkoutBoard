@@ -16,6 +16,9 @@ module.exports=defineConfig({
   ],
   webServer:{
     command:'npm run dev -- --host 127.0.0.1 --port 4173 --strictPort',
+    // GitHub Actions builds use /WorkoutBoard/, but the local Vite smoke
+    // fixture must be served at root so the browser test can find it.
+    env:{...process.env,GITHUB_ACTIONS:''},
     url:'http://127.0.0.1:4173/tests/fixtures/smoke.html',
     timeout:60000,
     reuseExistingServer:!process.env.CI
