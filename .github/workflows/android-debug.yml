@@ -7,6 +7,14 @@ on:
     paths:
       - 'src/nativeLocation.js'
       - 'src/outdoorTracking.jsx'
+      - 'src/trackingRules.js'
+      - 'src/androidNavigation.js'
+      - 'src/App.jsx'
+      - 'src/workoutHistory.jsx'
+      - 'src/mobilitySession.jsx'
+      - 'src/styles.css'
+      - 'tests/**'
+      - 'package.json'
       - 'capacitor.config.json'
       - '.github/workflows/android-debug.yml'
 

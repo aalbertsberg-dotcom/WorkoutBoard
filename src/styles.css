@@ -7788,3 +7788,21 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   margin-right:4px; min-width:64px; max-width:120px;
 }
 .today-completed-list > article > .completed-workout-delete { z-index:2; }
+
+
+/* Keep Leaflet's internal z-index layers below WorkSet headers and navigation. */
+.outdoor-route-map {
+  position:relative;
+  z-index:0;
+  isolation:isolate;
+  contain:layout paint;
+}
+.outdoor-route-map.leaflet-container {
+  z-index:0;
+}
+.completion-outdoor-summary,
+.workout-complete-summary,
+.history-detail {
+  position:relative;
+  isolation:isolate;
+}

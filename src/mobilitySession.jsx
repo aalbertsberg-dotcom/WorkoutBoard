@@ -15,6 +15,15 @@ export default function MobilitySession({session,initialMode='warmup',onBack,onS
   const [message,setMessage]=useState('')
   useEffect(()=>{const id=setInterval(()=>setElapsed(Math.floor((Date.now()-startedAt)/1000)),1000);return()=>clearInterval(id)},[startedAt])
   useEffect(()=>{setMode(initialMode);setChecked({});setStartedAt(Date.now());setElapsed(0);setNote('');setMessage('')},[initialMode])
+  useEffect(()=>{
+    const onNativeBack=event=>{
+      event.preventDefault()
+      if(Object.values(checked).some(Boolean)&&!window.confirm('Leave this routine without saving?'))return
+      onBack?.()
+    }
+    window.addEventListener('workset-native-back',onNativeBack)
+    return()=>window.removeEventListener('workset-native-back',onNativeBack)
+  },[checked,onBack])
   const items=mode==='warmup'?AGILE_8:COOL_DOWN
   const count=items.filter((_,i)=>checked[i]).length
   const changeMode=value=>{if(value===mode)return;setMode(value);setChecked({});setStartedAt(Date.now());setElapsed(0);setMessage('')}

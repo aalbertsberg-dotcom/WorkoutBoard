@@ -34,6 +34,39 @@ export function gpsJitterFloorMeters(currentAccuracy,lastAccuracy) {
   return Math.max(2.5,Math.min(8,(current+previous)*0.15))
 }
 
+// Compare movement against GPS uncertainty before adding any distance.
+// A single wandering GPS fix must not turn a stationary indoor session into a walk.
+export function gpsMovementAssessment({
+  distanceMeters=0,currentAccuracy=12,previousAccuracy=12,
+  reportedSpeed=null,priorCandidateDistance=null
+}={}){
+  const distance=Math.max(0,Number(distanceMeters)||0)
+  const validAccuracy=value=>value!==null&&value!==undefined&&value!==''&&Number.isFinite(Number(value))
+  const quality=Math.max(
+    validAccuracy(currentAccuracy)?Math.max(0,Number(currentAccuracy)):12,
+    validAccuracy(previousAccuracy)?Math.max(0,Number(previousAccuracy)):12
+  )
+  const speed=reportedSpeed===null||reportedSpeed===undefined||reportedSpeed===''?null:Number(reportedSpeed)
+  const knownSpeed=Number.isFinite(speed)&&speed>=0
+  if(knownSpeed&&speed<0.45)return {accept:false,pending:false,reason:'stationary',minimumMeters:0}
+  const strongMotion=knownSpeed&&speed>=0.65
+  const goodFix=quality<=8
+  // Low-quality indoor GPS gets a larger dead zone; reliable walking-speed
+  // fixes with high accuracy remain responsive.
+  const minimumMeters=Math.max(5,Math.min(40,quality*(strongMotion&&goodFix?0.85:1.65)))
+  if(distance<minimumMeters)return {accept:false,pending:false,reason:'noise',minimumMeters}
+  // With uncertain location or no hardware speed, require a second fix
+  // consistently farther from the last trusted anchor.
+  if(!strongMotion||!goodFix){
+    const previous=priorCandidateDistance===null||priorCandidateDistance===undefined
+      ?null:Number(priorCandidateDistance)
+    const progression=Math.max(3,quality*0.2)
+    if(!Number.isFinite(previous)||distance<previous+progression)
+      return {accept:false,pending:true,reason:'awaiting-consistency',minimumMeters}
+  }
+  return {accept:true,pending:false,reason:'movement',minimumMeters}
+}
+
 export function validWeightDraft(value) {
   return /^\d*(?:\.\d*)?$/.test(String(value))
 }

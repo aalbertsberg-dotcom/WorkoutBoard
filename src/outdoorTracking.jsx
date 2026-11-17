@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { MIN_MOVING_SPEED_MPS,paceIsMeaningful,hasReliableOutdoorRoute,hasRecordingGaps,hasLiveGpsFix,gpsJitterFloorMeters,shouldSplitGpsTrack } from './trackingRules'
+import { MIN_MOVING_SPEED_MPS,paceIsMeaningful,hasReliableOutdoorRoute,hasRecordingGaps,hasLiveGpsFix,gpsJitterFloorMeters,shouldSplitGpsTrack,gpsMovementAssessment } from './trackingRules'
 import { createMotionStepCounter,effectiveSteps,readMotionMagnitude,initialMotionAccess,gpsMarkerCount } from './stepTracking'
 import { canTrackInBackground,startNativeLocationWatch,stopNativeLocationWatch } from './nativeLocation'
 
@@ -176,6 +176,8 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
   const outdoorRef=useRef(current)
   const elapsedRef=useRef(elapsedSeconds)
   const watchRef=useRef(null)
+  const lastGpsFixAtRef=useRef(null)
+  const candidateMovementRef=useRef(null)
   const nativeWatchRef=useRef(null)
   const nativeStartingRef=useRef(false)
   const wakeLockRef=useRef(null)
@@ -220,6 +222,11 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
     const prev=outdoorRef.current||emptyOutdoorTrack(activity)
     const points=Array.isArray(prev.points)?prev.points:[]
     const last=points.at(-1)
+    // GPS heartbeat: a stationary fix is not a lost signal.
+    const precedingFixTime=lastGpsFixAtRef.current??last?.t??null
+    const missingUpdates=precedingFixTime!=null&&
+      shouldSplitGpsTrack({t:precedingFixTime},nextPoint)
+    lastGpsFixAtRef.current=nextPoint.t
     let segment=0
     let speed=nextPoint.s
     if(last){
@@ -227,28 +234,42 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
         segment=0
         nextPoint.break_before=true
         nextPoint.gap_reason='paused'
+        candidateMovementRef.current=null
         speed=0
-      }else if(shouldSplitGpsTrack(last,nextPoint)){
-        // The browser stopped sending GPS: never draw a fictional shortcut.
+      }else if(missingUpdates){
+        // Never interpolate a shortcut across a background/screen-lock gap.
         segment=0
         nextPoint.break_before=true
         nextPoint.gap_reason='no_updates'
+        candidateMovementRef.current=null
         speed=0
       }else{
         segment=haversineMeters(last,nextPoint)
         const dt=Math.max(.1,(nextPoint.t-Number(last.t||nextPoint.t))/1000)
         const calculated=segment/dt
-        if(!Number.isFinite(speed)||speed<=0)speed=calculated
         const maxReasonable=activity==='bike'?45:activity==='run'?15:8
         if(calculated>maxReasonable&&segment>25){
+          candidateMovementRef.current=null
           setMessage('GPS jump ignored.')
           return
         }
-        const jitterFloor=gpsJitterFloorMeters(nextPoint.a,last.a)
-        if(segment<jitterFloor){
-          setMessage('GPS locked')
+        const prior=candidateMovementRef.current
+        const candidateDistance=prior?.anchorTime===last.t?prior.distance:null
+        const decision=gpsMovementAssessment({
+          distanceMeters:segment,currentAccuracy:nextPoint.a,
+          previousAccuracy:last.a,reportedSpeed:nextPoint.s,
+          priorCandidateDistance:candidateDistance,
+        })
+        if(!decision.accept){
+          candidateMovementRef.current=decision.pending
+            ?{anchorTime:last.t,distance:segment}:null
+          setMessage(decision.reason==='stationary'
+            ? 'Stationary · GPS movement not counted'
+            : 'GPS acquired · waiting for consistent movement')
           return
         }
+        candidateMovementRef.current=null
+        if(!Number.isFinite(speed)||speed<=0)speed=calculated
       }
     }
     nextPoint.s=Number.isFinite(Number(speed))?Number(speed):null
@@ -292,7 +313,7 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
       last_accuracy_m:nextPoint.a,
     }
     outdoorRef.current=next
-    onChange?.(next)
+    onChangeRef.current?.(next)
     setMessage(nextPoint.gap_reason==='no_updates'
       ? 'GPS paused while screen was locked · gap marked'
       : 'GPS locked')
@@ -303,6 +324,8 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
       navigator.geolocation.clearWatch(watchRef.current)
       watchRef.current=null
     }
+    candidateMovementRef.current=null
+    lastGpsFixAtRef.current=null
     if(nativeWatchRef.current!=null){
       const id=nativeWatchRef.current
       nativeWatchRef.current=null

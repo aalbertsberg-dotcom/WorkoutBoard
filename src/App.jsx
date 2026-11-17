@@ -11,6 +11,9 @@ import { RouteMap, formatPace, formatOutdoorDuration } from './outdoorTracking'
 import WorkoutHistory from './workoutHistory'
 import MobilitySession from './mobilitySession'
 import { outdoorDistancePresentation } from './trackingRules'
+import { Capacitor } from '@capacitor/core'
+import { App as NativeApp } from '@capacitor/app'
+import { androidBackAction } from './androidNavigation'
 import { getActiveWorkoutId,setActiveWorkoutId,clearActiveWorkoutId,cancelledWorkoutIds,getWorkoutCancellationBarrier,rememberWorkoutCancellation,isOpenWorkout,selectWorkoutToRestore } from './workoutLifecycle'
 import QRCode from 'qrcode'
 import { BarcodeDetector as BarcodeDetectorPonyfill } from 'barcode-detector/ponyfill'
@@ -1210,6 +1213,7 @@ function App() {
   const [feedbackToast,setFeedbackToast] = useState(null)
   const [progressStartSection,setProgressStartSection] = useState('Overview')
   const [appNavDepth,setAppNavDepth] = useState(()=>Number(window.history.state?.worksetDepth||0))
+  const androidBackHandlerRef=useRef(null)
   const [completedTrainingSessions,setCompletedTrainingSessions] = useState([])
   const [programCompletionPrompt,setProgramCompletionPrompt] = useState(null)
   const [oneRmNotice,setOneRmNotice] = useState(null)
@@ -1243,6 +1247,60 @@ function App() {
       setAppNavDepth(0)
     }
   }
+
+  // Android hardware/system Back has its own lifecycle. Web browser history
+  // remains unchanged; nested pages may consume this cancelable event first.
+  androidBackHandlerRef.current=()=>{
+    const nestedBack=new Event('workset-native-back',{cancelable:true})
+    if(!window.dispatchEvent(nestedBack))return
+    const action=androidBackAction({
+      activeWorkout:Boolean(plannedTodayRef.current&&!showRegularToday),
+      deleteDialog:Boolean(completedDeletePrompt),
+      completion:Boolean(completionSummary),
+      overlay:Boolean(extraWorkoutOpen),
+      preview:Boolean(nextDayPreviewOpen),
+      depth:Number(window.history.state?.worksetDepth||appNavDepth||0),
+      tab:activeTab,
+    })
+    switch(action){
+      case 'close-delete-dialog':
+        setCompletedDeletePrompt(null)
+        break
+      case 'confirm-workout-exit':
+        // This activates the existing Cancel/Stay confirmation, never
+        // destroys a running or partially completed workout automatically.
+        setPlannedBackCancelRequest(v=>v+1)
+        break
+      case 'close-completion':
+        setCompletionSummary(null)
+        break
+      case 'close-overlay':
+        setExtraWorkoutOpen(false)
+        break
+      case 'close-preview':
+        setNextDayPreviewOpen(false)
+        setProgramPreviewChoiceKey('')
+        break
+      case 'history-back':
+        window.history.back()
+        break
+      case 'go-today':
+        navigateTo('today',{replace:true})
+        break
+      default:
+        NativeApp.minimizeApp().catch(()=>{})
+    }
+  }
+  useEffect(()=>{
+    if(!Capacitor.isNativePlatform()||Capacitor.getPlatform()!=='android')return
+    let closed=false,listener=null
+    NativeApp.addListener('backButton',()=>androidBackHandlerRef.current?.())
+      .then(handle=>{
+        if(closed)handle.remove()
+        else listener=handle
+      }).catch(()=>{})
+    return()=>{closed=true;listener?.remove()}
+  },[])
 
   const openProgress = (section='Overview') => navigateTo('progress',{progressSection:section})
   const openHistory = (id=null) => {setHistoryWorkoutId(id);navigateTo('history')}
