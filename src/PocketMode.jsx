@@ -1,10 +1,12 @@
 import {useEffect,useRef,useState} from 'react'
+import {createPortal} from 'react-dom'
 import {pocketSlideProgress,pocketSlideUnlocked,pocketHoldUnlocked,POCKET_HOLD_UNLOCK_MS,pocketModeStatus} from './pocketModeRules'
 
 const SLIDER_GUTTER=12
 
 /** WorkSet-only touch protection. Does not lock or switch off the device screen. */
 export default function PocketMode({activity='walk',elapsed='0:00',distance='0.00 mi',gps='Waiting for GPS',wakeStatus='checking',onUnlock}){
+  const overlayRef=useRef(null)
   const dragRef=useRef(null)
   const holdTimerRef=useRef(null)
   const holdStartRef=useRef(0)
@@ -15,6 +17,7 @@ export default function PocketMode({activity='walk',elapsed='0:00',distance='0.0
   useEffect(()=>{
     const previousOverflow=document.body.style.overflow
     document.body.style.overflow='hidden'
+    overlayRef.current?.focus()
     return()=>{
       document.body.style.overflow=previousOverflow
       window.clearTimeout(holdTimerRef.current)
@@ -82,7 +85,19 @@ export default function PocketMode({activity='walk',elapsed='0:00',distance='0.0
   const progressPixels=(slideProgress*100).toFixed(1)+'%'
   const label=activity==='bike'?'Bike':activity==='run'?'Run':'Walk'
 
-  return <div className="pocket-overlay" role="dialog" aria-modal="true" aria-label="Pocket Mode touch lock">
+  return createPortal(<div className="pocket-overlay" role="dialog" aria-modal="true"
+    aria-label="Pocket Mode touch lock" ref={overlayRef} tabIndex={-1}
+    onKeyDown={event=>{
+      if(event.key!=='Tab')return
+      const controls=overlayRef.current?.querySelectorAll('button')
+      if(!controls?.length)return
+      const first=controls[0],last=controls[controls.length-1]
+      if(event.shiftKey&&(document.activeElement===first||document.activeElement===overlayRef.current)){
+        event.preventDefault();last.focus()
+      }else if(!event.shiftKey&&(document.activeElement===last||document.activeElement===overlayRef.current)){
+        event.preventDefault();first.focus()
+      }
+    }}>
     <div className="pocket-overlay-content">
       <div className="pocket-overlay-top">
         <span className="pocket-lock-icon" aria-hidden="true">🔒</span>
@@ -129,5 +144,5 @@ export default function PocketMode({activity='walk',elapsed='0:00',distance='0.0
       </div>
       <p className="pocket-caution">WorkSet touch lock only · the display remains on. The phone’s power button or system gestures can still lock or leave the app.</p>
     </div>
-  </div>
+  </div>,document.body)
 }
