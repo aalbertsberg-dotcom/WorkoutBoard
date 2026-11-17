@@ -134,6 +134,8 @@ export function PlatformProgress({
   const [bodyTrendRange,setBodyTrendRange] = useState('3M')
   const [bodyTrendMetric,setBodyTrendMetric] = useState('waist')
   const [selectedOutdoorId,setSelectedOutdoorId] = useState(null)
+  const [communityDeleteId,setCommunityDeleteId] = useState(null)
+  const [communityDeleteBusy,setCommunityDeleteBusy] = useState(false)
 
   const loadData = async () => {
     if (!session?.user) return
@@ -206,6 +208,18 @@ export function PlatformProgress({
     setProfile(v=>({...v,community_opt_in:enabled}))
     setMessage(enabled?'Community sharing is on for future completed workouts.':'Community sharing is off and your community posts were removed.')
     await loadData()
+  }
+
+  const deleteCommunityPost=async()=>{
+    if(!session?.user?.id||!communityDeleteId||communityDeleteBusy)return
+    setCommunityDeleteBusy(true)
+    const {error}=await supabase.from('community_activity').delete()
+      .eq('id',communityDeleteId).eq('user_id',session.user.id)
+    setCommunityDeleteBusy(false)
+    if(error){setMessage(error.message);return}
+    setCommunity(rows=>rows.filter(row=>row.id!==communityDeleteId))
+    setCommunityDeleteId(null)
+    setMessage('Shared post removed. Your private workout history is unchanged.')
   }
 
   const toggleBodyweight = async enabled => {
@@ -745,9 +759,19 @@ export function PlatformProgress({
         {message&&<div className="status-message">{message}</div>}
         <div className="community-feed">{community.map(item=><article className="community-card" key={item.id}>
           <div className="community-card-head"><strong>{item.display_name}</strong><span>{new Date(item.created_at).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span></div>
-          <h3>{item.title}</h3><div className="community-stats"><span>{item.summary?.volume?Number(item.summary.volume).toLocaleString()+' lb volume':'Workout complete'}</span>{item.summary?.estimated_1rm?<span>e1RM {Math.round(item.summary.estimated_1rm)} lb</span>:null}{item.summary?.bodyweight?<span>BW {item.summary.bodyweight} lb</span>:null}</div>
+          <h3>{item.title}</h3>
+          {item.user_id===session?.user?.id&&<button type="button" className="community-remove-post" onClick={()=>setCommunityDeleteId(item.id)}>Remove this post</button>}
+          <div className="community-stats"><span>{item.summary?.volume?Number(item.summary.volume).toLocaleString()+' lb volume':'Workout complete'}</span>{item.summary?.estimated_1rm?<span>e1RM {Math.round(item.summary.estimated_1rm)} lb</span>:null}{item.summary?.bodyweight?<span>BW {item.summary.bodyweight} lb</span>:null}</div>
         </article>)}
         {!community.length&&<div className="empty-state">No community workouts yet. Opt in above if you want to share completed workout summaries.</div>}</div>
+        {communityDeleteId&&<div className="simple-card community-delete-confirm" role="alertdialog" aria-label="Remove shared post?">
+          <h3>Remove this shared post?</h3>
+          <p>This removes it from Community, not your workout history.</p>
+          <div className="history-detail-actions">
+            <button type="button" className="secondary-action" onClick={()=>setCommunityDeleteId(null)} disabled={communityDeleteBusy}>Keep post</button>
+            <button type="button" className="danger-action" onClick={deleteCommunityPost} disabled={communityDeleteBusy}>{communityDeleteBusy?'Removing…':'Remove post'}</button>
+          </div>
+        </div>}
       </>}
     </>}
   </section>
