@@ -3386,7 +3386,7 @@ function App() {
         <header className="app-header">
           <div>
             <div className="brand-lockup"><img src={import.meta.env.BASE_URL+'icon.svg'} alt="" /><span>Work<b>set</b></span></div>
-            <h1>{activeTab === 'today' ? 'Today' : activeTab === 'together' ? 'Together' : activeTab === 'program' ? 'Plan' : activeTab === 'whiteboard' ? 'Whiteboard' : activeTab === 'progress' ? 'Progress' : activeTab === 'history' ? 'History' : activeTab === 'mobility' ? 'Warm-up & Cool-down' : activeTab === 'admin' ? 'Admin' : 'Me'</h1>
+            <h1>{activeTab === 'today' ? 'Today' : activeTab === 'together' ? 'Together' : activeTab === 'program' ? 'Plan' : activeTab === 'whiteboard' ? 'Whiteboard' : activeTab === 'progress' ? 'Progress' : activeTab === 'history' ? 'History' : activeTab === 'mobility' ? 'Warm-up & Cool-down' : activeTab === 'admin' ? 'Admin' : 'Me'}</h1>
             {appNavDepth>0&&<button type="button" className="app-history-back" onClick={navigateBack}>← Back</button>}
           </div>
           <button className={'account-chip ' + (isAdmin ? 'admin' : '')} onClick={openMe}>
