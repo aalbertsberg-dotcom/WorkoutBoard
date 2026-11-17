@@ -4,6 +4,7 @@ import { RouteMap,outdoorMetrics,formatPace,formatOutdoorDuration,outdoorActivit
 import { outdoorDistancePresentation,hasReliableOutdoorRoute,hasVerifiedOutdoorRoute } from './trackingRules'
 import { effectiveSteps } from './stepTracking'
 import { EditableWorkout } from './advancedFeatures'
+import { DialogPortal } from './worksetDialogs'
 import { HISTORY_PAGE_SIZE,completedWorkoutKind,completedWorkoutSummary,workoutHistoryMatches,workoutHistoryDayKey } from './workoutHistoryUtils'
 
 const dateKey=workoutHistoryDayKey
@@ -199,14 +200,14 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
           setMonth(date=>new Date(date))
           onChanged?.()
         }}/>} 
-      {deleting&&<section className="simple-card history-delete-confirm" role="alertdialog" aria-label="Delete this workout?">
+      {deleting&&<DialogPortal label="Delete this workout?" onDismiss={()=>{if(!busy)setDeleting(false)}}><section className="simple-card history-delete-confirm">
         <h3>Delete this workout?</h3>
         <p>This removes only <strong>{selected.title}</strong> and its linked history. It cannot be undone.</p>
         <div className="history-detail-actions">
           <button type="button" className="secondary-action" onClick={()=>setDeleting(false)} disabled={busy}>Keep workout</button>
           <button type="button" className="danger-action" onClick={deleteSelected} disabled={busy}>{busy?'Deleting…':'Delete workout'}</button>
         </div>
-      </section>}
+      </section></DialogPortal>}
     </>:<>
       <div className="workset-history-switch" role="group" aria-label="History view">
         <button type="button" className={mode==='calendar'?'active':''} onClick={()=>setMode('calendar')}>Calendar</button>

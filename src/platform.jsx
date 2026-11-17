@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './supabase'
+import { DialogPortal } from './worksetDialogs'
 import { allArchivePrograms, archiveProgramById, makePlannedFromArchive } from './archivePrograms'
 import { ProgressToolbox, WorkoutTemplates } from './trainingTools'
 import { AdvancedProgressCenter, PlannedWorkoutTools, ShareImportPanel, AdminDashboardSummary } from './advancedFeatures'
@@ -775,14 +776,14 @@ export function PlatformProgress({
           <div className="community-stats"><span>{item.summary?.volume?Number(item.summary.volume).toLocaleString()+' lb volume':'Workout complete'}</span>{item.summary?.estimated_1rm?<span>e1RM {Math.round(item.summary.estimated_1rm)} lb</span>:null}{item.summary?.bodyweight?<span>BW {item.summary.bodyweight} lb</span>:null}</div>
         </article>)}
         {!community.length&&<div className="empty-state">No community workouts yet. Opt in above if you want to share completed workout summaries.</div>}</div>
-        {communityDeleteId&&<div className="simple-card community-delete-confirm" role="alertdialog" aria-label="Remove shared post?">
+        {communityDeleteId&&<DialogPortal label="Remove shared post?" onDismiss={()=>{if(!communityDeleteBusy)setCommunityDeleteId(null)}}><div className="simple-card community-delete-confirm">
           <h3>Remove this shared post?</h3>
           <p>This removes it from Community, not your workout history.</p>
           <div className="history-detail-actions">
             <button type="button" className="secondary-action" onClick={()=>setCommunityDeleteId(null)} disabled={communityDeleteBusy}>Keep post</button>
             <button type="button" className="danger-action" onClick={deleteCommunityPost} disabled={communityDeleteBusy}>{communityDeleteBusy?'Removing…':'Remove post'}</button>
           </div>
-        </div>}
+        </div></DialogPortal>}
       </>}
     </>}
   </section>
