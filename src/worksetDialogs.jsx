@@ -26,8 +26,11 @@ export function DialogPortal({children,onDismiss,label='WorkSet confirmation'}){
       if(e.shiftKey&&(document.activeElement===first||document.activeElement===panel)){e.preventDefault();last.focus()}
       else if(!e.shiftKey&&(document.activeElement===last||document.activeElement===panel)){e.preventDefault();first.focus()}
     }
+    const onNativeBack=event=>{event.preventDefault();event.stopImmediatePropagation();dismissRef.current?.()}
     document.addEventListener('keydown',onKey,true)
+    window.addEventListener('workset-native-back',onNativeBack,true)
     return()=>{
+      window.removeEventListener('workset-native-back',onNativeBack,true)
       document.removeEventListener('keydown',onKey,true)
       document.body.style.overflow=previousOverflow
       if(previous?.isConnected)previous.focus?.()
@@ -40,6 +43,41 @@ export function DialogPortal({children,onDismiss,label='WorkSet confirmation'}){
       {children}
     </section>
   </div>,document.body)
+}
+
+// Portal the existing richer, multi-action sheets without changing their logic.
+export function OverlayPortal({children,onDismiss}){
+  const rootRef=useRef(null)
+  const dismissRef=useRef(onDismiss)
+  dismissRef.current=onDismiss
+  useEffect(()=>{
+    const previous=document.activeElement
+    const overflow=document.body.style.overflow
+    document.body.style.overflow='hidden'
+    const root=rootRef.current
+    const focusables=()=>[...(root?.querySelectorAll('button:not(:disabled),input:not(:disabled),textarea:not(:disabled),select:not(:disabled)')||[])]
+      .filter(node=>node.getClientRects().length)
+    ;(focusables()[0]||root)?.focus?.()
+    const onKey=e=>{
+      if(e.key==='Escape'){e.preventDefault();e.stopPropagation();dismissRef.current?.();return}
+      if(e.key!=='Tab')return
+      const nodes=focusables()
+      if(!nodes.length){e.preventDefault();root?.focus();return}
+      const first=nodes[0],last=nodes.at(-1)
+      if(e.shiftKey&&(document.activeElement===first||document.activeElement===root)){e.preventDefault();last.focus()}
+      else if(!e.shiftKey&&(document.activeElement===last||document.activeElement===root)){e.preventDefault();first.focus()}
+    }
+    const onNativeBack=e=>{e.preventDefault();e.stopImmediatePropagation();dismissRef.current?.()}
+    window.addEventListener('workset-native-back',onNativeBack,true)
+    document.addEventListener('keydown',onKey,true)
+    return()=>{
+      window.removeEventListener('workset-native-back',onNativeBack,true)
+      document.removeEventListener('keydown',onKey,true)
+      document.body.style.overflow=overflow
+      if(previous?.isConnected)previous.focus?.()
+    }
+  },[])
+  return createPortal(<div ref={rootRef} className="workset-overlay-root" tabIndex={-1}>{children}</div>,document.body)
 }
 
 function ChoiceDialog({message,options,settle}){

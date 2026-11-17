@@ -1,4 +1,4 @@
-import { DialogPortal,confirmWorkset } from './worksetDialogs'
+import { DialogPortal,OverlayPortal,confirmWorkset } from './worksetDialogs'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase'
 import { PlatformProgress, PlanPage, AdminPanel, FeedbackPanel } from './platform'
@@ -4514,7 +4514,7 @@ function App() {
 
       {oneRmNotice&&<div className={'one-rm-save-toast '+(oneRmNotice.type==='error'?'error':'success')} role="status">{oneRmNotice.type==='success'?'✓ ':''}{oneRmNotice.text}</div>}
 
-      {completedDeletePrompt&&<div className="same-day-sheet-backdrop" onClick={()=>!deletingCompletedWorkout&&setCompletedDeletePrompt(null)}>
+      {completedDeletePrompt&&<OverlayPortal onDismiss={()=>!deletingCompletedWorkout&&setCompletedDeletePrompt(null)}><div className="same-day-sheet-backdrop" onClick={()=>!deletingCompletedWorkout&&setCompletedDeletePrompt(null)}>
         <section className="same-day-sheet completed-workout-delete-sheet" onClick={e=>e.stopPropagation()}>
           <span className="card-label">DELETE WORKOUT</span>
           <h3>Delete this completed workout?</h3>
@@ -4526,25 +4526,25 @@ function App() {
             <button className="danger-action" type="button" disabled={deletingCompletedWorkout} onClick={()=>deleteCompletedWorkout(completedDeletePrompt)}>{deletingCompletedWorkout?'Deleting…':'Delete workout'}</button>
           </div>
         </section>
-      </div>}
+      </div></OverlayPortal>}
 
-      {programCompletionPrompt&&<div className="same-day-sheet-backdrop" onClick={()=>setProgramCompletionPrompt(null)}>
+      {programCompletionPrompt&&<OverlayPortal onDismiss={()=>setProgramCompletionPrompt(null)}><div className="same-day-sheet-backdrop" onClick={()=>setProgramCompletionPrompt(null)}>
         <section className="same-day-sheet" onClick={e=>e.stopPropagation()}>
           <span className="card-label">PROGRAM COMPLETE</span>
           <h3>{programCompletionPrompt.name} complete. Update your 1 rep maxes?</h3>
           <p>Review workout-calculated estimates, enter a number manually, or start a strength baseline.</p>
           <div><button className="secondary-action" onClick={()=>setProgramCompletionPrompt(null)}>Not now</button><button className="primary-action" onClick={openOneRmReview}>Review 1RMs</button></div>
         </section>
-      </div>}
+      </div></OverlayPortal>}
 
-      {pendingWorkoutStart&&<div className="same-day-sheet-backdrop" onClick={()=>setPendingWorkoutStart(null)}>
+      {pendingWorkoutStart&&<OverlayPortal onDismiss={()=>setPendingWorkoutStart(null)}><div className="same-day-sheet-backdrop" onClick={()=>setPendingWorkoutStart(null)}>
         <section className="same-day-sheet" onClick={e=>e.stopPropagation()}>
           <span className="card-label">ANOTHER WORKOUT TODAY</span>
           <h3>You already completed {todayCompletedWorkouts.length||trackedProgramsInfo[0]?.workoutsToday||trackedTodayInfo?.workoutsToday||1} workout{(todayCompletedWorkouts.length||trackedProgramsInfo[0]?.workoutsToday||trackedTodayInfo?.workoutsToday||1)===1?'':'s'} today.</h3>
           <p>Start <strong>{pendingWorkoutStart.label}</strong> anyway?</p>
           <div><button className="secondary-action" onClick={()=>setPendingWorkoutStart(null)}>Cancel</button><button className="primary-action" onClick={confirmPendingWorkout}>Yes, start it</button></div>
         </section>
-      </div>}
+      </div></OverlayPortal>}
     </>
   )
 }

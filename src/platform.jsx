@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './supabase'
-import { DialogPortal,confirmWorkset } from './worksetDialogs'
+import { DialogPortal,OverlayPortal,confirmWorkset } from './worksetDialogs'
 import { allArchivePrograms, archiveProgramById, makePlannedFromArchive } from './archivePrograms'
 import { ProgressToolbox, WorkoutTemplates } from './trainingTools'
 import { AdvancedProgressCenter, PlannedWorkoutTools, ShareImportPanel, AdminDashboardSummary } from './advancedFeatures'
@@ -1530,7 +1530,7 @@ export function PlanPage({
         </div>
       </section>}
 
-      {limitPrompt&&<div className="program-choice-backdrop" onClick={()=>setLimitPrompt(null)}>
+      {limitPrompt&&<OverlayPortal onDismiss={()=>setLimitPrompt(null)}><div className="program-choice-backdrop" onClick={()=>setLimitPrompt(null)}>
         <section className="program-choice-sheet" onClick={e=>e.stopPropagation()}>
           <span className="card-label">3 ACTIVE PROGRAMS</span>
           <h3>Pause one to start {limitPrompt.name}</h3>
@@ -1540,9 +1540,9 @@ export function PlanPage({
           </button>)}</div>
           <button className="secondary-action" onClick={()=>setLimitPrompt(null)}>Cancel</button>
         </section>
-      </div>}
+      </div></OverlayPortal>}
 
-      {resumePrompt&&<div className="program-choice-backdrop" onClick={()=>setResumePrompt(null)}>
+      {resumePrompt&&<OverlayPortal onDismiss={()=>setResumePrompt(null)}><div className="program-choice-backdrop" onClick={()=>setResumePrompt(null)}>
         <section className="program-choice-sheet" onClick={e=>e.stopPropagation()}>
           <span className="card-label">RESUME PROGRAM</span>
           <h3>{resumePrompt.program_name}</h3>
@@ -1552,9 +1552,9 @@ export function PlanPage({
           <small className="helper-text">Restarting resets this program's tracked progress to 0. Your previous workout history is not deleted.</small>
           <button className="secondary-action" onClick={()=>setResumePrompt(null)}>Cancel</button>
         </section>
-      </div>}
+      </div></OverlayPortal>}
 
-      {cancelPrompt&&<div className="program-choice-backdrop" onClick={()=>setCancelPrompt(null)}>
+      {cancelPrompt&&<OverlayPortal onDismiss={()=>{if(!cancelBusy)setCancelPrompt(null)}}><div className="program-choice-backdrop" onClick={()=>setCancelPrompt(null)}>
         <section className="program-choice-sheet" onClick={e=>e.stopPropagation()}>
           <span className="card-label">STOP TRACKING</span>
           <h3>{cancelPrompt.program_name}</h3>
@@ -1562,7 +1562,7 @@ export function PlanPage({
           <button className="danger-button" onClick={confirmCancelTracking} disabled={cancelBusy}>{cancelBusy?'Stopping…':'Stop tracking this program'}</button>
           <button className="secondary-action" onClick={()=>setCancelPrompt(null)} disabled={cancelBusy}>Keep it paused</button>
         </section>
-      </div>}
+      </div></OverlayPortal>}
 
       {cancelled.length>0&&<details className="completed-programs stopped-programs">
         <summary><span><b>Stopped programs</b><small>{cancelled.length} previous run{cancelled.length===1?'':'s'}</small></span></summary>

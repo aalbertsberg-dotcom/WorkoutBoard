@@ -8175,3 +8175,8 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
 @media (max-height:490px) {
   .workset-dialog-panel,.same-day-sheet,.program-choice-sheet {max-height:calc(100dvh - 24px) !important;}
 }
+
+/* A top-level portal ensures sheets are never clipped by a scrolled workout,
+   sticky navigation, transformed map or nested stacking context. */
+.workset-overlay-root {position:fixed; inset:0; z-index:2000000000; pointer-events:none;}
+.workset-overlay-root > * {pointer-events:auto;}

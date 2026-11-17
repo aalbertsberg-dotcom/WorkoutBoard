@@ -28,3 +28,10 @@ test('In-viewport modal layout overrides legacy bottom sheets',()=>{
   assert.match(css,/align-items:center !important/)
   assert.match(css,/max-height:calc\(100dvh - 48px\) !important/)
 })
+
+test('Workout, program and completion sheets portal outside scrolled pages',()=>{
+  for(const file of ['src/App.jsx','src/platform.jsx','src/productFeatures.jsx']){
+    assert.match(source(file),/<OverlayPortal/,file)
+  }
+  assert.match(source('src/worksetDialogs.jsx'),/workset-native-back/)
+})
