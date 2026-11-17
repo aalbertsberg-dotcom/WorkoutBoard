@@ -4,6 +4,7 @@ import 'leaflet/dist/leaflet.css'
 import { MIN_MOVING_SPEED_MPS,paceIsMeaningful,hasReliableOutdoorRoute,hasRecordingGaps,hasLiveGpsFix,gpsJitterFloorMeters,shouldSplitGpsTrack,gpsMovementAssessment } from './trackingRules'
 import { createMotionStepCounter,effectiveSteps,readMotionMagnitude,initialMotionAccess,gpsMarkerCount } from './stepTracking'
 import { canTrackInBackground,nativeGpsDeviceName,startNativeLocationWatch,stopNativeLocationWatch } from './nativeLocation'
+import PocketMode from './PocketMode'
 
 export const METERS_PER_MILE=1609.344
 const MOTION_ACCESS_HINT_KEY='workset-browser-motion-granted-v1'
@@ -181,6 +182,9 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
   const nativeWatchRef=useRef(null)
   const nativeStartingRef=useRef(false)
   const wakeLockRef=useRef(null)
+  const wakeLockPendingRef=useRef(null)
+  const [wakeStatus,setWakeStatus]=useState('checking')
+  const [pocketLocked,setPocketLocked]=useState(false)
   const runningRef=useRef(running)
   const onChangeRef=useRef(onChange)
   const motionSupported=typeof window!=='undefined'&&typeof window.DeviceMotionEvent!=='undefined'
@@ -334,12 +338,59 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
   }
 
   const releaseWakeLock=async()=>{
-    try{await wakeLockRef.current?.release?.()}catch{}
+    const held=wakeLockRef.current
     wakeLockRef.current=null
+    try{await held?.release?.()}catch{}
+    setWakeStatus('released')
+  }
+  const requestWakeLock=async()=>{
+    if(canTrackInBackground()){
+      setWakeStatus('native')
+      return true
+    }
+    if(!navigator.wakeLock?.request){
+      setWakeStatus('unsupported')
+      return false
+    }
+    if(document.visibilityState!=='visible'){
+      setWakeStatus('hidden')
+      return false
+    }
+    if(wakeLockRef.current&&!wakeLockRef.current.released){
+      setWakeStatus('active')
+      return true
+    }
+    if(wakeLockPendingRef.current)return wakeLockPendingRef.current
+    const pending=(async()=>{
+      try{
+        const sentinel=await navigator.wakeLock.request('screen')
+        if(!runningRef.current){
+          try{await sentinel.release()}catch{}
+          return false
+        }
+        wakeLockRef.current=sentinel
+        setWakeStatus('active')
+        sentinel.addEventListener?.('release',()=>{
+          if(wakeLockRef.current===sentinel){
+            wakeLockRef.current=null
+            setWakeStatus(document.visibilityState==='visible'?'released':'hidden')
+          }
+        })
+        return true
+      }catch{
+        setWakeStatus('error')
+        return false
+      }
+    })()
+    wakeLockPendingRef.current=pending
+    try{return await pending}finally{
+      if(wakeLockPendingRef.current===pending)wakeLockPendingRef.current=null
+    }
   }
 
   const startWatch=async()=>{
     if(canTrackInBackground()){
+      setWakeStatus('native')
       if(nativeWatchRef.current!=null||nativeStartingRef.current)return
       nativeStartingRef.current=true
       setMessage('Starting '+nativeGpsDeviceName()+' background GPS…')
@@ -365,9 +416,7 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
     }
     if(watchRef.current!=null)return
     setMessage('Getting GPS signal…')
-    try{
-      if(navigator.wakeLock?.request)wakeLockRef.current=await navigator.wakeLock.request('screen')
-    }catch{}
+    await requestWakeLock()
     if(!runningRef.current){await releaseWakeLock();return}
     watchRef.current=navigator.geolocation.watchPosition(
       pushPosition,
@@ -383,6 +432,7 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
   useEffect(()=>{
     if(running)startWatch()
     else{
+      setPocketLocked(false)
       stopWatch()
       releaseWakeLock()
       if((outdoorRef.current?.points||[]).length){
@@ -397,8 +447,10 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
   useEffect(()=>{
     const onVisible=()=>{
       if(document.visibilityState==='visible'&&running){
-        if(navigator.wakeLock?.request&&!wakeLockRef.current)navigator.wakeLock.request('screen').then(lock=>{wakeLockRef.current=lock}).catch(()=>{})
+        requestWakeLock()
         if(watchRef.current==null&&nativeWatchRef.current==null&&!nativeStartingRef.current)startWatch()
+      }else if(document.visibilityState!=='visible'&&running){
+        setWakeStatus('hidden')
       }
     }
     document.addEventListener('visibilitychange',onVisible)
@@ -492,6 +544,21 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
       <b>{message||((current.points||[]).length?'Route saved':'GPS starts with the timer')}</b>
       {signal!=null&&<small>±{Math.round(signal)} m</small>}
     </div>
+    {running&&<div className="outdoor-pocket-control">
+      <button type="button" className="outdoor-pocket-button"
+        onClick={()=>{
+          setPocketLocked(true)
+          requestWakeLock()
+        }}>🔒 Pocket Mode <span>Prevent accidental touches</span></button>
+    </div>}
+    {running&&pocketLocked&&<PocketMode
+      activity={activity}
+      elapsed={formatOutdoorDuration(elapsedSeconds)}
+      distance={(metrics.miles||0).toFixed(2)+' mi'}
+      gps={permission==='denied'?'GPS permission required':partialRoute?'GPS has gaps':!liveFix?'Waiting for GPS':signal!=null&&signal>35?'GPS weak · ±'+Math.round(signal)+' m':'GPS recording'}
+      wakeStatus={wakeStatus}
+      onUnlock={()=>setPocketLocked(false)}
+    />}
 
     {liveFix
       ? <><RouteMap points={current.points} provisional={!credibleRoute}/>
