@@ -108,6 +108,7 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
     if(sessionRow.planned_workout_id)await supabase.from('planned_workouts').delete()
       .eq('id',sessionRow.planned_workout_id).eq('user_id',session.user.id)
     setRows(prev=>prev.filter(row=>row.id!==sessionRow.id))
+    setMonthRows(prev=>prev.filter(row=>row.id!==sessionRow.id))
     setSelectedId(null);setDeleting(false);setBusy(false)
     setMessage('Workout deleted.')
     onChanged?.()
@@ -159,9 +160,9 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
             <div><span>Distance</span><strong>{distance.label}</strong></div>
             <div><span>Duration</span><strong>{formatOutdoorDuration(metrics?.elapsedSeconds||Number(workout.quick_timer_elapsed_seconds||0))}</strong></div>
             {(kind==='walk'||kind==='run')&&<div><span>Steps</span><strong>{formatNumber(effectiveSteps(outdoor))}</strong></div>}
-            <div><span>{kind==='bike'?'Avg speed':'Avg pace'}</span><strong>{!hasReliableOutdoorRoute(outdoor)?'—':kind==='bike'?(metrics?.avgMph?metrics.avgMph.toFixed(1)+' mph':'—'):formatPace(metrics?.avgPaceSecPerMile)}</strong></div>
+            <div><span>{kind==='bike'?'Avg speed':'Avg pace'}</span><strong>{!hasVerifiedOutdoorRoute(outdoor)?'—':kind==='bike'?(metrics?.avgMph?metrics.avgMph.toFixed(1)+' mph':'—'):formatPace(metrics?.avgPaceSecPerMile)}</strong></div>
           </div>
-          {distance.estimated&&<small className="history-note">Distance is approximate; insufficient reliable GPS points for an accurate route or pace.</small>}
+          {distance.estimated&&<small className="history-note">{distance.note}. Pace is not reported for an unverified track.</small>}
         </>}
         {category(selected)==='Mobility'&&<>
           <p className="history-note">{workout.mobility?.kind==='cooldown'?'Cool-down':'Warm-up'} · {formatOutdoorDuration(Number(workout.mobility?.duration_seconds||0))}</p>
@@ -187,7 +188,12 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
         {(workout.note||workout.notes)&&<div className="history-notes"><strong>Notes</strong><p>{workout.note||workout.notes}</p></div>}
       </article>
       {editing&&<EditableWorkout key={selected.id} sessionRow={selected}
-        onCancel={()=>setEditing(false)} onSaved={async()=>{setEditing(false);setMessage('Workout saved.');await load();onChanged?.()}}/>}
+        onCancel={()=>setEditing(false)} onSaved={async()=>{
+          setEditing(false);setMessage('Workout saved.')
+          await load()
+          setMonth(date=>new Date(date))
+          onChanged?.()
+        }}/>} 
       {deleting&&<section className="simple-card history-delete-confirm" role="alertdialog" aria-label="Delete this workout?">
         <h3>Delete this workout?</h3>
         <p>This removes only <strong>{selected.title}</strong> and its linked history. It cannot be undone.</p>
@@ -228,14 +234,18 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
         </div>
         <h3 className="history-day-title">{prettyDate(day)}</h3>
         <div className="history-entries">{dayRows.map(itemButton)}</div>
-        {!dayRows.length&&<p className="history-empty">No {categoryFilter==='All'?'':categoryFilter.toLowerCase()+' '}workouts recorded on this date.</p>}
+        {loadingMonth&&<p className="history-note" role="status">Loading this month's workouts…</p>}
+        {!loadingMonth&&!dayRows.length&&<p className="history-empty">No {categoryFilter==='All'?'':categoryFilter.toLowerCase()+' '}workouts recorded on this date.</p>}
       </section>}
       {mode==='list'&&<section className="simple-card">
         <h3>Completed workouts <small>({filtered.length})</small></h3>
         <div className="history-entries">{filtered.map(itemButton)}</div>
-        {!filtered.length&&<p className="history-empty">No workouts match these filters.</p>}
+        {!loading&&!filtered.length&&<p className="history-empty">No matching workouts in the loaded history.</p>}
+        {hasMore&&<button type="button" className="history-load-more" disabled={loading}
+          onClick={()=>setVisibleCount(n=>n+HISTORY_PAGE_SIZE)}>{loading?'Loading…':'Load older workouts'}</button>}
+        <small className="history-note">Showing {rows.length} most recent workouts{hasMore?' · load older sessions to search further':''}.</small>
       </section>}
-      {loading&&<p className="history-note">Loading your workout history…</p>}
+      {loading&&<p className="history-note" role="status">Loading your workout history…</p>}
     </>}
   </section>
 }
