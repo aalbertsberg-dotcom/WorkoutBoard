@@ -6,6 +6,8 @@ on:
     branches: [main]
     paths:
       - 'src/nativeLocation.js'
+      - 'src/nativeAuth.js'
+      - 'src/nativePlatforms.js'
       - 'src/outdoorTracking.jsx'
       - 'src/trackingRules.js'
       - 'src/androidNavigation.js'
@@ -51,6 +53,7 @@ jobs:
           WORKSET_NATIVE_BUILD: 'true'
           VITE_SUPABASE_URL: https://lplybuzlgowxeszkvtqe.supabase.co
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_PUBLIC_APP_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
       - name: Generate Android wrapper and sync plugins
         run: |
           npx cap add android
