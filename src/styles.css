@@ -8194,3 +8194,60 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
 .workset-crash-screen h1,.workset-crash-screen p {margin:0;}
 .workset-crash-screen p,.workset-crash-screen small {color:#bccce2;line-height:1.5;}
 .workset-crash-screen button{min-height:48px;border-radius:9px;}
+
+
+/* WorkSet 2.6.7 — History action buttons have one predictable layout.
+   The old flex-wrap caused Delete to fall below Edit on narrow phones; its
+   standalone danger-lite class also lacked a complete button border style. */
+.workset-history .history-detail-top {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,260px);
+  gap:14px;
+  align-items:start;
+}
+.workset-history .history-detail-top > :first-child {min-width:0}
+.workset-history .history-detail-top .history-detail-actions {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  align-items:stretch;
+  gap:10px;
+  width:100%;
+  min-width:0;
+}
+.workset-history .history-detail-top .history-detail-actions > button {
+  box-sizing:border-box;
+  width:100%;
+  min-width:0;
+  min-height:48px;
+  margin:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:10px 12px;
+  font-size:14px;
+  font-weight:850;
+  line-height:1.25;
+  text-align:center;
+  white-space:normal;
+  border-radius:12px;
+}
+.workset-history .history-detail-top .danger-lite {
+  border:1px solid #a74852;
+  background:#32171d;
+  color:#ffd9de;
+}
+.workset-history .history-detail-top .danger-lite:focus-visible,
+.workset-history .history-detail-top .secondary-action:focus-visible {
+  outline:3px solid #b4d9ff;
+  outline-offset:2px;
+}
+@media (max-width:600px) {
+  .workset-history .history-detail-top {
+    grid-template-columns:minmax(0,1fr);
+    gap:16px;
+  }
+  .workset-history .history-detail-top .history-detail-actions {
+    width:100%;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+}
