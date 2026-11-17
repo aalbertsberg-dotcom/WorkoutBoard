@@ -3,7 +3,7 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { MIN_MOVING_SPEED_MPS,paceIsMeaningful,hasReliableOutdoorRoute,hasRecordingGaps,hasLiveGpsFix,gpsJitterFloorMeters,shouldSplitGpsTrack,gpsMovementAssessment } from './trackingRules'
 import { createMotionStepCounter,effectiveSteps,readMotionMagnitude,initialMotionAccess,gpsMarkerCount } from './stepTracking'
-import { canTrackInBackground,startNativeLocationWatch,stopNativeLocationWatch } from './nativeLocation'
+import { canTrackInBackground,nativeGpsDeviceName,startNativeLocationWatch,stopNativeLocationWatch } from './nativeLocation'
 
 export const METERS_PER_MILE=1609.344
 const MOTION_ACCESS_HINT_KEY='workset-browser-motion-granted-v1'
@@ -342,7 +342,7 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
     if(canTrackInBackground()){
       if(nativeWatchRef.current!=null||nativeStartingRef.current)return
       nativeStartingRef.current=true
-      setMessage('Starting Android background GPS…')
+      setMessage('Starting '+nativeGpsDeviceName()+' background GPS…')
       try{
         const id=await startNativeLocationWatch(
           pushPosition,
@@ -351,7 +351,7 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
         if(!runningRef.current)await stopNativeLocationWatch(id)
         else{
           nativeWatchRef.current=id
-          setMessage('Android background GPS active · tracking with screen locked')
+          setMessage(nativeGpsDeviceName()+' background GPS active · tracking with screen locked')
         }
       }catch(error){
         setMessage(error?.message||'Could not start Android background GPS')
@@ -526,7 +526,9 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
     </div>}
 
     <p className="outdoor-web-note">{canTrackInBackground()
-      ? 'Android background location is enabled during an active workout. A persistent notification indicates recording.'
-      : 'Chrome cannot reliably record GPS with the screen locked. Gaps are marked rather than connected; use the WorkSet Android app for background tracking.'}</p>
+      ? nativeGpsDeviceName()==='iPhone'
+        ? 'iPhone records location during an active workout when permission allows it. iOS shows a location-use indicator while background tracking.'
+        : 'Android background location is enabled during an active workout. A persistent notification indicates recording.'
+      : 'Chrome cannot reliably record GPS with the screen locked. Gaps are marked rather than connected; use the WorkSet mobile app for background tracking.'}</p>
   </section>
 }
