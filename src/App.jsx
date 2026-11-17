@@ -3495,7 +3495,7 @@ function App() {
           ) : trackedProgramsInfo.length && !showRegularToday ? (
             <section className="page-section tracked-today-state">
               {todayCompletedWorkouts.length>0&&<details className="today-completed-workouts" open>
-                <summary><span><b>Today’s workouts</b><small>{todayCompletedWorkouts.length} completed</small></span></summary>
+                <summary onClick={e=>{e.preventDefault();openHistory()}} title="Open workout history"><span><b>Today’s workouts</b><small>{todayCompletedWorkouts.length} completed · View calendar ›</small></span></summary>
                 <button type="button" className="today-history-link" onClick={()=>openHistory()}>Open calendar & workout history ›</button>
                 <div className="today-completed-list">{todayCompletedWorkouts.map(row=><article key={row.id}>
                   <button type="button" className="completed-workout-delete" aria-label={'Delete '+(row.title||'workout')} onClick={()=>{setWorkoutStartError('');setCompletedDeletePrompt(row)}}>×</button>
@@ -3681,7 +3681,7 @@ function App() {
           ) : !trackedProgramsInfo.length && !showRegularToday && !sharedWorkoutActive ? (
             <section className="page-section no-program-today">
               {todayCompletedWorkouts.length>0&&<details className="today-completed-workouts" open>
-                <summary><span><b>Today’s workouts</b><small>{todayCompletedWorkouts.length} completed</small></span></summary>
+                <summary onClick={e=>{e.preventDefault();openHistory()}} title="Open workout history"><span><b>Today’s workouts</b><small>{todayCompletedWorkouts.length} completed · View calendar ›</small></span></summary>
                 <button type="button" className="today-history-link" onClick={()=>openHistory()}>Open calendar & workout history ›</button>
                 <div className="today-completed-list">{todayCompletedWorkouts.map(row=><article key={row.id}>
                   <button type="button" className="completed-workout-delete" aria-label={'Delete '+(row.title||'workout')} onClick={()=>{setWorkoutStartError('');setCompletedDeletePrompt(row)}}>×</button>
