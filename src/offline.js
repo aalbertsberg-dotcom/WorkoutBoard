@@ -130,6 +130,12 @@ const queueNetworkFailure=async opts=>{
 export async function upsertOfflineFirst(supabase,{userId,table,payload,onConflict='id',dedupeKey=null,select=false,single=false}){
   const opts={userId,table,payload,onConflict,dedupeKey}
   if(!isOnline())return queueNetworkFailure(opts)
+  // Drain previous offline edits before sending a newer online edit. Otherwise
+  // reconnects could write an old queued set over the latest set.
+  if(getPendingOfflineCount(userId)>0){
+    const flushed=await syncOfflineQueue(supabase,userId)
+    if(flushed.pending>0)return queueNetworkFailure(opts)
+  }
   try{
     let query=supabase.from(table).upsert(payload,{onConflict})
     if(select)query=query.select('*')

@@ -10,7 +10,7 @@ globalThis.localStorage={
   key:index=>[...local.keys()][index]??null,
   get length(){return local.size}
 }
-globalThis.navigator={onLine:false}
+Object.defineProperty(globalThis,'navigator',{configurable:true,value:{onLine:false}})
 globalThis.window={dispatchEvent:()=>true}
 globalThis.CustomEvent=class{constructor(type,options){this.type=type;this.detail=options?.detail}}
 const {hydrateOfflineQueue,upsertOfflineFirst,getPendingOfflineCount,syncOfflineQueue,queueUpsert}=await import('../src/offline.js')
@@ -83,4 +83,18 @@ test('Release requires pending workout protection, cache-versioning, and crash r
   assert.match(main,/<WorksetErrorBoundary>/)
   assert.match(runner,/await queueUpsert/)
   assert.match(runner,/await clearWorkoutDraft/)
+})
+
+test('On reconnect, pending edits flush before a new online edit is sent',async()=>{
+  globalThis.navigator.onLine=false
+  await queueUpsert({userId:'athlete-test',table:'planned_workouts',payload:{id:'workout-3',note:'older'}})
+  globalThis.navigator.onLine=true
+  const sent=[]
+  const supabase={from:()=>({upsert:async payload=>{sent.push(payload.note);return {error:null}}})}
+  const current=await upsertOfflineFirst(supabase,{
+    userId:'athlete-test',table:'planned_workouts',payload:{id:'workout-3',note:'newest'}
+  })
+  assert.equal(current.error,null)
+  assert.deepEqual(sent,['older','newest'])
+  assert.equal(getPendingOfflineCount('athlete-test'),0)
 })

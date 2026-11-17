@@ -285,7 +285,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
   },[planned?.user_id,planned?.id])
 
   useEffect(()=>{
-    if (!planned?.id || saveState !== 'Unsaved' || cancelRequestedRef.current) return
+    if (!planned?.id || !draftReady || saveState !== 'Unsaved' || cancelRequestedRef.current) return
     const timer=setTimeout(async()=>{
       if(cancelRequestedRef.current)return
       setSaveState('Saving…')
@@ -304,7 +304,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
         setSaveState(result.error?'Save failed: '+result.error.message:result.offline?'Saved offline':'Saved')
     },workout.quick_cardio?2200:700)
     return ()=>clearTimeout(timer)
-  },[workout,planned?.id,saveState])
+  },[workout,planned?.id,saveState,draftReady])
 
   const changeExercise=(index,patch)=>{
     setSaveState('Unsaved')
