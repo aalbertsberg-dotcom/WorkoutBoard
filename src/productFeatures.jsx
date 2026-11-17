@@ -1,3 +1,4 @@
+import {OverlayPortal} from './worksetDialogs'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase'
 import { MetconTracker } from './advancedFeatures'
@@ -857,14 +858,14 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       </div>
 
       {!canFinishCardio&&<small className="quick-cardio-finish-hint">Start the timer or enter a workout duration before finishing.</small>}
-      {cancelConfirm&&<div className="same-day-sheet-backdrop workout-cancel-backdrop" onClick={()=>!cancelling&&setCancelConfirm(false)}>
+      {cancelConfirm&&<OverlayPortal onDismiss={()=>{if(!cancelling)setCancelConfirm(false)}}><div className="same-day-sheet-backdrop workout-cancel-backdrop" onClick={()=>!cancelling&&setCancelConfirm(false)}>
         <section className="same-day-sheet cancel-workout-confirm cancel-workout-modal" onClick={e=>e.stopPropagation()}>
           <span className="card-label">ACTIVE WORKOUT</span>
           <h3>Cancel this {String(planned.title||'workout').toLowerCase()}?</h3>
           <p>This discards this unfinished workout and returns to Today.</p>
           <div><button type="button" className="secondary-action" onClick={()=>setCancelConfirm(false)} disabled={cancelling}>Keep it</button><button type="button" className="danger-action" onClick={cancelWorkout} disabled={cancelling}>{cancelling?'Cancelling…':'Yes, cancel'}</button></div>
         </section>
-      </div>}
+      </div></OverlayPortal>}
     </section>
   }
 
@@ -1067,25 +1068,25 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       </section>
     </details>
 
-    {removeExercisePrompt&&<div className="same-day-sheet-backdrop" onClick={()=>setRemoveExercisePrompt(null)}>
+    {removeExercisePrompt&&<OverlayPortal onDismiss={()=>setRemoveExercisePrompt(null)}><div className="same-day-sheet-backdrop" onClick={()=>setRemoveExercisePrompt(null)}>
       <section className="same-day-sheet remove-exercise-confirm" onClick={e=>e.stopPropagation()}>
         <span className="card-label">REMOVE EXERCISE</span>
         <h3>Remove {removeExercisePrompt.name}?</h3>
         <p>This removes it from today's workout only. It won't change the program.</p>
         <div><button type="button" className="secondary-action" onClick={()=>setRemoveExercisePrompt(null)}>Keep it</button><button type="button" className="danger-action" onClick={()=>removeExercise(removeExercisePrompt.index)}>Remove</button></div>
       </section>
-    </div>}
+    </div></OverlayPortal>}
 
     {onDismiss&&<button className="secondary-action regular-workout-fallback" onClick={onDismiss}>Use regular Today workout</button>}
     <button type="button" className="secondary-action cancel-workout-button" onClick={()=>setCancelConfirm(true)}>Cancel workout</button>
-    {cancelConfirm&&<div className="same-day-sheet-backdrop workout-cancel-backdrop" onClick={()=>!cancelling&&setCancelConfirm(false)}>
+    {cancelConfirm&&<OverlayPortal onDismiss={()=>{if(!cancelling)setCancelConfirm(false)}}><div className="same-day-sheet-backdrop workout-cancel-backdrop" onClick={()=>!cancelling&&setCancelConfirm(false)}>
       <section id="planned-cancel-confirm" className="same-day-sheet cancel-workout-confirm cancel-workout-modal" onClick={e=>e.stopPropagation()}>
         <span className="card-label">ACTIVE WORKOUT</span>
         <h3>Cancel this workout?</h3>
         <p>Your in-progress entries will not count as a completed workout. This will not advance your program.</p>
         <div><button type="button" className="secondary-action" onClick={()=>setCancelConfirm(false)} disabled={cancelling}>Keep workout</button><button type="button" className="danger-action" onClick={cancelWorkout} disabled={cancelling}>{cancelling?'Cancelling…':'Yes, cancel'}</button></div>
       </section>
-    </div>}
+    </div></OverlayPortal>}
     <div className="finish-wrap planned-finish-wrap">
       <button className="finish" onClick={finish} disabled={finishing||cancelling}>{finishing?'FINISHING…':'FINISH WORKOUT'}</button>
     </div>

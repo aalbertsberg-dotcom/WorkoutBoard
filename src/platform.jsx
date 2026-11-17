@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './supabase'
+import { DialogPortal,OverlayPortal,confirmWorkset } from './worksetDialogs'
 import { allArchivePrograms, archiveProgramById, makePlannedFromArchive } from './archivePrograms'
 import { ProgressToolbox, WorkoutTemplates } from './trainingTools'
 import { AdvancedProgressCenter, PlannedWorkoutTools, ShareImportPanel, AdminDashboardSummary } from './advancedFeatures'
@@ -775,14 +776,14 @@ export function PlatformProgress({
           <div className="community-stats"><span>{item.summary?.volume?Number(item.summary.volume).toLocaleString()+' lb volume':'Workout complete'}</span>{item.summary?.estimated_1rm?<span>e1RM {Math.round(item.summary.estimated_1rm)} lb</span>:null}{item.summary?.bodyweight?<span>BW {item.summary.bodyweight} lb</span>:null}</div>
         </article>)}
         {!community.length&&<div className="empty-state">No community workouts yet. Opt in above if you want to share completed workout summaries.</div>}</div>
-        {communityDeleteId&&<div className="simple-card community-delete-confirm" role="alertdialog" aria-label="Remove shared post?">
+        {communityDeleteId&&<DialogPortal label="Remove shared post?" onDismiss={()=>{if(!communityDeleteBusy)setCommunityDeleteId(null)}}><div className="simple-card community-delete-confirm">
           <h3>Remove this shared post?</h3>
           <p>This removes it from Community, not your workout history.</p>
           <div className="history-detail-actions">
             <button type="button" className="secondary-action" onClick={()=>setCommunityDeleteId(null)} disabled={communityDeleteBusy}>Keep post</button>
             <button type="button" className="danger-action" onClick={deleteCommunityPost} disabled={communityDeleteBusy}>{communityDeleteBusy?'Removing…':'Remove post'}</button>
           </div>
-        </div>}
+        </div></DialogPortal>}
       </>}
     </>}
   </section>
@@ -1529,7 +1530,7 @@ export function PlanPage({
         </div>
       </section>}
 
-      {limitPrompt&&<div className="program-choice-backdrop" onClick={()=>setLimitPrompt(null)}>
+      {limitPrompt&&<OverlayPortal onDismiss={()=>setLimitPrompt(null)}><div className="program-choice-backdrop" onClick={()=>setLimitPrompt(null)}>
         <section className="program-choice-sheet" onClick={e=>e.stopPropagation()}>
           <span className="card-label">3 ACTIVE PROGRAMS</span>
           <h3>Pause one to start {limitPrompt.name}</h3>
@@ -1539,9 +1540,9 @@ export function PlanPage({
           </button>)}</div>
           <button className="secondary-action" onClick={()=>setLimitPrompt(null)}>Cancel</button>
         </section>
-      </div>}
+      </div></OverlayPortal>}
 
-      {resumePrompt&&<div className="program-choice-backdrop" onClick={()=>setResumePrompt(null)}>
+      {resumePrompt&&<OverlayPortal onDismiss={()=>setResumePrompt(null)}><div className="program-choice-backdrop" onClick={()=>setResumePrompt(null)}>
         <section className="program-choice-sheet" onClick={e=>e.stopPropagation()}>
           <span className="card-label">RESUME PROGRAM</span>
           <h3>{resumePrompt.program_name}</h3>
@@ -1551,9 +1552,9 @@ export function PlanPage({
           <small className="helper-text">Restarting resets this program's tracked progress to 0. Your previous workout history is not deleted.</small>
           <button className="secondary-action" onClick={()=>setResumePrompt(null)}>Cancel</button>
         </section>
-      </div>}
+      </div></OverlayPortal>}
 
-      {cancelPrompt&&<div className="program-choice-backdrop" onClick={()=>setCancelPrompt(null)}>
+      {cancelPrompt&&<OverlayPortal onDismiss={()=>{if(!cancelBusy)setCancelPrompt(null)}}><div className="program-choice-backdrop" onClick={()=>setCancelPrompt(null)}>
         <section className="program-choice-sheet" onClick={e=>e.stopPropagation()}>
           <span className="card-label">STOP TRACKING</span>
           <h3>{cancelPrompt.program_name}</h3>
@@ -1561,7 +1562,7 @@ export function PlanPage({
           <button className="danger-button" onClick={confirmCancelTracking} disabled={cancelBusy}>{cancelBusy?'Stopping…':'Stop tracking this program'}</button>
           <button className="secondary-action" onClick={()=>setCancelPrompt(null)} disabled={cancelBusy}>Keep it paused</button>
         </section>
-      </div>}
+      </div></OverlayPortal>}
 
       {cancelled.length>0&&<details className="completed-programs stopped-programs">
         <summary><span><b>Stopped programs</b><small>{cancelled.length} previous run{cancelled.length===1?'':'s'}</small></span></summary>
@@ -1780,7 +1781,7 @@ export function AdminPanel({ programs }) {
   const resetUserTraining = async () => {
     if(!selected)return
     const label=selected.display_name||selected.email||'this user'
-    if(!window.confirm(`Reset ALL workouts and 1 rep maxes for ${label}? This cannot be undone.`))return
+    if(!await confirmWorkset(`Reset ALL workouts and 1 rep maxes for ${label}? This cannot be undone.`))return
     setMessage('Resetting training data…')
     const {error}=await supabase.rpc('admin_reset_training',{target_user:selected.user_id})
     if(error){setMessage('Run the product-upgrades migration first: '+error.message);return}
@@ -1802,7 +1803,7 @@ export function AdminPanel({ programs }) {
   }
 
   const deleteSession = async row => {
-    if(!selected||!window.confirm(`Delete "${row.title}" from this user's history? This cannot be undone.`))return
+    if(!selected||!await confirmWorkset(`Delete "${row.title}" from this user's history? This cannot be undone.`))return
     const {error}=await supabase.rpc('admin_delete_training_session',{target_user:selected.user_id,target_session:row.id})
     if(error){setMessage('Run the product-upgrades migration first: '+error.message);return}
     setSessions(rows=>rows.filter(r=>r.id!==row.id));setMessage('Session deleted.');await loadUsers()
