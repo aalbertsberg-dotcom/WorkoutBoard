@@ -7933,3 +7933,186 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   .today-history-access { width:100%; justify-content:space-between; }
   .today-completed-entry .today-completed-stats small { display:none; }
 }
+
+
+/* Pocket Mode — an intentional WorkSet touch shield; not an OS screen lock. */
+.outdoor-pocket-control { margin:12px 0; }
+.outdoor-pocket-button {
+  width:100%;
+  min-height:52px;
+  padding:12px 16px;
+  display:flex;
+  gap:8px;
+  justify-content:center;
+  align-items:center;
+  flex-wrap:wrap;
+  background:#192b25;
+  border:1px solid #699877;
+  border-radius:12px;
+  color:#edf8eb;
+  font-size:15px;
+  font-weight:850;
+  cursor:pointer;
+}
+.outdoor-pocket-button span { font-size:12px; color:#b9cfc4; font-weight:500; }
+.outdoor-pocket-button:focus-visible { outline:3px solid #a5d991; outline-offset:3px; }
+
+.pocket-overlay {
+  position:fixed;
+  inset:0;
+  width:100%;
+  width:100vw;
+  height:100%;
+  height:100dvh;
+  z-index:2147483000;
+  color:#e4eae4;
+  background:#010302;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  overflow:hidden;
+  overscroll-behavior:contain;
+  touch-action:none;
+  -webkit-user-select:none;
+  user-select:none;
+  padding:calc(22px + env(safe-area-inset-top,0px)) max(18px,env(safe-area-inset-right,0px))
+    calc(20px + env(safe-area-inset-bottom,0px)) max(18px,env(safe-area-inset-left,0px));
+  box-sizing:border-box;
+}
+.pocket-overlay * { box-sizing:border-box; }
+.pocket-overlay-content {
+  width:min(100%,480px);
+  height:100%;
+  display:flex;
+  flex-direction:column;
+  min-height:0;
+  gap:16px;
+}
+.pocket-overlay-top { display:flex; align-items:center; gap:14px; }
+.pocket-lock-icon { font-size:26px; line-height:1; }
+.pocket-eyebrow { color:#a8c0aa; font-size:10px; font-weight:800; letter-spacing:0.15em; }
+.pocket-overlay h2 { font-size:22px; font-weight:750; margin:4px 0 0; line-height:1.25; }
+.pocket-intro { font-size:13px; color:#83968b; margin:0; line-height:1.5; }
+.pocket-live-metrics { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:clamp(16px,6vh,60px); }
+.pocket-live-metrics>div {
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  padding:18px 8px;
+  border:1px solid #213027;
+  border-radius:12px;
+  align-items:center;
+  background:#050a07;
+}
+.pocket-live-metrics span { font-size:12px; color:#9cb3a0; }
+.pocket-live-metrics strong { font-size:clamp(26px,7vw,40px); letter-spacing:-0.04em; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.pocket-tracking-status {
+  display:flex;
+  align-items:flex-start;
+  gap:11px;
+  padding:12px;
+  border:1px solid #1b2a22;
+  border-radius:10px;
+  background:#030704;
+}
+.pocket-signal-dot { flex:0 0 9px; height:9px; width:9px; border-radius:50%; background:#a6d689; margin-top:5px; }
+.pocket-tracking-status>div { display:flex; flex-direction:column; gap:5px; min-width:0; }
+.pocket-tracking-status strong { font-size:13px; font-weight:750; }
+.pocket-tracking-status small { font-size:11px; color:#a1b1a4; line-height:1.4; }
+.pocket-unlock-controls { margin-top:auto; display:flex; flex-direction:column; align-items:stretch; gap:12px; }
+.pocket-unlock-controls h3 { text-align:center; color:#cbdacd; margin:0 0 4px; font-size:17px; }
+.pocket-slide-track {
+  position:relative;
+  width:100%;
+  min-height:82px;
+  border:1px solid #4f6657;
+  border-radius:999px;
+  background:#111c14;
+  overflow:hidden;
+  touch-action:none;
+}
+.pocket-slide-progress {
+  position:absolute;
+  inset:0 auto 0 0;
+  background:#294432;
+  border-radius:inherit;
+  opacity:0.55;
+  pointer-events:none;
+}
+.pocket-slide-hint {
+  position:absolute;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding-left:50px;
+  color:#d3e2d5;
+  font-size:14px;
+  font-weight:750;
+  pointer-events:none;
+}
+.pocket-slide-hint span { font-size:24px; margin-left:8px; line-height:1; }
+.pocket-slide-thumb {
+  position:absolute;
+  top:6px;
+  bottom:6px;
+  width:72px;
+  min-width:72px;
+  padding:0;
+  display:grid;
+  place-items:center;
+  background:#c6eca4;
+  color:#13271a;
+  font-size:38px;
+  border:0;
+  border-radius:999px;
+  cursor:grab;
+  touch-action:none;
+  -webkit-user-select:none;
+  user-select:none;
+  box-shadow:0 1px 10px #0005;
+}
+.pocket-slide-thumb:active { cursor:grabbing; }
+.pocket-slide-thumb:focus-visible,.pocket-hold-unlock:focus-visible {
+  outline:3px solid #f7e596; outline-offset:3px;
+}
+.pocket-hold-unlock {
+  min-height:52px;
+  border:1px solid #3e5142;
+  background:#0a100c;
+  color:#c0d3c3;
+  border-radius:12px;
+  font-size:13px;
+  font-weight:700;
+  touch-action:none;
+  cursor:pointer;
+}
+.pocket-hold-unlock.holding { background:#263f2c; border-color:#9abb87; }
+.pocket-caution { font-size:11px; color:#8d9e90; text-align:center; line-height:1.5; margin:0; }
+@media(max-height:640px) {
+  .pocket-overlay-content { gap:8px; }
+  .pocket-live-metrics { margin-top:5px; }
+  .pocket-live-metrics>div { padding:10px 6px; }
+  .pocket-slide-track { min-height:68px; }
+  .pocket-slide-thumb { font-size:31px; }
+  .pocket-intro { display:none; }
+  .pocket-caution { font-size:10px; }
+}
+
+@media(max-height:520px) {
+  .pocket-overlay { padding-top:12px; padding-bottom:12px; }
+  .pocket-overlay-content { gap:6px; }
+  .pocket-overlay-top h2 { font-size:17px; }
+  .pocket-lock-icon { font-size:20px; }
+  .pocket-live-metrics { margin-top:0; }
+  .pocket-live-metrics>div { padding:5px 6px; gap:2px; }
+  .pocket-live-metrics strong { font-size:22px; }
+  .pocket-tracking-status { padding:6px 10px; }
+  .pocket-tracking-status small { font-size:10px; }
+  .pocket-unlock-controls { gap:6px; }
+  .pocket-unlock-controls h3 { font-size:14px; }
+  .pocket-slide-track { min-height:60px; }
+  .pocket-slide-thumb { top:4px; bottom:4px; }
+  .pocket-hold-unlock { min-height:42px; }
+  .pocket-caution { display:none; }
+}
