@@ -153,9 +153,9 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
             <p>{prettyDate(dateKey(selected))}{selected.completed_at?' · '+new Date(selected.completed_at).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):''}</p>
             {selected.program&&<small>{selected.program}</small>}
           </div>
-          <div className="history-detail-actions">
+          <div className="history-detail-actions" role="group" aria-label="Workout actions">
             <button type="button" className="secondary-action" onClick={()=>{setEditing(x=>!x);setDeleting(false)}}>{editing?'Close editor':'Edit'}</button>
-            <button type="button" className="danger-lite" onClick={()=>{setDeleting(true);setEditing(false)}}>Delete</button>
+            <button type="button" className="secondary-action danger-lite" onClick={()=>{setDeleting(true);setEditing(false)}}>Delete</button>
           </div>
         </div>
         {category(selected)==='Cardio'&&<>
