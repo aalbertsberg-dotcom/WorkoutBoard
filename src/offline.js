@@ -1,4 +1,4 @@
-import {durableRead,durableWrite} from './durableStore'
+import {durableRead,durableWrite} from './durableStore.js'
 
 // Every pending upsert is persisted before the UI reports "Saved offline".
 // The v1 localStorage queue is imported automatically on first 2.6.6 run.

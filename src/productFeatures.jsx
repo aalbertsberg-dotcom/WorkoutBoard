@@ -1,5 +1,5 @@
 import {OverlayPortal} from './worksetDialogs'
-import {recoverWorkoutDraft,persistWorkoutDraft,clearWorkoutDraft} from './durableStore'
+import {recoverWorkoutDraft,persistWorkoutDraft,clearWorkoutDraft} from './durableStore.js'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase'
 import { MetconTracker } from './advancedFeatures'
