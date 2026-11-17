@@ -36,6 +36,7 @@ jobs:
       - name: Build native web assets
         run: npm run build:android
         env:
+          WORKSET_NATIVE_BUILD: 'true'
           VITE_SUPABASE_URL: https://lplybuzlgowxeszkvtqe.supabase.co
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
       - name: Generate Android wrapper and sync plugins
