@@ -60,6 +60,18 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
   }
   useEffect(()=>{load()},[session?.user?.id])
   useEffect(()=>{if(initialWorkoutId){setSelectedId(initialWorkoutId);setEditing(false);setDeleting(false)}},[initialWorkoutId])
+  useEffect(()=>{
+    const onNativeBack=event=>{
+      if(deleting||editing||selectedId){
+        event.preventDefault()
+        if(deleting)setDeleting(false)
+        else if(editing)setEditing(false)
+        else setSelectedId(null)
+      }
+    }
+    window.addEventListener('workset-native-back',onNativeBack)
+    return()=>window.removeEventListener('workset-native-back',onNativeBack)
+  },[deleting,editing,selectedId])
   const selected=rows.find(row=>row.id===selectedId)||null
   const dates=useMemo(()=>{
     const map={}
