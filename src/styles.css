@@ -7796,7 +7796,6 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   z-index:0;
   isolation:isolate;
   contain:layout paint;
-  touch-action:pan-y;
 }
 .outdoor-route-map.leaflet-container {
   z-index:0;
