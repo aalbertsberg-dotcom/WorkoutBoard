@@ -7,7 +7,7 @@ import { WhiteboardPage } from './whiteboard'
 import { TrainingTimer } from './trainingTools'
 import { WorkoutCoach, MetconTracker, AccountSecurityPanel, BackupRestorePanel, WorkoutSettingsPanel } from './advancedFeatures'
 import { archiveProgramById, makePlannedFromArchive } from './archivePrograms'
-import { saveOfflineSession, readOfflineSession, clearOfflineSession, writeOfflineState, readOfflineState, getPendingOfflineCount, syncOfflineQueue, offlineUuid, upsertOfflineFirst } from './offline'
+import { saveOfflineSession, readOfflineSession, clearOfflineSession, writeOfflineState, readOfflineState, getPendingOfflineCount, syncOfflineQueue, hydrateOfflineQueue, offlineUuid, upsertOfflineFirst } from './offline'
 import { RouteMap, formatPace, formatOutdoorDuration } from './outdoorTracking'
 import WorkoutHistory from './workoutHistory'
 import MobilitySession from './mobilitySession'
@@ -1247,7 +1247,7 @@ function App() {
   const [programCompletionPrompt,setProgramCompletionPrompt] = useState(null)
   const [oneRmNotice,setOneRmNotice] = useState(null)
   const [releaseUpdate,setReleaseUpdate] = useState(null)
-  const [offlineStatus,setOfflineStatus] = useState(()=>({online:navigator.onLine!==false,pending:0,syncing:false}))
+  const [offlineStatus,setOfflineStatus] = useState(()=>({online:navigator.onLine!==false,pending:0,syncing:false,error:null,ready:false}))
 
   const navigateTo = (tab,{progressSection=null,replace=false}={}) => {
     const section=progressSection || (tab==='progress'?progressStartSection:'Overview')
@@ -1415,18 +1415,8 @@ function App() {
     }
   },[])
 
-  const applyReleaseUpdate=async()=>{
-    if(!releaseUpdate?.buildId)return
-    try{
-      if('caches' in window){
-        const keys=await caches.keys()
-        await Promise.all(keys.filter(key=>/^(workoutboard|workset)-/i.test(key)).map(key=>caches.delete(key)))
-      }
-      if('serviceWorker' in navigator){
-        const regs=await navigator.serviceWorker.getRegistrations()
-        await Promise.all(regs.map(reg=>reg.unregister()))
-      }
-    }catch{}
+  const applyReleaseUpdate=()=>{
+    if(!releaseUpdate?.buildId||updateBlocked)return
     const url=new URL(window.location.href)
     url.searchParams.set('_workset_release',String(releaseUpdate.buildId).slice(0,12))
     window.location.replace(url.toString())
@@ -1593,27 +1583,39 @@ function App() {
   useEffect(()=>{
     const userId=session?.user?.id
     let cancelled=false
-    const refreshStatus=()=>setOfflineStatus(v=>({...v,online:navigator.onLine!==false,pending:getPendingOfflineCount(userId)}))
+    const refreshStatus=()=>setOfflineStatus(v=>({...v,online:navigator.onLine!==false,pending:getPendingOfflineCount(userId),ready:true}))
     const sync=async()=>{
+      await hydrateOfflineQueue()
+      if(cancelled)return
       refreshStatus()
       if(!userId||navigator.onLine===false)return
       setOfflineStatus(v=>({...v,online:true,syncing:true,pending:getPendingOfflineCount(userId)}))
-      const result=await syncOfflineQueue(supabase,userId)
-      if(cancelled)return
-      setOfflineStatus({online:true,syncing:false,pending:result.pending||0})
+      try{
+        const result=await syncOfflineQueue(supabase,userId)
+        if(!cancelled)setOfflineStatus({online:true,syncing:false,pending:result.pending||0,error:result.error?.message||null,ready:true})
+      }catch(error){
+        if(!cancelled)setOfflineStatus(v=>({...v,syncing:false,error:error?.message||'Sync unavailable'}))
+      }
     }
     const onOnline=()=>sync()
     const onOffline=()=>refreshStatus()
     const onQueue=()=>refreshStatus()
+    const onVisible=()=>{if(document.visibilityState==='visible')sync()}
     window.addEventListener('online',onOnline)
     window.addEventListener('offline',onOffline)
     window.addEventListener('workset:offline-change',onQueue)
+    window.addEventListener('focus',onVisible)
+    document.addEventListener('visibilitychange',onVisible)
+    const retry=setInterval(()=>{if(navigator.onLine!==false&&getPendingOfflineCount(userId)>0)sync()},45000)
     sync()
     return()=>{
       cancelled=true
+      clearInterval(retry)
       window.removeEventListener('online',onOnline)
       window.removeEventListener('offline',onOffline)
       window.removeEventListener('workset:offline-change',onQueue)
+      window.removeEventListener('focus',onVisible)
+      document.removeEventListener('visibilitychange',onVisible)
     }
   },[session?.user?.id])
 
@@ -1864,6 +1866,13 @@ function App() {
     )
     return exerciseProgress || conditioningProgress || Boolean(String(workout.note||'').trim())
   }
+
+  // A release never interrupts a live workout or erases unsynced changes.
+  const updateBlocked=Boolean(
+    !offlineStatus.ready||!offlineStatus.online||offlineStatus.syncing||offlineStatus.pending>0||
+    (plannedToday&&(plannedToday.status==='started'||plannedWorkoutHasProgress(plannedToday)))||
+    (showRegularToday&&!log.complete)
+  )
 
   const standaloneWorkoutHasUserProgress = row => {
     const workout=row?.workout||{}
@@ -4493,18 +4502,20 @@ function App() {
         <button className={activeTab==='whiteboard'?'active':''} onClick={()=>navigateTo('whiteboard')}><b>□</b><span>Board</span></button>
       </nav>
 
-      {(!offlineStatus.online||offlineStatus.pending>0||offlineStatus.syncing)&&<div className={'offline-status-toast '+(!offlineStatus.online?'offline':offlineStatus.syncing?'syncing':'pending')} role="status">
+      {(!offlineStatus.online||offlineStatus.pending>0||offlineStatus.syncing||offlineStatus.error)&&<div className={'offline-status-toast '+(!offlineStatus.online?'offline':offlineStatus.syncing?'syncing':'pending')} role="status">
         <strong>{!offlineStatus.online?'Offline':offlineStatus.syncing?'Syncing':'Waiting to sync'}</strong>
         <span>{!offlineStatus.online
           ? (offlineStatus.pending?offlineStatus.pending+' change'+(offlineStatus.pending===1?'':'s')+' saved on this device':'Workouts and measurements save on this device')
           : offlineStatus.syncing
             ? 'Sending saved changes…'
-            : offlineStatus.pending+' change'+(offlineStatus.pending===1?'':'s')+' waiting'}</span>
+            : offlineStatus.error
+              ? 'Sync needs attention: '+offlineStatus.error
+              : offlineStatus.pending+' change'+(offlineStatus.pending===1?'':'s')+' waiting'}</span>
       </div>}
 
-      {releaseUpdate&&<div className="release-update-toast" role="status">
-        <div><strong>Workset update ready</strong><span>Reload to use the latest version.</span></div>
-        <button type="button" onClick={applyReleaseUpdate}>Reload</button>
+      {releaseUpdate&&!updateBlocked&&<div className="release-update-toast" role="status">
+        <div><strong>WorkSet update ready</strong><span>{updateBlocked?'Finish the workout and sync pending changes before updating.':'Safe to update — your workout data is preserved.'}</span></div>
+        <button type="button" onClick={applyReleaseUpdate} disabled={updateBlocked}>{updateBlocked?'Later':'Update'}</button>
       </div>}
 
       {feedbackToast&&isAdmin&&<button className="admin-feedback-toast" onClick={()=>{setFeedbackUnread(0);setFeedbackToast(null);navigateTo('admin')}}>

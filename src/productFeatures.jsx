@@ -1,4 +1,5 @@
 import {OverlayPortal} from './worksetDialogs'
+import {recoverWorkoutDraft,persistWorkoutDraft,clearWorkoutDraft} from './durableStore.js'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase'
 import { MetconTracker } from './advancedFeatures'
@@ -177,6 +178,8 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
   const [quickClock,setQuickClock]=useState(()=>Date.now())
   const cancelRequestedRef=useRef(false)
   const inFlightSaveRef=useRef(Promise.resolve())
+  const revisionRef=useRef(0)
+  const [draftReady,setDraftReady]=useState(false)
 
   const lastCancelRequestRef=useRef(cancelRequestToken)
   useEffect(()=>{
@@ -207,7 +210,6 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       }
     } catch {}
     cancelRequestedRef.current=false
-    inFlightSaveRef.current=Promise.resolve()
     setWorkout(withSetProgress({exercises:[],sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',circuit_rounds:'',conditioningEnabled:false,metcon:{name:'',format:'',activity:'',duration:'',workTime:'',restTime:'',interval:'',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx',intensity:'Easy'},...(planned?.workout||{}),...(cached||{})}))
     setConditioningOpen(Boolean(planned?.workout?.conditioning_prescribed))
     setExerciseAdderOpen(false)
@@ -217,13 +219,28 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
     setRemoveExercisePrompt(null)
   },[planned?.id,planned?.updated_at])
 
+  // Recover the newest saved draft before writing any replacement.
   useEffect(()=>{
     if(!planned?.id)return
-    try {
-      localStorage.setItem('wb-planned-draft-'+planned.id,JSON.stringify(workout))
-      localStorage.setItem('wb-planned-draft-ts-'+planned.id,String(Date.now()))
-    } catch {}
-  },[workout,planned?.id])
+    let cancelled=false
+    setDraftReady(false)
+    const serverTs=planned.updated_at?new Date(planned.updated_at).getTime():0
+    let localTs=0
+    try{localTs=Number(localStorage.getItem('wb-planned-draft-ts-'+planned.id)||0)}catch{}
+    recoverWorkoutDraft(planned.user_id,planned.id,serverTs).then(saved=>{
+      if(!cancelled&&saved?.value&&Number(saved.savedAt)>localTs)
+        setWorkout(current=>withSetProgress({...current,...saved.value}))
+    }).finally(()=>{if(!cancelled)setDraftReady(true)})
+    return()=>{cancelled=true}
+  },[planned?.id,planned?.updated_at])
+
+  useEffect(()=>{
+    if(!planned?.id||!draftReady)return
+    revisionRef.current++
+    persistWorkoutDraft(planned.user_id,planned.id,workout).then(ok=>{
+      if(!ok)setSaveState('Storage unavailable — keep this page open')
+    })
+  },[workout,planned?.id,draftReady])
 
   useEffect(()=>{
     if(!planned?.user_id)return
@@ -268,24 +285,26 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
   },[planned?.user_id,planned?.id])
 
   useEffect(()=>{
-    if (!planned?.id || saveState !== 'Unsaved' || cancelRequestedRef.current) return
+    if (!planned?.id || !draftReady || saveState !== 'Unsaved' || cancelRequestedRef.current) return
     const timer=setTimeout(async()=>{
       if(cancelRequestedRef.current)return
       setSaveState('Saving…')
       const updatedAt=new Date().toISOString()
-      const save=upsertOfflineFirst(supabase,{
+      const revision=revisionRef.current
+      const save=inFlightSaveRef.current.catch(()=>{}).then(()=>upsertOfflineFirst(supabase,{
         userId:planned.user_id,
         table:'planned_workouts',
         payload:{...planned,workout,updated_at:updatedAt},
         onConflict:'id',
         dedupeKey:'planned:'+planned.id,
-      })
+      }))
       inFlightSaveRef.current=save
       const result=await save
-      if(!cancelRequestedRef.current)setSaveState(result.error ? 'Save failed' : result.offline ? 'Saved offline' : 'Saved')
+      if(!cancelRequestedRef.current&&revision===revisionRef.current)
+        setSaveState(result.error?'Save failed: '+result.error.message:result.offline?'Saved offline':'Saved')
     },workout.quick_cardio?2200:700)
     return ()=>clearTimeout(timer)
-  },[workout,planned?.id,saveState])
+  },[workout,planned?.id,saveState,draftReady])
 
   const changeExercise=(index,patch)=>{
     setSaveState('Unsaved')
@@ -490,10 +509,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       setCancelling(false)
       return
     }
-    try {
-      localStorage.removeItem('wb-planned-draft-'+planned.id)
-      localStorage.removeItem('wb-planned-draft-ts-'+planned.id)
-    } catch {}
+    await clearWorkoutDraft(planned.user_id,planned.id)
     setSaveState(result.offline?'Saved offline':'Saved')
     setCancelConfirm(false)
     setCancelling(false)
@@ -535,6 +551,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
   const finish=async()=>{
     if (!planned?.id || finishing || (quickCardio&&!canFinishCardio)) return
     setFinishing(true)
+    await inFlightSaveRef.current.catch(()=>{})
     const now=new Date().toISOString()
     const quickDurationText=quickCardio&&quickElapsedSeconds>0 ? formatQuickTime(quickElapsedSeconds) : ''
     const reliableOutdoor=quickOutdoorKind ? withoutUnreliableRoute(workout.outdoor||emptyOutdoorTrack(quickOutdoorKind)) : null
@@ -606,14 +623,15 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       updated_at:now,
     })
     const finishLocally=async(sessionId)=>{
-      queueUpsert({
+      try {
+      await queueUpsert({
         userId:planned.user_id,
         table:'planned_workouts',
         payload:{...planned,status:'completed',workout:finalWorkout,updated_at:now},
         onConflict:'id',
         dedupeKey:'planned:'+planned.id,
       })
-      queueUpsert({
+      await queueUpsert({
         userId:planned.user_id,
         table:'training_sessions',
         payload:finishPayload(sessionId),
@@ -621,7 +639,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
         dedupeKey:'training:'+sessionId,
       })
       if(sharedSessionId){
-        queueUpsert({
+        await queueUpsert({
           userId:planned.user_id,
           table:'session_results',
           payload:{
@@ -637,10 +655,12 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
           dedupeKey:'session-result:'+sharedSessionId+':'+planned.user_id,
         })
       }
-      try {
-        localStorage.removeItem('wb-planned-draft-'+planned.id)
-        localStorage.removeItem('wb-planned-draft-ts-'+planned.id)
-      } catch {}
+      await clearWorkoutDraft(planned.user_id,planned.id)
+      }catch(error){
+        setSaveState('Finish not saved: '+(error?.message||'Storage unavailable'))
+        setFinishing(false)
+        return
+      }
       setSaveState('Saved offline')
       onFinished?.({
         title:planned.title,
@@ -739,10 +759,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
           updated_at:now,
         },{onConflict:'session_id,user_id'})
       }
-      try {
-        localStorage.removeItem('wb-planned-draft-'+planned.id)
-        localStorage.removeItem('wb-planned-draft-ts-'+planned.id)
-      } catch {}
+      await clearWorkoutDraft(planned.user_id,planned.id)
       setSaveState(plannedResult.offline?'Saved offline':'Saved')
       onFinished?.({
         title:planned.title,
