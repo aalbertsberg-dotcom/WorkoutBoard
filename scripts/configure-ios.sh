@@ -16,6 +16,12 @@ upsert_string() {
   fi
 }
 upsert_string CFBundleDisplayName "WorkSet"
+if [[ -n "${WORKSET_IOS_APP_VERSION:-}" ]]; then
+  upsert_string CFBundleShortVersionString "$WORKSET_IOS_APP_VERSION"
+fi
+if [[ -n "${WORKSET_IOS_BUILD_NUMBER:-}" ]]; then
+  upsert_string CFBundleVersion "$WORKSET_IOS_BUILD_NUMBER"
+fi
 upsert_string NSLocationWhenInUseUsageDescription "WorkSet uses your location to map walks, runs and rides while tracking is active."
 upsert_string NSLocationAlwaysAndWhenInUseUsageDescription "WorkSet records your route while the screen is locked during an active workout. Recording stops when the workout ends."
 upsert_string NSMotionUsageDescription "WorkSet uses motion data to estimate steps during an active walk or run."
