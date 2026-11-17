@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {
   validWeightDraft,validRepsDraft,displayedSetWeight,recordedWeightValue,
   canFinishQuickCardio,hasReliableOutdoorRoute,paceIsMeaningful,withoutUnreliableRoute,
-  hasLiveGpsFix,gpsJitterFloorMeters,outdoorDistancePresentation,shouldSplitGpsTrack,hasRecordingGaps,hasVerifiedOutdoorRoute
+  hasLiveGpsFix,gpsJitterFloorMeters,outdoorDistancePresentation,shouldSplitGpsTrack,hasRecordingGaps,hasVerifiedOutdoorRoute,gpsMovementAssessment
 } from '../src/trackingRules.js'
 
 test('erasing 135 stays erased even when a previous set offers 135',()=>{
@@ -138,4 +138,42 @@ test('screen-off GPS interruptions split the route and never claim verified mile
   assert.equal(text.estimated,true)
   assert.equal(text.partial,true)
   assert.equal(hasVerifiedOutdoorRoute({distance_m:180,points:[{lat:30,lng:-88},{lat:30.001,lng:-88}]}),true)
+})
+
+test('indoor stationary speed does not become phantom GPS distance',()=>{
+  const drift=gpsMovementAssessment({
+    distanceMeters:26,currentAccuracy:13,previousAccuracy:13,
+    reportedSpeed:0,priorCandidateDistance:24
+  })
+  assert.equal(drift.accept,false)
+  assert.equal(drift.reason,'stationary')
+})
+test('low-accuracy drift stays uncounted without coherent follow-through',()=>{
+  const tiny=gpsMovementAssessment({distanceMeters:12,currentAccuracy:13,previousAccuracy:13})
+  assert.equal(tiny.accept,false)
+  assert.equal(tiny.pending,false)
+  const first=gpsMovementAssessment({distanceMeters:24,currentAccuracy:13,previousAccuracy:13})
+  assert.equal(first.accept,false)
+  assert.equal(first.pending,true)
+  const bounce=gpsMovementAssessment({
+    distanceMeters:20,currentAccuracy:13,previousAccuracy:13,priorCandidateDistance:24
+  })
+  assert.equal(bounce.accept,false)
+  const confirmed=gpsMovementAssessment({
+    distanceMeters:29,currentAccuracy:13,previousAccuracy:13,priorCandidateDistance:24
+  })
+  assert.equal(confirmed.accept,true)
+})
+test('good outdoor fixes still allow plausible walking',()=>{
+  const moving=gpsMovementAssessment({
+    distanceMeters:6,currentAccuracy:5,previousAccuracy:5,reportedSpeed:1.1
+  })
+  assert.equal(moving.accept,true)
+  assert.equal(moving.pending,false)
+  const noSpeed=gpsMovementAssessment({
+    distanceMeters:12,currentAccuracy:5,previousAccuracy:5,priorCandidateDistance:8
+  })
+  assert.equal(noSpeed.accept,true)
+  const missingAccuracy=gpsMovementAssessment({distanceMeters:6,currentAccuracy:null,previousAccuracy:null,reportedSpeed:1})
+  assert.equal(missingAccuracy.accept,false)
 })
