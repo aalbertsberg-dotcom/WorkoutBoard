@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {completedWorkoutKind,completedWorkoutSummary,workoutHistoryDayKey,workoutHistoryMatches,HISTORY_PAGE_SIZE} from '../src/workoutHistoryUtils.js'
 
 test('cardio history shows distance consistently even without a tracked program',()=>{
- const walk={title:'Walk',total_volume:0,workout:{quick_cardio_kind:'walk',outdoor:{distance_m:2349,points:[]}}}
+ const walk={title:'Walk',total_volume:0,workout:{quick_cardio_kind:'walk',outdoor:{distance_m:2349,points:[{lat:30,lng:-88},{lat:30.012,lng:-88}]}}}}
  assert.equal(completedWorkoutKind(walk),'Cardio')
  assert.match(completedWorkoutSummary(walk),/mi/)
  assert.equal(completedWorkoutSummary({...walk,workout:{quick_cardio_kind:'walk',outdoor:{distance_m:22.56}}}),'≈74 ft')
