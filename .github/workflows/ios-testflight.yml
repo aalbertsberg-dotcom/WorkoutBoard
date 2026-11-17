@@ -1,0 +1,124 @@
+name: Upload WorkSet to TestFlight (Apple signing required)
+
+# Never auto-upload untested builds to an external group.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  testflight:
+    runs-on: macos-15
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify Apple signing secrets exist
+        env:
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          CERT_P12: ${{ secrets.IOS_DISTRIBUTION_P12_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_P12_PASSWORD }}
+          PROFILE: ${{ secrets.IOS_APPSTORE_PROFILE_BASE64 }}
+          API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          API_ISSUER: ${{ secrets.APPSTORE_ISSUER_ID }}
+          API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+        run: |
+          : "${TEAM_ID:?Missing APPLE_TEAM_ID}"
+          : "${CERT_P12:?Missing IOS_DISTRIBUTION_P12_BASE64}"
+          : "${CERT_PASSWORD:?Missing IOS_DISTRIBUTION_P12_PASSWORD}"
+          : "${PROFILE:?Missing IOS_APPSTORE_PROFILE_BASE64}"
+          : "${API_KEY_ID:?Missing APPSTORE_API_KEY_ID}"
+          : "${API_ISSUER:?Missing APPSTORE_ISSUER_ID}"
+          : "${API_PRIVATE_KEY:?Missing APPSTORE_API_PRIVATE_KEY}"
+      - name: Install packages and verify tests
+        run: |
+          npm install
+          npm test
+      - name: Build shared native web app
+        run: npm run build:native
+        env:
+          WORKSET_NATIVE_BUILD: 'true'
+          VITE_SUPABASE_URL: https://lplybuzlgowxeszkvtqe.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_PUBLIC_APP_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+      - name: Generate and configure iOS wrapper
+        run: |
+          npx cap add ios
+          npx cap sync ios
+          WORKSET_IOS_APP_VERSION="$(node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).version")" \
+          WORKSET_IOS_BUILD_NUMBER="${{ github.run_number }}" \
+            bash scripts/configure-ios.sh
+      - name: Import signing identity and provisioning profile
+        env:
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          CERT_P12: ${{ secrets.IOS_DISTRIBUTION_P12_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_P12_PASSWORD }}
+          PROFILE: ${{ secrets.IOS_APPSTORE_PROFILE_BASE64 }}
+        run: |
+          set -euo pipefail
+          echo "$CERT_P12" | base64 -D > "$RUNNER_TEMP/ios-distribution.p12"
+          KEYCHAIN="$RUNNER_TEMP/workset-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 20)"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN"
+          security import "$RUNNER_TEMP/ios-distribution.p12" -k "$KEYCHAIN" -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          PROFILE_FILE="$RUNNER_TEMP/WorkSet-AppStore.mobileprovision"
+          echo "$PROFILE" | base64 -D > "$PROFILE_FILE"
+          security cms -D -i "$PROFILE_FILE" > "$RUNNER_TEMP/workset-profile.plist"
+          PROFILE_NAME=$(/usr/libexec/PlistBuddy -c 'Print :Name' "$RUNNER_TEMP/workset-profile.plist")
+          cp "$PROFILE_FILE" "$HOME/Library/MobileDevice/Provisioning Profiles/"
+          echo "IOS_PROFILE_NAME=$PROFILE_NAME" >> "$GITHUB_ENV"
+          echo "IOS_TEAM_ID=$TEAM_ID" >> "$GITHUB_ENV"
+      - name: Archive WorkSet for iPhone distribution
+        run: |
+          xcodebuild \
+            -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/WorkSet.xcarchive" \
+            DEVELOPMENT_TEAM="$IOS_TEAM_ID" \
+            CODE_SIGN_STYLE=Manual \
+            PROVISIONING_PROFILE_SPECIFIER="$IOS_PROFILE_NAME" \
+            'CODE_SIGN_IDENTITY=Apple Distribution' \
+            archive
+      - name: Export signed App Store IPA
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>teamID</key><string>$IOS_TEAM_ID</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>provisioningProfiles</key><dict>
+              <key>com.workset.mobile</key><string>$IOS_PROFILE_NAME</string>
+            </dict>
+          </dict></plist>
+          EOF
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/WorkSet.xcarchive" \
+            -exportPath "$RUNNER_TEMP/WorkSet-export" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
+          test -f "$RUNNER_TEMP/WorkSet-export/App.ipa"
+      - name: Upload signed IPA to TestFlight
+        env:
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+          APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+        run: |
+          mkdir -p "$HOME/.appstoreconnect/private_keys"
+          printf '%s' "$APPSTORE_API_PRIVATE_KEY" > "$HOME/.appstoreconnect/private_keys/AuthKey_${APPSTORE_API_KEY_ID}.p8"
+          chmod 600 "$HOME/.appstoreconnect/private_keys/AuthKey_${APPSTORE_API_KEY_ID}.p8"
+          xcrun altool --upload-app \
+            --type ios \
+            --file "$RUNNER_TEMP/WorkSet-export/App.ipa" \
+            --apiKey "$APPSTORE_API_KEY_ID" \
+            --apiIssuer "$APPSTORE_ISSUER_ID"
