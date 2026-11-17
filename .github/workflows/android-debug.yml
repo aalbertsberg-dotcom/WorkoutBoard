@@ -27,8 +27,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - name: Android SDK
-        uses: android-actions/setup-android@v3
+      # GitHub ubuntu-latest already has Android SDK cmdline-tools.
+      # setup-android@v3 requests the retired "tools" package and fails.
+      - name: Android SDK location
+        run: |
+          echo "Using Android SDK: ${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          test -d "${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
       - name: Install packages
         run: npm install
       - name: Test
