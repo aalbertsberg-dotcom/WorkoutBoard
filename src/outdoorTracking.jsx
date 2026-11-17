@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { MIN_MOVING_SPEED_MPS,paceIsMeaningful,hasReliableOutdoorRoute,hasLiveGpsFix,gpsJitterFloorMeters } from './trackingRules'
+import { MIN_MOVING_SPEED_MPS,paceIsMeaningful,hasReliableOutdoorRoute,hasRecordingGaps,hasLiveGpsFix,gpsJitterFloorMeters,shouldSplitGpsTrack } from './trackingRules'
 import { createMotionStepCounter,effectiveSteps,readMotionMagnitude,initialMotionAccess,gpsMarkerCount } from './stepTracking'
 
 export const METERS_PER_MILE=1609.344
@@ -60,7 +60,7 @@ export function outdoorMetrics(outdoor={},elapsedSeconds=0,activity='walk'){
   const distanceM=Math.max(0,Number(outdoor?.distance_m||points.at(-1)?.d||0))
   const miles=distanceM/METERS_PER_MILE
   const seconds=Math.max(0,Number(elapsedSeconds||outdoor?.elapsed_seconds||0))
-  const validRoute=points.length>=2&&paceIsMeaningful(distanceM,seconds)
+  const validRoute=points.length>=2&&!hasRecordingGaps(outdoor)&&paceIsMeaningful(distanceM,seconds)
   const speeds=points.map(p=>Number(p.s||0)).filter(v=>Number.isFinite(v)&&v>=MIN_MOVING_SPEED_MPS)
   const lastPoint=points.at(-1)
   const lastSpeed=Number(lastPoint?.s)
@@ -221,9 +221,15 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
     let speed=nextPoint.s
     if(last){
       if(prev.status==='paused'){
-        // Resume from this fix; don't count motion while the timer was paused.
         segment=0
         nextPoint.break_before=true
+        nextPoint.gap_reason='paused'
+        speed=0
+      }else if(shouldSplitGpsTrack(last,nextPoint)){
+        // The browser stopped sending GPS: never draw a fictional shortcut.
+        segment=0
+        nextPoint.break_before=true
+        nextPoint.gap_reason='no_updates'
         speed=0
       }else{
         segment=haversineMeters(last,nextPoint)
@@ -284,7 +290,9 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
     }
     outdoorRef.current=next
     onChange?.(next)
-    setMessage('GPS locked')
+    setMessage(nextPoint.gap_reason==='no_updates'
+      ? 'GPS paused while screen was locked · gap marked'
+      : 'GPS locked')
   }
 
   const stopWatch=()=>{
@@ -418,6 +426,7 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
   const signal=current?.last_accuracy_m
   const liveFix=hasLiveGpsFix(current)
   const credibleRoute=hasReliableOutdoorRoute(current)
+  const partialRoute=hasRecordingGaps(current)
   const feetTracked=Math.round(metrics.distanceM*3.28084)
   return <section className="outdoor-tracker">
     <div className="outdoor-live-grid">
@@ -435,7 +444,8 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
 
     {liveFix
       ? <><RouteMap points={current.points} provisional={!credibleRoute}/>
-          {!credibleRoute&&<p className="outdoor-route-preview-note">Live GPS preview · short distances are approximate. A longer, reliable route is needed to save the map.</p>}
+          {partialRoute&&<p className="outdoor-route-preview-note">GPS gap detected: unrecorded distance was not counted. Screen-off GPS requires the Android app.</p>}
+           {!credibleRoute&&!partialRoute&&<p className="outdoor-route-preview-note">Live GPS preview · short distances are approximate. A longer, reliable route is needed to save the map.</p>}
         </>
       : <div className="outdoor-map-placeholder">
           <strong>Your live location will appear here</strong>
