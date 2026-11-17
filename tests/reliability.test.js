@@ -98,3 +98,8 @@ test('On reconnect, pending edits flush before a new online edit is sent',async(
   assert.deepEqual(sent,['older','newest'])
   assert.equal(getPendingOfflineCount('athlete-test'),0)
 })
+
+test('Release guard is initialized only after the workout progress helper',()=>{
+  const app=readFileSync(new URL('../src/App.jsx',import.meta.url),'utf8')
+  assert.ok(app.indexOf('const updateBlocked=Boolean(')>app.indexOf('const plannedWorkoutHasProgress = row => {'))
+})

@@ -1415,12 +1415,6 @@ function App() {
     }
   },[])
 
-  // A release never interrupts a live workout or erases unsynced changes.
-  const updateBlocked=Boolean(
-    !offlineStatus.online||offlineStatus.syncing||offlineStatus.pending>0||
-    (plannedToday&&(plannedToday.status==='started'||plannedWorkoutHasProgress(plannedToday)))||
-    (showRegularToday&&!log.complete)
-  )
   const applyReleaseUpdate=()=>{
     if(!releaseUpdate?.buildId||updateBlocked)return
     const url=new URL(window.location.href)
@@ -1872,6 +1866,13 @@ function App() {
     )
     return exerciseProgress || conditioningProgress || Boolean(String(workout.note||'').trim())
   }
+
+  // A release never interrupts a live workout or erases unsynced changes.
+  const updateBlocked=Boolean(
+    !offlineStatus.online||offlineStatus.syncing||offlineStatus.pending>0||
+    (plannedToday&&(plannedToday.status==='started'||plannedWorkoutHasProgress(plannedToday)))||
+    (showRegularToday&&!log.complete)
+  )
 
   const standaloneWorkoutHasUserProgress = row => {
     const workout=row?.workout||{}
