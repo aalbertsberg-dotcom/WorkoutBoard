@@ -21,8 +21,16 @@ function metricsFromWorkout(workout){
     }
   }
   for(const ex of workout?.exercises||[]){
-    const p=parseSet(ex.result)
-    if(p){volume+=p.volume;best=Math.max(best,p.e1rm)}
+    if(ex.setProgress?.length){
+      for(const set of ex.setProgress){
+        if(!set.done)continue
+        const w=Number(set.weight||0),rep=Number(set.actual_reps??set.reps??0)
+        if(w>0&&rep>0){volume+=w*rep;best=Math.max(best,w*(1+rep/30))}
+      }
+    }else{
+      const p=parseSet(ex.result)
+      if(p){volume+=p.volume;best=Math.max(best,p.e1rm)}
+    }
   }
   return {volume:Math.round(volume),e1rm:Math.round(best)}
 }
@@ -174,11 +182,14 @@ export function MetconTracker({value,onChange,onRemove}) {
   </section>
 }
 
-function EditableWorkout({sessionRow,onSaved,onCancel}){
+export function EditableWorkout({sessionRow,onSaved,onCancel}){
   const [title,setTitle]=useState(sessionRow.title||'Workout')
   const [workout,setWorkout]=useState(()=>structuredClone(sessionRow.workout||{}))
   const [bodyweight,setBodyweight]=useState(sessionRow.bodyweight??'')
   const [busy,setBusy]=useState(false)
+  const updateSet=(i,k,key,val)=>setWorkout(v=>({...v,exercises:(v.exercises||[]).map((ex,j)=>j!==i?ex:{
+    ...ex,setProgress:(ex.setProgress||[]).map((set,l)=>l!==k?set:{...set,[key]:val,...(key==='weight'?{weight_edited:true}:{})})
+  })}))
   const updateMain=(i,key,val)=>setWorkout(v=>({...v,main:(v.main||[]).map((s,j)=>j===i?{...s,[key]:val}:s)}))
   const updateEx=(i,key,val)=>setWorkout(v=>({...v,exercises:(v.exercises||[]).map((s,j)=>j===i?{...s,[key]:val}:s)}))
   const save=async()=>{
@@ -190,7 +201,17 @@ function EditableWorkout({sessionRow,onSaved,onCancel}){
     <div className="section-heading"><div><span className="card-label">EDIT COMPLETED WORKOUT</span><h3>{sessionRow.title}</h3></div></div>
     <label>Title<input value={title} onChange={e=>setTitle(e.target.value)}/></label>
     {(workout.main||[]).map((s,i)=><div className="edit-set-row" key={i}><strong>Set {i+1}</strong><input type="number" value={s.weight??''} onChange={e=>updateMain(i,'weight',e.target.value)}/><span>lb ×</span><input type="number" value={s.actualReps??''} onChange={e=>updateMain(i,'actualReps',e.target.value)}/><span>reps</span></div>)}
-    {(workout.exercises||[]).map((x,i)=><div className="edit-ex-row" key={x.id||i}><input value={x.name||''} onChange={e=>updateEx(i,'name',e.target.value)}/><input value={x.result||''} onChange={e=>updateEx(i,'result',e.target.value)} placeholder="Result"/></div>)}
+    {(workout.exercises||[]).map((x,i)=><div className="edit-ex-row" key={x.id||i}>
+      <input value={x.name||''} onChange={e=>updateEx(i,'name',e.target.value)} aria-label="Exercise name"/>
+      {x.setProgress?.length
+        ? <div className="history-edit-sets">{x.setProgress.map((set,k)=><label key={k}>Set {k+1}
+            <input type="number" inputMode="decimal" value={set.weight??''} onChange={e=>updateSet(i,k,'weight',e.target.value)} aria-label="Set weight"/>
+            <input type="number" inputMode="numeric" value={set.actual_reps??set.reps??''} onChange={e=>updateSet(i,k,'actual_reps',e.target.value)} aria-label="Set repetitions"/>
+            <span>lb × reps</span>
+          </label>)}</div>
+        : <input value={x.result||''} onChange={e=>updateEx(i,'result',e.target.value)} placeholder="Result" />}
+    </div>)}
+    <label>Notes<textarea rows={2} value={workout.note||''} onChange={e=>setWorkout(v=>({...v,note:e.target.value}))}/></label>
     <label>Bodyweight<input type="number" value={bodyweight} onChange={e=>setBodyweight(e.target.value)}/></label>
     <div className="edit-actions"><button className="secondary-action" onClick={onCancel}>Cancel</button><button className="primary-action" disabled={busy} onClick={save}>{busy?'Saving…':'Recalculate + save'}</button></div>
   </section>
