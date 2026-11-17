@@ -8180,3 +8180,7 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
    sticky navigation, transformed map or nested stacking context. */
 .workset-overlay-root {position:fixed; inset:0; z-index:2000000000; pointer-events:none;}
 .workset-overlay-root > * {pointer-events:auto;}
+
+/* WorkSet 2.6.6 — safer update prompts and visible sync errors. */
+.release-update-toast button:disabled {opacity:.55;cursor:not-allowed;background:#34442a;border-color:#51613f;}
+.offline-status-toast span {overflow-wrap:anywhere;}
