@@ -7,12 +7,15 @@ import '../../src/styles.css'
 function TestFixture(){
   const [confirming,setConfirming]=useState(false)
   const [pocket,setPocket]=useState(false)
+  const [templateRemoved,setTemplateRemoved]=useState(false)
   return <>
     <main style={{minHeight:'150vh',padding:20}}>
       <h1>WorkSet mobile test fixture</h1>
       <div style={{height:'105vh'}} aria-hidden="true"/>
       <button type="button" onClick={()=>setConfirming(true)}>Delete workout</button>
       <button type="button" onClick={()=>setPocket(true)}>Open Pocket Mode</button>
+      <button type="button" className="danger-lite" onClick={()=>setTemplateRemoved(true)}>Remove template</button>
+      {templateRemoved&&<span role="status">Template removal action reached</span>}
     </main>
     {confirming&&<DialogPortal label="Delete this workout?" onDismiss={()=>setConfirming(false)}>
       <h3>Delete this workout?</h3>

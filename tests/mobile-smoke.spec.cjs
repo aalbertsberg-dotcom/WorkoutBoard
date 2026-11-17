@@ -32,3 +32,15 @@ test('Pocket Mode unlocks after a deliberate three-second hold',async({page})=>{
     .dispatchEvent('pointerdown',{isPrimary:true,pointerType:'touch',pointerId:1})
   await expect(pocket).toHaveCount(0,{timeout:6000})
 })
+
+
+test('Shared destructive buttons have rounded borders, safe tap targets and respond to touch',async({page})=>{
+  await page.goto('/tests/fixtures/smoke.html')
+  const button=page.getByRole('button',{name:'Remove template'})
+  const box=await button.boundingBox()
+  expect(box.height).toBeGreaterThanOrEqual(44)
+  expect(await button.evaluate(el=>getComputedStyle(el).borderTopStyle)).toBe('solid')
+  expect(await button.evaluate(el=>parseFloat(getComputedStyle(el).borderTopLeftRadius))).toBeGreaterThanOrEqual(9)
+  await button.click()
+  await expect(page.getByRole('status')).toContainText('Template removal action reached')
+})

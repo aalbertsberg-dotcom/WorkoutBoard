@@ -575,9 +575,14 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   color:#fff;
 }
 .danger-lite {
-  border-color:#7f1d1d;
+  border:1px solid #9e424a;
+  border-radius:11px;
+  min-height:44px;
+  padding:9px 12px;
   background:#2b1115;
   color:#fecaca;
+  font-weight:850;
+  line-height:1.25;
 }
 
 .join-row {
