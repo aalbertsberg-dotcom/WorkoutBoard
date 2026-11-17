@@ -105,7 +105,7 @@ export default function PocketMode({activity='walk',elapsed='0:00',distance='0.0
           <div className="pocket-slide-progress" style={{width:progressPixels}} aria-hidden="true"/>
           <span className="pocket-slide-hint" aria-hidden="true">Slide all the way <span>› ›</span></span>
           <button type="button" className="pocket-slide-thumb"
-            style={{left:'calc(6px + (100% - 84px) * '+slideProgress+')'}}
+            style={{left:'calc(6px + '+(slideProgress*100).toFixed(1)+'% - '+(slideProgress*84).toFixed(1)+'px)'}}
             onPointerDown={beginSlide}
             onPointerMove={moveSlide}
             onPointerUp={finishSlide}
