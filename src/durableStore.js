@@ -44,6 +44,14 @@ export const durableWrite=async(key,value)=>(await operate('write',key,value)).o
 export const durableDelete=async key=>(await operate('delete',key)).ok
 
 const draftKey=(userId,plannedId)=>'draft:'+userId+':'+plannedId
+const draftWrites=new Map()
+const enqueueDraftWrite=(key,action)=>{
+  const prior=draftWrites.get(key)||Promise.resolve()
+  const current=prior.catch(()=>{}).then(action)
+  draftWrites.set(key,current)
+  current.finally(()=>{if(draftWrites.get(key)===current)draftWrites.delete(key)}).catch(()=>{})
+  return current
+}
 const legacyDraftKey=plannedId=>'wb-planned-draft-'+plannedId
 const legacyDraftTime=plannedId=>'wb-planned-draft-ts-'+plannedId
 
@@ -68,7 +76,8 @@ export async function persistWorkoutDraft(userId,plannedId,workout){
     localStorage.setItem(legacyDraftTime(plannedId),String(savedAt))
     localOK=true
   }catch{}
-  const indexedOK=await durableWrite(draftKey(userId,plannedId),{savedAt,value:workout})
+  const key=draftKey(userId,plannedId)
+  const indexedOK=await enqueueDraftWrite(key,()=>durableWrite(key,{savedAt,value:workout}))
   return Boolean(localOK||indexedOK)
 }
 export async function clearWorkoutDraft(userId,plannedId){
@@ -77,5 +86,6 @@ export async function clearWorkoutDraft(userId,plannedId){
     localStorage.removeItem(legacyDraftKey(plannedId))
     localStorage.removeItem(legacyDraftTime(plannedId))
   }catch{}
-  await durableDelete(draftKey(userId,plannedId))
+  const key=draftKey(userId,plannedId)
+  await enqueueDraftWrite(key,()=>durableDelete(key))
 }

@@ -8184,3 +8184,13 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
 /* WorkSet 2.6.6 — safer update prompts and visible sync errors. */
 .release-update-toast button:disabled {opacity:.55;cursor:not-allowed;background:#34442a;border-color:#51613f;}
 .offline-status-toast span {overflow-wrap:anywhere;}
+
+/* WorkSet stays usable when an unexpected React component fails. */
+.workset-crash-screen{
+  margin:8vh auto;padding:24px;width:min(calc(100% - 32px),520px);
+  display:grid;gap:16px;color:#eef4ff;background:#142036;
+  border:1px solid #64748b;border-radius:18px;
+}
+.workset-crash-screen h1,.workset-crash-screen p {margin:0;}
+.workset-crash-screen p,.workset-crash-screen small {color:#bccce2;line-height:1.5;}
+.workset-crash-screen button{min-height:48px;border-radius:9px;}
