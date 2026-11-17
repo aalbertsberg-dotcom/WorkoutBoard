@@ -2,7 +2,7 @@ name: Workset Build Check
 
 on:
   push:
-    branches: [main, 'feature/**', 'redo/**']
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:

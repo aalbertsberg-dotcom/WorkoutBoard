@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { MIN_MOVING_SPEED_MPS,paceIsMeaningful,hasReliableOutdoorRoute,hasLiveGpsFix,gpsJitterFloorMeters } from './trackingRules'
+import { MIN_MOVING_SPEED_MPS,paceIsMeaningful,hasReliableOutdoorRoute,hasRecordingGaps,hasLiveGpsFix,gpsJitterFloorMeters,shouldSplitGpsTrack } from './trackingRules'
 import { createMotionStepCounter,effectiveSteps,readMotionMagnitude,initialMotionAccess,gpsMarkerCount } from './stepTracking'
+import { canTrackInBackground,startNativeLocationWatch,stopNativeLocationWatch } from './nativeLocation'
 
 export const METERS_PER_MILE=1609.344
 const MOTION_ACCESS_HINT_KEY='workset-browser-motion-granted-v1'
@@ -60,7 +61,7 @@ export function outdoorMetrics(outdoor={},elapsedSeconds=0,activity='walk'){
   const distanceM=Math.max(0,Number(outdoor?.distance_m||points.at(-1)?.d||0))
   const miles=distanceM/METERS_PER_MILE
   const seconds=Math.max(0,Number(elapsedSeconds||outdoor?.elapsed_seconds||0))
-  const validRoute=points.length>=2&&paceIsMeaningful(distanceM,seconds)
+  const validRoute=points.length>=2&&!hasRecordingGaps(outdoor)&&paceIsMeaningful(distanceM,seconds)
   const speeds=points.map(p=>Number(p.s||0)).filter(v=>Number.isFinite(v)&&v>=MIN_MOVING_SPEED_MPS)
   const lastPoint=points.at(-1)
   const lastSpeed=Number(lastPoint?.s)
@@ -175,6 +176,8 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
   const outdoorRef=useRef(current)
   const elapsedRef=useRef(elapsedSeconds)
   const watchRef=useRef(null)
+  const nativeWatchRef=useRef(null)
+  const nativeStartingRef=useRef(false)
   const wakeLockRef=useRef(null)
   const runningRef=useRef(running)
   const onChangeRef=useRef(onChange)
@@ -221,9 +224,15 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
     let speed=nextPoint.s
     if(last){
       if(prev.status==='paused'){
-        // Resume from this fix; don't count motion while the timer was paused.
         segment=0
         nextPoint.break_before=true
+        nextPoint.gap_reason='paused'
+        speed=0
+      }else if(shouldSplitGpsTrack(last,nextPoint)){
+        // The browser stopped sending GPS: never draw a fictional shortcut.
+        segment=0
+        nextPoint.break_before=true
+        nextPoint.gap_reason='no_updates'
         speed=0
       }else{
         segment=haversineMeters(last,nextPoint)
@@ -284,13 +293,20 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
     }
     outdoorRef.current=next
     onChange?.(next)
-    setMessage('GPS locked')
+    setMessage(nextPoint.gap_reason==='no_updates'
+      ? 'GPS paused while screen was locked · gap marked'
+      : 'GPS locked')
   }
 
   const stopWatch=()=>{
     if(watchRef.current!=null&&navigator.geolocation){
       navigator.geolocation.clearWatch(watchRef.current)
       watchRef.current=null
+    }
+    if(nativeWatchRef.current!=null){
+      const id=nativeWatchRef.current
+      nativeWatchRef.current=null
+      stopNativeLocationWatch(id).catch(()=>{})
     }
   }
 
@@ -300,6 +316,26 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
   }
 
   const startWatch=async()=>{
+    if(canTrackInBackground()){
+      if(nativeWatchRef.current!=null||nativeStartingRef.current)return
+      nativeStartingRef.current=true
+      setMessage('Starting Android background GPS…')
+      try{
+        const id=await startNativeLocationWatch(
+          pushPosition,
+          error=>setMessage(error?.message||'Native GPS permission or signal unavailable')
+        )
+        if(!runningRef.current)await stopNativeLocationWatch(id)
+        else{
+          nativeWatchRef.current=id
+          setMessage('Android background GPS active · tracking with screen locked')
+        }
+      }catch(error){
+        setMessage(error?.message||'Could not start Android background GPS')
+        setPermission('denied')
+      }finally{nativeStartingRef.current=false}
+      return
+    }
     if(!navigator.geolocation){
       setMessage('GPS is not available on this device.')
       return
@@ -339,7 +375,7 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
     const onVisible=()=>{
       if(document.visibilityState==='visible'&&running){
         if(navigator.wakeLock?.request&&!wakeLockRef.current)navigator.wakeLock.request('screen').then(lock=>{wakeLockRef.current=lock}).catch(()=>{})
-        if(watchRef.current==null)startWatch()
+        if(watchRef.current==null&&nativeWatchRef.current==null&&!nativeStartingRef.current)startWatch()
       }
     }
     document.addEventListener('visibilitychange',onVisible)
@@ -418,6 +454,7 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
   const signal=current?.last_accuracy_m
   const liveFix=hasLiveGpsFix(current)
   const credibleRoute=hasReliableOutdoorRoute(current)
+  const partialRoute=hasRecordingGaps(current)
   const feetTracked=Math.round(metrics.distanceM*3.28084)
   return <section className="outdoor-tracker">
     <div className="outdoor-live-grid">
@@ -435,7 +472,8 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
 
     {liveFix
       ? <><RouteMap points={current.points} provisional={!credibleRoute}/>
-          {!credibleRoute&&<p className="outdoor-route-preview-note">Live GPS preview · short distances are approximate. A longer, reliable route is needed to save the map.</p>}
+          {partialRoute&&<p className="outdoor-route-preview-note">GPS gap detected: unrecorded distance was not counted. Screen-off GPS requires the Android app.</p>}
+           {!credibleRoute&&!partialRoute&&<p className="outdoor-route-preview-note">Live GPS preview · short distances are approximate. A longer, reliable route is needed to save the map.</p>}
         </>
       : <div className="outdoor-map-placeholder">
           <strong>Your live location will appear here</strong>
@@ -464,6 +502,8 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
       {metrics.splits.map(split=><div key={split.mile}><span>Mile {split.mile}</span><strong>{formatPace(split.split_seconds)}</strong></div>)}
     </div>}
 
-    <p className="outdoor-web-note">For reliable web GPS, keep Workset open. The screen is kept awake while tracking when your device allows it.</p>
+    <p className="outdoor-web-note">{canTrackInBackground()
+      ? 'Android background location is enabled during an active workout. A persistent notification indicates recording.'
+      : 'Chrome cannot reliably record GPS with the screen locked. Gaps are marked rather than connected; use the WorkSet Android app for background tracking.'}</p>
   </section>
 }

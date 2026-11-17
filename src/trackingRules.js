@@ -4,6 +4,20 @@ export const MIN_RELIABLE_ROUTE_METERS = 30
 export const MIN_PACE_SECONDS = 15
 export const MIN_MOVING_SPEED_MPS = 0.45
 
+export const GPS_GAP_THRESHOLD_MS = 18000
+export function shouldSplitGpsTrack(previous,next,maxMs=GPS_GAP_THRESHOLD_MS) {
+  if(!previous||!next)return false
+  const interval=Number(next.t)-Number(previous.t)
+  return !Number.isFinite(interval)||interval<=0||interval>maxMs
+}
+export function hasRecordingGaps(outdoor) {
+  return Array.isArray(outdoor?.points) && outdoor.points.some(point=>point.gap_reason==='no_updates')
+}
+export function hasVerifiedOutdoorRoute(outdoor) {
+  return hasReliableOutdoorRoute(outdoor)&&!hasRecordingGaps(outdoor)
+}
+
+
 // Live preview is deliberately separate from the stricter persisted-route quality gate.
 // One GPS fix can locate the user; a longer, credible track is needed for saved routes.
 export function hasLiveGpsFix(outdoor) {
@@ -62,7 +76,7 @@ export function paceIsMeaningful(distanceMeters,seconds) {
 export function withoutUnreliableRoute(outdoor) {
   // Keep the measured short-distance estimate; only remove the unreliable
   // route geometry/elevation/splits that would imply a validated GPS track.
-  if(hasReliableOutdoorRoute(outdoor))return {...outdoor,distance_quality:'route'}
+  if(hasReliableOutdoorRoute(outdoor))return {...outdoor,distance_quality:hasRecordingGaps(outdoor)?'partial':'route'}
   const distanceM=Math.max(0,Number(outdoor?.distance_m||0))
   return {
     ...outdoor,
@@ -78,9 +92,16 @@ export function outdoorDistancePresentation(outdoor={}) {
   const meters=Math.max(0,Number(outdoor?.distance_m||0))
   const miles=meters/1609.344
   const hasRoute=hasReliableOutdoorRoute(outdoor)
+  const hasGaps=hasRecordingGaps(outdoor)
   if(meters===0)return {
     meters,miles,hasRoute:false,estimated:false,
     label:'0.00 mi',milesLabel:'0.00 mi',note:'No GPS distance recorded'
+  }
+  if(hasGaps)return {
+    meters,miles,hasRoute:true,estimated:true,partial:true,
+    label:'≈'+miles.toFixed(2)+' mi',
+    milesLabel:'≈'+miles.toFixed(2)+' mi',
+    note:'GPS signal was interrupted · route and distance may be incomplete'
   }
   if(!hasRoute)return {
     meters,miles,hasRoute:false,estimated:true,

@@ -8,6 +8,8 @@ import { WorkoutCoach, MetconTracker, AccountSecurityPanel, BackupRestorePanel, 
 import { archiveProgramById, makePlannedFromArchive } from './archivePrograms'
 import { saveOfflineSession, readOfflineSession, clearOfflineSession, writeOfflineState, readOfflineState, getPendingOfflineCount, syncOfflineQueue, offlineUuid, upsertOfflineFirst } from './offline'
 import { RouteMap, formatPace, formatOutdoorDuration } from './outdoorTracking'
+import WorkoutHistory from './workoutHistory'
+import MobilitySession from './mobilitySession'
 import { outdoorDistancePresentation } from './trackingRules'
 import { getActiveWorkoutId,setActiveWorkoutId,clearActiveWorkoutId,cancelledWorkoutIds,getWorkoutCancellationBarrier,rememberWorkoutCancellation,isOpenWorkout,selectWorkoutToRestore } from './workoutLifecycle'
 import QRCode from 'qrcode'
@@ -1198,6 +1200,8 @@ function App() {
   const [pendingWorkoutStart,setPendingWorkoutStart] = useState(null)
   const [todayCompletedWorkouts,setTodayCompletedWorkouts] = useState([])
   const [completedDeletePrompt,setCompletedDeletePrompt] = useState(null)
+  const [historyWorkoutId,setHistoryWorkoutId] = useState(null)
+  const [mobilityMode,setMobilityMode] = useState('warmup')
   const [deletingCompletedWorkout,setDeletingCompletedWorkout] = useState(false)
   const [workoutStartError,setWorkoutStartError] = useState('')
   const [classicCancelConfirm,setClassicCancelConfirm] = useState(false)
@@ -1241,6 +1245,8 @@ function App() {
   }
 
   const openProgress = (section='Overview') => navigateTo('progress',{progressSection:section})
+  const openHistory = (id=null) => {setHistoryWorkoutId(id);navigateTo('history')}
+  const openMobility = mode => {setMobilityMode(mode);navigateTo('mobility')}
 
   useEffect(()=>{
     const state=window.history.state||{}
@@ -3380,7 +3386,7 @@ function App() {
         <header className="app-header">
           <div>
             <div className="brand-lockup"><img src={import.meta.env.BASE_URL+'icon.svg'} alt="" /><span>Work<b>set</b></span></div>
-            <h1>{activeTab === 'today' ? 'Today' : activeTab === 'together' ? 'Together' : activeTab === 'program' ? 'Plan' : activeTab === 'whiteboard' ? 'Whiteboard' : activeTab === 'progress' ? 'Progress' : activeTab === 'admin' ? 'Admin' : 'Me'}</h1>
+            <h1>{activeTab === 'today' ? 'Today' : activeTab === 'together' ? 'Together' : activeTab === 'program' ? 'Plan' : activeTab === 'whiteboard' ? 'Whiteboard' : activeTab === 'progress' ? 'Progress' : activeTab === 'history' ? 'History' : activeTab === 'mobility' ? 'Warm-up & Cool-down' : activeTab === 'admin' ? 'Admin' : 'Me'}</h1>
             {appNavDepth>0&&<button type="button" className="app-history-back" onClick={navigateBack}>← Back</button>}
           </div>
           <button className={'account-chip ' + (isAdmin ? 'admin' : '')} onClick={openMe}>
@@ -3489,9 +3495,11 @@ function App() {
           ) : trackedProgramsInfo.length && !showRegularToday ? (
             <section className="page-section tracked-today-state">
               {todayCompletedWorkouts.length>0&&<details className="today-completed-workouts" open>
-                <summary><span><b>Today’s workouts</b><small>{todayCompletedWorkouts.length} completed</small></span></summary>
+                <summary onClick={e=>{e.preventDefault();openHistory()}} title="Open workout history"><span><b>Today’s workouts</b><small>{todayCompletedWorkouts.length} completed · View calendar ›</small></span></summary>
+                <button type="button" className="today-history-link" onClick={()=>openHistory()}>Open calendar & workout history ›</button>
                 <div className="today-completed-list">{todayCompletedWorkouts.map(row=><article key={row.id}>
                   <button type="button" className="completed-workout-delete" aria-label={'Delete '+(row.title||'workout')} onClick={()=>{setWorkoutStartError('');setCompletedDeletePrompt(row)}}>×</button>
+                  <button type="button" className="today-completed-open" aria-label={'View '+(row.title||'workout')} onClick={()=>openHistory(row.training_session_id||row.id)}>View ›</button>
                   <div><strong>{row.title||'Workout'}</strong><span>{row.program||'Workout'}{row.completed_at?' · '+new Date(row.completed_at).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):''}</span></div>
                   <b>{Number(row.total_volume||0)>0
                     ? Number(row.total_volume).toLocaleString()+' lb'
@@ -3566,6 +3574,9 @@ function App() {
                     <small>{trackedProgramsInfo.length>1
                       ? trackedProgramsInfo.length+' programs tracked'
                       : (trackedProgramsInfo[0]?.nextTitle||trackedProgramsInfo[0]?.name||'Open your program')}</small>
+                  </button>
+                  <button type="button" className="today-choice-mobility" onClick={()=>openMobility('warmup')}>
+                    <span className="quick-start-icon">◌</span><strong>Warm-up / Cool-down</strong><small>Agile 8 mobility · recovery</small>
                   </button>
                   <button type="button" onClick={()=>startStandaloneWorkout('walk')}>
                     <span className="quick-start-icon activity-icon">🚶</span><strong>Walk</strong><small>Time, distance or both</small>
@@ -3670,9 +3681,11 @@ function App() {
           ) : !trackedProgramsInfo.length && !showRegularToday && !sharedWorkoutActive ? (
             <section className="page-section no-program-today">
               {todayCompletedWorkouts.length>0&&<details className="today-completed-workouts" open>
-                <summary><span><b>Today’s workouts</b><small>{todayCompletedWorkouts.length} completed</small></span></summary>
+                <summary onClick={e=>{e.preventDefault();openHistory()}} title="Open workout history"><span><b>Today’s workouts</b><small>{todayCompletedWorkouts.length} completed · View calendar ›</small></span></summary>
+                <button type="button" className="today-history-link" onClick={()=>openHistory()}>Open calendar & workout history ›</button>
                 <div className="today-completed-list">{todayCompletedWorkouts.map(row=><article key={row.id}>
                   <button type="button" className="completed-workout-delete" aria-label={'Delete '+(row.title||'workout')} onClick={()=>{setWorkoutStartError('');setCompletedDeletePrompt(row)}}>×</button>
+                  <button type="button" className="today-completed-open" aria-label={'View '+(row.title||'workout')} onClick={()=>openHistory(row.training_session_id||row.id)}>View ›</button>
                   <div><strong>{row.title||'Workout'}</strong><span>{row.program||'Workout'}{row.completed_at?' · '+new Date(row.completed_at).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):''}</span></div>
                   <b>{Number(row.total_volume||0)>0?Number(row.total_volume).toLocaleString()+' lb':'Completed'}</b>
                 </article>)}</div>
@@ -3692,6 +3705,9 @@ function App() {
                   </button>}
                   <button type="button" className="today-choice-program" onClick={()=>navigateTo('program')}>
                     <span className="quick-start-icon">▦</span><strong>Choose a program</strong><small>Start or track a training plan</small>
+                  </button>
+                  <button type="button" className="today-choice-mobility" onClick={()=>openMobility('warmup')}>
+                    <span className="quick-start-icon">◌</span><strong>Warm-up / Cool-down</strong><small>Agile 8 mobility · recovery</small>
                   </button>
                   <button type="button" onClick={()=>startStandaloneWorkout('walk')}>
                     <span className="quick-start-icon activity-icon">🚶</span><strong>Walk</strong><small>Time, distance or both</small>
@@ -4219,6 +4235,13 @@ function App() {
           />
         ) : activeTab === 'whiteboard' ? (
           <WhiteboardPage session={session} />
+        ) : activeTab === 'mobility' ? (
+          <MobilitySession session={session} initialMode={mobilityMode}
+            onBack={openToday}
+            onSaved={async id=>{await refreshPlannedToday();openHistory(id)}}/>
+        ) : activeTab === 'history' ? (
+          <WorkoutHistory session={session} initialWorkoutId={historyWorkoutId}
+            onBack={openToday} onChanged={refreshPlannedToday}/>
         ) : activeTab === 'progress' ? (
           <section className="page-section progress-page">
             <div className="progress-page-top">
@@ -4242,6 +4265,7 @@ function App() {
               trackedProgramsInfo={trackedProgramsInfo}
               initialSection={progressStartSection}
               onSectionChange={section=>openProgress(section)}
+              onOpenHistory={()=>openHistory()}
             />
           </section>
         ) : activeTab === 'admin' ? (
@@ -4263,10 +4287,16 @@ function App() {
               <label>Display name<input defaultValue={displayName} onBlur={e => saveDisplayName(e.target.value)} /></label>
             </section>
 
+            <section className="simple-card account-history-entry">
+              <div><span className="card-label">WORKOUTS</span><h3>Your training history</h3><p>Calendar, saved activities and workout details.</p></div>
+              <button type="button" className="wide-button" onClick={()=>openHistory()}>Open Workout History</button>
+            </section>
+
             <PlatformProgress
               view="mine"
               compact
               onOpenProgress={()=>openProgress('Overview')}
+              onOpenHistory={()=>openHistory()}
               onOpenWeight={()=>openProgress('Weight & Measurements')}
               onOpenMeasurements={()=>openProgress('Weight & Measurements')}
               session={session}

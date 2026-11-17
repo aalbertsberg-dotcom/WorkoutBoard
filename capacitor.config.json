@@ -1,0 +1,11 @@
+{
+  "appId": "com.workset.mobile",
+  "appName": "WorkSet",
+  "webDir": "dist",
+  "android": {
+    "useLegacyBridge": true
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}

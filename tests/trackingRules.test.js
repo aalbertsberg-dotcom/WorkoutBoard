@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {
   validWeightDraft,validRepsDraft,displayedSetWeight,recordedWeightValue,
   canFinishQuickCardio,hasReliableOutdoorRoute,paceIsMeaningful,withoutUnreliableRoute,
-  hasLiveGpsFix,gpsJitterFloorMeters,outdoorDistancePresentation
+  hasLiveGpsFix,gpsJitterFloorMeters,outdoorDistancePresentation,shouldSplitGpsTrack,hasRecordingGaps,hasVerifiedOutdoorRoute
 } from '../src/trackingRules.js'
 
 test('erasing 135 stays erased even when a previous set offers 135',()=>{
@@ -115,4 +115,27 @@ test('each untouched set defaults to its own programmed 1RM percentage',()=>{
   assert.equal(displayedSetWeight({weight:'',weight_edited:true},[140,155]),'')
   // Previous-set fallback remains available when there is no programmed target.
   assert.equal(displayedSetWeight(currentSet,[0,155]),'155')
+})
+
+test('screen-off GPS interruptions split the route and never claim verified mileage',()=>{
+  const previous={lat:30,lng:-88,t:1000}
+  assert.equal(shouldSplitGpsTrack(previous,{lat:30.001,lng:-88,t:5000}),false)
+  assert.equal(shouldSplitGpsTrack(previous,{lat:30.01,lng:-88,t:50000}),true)
+  assert.equal(shouldSplitGpsTrack(previous,{lat:30,lng:-88,t:500}),true)
+  const partial={distance_m:180,points:[
+    {lat:30,lng:-88,t:1000},
+    {lat:30.0003,lng:-88,t:5000},
+    {lat:30.01,lng:-88,t:50000,break_before:true,gap_reason:'no_updates'},
+    {lat:30.0108,lng:-88,t:55000}
+  ]}
+  assert.equal(hasRecordingGaps(partial),true)
+  assert.equal(hasVerifiedOutdoorRoute(partial),false)
+  const saved=withoutUnreliableRoute(partial)
+  assert.equal(saved.distance_quality,'partial')
+  assert.equal(saved.points.length,4)
+  const text=outdoorDistancePresentation(saved)
+  assert.equal(text.hasRoute,true)
+  assert.equal(text.estimated,true)
+  assert.equal(text.partial,true)
+  assert.equal(hasVerifiedOutdoorRoute({distance_m:180,points:[{lat:30,lng:-88},{lat:30.001,lng:-88}]}),true)
 })

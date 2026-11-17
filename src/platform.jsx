@@ -6,7 +6,7 @@ import { AdvancedProgressCenter, PlannedWorkoutTools, ShareImportPanel, AdminDas
 import { readOfflineState, writeOfflineState, upsertOfflineFirst } from './offline'
 import { RouteMap, outdoorMetrics, formatPace, formatOutdoorDuration, outdoorActivityKind } from './outdoorTracking'
 import { effectiveSteps } from './stepTracking'
-import { hasReliableOutdoorRoute,outdoorDistancePresentation } from './trackingRules'
+import { hasReliableOutdoorRoute,hasVerifiedOutdoorRoute,outdoorDistancePresentation } from './trackingRules'
 
 function startOfWeek(date = new Date()) {
   const d = new Date(date)
@@ -115,6 +115,7 @@ export function PlatformProgress({
   onOpenProgress=null,
   onOpenWeight=null,
   onOpenMeasurements=null,
+  onOpenHistory=null,
   onSectionChange=null,
   trackedProgramInfo=null,
   trackedProgramsInfo=[],
@@ -134,6 +135,8 @@ export function PlatformProgress({
   const [bodyTrendRange,setBodyTrendRange] = useState('3M')
   const [bodyTrendMetric,setBodyTrendMetric] = useState('waist')
   const [selectedOutdoorId,setSelectedOutdoorId] = useState(null)
+  const [communityDeleteId,setCommunityDeleteId] = useState(null)
+  const [communityDeleteBusy,setCommunityDeleteBusy] = useState(false)
 
   const loadData = async () => {
     if (!session?.user) return
@@ -206,6 +209,18 @@ export function PlatformProgress({
     setProfile(v=>({...v,community_opt_in:enabled}))
     setMessage(enabled?'Community sharing is on for future completed workouts.':'Community sharing is off and your community posts were removed.')
     await loadData()
+  }
+
+  const deleteCommunityPost=async()=>{
+    if(!session?.user?.id||!communityDeleteId||communityDeleteBusy)return
+    setCommunityDeleteBusy(true)
+    const {error}=await supabase.from('community_activity').delete()
+      .eq('id',communityDeleteId).eq('user_id',session.user.id)
+    setCommunityDeleteBusy(false)
+    if(error){setMessage(error.message);return}
+    setCommunity(rows=>rows.filter(row=>row.id!==communityDeleteId))
+    setCommunityDeleteId(null)
+    setMessage('Shared post removed. Your private workout history is unchanged.')
   }
 
   const toggleBodyweight = async enabled => {
@@ -363,7 +378,14 @@ export function PlatformProgress({
     })),
     ...flexSessions.map(r=>({
       id:'flex-'+r.id,date:r.completed_at||r.session_date,title:r.title,
-      subtitle:r.program||'Custom workout',volume:Number(r.total_volume||0),e1rm:Number(r.estimated_1rm||0)
+      subtitle:r.program||'Custom workout',volume:Number(r.total_volume||0),e1rm:Number(r.estimated_1rm||0),
+      activityLabel:r.workout?.mobility
+        ? (r.workout.mobility.items||[]).filter(x=>x.done).length+' movements'
+        : outdoorActivityKind(r.workout?.quick_cardio_kind||r.workout?.metcon?.activity||r.title)
+          ? (Number(r.workout?.outdoor?.distance_m||0)>0
+              ? outdoorDistancePresentation(r.workout?.outdoor).label
+              : 'Cardio session')
+          : null
     }))
   ].sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,15)
 
@@ -398,7 +420,7 @@ export function PlatformProgress({
       const kind=outdoorActivityKind(row.workout?.quick_cardio_kind||row.workout?.metcon?.activity||row.title)||'walk'
       const elapsed=Number(row.workout?.quick_timer_elapsed_seconds||row.workout?.outdoor?.elapsed_seconds||0)
       return {...row,_outdoorKind:kind,_outdoor:outdoorMetrics(row.workout.outdoor,elapsed,kind),
-        _routeReady:hasReliableOutdoorRoute(row.workout.outdoor)}
+        _routeReady:hasVerifiedOutdoorRoute(row.workout.outdoor)}
     })
     .sort((a,b)=>String(b.completed_at||b.session_date).localeCompare(String(a.completed_at||a.session_date)))
   ,[flexSessions])
@@ -677,9 +699,11 @@ export function PlatformProgress({
 
         {selectedOutdoor&&<section className="simple-card outdoor-history-focus">
           <div className="section-heading"><div><span className="card-label">ACTIVITY DETAILS</span><h3>{selectedOutdoor.title}</h3></div><span>{new Date(selectedOutdoor.completed_at||selectedOutdoor.session_date).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span></div>
-          {selectedOutdoor._routeReady
+          {hasReliableOutdoorRoute(selectedOutdoor.workout?.outdoor)
             ? <RouteMap points={selectedOutdoor.workout?.outdoor?.points||[]}/>
             : <p className="outdoor-estimated-distance-note">{outdoorDistancePresentation(selectedOutdoor.workout?.outdoor).note}. No saved route or pace is shown for short GPS estimates.</p>}
+          {!selectedOutdoor._routeReady&&hasReliableOutdoorRoute(selectedOutdoor.workout?.outdoor)&&
+            <p className="outdoor-estimated-distance-note">Partial route: GPS stopped during tracking. Gaps are not connected or included in route-distance totals.</p>}
           <div className="outdoor-history-stats">
             <div><span>Distance</span><strong>{outdoorDistancePresentation(selectedOutdoor.workout?.outdoor).label}</strong></div>
             <div><span>Time</span><strong>{formatOutdoorDuration(selectedOutdoor._outdoor.elapsedSeconds)}</strong></div>
@@ -693,7 +717,7 @@ export function PlatformProgress({
           {outdoorSessions.length?<div>{outdoorSessions.slice(0,12).map(row=><button type="button" key={row.id} className={selectedOutdoor?.id===row.id?'active':''} onClick={()=>setSelectedOutdoorId(row.id)}>
             <span className="outdoor-history-icon">{row._outdoorKind==='bike'?'🚴':row._outdoorKind==='run'?'🏃':'🚶'}</span>
             <span><strong>{row.title}</strong><small>{new Date(row.completed_at||row.session_date).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</small></span>
-            <span><strong>{outdoorDistancePresentation(row.workout?.outdoor).label}</strong><small>{!row._routeReady?'Approximate · no saved route':row._outdoorKind==='bike'?(row._outdoor.avgMph?row._outdoor.avgMph.toFixed(1)+' mph':'—'):formatPace(row._outdoor.avgPaceSecPerMile)}</small></span>
+            <span><strong>{outdoorDistancePresentation(row.workout?.outdoor).label}</strong><small>{!row._routeReady?'GPS estimate · partial or no route':row._outdoorKind==='bike'?(row._outdoor.avgMph?row._outdoor.avgMph.toFixed(1)+' mph':'—'):formatPace(row._outdoor.avgPaceSecPerMile)}</small></span>
           </button>)}</div>:<div className="empty-state action-empty"><strong>Nothing to show yet.</strong><span>Your first GPS-tracked outdoor workout will appear here.</span></div>}
         </section>
       </>}
@@ -727,9 +751,10 @@ export function PlatformProgress({
       </>}
 
       {progressSection==='History'&&<>
+        {onOpenHistory&&<button type="button" className="wide-button" onClick={onOpenHistory}>Open workout calendar and details ›</button>}
         <section className="simple-card">
           <div className="section-heading"><div><span className="card-label">RECENT WORKOUTS</span><h3>Completed workouts</h3></div></div>
-          <div className="history-list">{recentCombined.map(row=><article className="progress-workout" key={row.id}><div><strong>{new Date(row.date).toLocaleDateString(undefined,{month:'short',day:'numeric'})} · {row.title}</strong><span>{row.subtitle}</span></div><div><strong>{formatWeight(row.volume)} lb</strong><span>{row.e1rm?'e1RM '+formatWeight(row.e1rm):''}</span></div></article>)}
+          <div className="history-list">{recentCombined.map(row=><article className="progress-workout" key={row.id}><div><strong>{new Date(row.date).toLocaleDateString(undefined,{month:'short',day:'numeric'})} · {row.title}</strong><span>{row.subtitle}</span></div><div><strong>{row.activityLabel||formatWeight(row.volume)+' lb'}</strong><span>{row.e1rm?'e1RM '+formatWeight(row.e1rm):''}</span></div></article>)}
           {!recentCombined.length&&<div className="empty-state action-empty"><strong>No completed workouts yet.</strong><span>Finish a workout and it will show here.</span></div>}</div>
         </section>
 
@@ -745,9 +770,19 @@ export function PlatformProgress({
         {message&&<div className="status-message">{message}</div>}
         <div className="community-feed">{community.map(item=><article className="community-card" key={item.id}>
           <div className="community-card-head"><strong>{item.display_name}</strong><span>{new Date(item.created_at).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span></div>
-          <h3>{item.title}</h3><div className="community-stats"><span>{item.summary?.volume?Number(item.summary.volume).toLocaleString()+' lb volume':'Workout complete'}</span>{item.summary?.estimated_1rm?<span>e1RM {Math.round(item.summary.estimated_1rm)} lb</span>:null}{item.summary?.bodyweight?<span>BW {item.summary.bodyweight} lb</span>:null}</div>
+          <h3>{item.title}</h3>
+          {item.user_id===session?.user?.id&&<button type="button" className="community-remove-post" onClick={()=>setCommunityDeleteId(item.id)}>Remove this post</button>}
+          <div className="community-stats"><span>{item.summary?.volume?Number(item.summary.volume).toLocaleString()+' lb volume':'Workout complete'}</span>{item.summary?.estimated_1rm?<span>e1RM {Math.round(item.summary.estimated_1rm)} lb</span>:null}{item.summary?.bodyweight?<span>BW {item.summary.bodyweight} lb</span>:null}</div>
         </article>)}
         {!community.length&&<div className="empty-state">No community workouts yet. Opt in above if you want to share completed workout summaries.</div>}</div>
+        {communityDeleteId&&<div className="simple-card community-delete-confirm" role="alertdialog" aria-label="Remove shared post?">
+          <h3>Remove this shared post?</h3>
+          <p>This removes it from Community, not your workout history.</p>
+          <div className="history-detail-actions">
+            <button type="button" className="secondary-action" onClick={()=>setCommunityDeleteId(null)} disabled={communityDeleteBusy}>Keep post</button>
+            <button type="button" className="danger-action" onClick={deleteCommunityPost} disabled={communityDeleteBusy}>{communityDeleteBusy?'Removing…':'Remove post'}</button>
+          </div>
+        </div>}
       </>}
     </>}
   </section>

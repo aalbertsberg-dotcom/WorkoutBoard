@@ -23,5 +23,5 @@ export default defineConfig({
     __WORKSET_BUILD_ID__:JSON.stringify(buildId),
     __WORKSET_APP_VERSION__:JSON.stringify(pkg.version),
   },
-  base: process.env.GITHUB_ACTIONS ? '/WorkoutBoard/' : '/',
+  base: process.env.WORKSET_NATIVE_BUILD==='true' ? './' : process.env.GITHUB_ACTIONS ? '/WorkoutBoard/' : '/',
 })
