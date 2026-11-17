@@ -114,6 +114,11 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
     onChanged?.()
   }
   const openList=()=>{setSelectedId(null);setEditing(false);setDeleting(false)}
+  const changeMonth=offset=>{
+    const next=new Date(month.getFullYear(),month.getMonth()+offset,1)
+    setMonth(next)
+    setDay([next.getFullYear(),String(next.getMonth()+1).padStart(2,'0'),'01'].join('-'))
+  }
   const itemButton=row=><button type="button" className="history-entry" key={row.id} onClick={()=>select(row)}>
     <span className="history-entry-main"><strong>{row.title||'Workout'}</strong>
       <small>{prettyDate(dateKey(row))} · {row.program||category(row)}</small></span>
@@ -219,9 +224,9 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
       </div>
       {mode==='calendar'&&<section className="simple-card history-calendar">
         <div className="history-month">
-          <button type="button" aria-label="Previous month" onClick={()=>setMonth(d=>new Date(d.getFullYear(),d.getMonth()-1,1))}>‹</button>
+          <button type="button" aria-label="Previous month" onClick={()=>changeMonth(-1)}>‹</button>
           <h3>{month.toLocaleDateString(undefined,{month:'long',year:'numeric'})}</h3>
-          <button type="button" aria-label="Next month" onClick={()=>setMonth(d=>new Date(d.getFullYear(),d.getMonth()+1,1))}>›</button>
+          <button type="button" aria-label="Next month" onClick={()=>changeMonth(1)}>›</button>
         </div>
         <div className="history-calendar-grid">
           {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(x=><b key={x}>{x}</b>)}
