@@ -6,7 +6,7 @@ import { AdvancedProgressCenter, PlannedWorkoutTools, ShareImportPanel, AdminDas
 import { readOfflineState, writeOfflineState, upsertOfflineFirst } from './offline'
 import { RouteMap, outdoorMetrics, formatPace, formatOutdoorDuration, outdoorActivityKind } from './outdoorTracking'
 import { effectiveSteps } from './stepTracking'
-import { hasReliableOutdoorRoute,outdoorDistancePresentation } from './trackingRules'
+import { hasReliableOutdoorRoute,hasVerifiedOutdoorRoute,outdoorDistancePresentation } from './trackingRules'
 
 function startOfWeek(date = new Date()) {
   const d = new Date(date)
@@ -420,7 +420,7 @@ export function PlatformProgress({
       const kind=outdoorActivityKind(row.workout?.quick_cardio_kind||row.workout?.metcon?.activity||row.title)||'walk'
       const elapsed=Number(row.workout?.quick_timer_elapsed_seconds||row.workout?.outdoor?.elapsed_seconds||0)
       return {...row,_outdoorKind:kind,_outdoor:outdoorMetrics(row.workout.outdoor,elapsed,kind),
-        _routeReady:hasReliableOutdoorRoute(row.workout.outdoor)}
+        _routeReady:hasVerifiedOutdoorRoute(row.workout.outdoor)}
     })
     .sort((a,b)=>String(b.completed_at||b.session_date).localeCompare(String(a.completed_at||a.session_date)))
   ,[flexSessions])
@@ -699,9 +699,11 @@ export function PlatformProgress({
 
         {selectedOutdoor&&<section className="simple-card outdoor-history-focus">
           <div className="section-heading"><div><span className="card-label">ACTIVITY DETAILS</span><h3>{selectedOutdoor.title}</h3></div><span>{new Date(selectedOutdoor.completed_at||selectedOutdoor.session_date).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span></div>
-          {selectedOutdoor._routeReady
+          {hasReliableOutdoorRoute(selectedOutdoor.workout?.outdoor)
             ? <RouteMap points={selectedOutdoor.workout?.outdoor?.points||[]}/>
             : <p className="outdoor-estimated-distance-note">{outdoorDistancePresentation(selectedOutdoor.workout?.outdoor).note}. No saved route or pace is shown for short GPS estimates.</p>}
+          {!selectedOutdoor._routeReady&&hasReliableOutdoorRoute(selectedOutdoor.workout?.outdoor)&&
+            <p className="outdoor-estimated-distance-note">Partial route: GPS stopped during tracking. Gaps are not connected or included in route-distance totals.</p>}
           <div className="outdoor-history-stats">
             <div><span>Distance</span><strong>{outdoorDistancePresentation(selectedOutdoor.workout?.outdoor).label}</strong></div>
             <div><span>Time</span><strong>{formatOutdoorDuration(selectedOutdoor._outdoor.elapsedSeconds)}</strong></div>
@@ -715,7 +717,7 @@ export function PlatformProgress({
           {outdoorSessions.length?<div>{outdoorSessions.slice(0,12).map(row=><button type="button" key={row.id} className={selectedOutdoor?.id===row.id?'active':''} onClick={()=>setSelectedOutdoorId(row.id)}>
             <span className="outdoor-history-icon">{row._outdoorKind==='bike'?'🚴':row._outdoorKind==='run'?'🏃':'🚶'}</span>
             <span><strong>{row.title}</strong><small>{new Date(row.completed_at||row.session_date).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</small></span>
-            <span><strong>{outdoorDistancePresentation(row.workout?.outdoor).label}</strong><small>{!row._routeReady?'Approximate · no saved route':row._outdoorKind==='bike'?(row._outdoor.avgMph?row._outdoor.avgMph.toFixed(1)+' mph':'—'):formatPace(row._outdoor.avgPaceSecPerMile)}</small></span>
+            <span><strong>{outdoorDistancePresentation(row.workout?.outdoor).label}</strong><small>{!row._routeReady?'GPS estimate · partial or no route':row._outdoorKind==='bike'?(row._outdoor.avgMph?row._outdoor.avgMph.toFixed(1)+' mph':'—'):formatPace(row._outdoor.avgPaceSecPerMile)}</small></span>
           </button>)}</div>:<div className="empty-state action-empty"><strong>Nothing to show yet.</strong><span>Your first GPS-tracked outdoor workout will appear here.</span></div>}
         </section>
       </>}
