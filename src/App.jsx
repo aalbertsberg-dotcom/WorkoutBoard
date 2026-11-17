@@ -4265,6 +4265,7 @@ function App() {
               trackedProgramsInfo={trackedProgramsInfo}
               initialSection={progressStartSection}
               onSectionChange={section=>openProgress(section)}
+              onOpenHistory={()=>openHistory()}
             />
           </section>
         ) : activeTab === 'admin' ? (
@@ -4295,6 +4296,7 @@ function App() {
               view="mine"
               compact
               onOpenProgress={()=>openProgress('Overview')}
+              onOpenHistory={()=>openHistory()}
               onOpenWeight={()=>openProgress('Weight & Measurements')}
               onOpenMeasurements={()=>openProgress('Weight & Measurements')}
               session={session}
