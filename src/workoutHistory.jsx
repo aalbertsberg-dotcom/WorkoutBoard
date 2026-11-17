@@ -6,6 +6,7 @@ import { effectiveSteps } from './stepTracking'
 import { EditableWorkout } from './advancedFeatures'
 
 const dateKey=(row)=>String(row?.session_date||row?.completed_at||'').slice(0,10)
+const localDay=()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')}
 const prettyDate=key=>new Date(key+'T12:00:00').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric',year:'numeric'})
 const formatNumber=v=>Number(v||0).toLocaleString()
 const category=row=>{
@@ -39,7 +40,7 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
   const [message,setMessage]=useState('')
   const [mode,setMode]=useState('calendar')
   const [month,setMonth]=useState(()=>new Date())
-  const [day,setDay]=useState(()=>new Date().toLocaleDateString('en-CA'))
+  const [day,setDay]=useState(localDay)
   const [query,setQuery]=useState('')
   const [categoryFilter,setCategoryFilter]=useState('All')
   const [selectedId,setSelectedId]=useState(initialWorkoutId)
