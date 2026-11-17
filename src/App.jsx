@@ -11,6 +11,7 @@ import { RouteMap, formatPace, formatOutdoorDuration } from './outdoorTracking'
 import WorkoutHistory from './workoutHistory'
 import MobilitySession from './mobilitySession'
 import { outdoorDistancePresentation } from './trackingRules'
+import { completedWorkoutSummary } from './workoutHistoryUtils'
 import { Capacitor } from '@capacitor/core'
 import { App as NativeApp } from '@capacitor/app'
 import { androidBackAction } from './androidNavigation'
@@ -1127,6 +1128,27 @@ function RecoveryScreen({onDone}) {
       </section>
     </main>
   )
+}
+
+function TodayCompletedWorkouts({rows=[],onOpen}){
+  if(!rows.length)return null
+  return <section className="today-completed-workouts" aria-label="Today's completed workouts">
+    <button type="button" className="today-completed-head" onClick={()=>onOpen()}>
+      <span><strong>Today's workouts</strong><small>{rows.length} completed · Open history & calendar</small></span>
+      <b aria-hidden="true">›</b>
+    </button>
+    <div className="today-completed-list">
+      {rows.map(row=><button type="button" className="today-completed-entry" key={row.id}
+        onClick={()=>onOpen(row.training_session_id||row.id)}
+        aria-label={'View completed '+(row.title||'workout')}>
+        <span className="today-completed-info">
+          <strong>{row.title||'Workout'}</strong>
+          <small>{row.program||'Standalone workout'}{row.completed_at?' · '+new Date(row.completed_at).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):''}</small>
+        </span>
+        <span className="today-completed-stats"><b>{completedWorkoutSummary(row)}</b><small>View ›</small></span>
+      </button>)}
+    </div>
+  </section>
 }
 
 function App() {
@@ -3558,23 +3580,7 @@ function App() {
             />
           ) : trackedProgramsInfo.length && !showRegularToday ? (
             <section className="page-section tracked-today-state">
-              {todayCompletedWorkouts.length>0&&<details className="today-completed-workouts" open>
-                <summary onClick={e=>{e.preventDefault();openHistory()}} title="Open workout history"><span><b>Today’s workouts</b><small>{todayCompletedWorkouts.length} completed · View calendar ›</small></span></summary>
-                <button type="button" className="today-history-link" onClick={()=>openHistory()}>Open calendar & workout history ›</button>
-                <div className="today-completed-list">{todayCompletedWorkouts.map(row=><article key={row.id}>
-                  <button type="button" className="completed-workout-delete" aria-label={'Delete '+(row.title||'workout')} onClick={()=>{setWorkoutStartError('');setCompletedDeletePrompt(row)}}>×</button>
-                  <button type="button" className="today-completed-open" aria-label={'View '+(row.title||'workout')} onClick={()=>openHistory(row.training_session_id||row.id)}>View ›</button>
-                  <div><strong>{row.title||'Workout'}</strong><span>{row.program||'Workout'}{row.completed_at?' · '+new Date(row.completed_at).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):''}</span></div>
-                  <b>{Number(row.total_volume||0)>0
-                    ? Number(row.total_volume).toLocaleString()+' lb'
-                    : Number(row.workout?.outdoor?.distance_m||0)>0
-                      ? outdoorDistancePresentation(row.workout.outdoor).label
-                      : row.outdoor_summary?.miles
-                        ? Number(row.outdoor_summary.miles).toFixed(2)+' mi'
-                        : 'Completed'}</b>
-                  {row.workout?.exercises?.length>0&&<details><summary>Exercises</summary><p>{row.workout.exercises.map(x=>x.name).filter(Boolean).join(' · ')}</p></details>}
-                </article>)}</div>
-              </details>}
+              <TodayCompletedWorkouts rows={todayCompletedWorkouts} onOpen={openHistory}/>
               {completionSummary&&<section className="workout-complete-summary">
                 <div className="completion-check">✓</div>
                 <div><span className="card-label">WORKOUT COMPLETE</span><h2>{completionSummary.title||'Workout complete'}</h2><p>{completionSummary.program||trackedProgramsInfo.find(x=>x.key===plannedToday?.workout?.tracking_program_key)?.name||trackedTodayInfo?.name||'Workout'}</p></div>
@@ -3621,9 +3627,10 @@ function App() {
 
               {!nextDayPreviewOpen&&<section className="today-choice-screen">
                 <div className="today-choice-heading">
-                  <span className="card-label">TODAY</span>
-                  <h2>What are we doing today?</h2>
-                  <p>Choose the thing you actually want to do today.</p>
+                  <div><span className="card-label">TODAY</span>
+                    <h2>What are we doing today?</h2>
+                    <p>Choose the thing you actually want to do today.</p></div>
+                  <button type="button" className="today-history-access" onClick={()=>openHistory()}>History & calendar <span aria-hidden="true">›</span></button>
                 </div>
 
                 <div className="today-choice-grid">
@@ -3744,22 +3751,13 @@ function App() {
             </section>
           ) : !trackedProgramsInfo.length && !showRegularToday && !sharedWorkoutActive ? (
             <section className="page-section no-program-today">
-              {todayCompletedWorkouts.length>0&&<details className="today-completed-workouts" open>
-                <summary onClick={e=>{e.preventDefault();openHistory()}} title="Open workout history"><span><b>Today’s workouts</b><small>{todayCompletedWorkouts.length} completed · View calendar ›</small></span></summary>
-                <button type="button" className="today-history-link" onClick={()=>openHistory()}>Open calendar & workout history ›</button>
-                <div className="today-completed-list">{todayCompletedWorkouts.map(row=><article key={row.id}>
-                  <button type="button" className="completed-workout-delete" aria-label={'Delete '+(row.title||'workout')} onClick={()=>{setWorkoutStartError('');setCompletedDeletePrompt(row)}}>×</button>
-                  <button type="button" className="today-completed-open" aria-label={'View '+(row.title||'workout')} onClick={()=>openHistory(row.training_session_id||row.id)}>View ›</button>
-                  <div><strong>{row.title||'Workout'}</strong><span>{row.program||'Workout'}{row.completed_at?' · '+new Date(row.completed_at).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):''}</span></div>
-                  <b>{Number(row.total_volume||0)>0?Number(row.total_volume).toLocaleString()+' lb':'Completed'}</b>
-                </article>)}</div>
-              </details>}
-
+              <TodayCompletedWorkouts rows={todayCompletedWorkouts} onOpen={openHistory}/>
               <section className="today-choice-screen">
                 <div className="today-choice-heading">
-                  <span className="card-label">TODAY</span>
-                  <h2>What are we doing today?</h2>
-                  <p>Pick something simple, start a workout, or choose a program.</p>
+                  <div><span className="card-label">TODAY</span>
+                    <h2>What are we doing today?</h2>
+                    <p>Pick something simple, start a workout, or choose a program.</p></div>
+                  <button type="button" className="today-history-access" onClick={()=>openHistory()}>History & calendar <span aria-hidden="true">›</span></button>
                 </div>
                 <div className="today-choice-grid">
                   {resumeStandalonePlan&&<button type="button" className="today-choice-resume" onClick={()=>activatePlannedWorkout(resumeStandalonePlan)}>
