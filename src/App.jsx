@@ -1247,7 +1247,7 @@ function App() {
   const [programCompletionPrompt,setProgramCompletionPrompt] = useState(null)
   const [oneRmNotice,setOneRmNotice] = useState(null)
   const [releaseUpdate,setReleaseUpdate] = useState(null)
-  const [offlineStatus,setOfflineStatus] = useState(()=>({online:navigator.onLine!==false,pending:0,syncing:false,error:null}))
+  const [offlineStatus,setOfflineStatus] = useState(()=>({online:navigator.onLine!==false,pending:0,syncing:false,error:null,ready:false}))
 
   const navigateTo = (tab,{progressSection=null,replace=false}={}) => {
     const section=progressSection || (tab==='progress'?progressStartSection:'Overview')
@@ -1583,7 +1583,7 @@ function App() {
   useEffect(()=>{
     const userId=session?.user?.id
     let cancelled=false
-    const refreshStatus=()=>setOfflineStatus(v=>({...v,online:navigator.onLine!==false,pending:getPendingOfflineCount(userId)}))
+    const refreshStatus=()=>setOfflineStatus(v=>({...v,online:navigator.onLine!==false,pending:getPendingOfflineCount(userId),ready:true}))
     const sync=async()=>{
       await hydrateOfflineQueue()
       if(cancelled)return
@@ -1592,7 +1592,7 @@ function App() {
       setOfflineStatus(v=>({...v,online:true,syncing:true,pending:getPendingOfflineCount(userId)}))
       try{
         const result=await syncOfflineQueue(supabase,userId)
-        if(!cancelled)setOfflineStatus({online:true,syncing:false,pending:result.pending||0,error:result.error?.message||null})
+        if(!cancelled)setOfflineStatus({online:true,syncing:false,pending:result.pending||0,error:result.error?.message||null,ready:true})
       }catch(error){
         if(!cancelled)setOfflineStatus(v=>({...v,syncing:false,error:error?.message||'Sync unavailable'}))
       }
@@ -1869,7 +1869,7 @@ function App() {
 
   // A release never interrupts a live workout or erases unsynced changes.
   const updateBlocked=Boolean(
-    !offlineStatus.online||offlineStatus.syncing||offlineStatus.pending>0||
+    !offlineStatus.ready||!offlineStatus.online||offlineStatus.syncing||offlineStatus.pending>0||
     (plannedToday&&(plannedToday.status==='started'||plannedWorkoutHasProgress(plannedToday)))||
     (showRegularToday&&!log.complete)
   )

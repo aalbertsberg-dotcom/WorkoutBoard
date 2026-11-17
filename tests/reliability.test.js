@@ -108,3 +108,9 @@ test('Update toast stays out of the way of an unfinished workout',()=>{
   const app=readFileSync(new URL('../src/App.jsx',import.meta.url),'utf8')
   assert.match(app,/releaseUpdate&&!updateBlocked&&<div className="release-update-toast"/)
 })
+
+test('Release updates are blocked until durable pending-workout queue has loaded',()=>{
+  const app=readFileSync(new URL('../src/App.jsx',import.meta.url),'utf8')
+  assert.match(app,/ready:false/)
+  assert.match(app,/!offlineStatus.ready\|\|!offlineStatus.online/)
+})
