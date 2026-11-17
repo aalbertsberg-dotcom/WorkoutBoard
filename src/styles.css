@@ -7682,3 +7682,96 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
 
 /* Short GPS activity: retain approximate distance without implying a recorded route. */
 .completion-gps-note,.outdoor-estimated-distance-note { margin:10px 0; padding:10px 12px; border:1px solid #34465f; border-radius:10px; color:#aab9ce; background:#111c2d; font-size:12px; line-height:1.5; }
+
+
+/* WorkSet 2.6: activity history is a first-class screen, separate from charts. */
+.workset-history,.workset-mobility { display:grid; gap:16px; min-width:0; }
+.workset-history-head,.mobility-heading { display:flex; justify-content:space-between; align-items:start; flex-wrap:wrap; gap:12px; }
+.workset-history-head h2,.mobility-heading h2 { margin:5px 0; font-size:clamp(23px,5vw,30px); }
+.workset-history-head p,.mobility-heading p { font-size:13px; color:#99a9bf; margin:4px 0; line-height:1.4; }
+.workset-history-head .secondary-action,.mobility-heading .secondary-action { min-height:44px; padding:9px 14px; }
+.workset-history-switch { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; padding:5px; border:1px solid #34465f; border-radius:12px; background:#0c1727; }
+.workset-history-switch button { border:0; border-radius:8px; padding:12px 9px; min-height:44px; color:#afbed2; background:transparent; font-size:14px; font-weight:750; cursor:pointer; }
+.workset-history-switch button.active { background:#2b405d; color:white; }
+.history-filters { display:flex; gap:12px; flex-wrap:wrap; }
+.history-filters label,.mobility-note { display:grid; gap:5px; flex:1 1 190px; color:#acbbcc; font-size:12px; font-weight:750; }
+.history-filters input,.history-filters select,.mobility-note textarea { box-sizing:border-box; width:100%; min-height:44px; border:1px solid #34465f; border-radius:10px; background:#0c1727; color:#f6f8fa; padding:10px 12px; font:inherit; font-size:15px; }
+.history-calendar { display:grid; gap:13px; }
+.history-month { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.history-month h3 { margin:0; font-size:17px; }
+.history-month button { border:1px solid #364b66; background:#18273a; color:white; border-radius:10px; min-height:44px; min-width:44px; font-size:23px; }
+.history-calendar-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:4px; text-align:center; }
+.history-calendar-grid > b { color:#a8b9d0; font-size:10px; padding:8px 0; }
+.history-calendar-grid button { min-height:47px; border-radius:9px; border:1px solid transparent; color:#d9e3f0; background:#101c2c; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; padding:4px 0; font-size:13px; cursor:pointer; }
+.history-calendar-grid button.outside { opacity:.32; }
+.history-calendar-grid button.trained { background:#1b3428; border-color:#4f7755; }
+.history-calendar-grid button.selected { outline:2px solid #a2c95f; outline-offset:-2px; }
+.history-calendar-grid button small { display:block; font-size:10px; font-weight:850; line-height:1; color:#caff9b; }
+.history-day-title { margin:5px 0 0; font-size:16px; }
+.history-entries { display:grid; gap:8px; }
+.history-entry { width:100%; min-height:72px; display:flex; gap:12px; align-items:center; justify-content:space-between; text-align:left; border-radius:11px; border:1px solid #34485f; background:#101b2c; padding:13px; cursor:pointer; color:white; }
+.history-entry-main,.history-entry-meta { display:grid; gap:5px; min-width:0; }
+.history-entry-main strong { font-size:16px; overflow-wrap:anywhere; }
+.history-entry-main small,.history-entry-meta span { font-size:11px; color:#a1b0c5; }
+.history-entry-meta { text-align:right; flex-shrink:0; }
+.history-entry-meta b { font-size:12px; color:#c1e995; }
+.history-entry:active,.today-completed-open:active { transform:scale(.99); border-color:#a3c97b; }
+.history-empty,.history-note { color:#a1b1c5; line-height:1.5; font-size:13px; }
+.history-detail { display:grid; gap:16px; min-width:0; }
+.history-detail-top { display:flex; align-items:start; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+.history-detail-top h3 { margin:6px 0; font-size:23px; }
+.history-detail-top p,.history-detail-top small { color:#9aadc4; font-size:12px; }
+.history-detail-actions { display:flex; gap:9px; align-items:center; flex-wrap:wrap; }
+.history-detail-actions button { min-height:44px; padding:9px 14px; }
+.history-detail-kpis { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.history-detail-kpis>div { display:grid; gap:5px; min-width:0; padding:13px; border-radius:10px; background:#0d1928; }
+.history-detail-kpis span { color:#93a7bd; font-size:11px; }
+.history-detail-kpis strong { color:#f6f9fb; font-size:18px; overflow-wrap:anywhere; }
+.history-exercises { display:grid; gap:8px; }
+.history-exercises h4 { margin:0 0 4px; }
+.history-exercises>div { display:grid; gap:5px; padding:10px 12px; border:1px solid #263c55; border-radius:10px; }
+.history-exercises strong { font-size:14px; }
+.history-exercises small { color:#aabacb; font-size:12px; line-height:1.4; }
+.history-notes { border-top:1px solid #33465d; padding-top:12px; }
+.history-notes p { margin-bottom:0; }
+.history-delete-confirm { display:grid; gap:12px; border:1px solid #a04747; }
+.today-completed-open { position:relative; z-index:1; border:1px solid #405875; border-radius:10px; background:#1b2b41; color:#d0e6ff; font-weight:750; min-height:40px; padding:8px 12px; flex-shrink:0; }
+.today-history-link { margin:8px 12px; padding:9px 12px; border:1px solid #32485f; border-radius:8px; background:#1b2d41; color:#d9edff; font-size:13px; font-weight:700; min-height:44px; }
+.today-completed-workouts>summary { cursor:pointer; }
+.account-history-entry { display:grid; gap:10px; }
+.account-history-entry h3 { margin:4px 0; }
+.account-history-entry p { color:#9cafc6; margin:0; font-size:12px; }
+.history-edit-sets { display:grid; gap:8px; }
+.history-edit-sets label { display:grid; grid-template-columns:1fr 1fr 1fr; align-items:center; gap:6px; }
+.history-edit-sets input { min-width:0; width:100%; }
+
+/* Large, predictable tap targets on mobile — no tiny floating submenu buttons. */
+.progress-section-tabs { display:grid !important; grid-template-columns:repeat(2,minmax(0,1fr)) !important; gap:7px !important; overflow:visible !important; }
+.progress-section-tabs button { min-width:0 !important; min-height:46px !important; width:100%; font-size:13px !important; white-space:normal !important; line-height:1.3; }
+.advanced-tabs { display:grid !important; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; overflow:visible !important; }
+.advanced-tabs button { min-width:0 !important; width:100%; min-height:44px; white-space:normal !important; font-size:13px; }
+.app-level-mobile-nav { grid-template-columns:repeat(4,minmax(0,1fr)) !important; }
+.app-level-mobile-nav button { min-width:0; }
+.app-level-mobile-nav button span { white-space:nowrap; }
+
+/* Warm-up and cool-down remain lightweight and independent from programs. */
+.today-choice-grid .today-choice-mobility { background:#152633; border-color:#547a67; }
+.mobility-session-status { display:flex; gap:12px; justify-content:space-between; border:1px solid #344963; border-radius:12px; padding:13px; }
+.mobility-session-status span { display:grid; gap:4px; color:#94a7bf; font-size:12px; }
+.mobility-session-status strong { color:#ebf9eb; font-size:20px; }
+.mobility-attribution { margin:0; color:#9aafc4; font-size:12px; line-height:1.5; }
+.mobility-movements { display:grid; gap:9px; }
+.mobility-movements label { display:flex; gap:12px; align-items:flex-start; padding:14px; border:1px solid #32485f; border-radius:13px; background:#101d2c; }
+.mobility-movements label.done { border-color:#6c9a63; background:#172a22; }
+.mobility-movements input { flex:0 0 22px; width:22px; height:22px; accent-color:#9bcd69; }
+.mobility-movements label span { display:grid; gap:5px; }
+.mobility-movements strong { font-size:15px; color:white; }
+.mobility-movements small { color:#b6db9e; font-size:12px; font-weight:750; }
+.mobility-movements em { color:#abbac9; font-style:normal; font-size:13px; line-height:1.45; }
+.mobility-actions { display:grid; grid-template-columns:1fr 2fr; gap:10px; padding-bottom:14px; }
+.mobility-actions button { min-height:48px; font-size:14px; }
+@media(min-width:700px){
+  .progress-section-tabs { grid-template-columns:repeat(5,minmax(0,1fr)) !important; }
+  .advanced-tabs { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .history-calendar-grid button { min-height:58px; }
+}
