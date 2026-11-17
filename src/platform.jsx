@@ -115,6 +115,7 @@ export function PlatformProgress({
   onOpenProgress=null,
   onOpenWeight=null,
   onOpenMeasurements=null,
+  onOpenHistory=null,
   onSectionChange=null,
   trackedProgramInfo=null,
   trackedProgramsInfo=[],
@@ -377,7 +378,14 @@ export function PlatformProgress({
     })),
     ...flexSessions.map(r=>({
       id:'flex-'+r.id,date:r.completed_at||r.session_date,title:r.title,
-      subtitle:r.program||'Custom workout',volume:Number(r.total_volume||0),e1rm:Number(r.estimated_1rm||0)
+      subtitle:r.program||'Custom workout',volume:Number(r.total_volume||0),e1rm:Number(r.estimated_1rm||0),
+      activityLabel:r.workout?.mobility
+        ? (r.workout.mobility.items||[]).filter(x=>x.done).length+' movements'
+        : outdoorActivityKind(r.workout?.quick_cardio_kind||r.workout?.metcon?.activity||r.title)
+          ? (Number(r.workout?.outdoor?.distance_m||0)>0
+              ? outdoorDistancePresentation(r.workout?.outdoor).label
+              : 'Cardio session')
+          : null
     }))
   ].sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,15)
 
@@ -741,9 +749,10 @@ export function PlatformProgress({
       </>}
 
       {progressSection==='History'&&<>
+        {onOpenHistory&&<button type="button" className="wide-button" onClick={onOpenHistory}>Open workout calendar and details ›</button>}
         <section className="simple-card">
           <div className="section-heading"><div><span className="card-label">RECENT WORKOUTS</span><h3>Completed workouts</h3></div></div>
-          <div className="history-list">{recentCombined.map(row=><article className="progress-workout" key={row.id}><div><strong>{new Date(row.date).toLocaleDateString(undefined,{month:'short',day:'numeric'})} · {row.title}</strong><span>{row.subtitle}</span></div><div><strong>{formatWeight(row.volume)} lb</strong><span>{row.e1rm?'e1RM '+formatWeight(row.e1rm):''}</span></div></article>)}
+          <div className="history-list">{recentCombined.map(row=><article className="progress-workout" key={row.id}><div><strong>{new Date(row.date).toLocaleDateString(undefined,{month:'short',day:'numeric'})} · {row.title}</strong><span>{row.subtitle}</span></div><div><strong>{row.activityLabel||formatWeight(row.volume)+' lb'}</strong><span>{row.e1rm?'e1RM '+formatWeight(row.e1rm):''}</span></div></article>)}
           {!recentCombined.length&&<div className="empty-state action-empty"><strong>No completed workouts yet.</strong><span>Finish a workout and it will show here.</span></div>}</div>
         </section>
 
