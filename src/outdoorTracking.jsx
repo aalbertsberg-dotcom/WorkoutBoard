@@ -495,7 +495,7 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
 
     {liveFix
       ? <><RouteMap points={current.points} provisional={!credibleRoute}/>
-          {partialRoute&&<p className="outdoor-route-preview-note">GPS gap detected: unrecorded distance was not counted. Screen-off GPS requires the Android app.</p>}
+          {partialRoute&&<p className="outdoor-route-preview-note">GPS gap detected: unrecorded distance was not counted. Screen-off GPS requires the native WorkSet app.</p>}
            {!credibleRoute&&!partialRoute&&<p className="outdoor-route-preview-note">Live GPS preview · short distances are approximate. A longer, reliable route is needed to save the map.</p>}
         </>
       : <div className="outdoor-map-placeholder">

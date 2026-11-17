@@ -1,32 +1,23 @@
 import { useEffect,useMemo,useState } from 'react'
 import { supabase } from './supabase'
 import { RouteMap,outdoorMetrics,formatPace,formatOutdoorDuration,outdoorActivityKind } from './outdoorTracking'
-import { outdoorDistancePresentation,hasReliableOutdoorRoute } from './trackingRules'
+import { outdoorDistancePresentation,hasReliableOutdoorRoute,hasVerifiedOutdoorRoute } from './trackingRules'
 import { effectiveSteps } from './stepTracking'
 import { EditableWorkout } from './advancedFeatures'
+import { HISTORY_PAGE_SIZE,completedWorkoutKind,completedWorkoutSummary,workoutHistoryMatches,workoutHistoryDayKey } from './workoutHistoryUtils'
 
-const dateKey=(row)=>String(row?.session_date||row?.completed_at||'').slice(0,10)
+const dateKey=workoutHistoryDayKey
 const localDay=()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')}
-const prettyDate=key=>new Date(key+'T12:00:00').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric',year:'numeric'})
+const prettyDate=key=>{
+  const date=new Date(String(key||'')+'T12:00:00')
+  return Number.isNaN(date.getTime())?'Unknown date':date.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric',year:'numeric'})
+}
 const formatNumber=v=>Number(v||0).toLocaleString()
-const category=row=>{
-  if(row?.workout?.mobility)return 'Mobility'
-  if(outdoorActivityKind(row?.workout?.quick_cardio_kind||row?.workout?.metcon?.activity||row?.title))return 'Cardio'
-  return 'Strength'
-}
-const summary=row=>{
-  if(category(row)==='Mobility')return (row?.workout?.mobility?.items||[]).filter(x=>x.done).length+' movements'
-  if(category(row)==='Cardio'){
-    const d=outdoorDistancePresentation(row?.workout?.outdoor)
-    const steps=effectiveSteps(row?.workout?.outdoor)
-    return (d.meters>0?d.label:'Timed workout')+(steps?' · '+formatNumber(steps)+' steps':'')
-  }
-  return Number(row?.total_volume||0)>0?formatNumber(row.total_volume)+' lb volume':'Strength session'
-}
+const category=completedWorkoutKind
+const summary=completedWorkoutSummary
 const monthGrid=date=>{
   const first=new Date(date.getFullYear(),date.getMonth(),1)
-  const start=new Date(first)
-  start.setDate(first.getDate()-first.getDay())
+  const start=new Date(first);start.setDate(first.getDate()-first.getDay())
   return Array.from({length:42},(_,i)=>{
     const d=new Date(start);d.setDate(start.getDate()+i)
     return {key:`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,
@@ -36,7 +27,11 @@ const monthGrid=date=>{
 
 export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onChanged}){
   const [rows,setRows]=useState([])
+  const [monthRows,setMonthRows]=useState([])
+  const [visibleCount,setVisibleCount]=useState(HISTORY_PAGE_SIZE)
+  const [hasMore,setHasMore]=useState(false)
   const [loading,setLoading]=useState(true)
+  const [loadingMonth,setLoadingMonth]=useState(true)
   const [message,setMessage]=useState('')
   const [mode,setMode]=useState('calendar')
   const [month,setMonth]=useState(()=>new Date())
@@ -49,16 +44,37 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
   const [busy,setBusy]=useState(false)
 
   const load=async()=>{
-    if(!session?.user?.id){setRows([]);setLoading(false);return}
+    if(!session?.user?.id){setRows([]);setHasMore(false);setLoading(false);return}
     setLoading(true)
     const {data,error}=await supabase.from('training_sessions').select('*')
       .eq('user_id',session.user.id).not('completed_at','is',null)
-      .order('completed_at',{ascending:false}).limit(500)
+      .order('completed_at',{ascending:false}).range(0,visibleCount)
     if(error)setMessage(error.message)
-    else setRows(data||[])
+    else{
+      setRows((data||[]).slice(0,visibleCount))
+      setHasMore((data||[]).length>visibleCount)
+    }
     setLoading(false)
   }
-  useEffect(()=>{load()},[session?.user?.id])
+  useEffect(()=>{load()},[session?.user?.id,visibleCount])
+  // Fetch calendar dates independently, including months older than list results.
+  useEffect(()=>{
+    if(!session?.user?.id){setMonthRows([]);setLoadingMonth(false);return}
+    let cancelled=false
+    const grid=monthGrid(month)
+    setLoadingMonth(true)
+    supabase.from('training_sessions').select('*')
+      .eq('user_id',session.user.id).not('completed_at','is',null)
+      .gte('session_date',grid[0].key).lte('session_date',grid.at(-1).key)
+      .order('completed_at',{ascending:false}).limit(1000)
+      .then(({data,error})=>{
+        if(cancelled)return
+        if(error)setMessage(error.message)
+        else setMonthRows(data||[])
+        setLoadingMonth(false)
+      })
+    return()=>{cancelled=true}
+  },[session?.user?.id,month])
   useEffect(()=>{if(initialWorkoutId){setSelectedId(initialWorkoutId);setEditing(false);setDeleting(false)}},[initialWorkoutId])
   useEffect(()=>{
     const onNativeBack=event=>{
@@ -72,21 +88,14 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
     window.addEventListener('workset-native-back',onNativeBack)
     return()=>window.removeEventListener('workset-native-back',onNativeBack)
   },[deleting,editing,selectedId])
-  const selected=rows.find(row=>row.id===selectedId)||null
+  const selected=rows.find(row=>row.id===selectedId)||monthRows.find(row=>row.id===selectedId)||null
   const dates=useMemo(()=>{
     const map={}
-    for(const row of rows){const key=dateKey(row);if(key)map[key]=(map[key]||0)+1}
+    for(const row of monthRows){const key=dateKey(row);if(key)map[key]=(map[key]||0)+1}
     return map
-  },[rows])
-  const filtered=useMemo(()=>{
-    const q=query.toLowerCase().trim()
-    return rows.filter(row=>
-      (categoryFilter==='All'||category(row)===categoryFilter) &&
-      (!q||[row.title,row.program,JSON.stringify((row.workout?.exercises||[]).map(x=>x.name)),
-        String(row.session_date)].join(' ').toLowerCase().includes(q))
-    )
-  },[rows,query,categoryFilter])
-  const dayRows=filtered.filter(row=>dateKey(row)===day)
+  },[monthRows])
+  const filtered=useMemo(()=>rows.filter(row=>workoutHistoryMatches(row,categoryFilter,query)),[rows,query,categoryFilter])
+  const dayRows=monthRows.filter(row=>workoutHistoryMatches(row,categoryFilter)&&dateKey(row)===day)
   const select=row=>{setSelectedId(row.id);setEditing(false);setDeleting(false);setMessage('')}
 
   const deleteSelected=async()=>{
@@ -99,11 +108,17 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
     if(sessionRow.planned_workout_id)await supabase.from('planned_workouts').delete()
       .eq('id',sessionRow.planned_workout_id).eq('user_id',session.user.id)
     setRows(prev=>prev.filter(row=>row.id!==sessionRow.id))
+    setMonthRows(prev=>prev.filter(row=>row.id!==sessionRow.id))
     setSelectedId(null);setDeleting(false);setBusy(false)
     setMessage('Workout deleted.')
     onChanged?.()
   }
   const openList=()=>{setSelectedId(null);setEditing(false);setDeleting(false)}
+  const changeMonth=offset=>{
+    const next=new Date(month.getFullYear(),month.getMonth()+offset,1)
+    setMonth(next)
+    setDay([next.getFullYear(),String(next.getMonth()+1).padStart(2,'0'),'01'].join('-'))
+  }
   const itemButton=row=><button type="button" className="history-entry" key={row.id} onClick={()=>select(row)}>
     <span className="history-entry-main"><strong>{row.title||'Workout'}</strong>
       <small>{prettyDate(dateKey(row))} · {row.program||category(row)}</small></span>
@@ -150,9 +165,9 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
             <div><span>Distance</span><strong>{distance.label}</strong></div>
             <div><span>Duration</span><strong>{formatOutdoorDuration(metrics?.elapsedSeconds||Number(workout.quick_timer_elapsed_seconds||0))}</strong></div>
             {(kind==='walk'||kind==='run')&&<div><span>Steps</span><strong>{formatNumber(effectiveSteps(outdoor))}</strong></div>}
-            <div><span>{kind==='bike'?'Avg speed':'Avg pace'}</span><strong>{!hasReliableOutdoorRoute(outdoor)?'—':kind==='bike'?(metrics?.avgMph?metrics.avgMph.toFixed(1)+' mph':'—'):formatPace(metrics?.avgPaceSecPerMile)}</strong></div>
+            <div><span>{kind==='bike'?'Avg speed':'Avg pace'}</span><strong>{!hasVerifiedOutdoorRoute(outdoor)?'—':kind==='bike'?(metrics?.avgMph?metrics.avgMph.toFixed(1)+' mph':'—'):formatPace(metrics?.avgPaceSecPerMile)}</strong></div>
           </div>
-          {distance.estimated&&<small className="history-note">Distance is approximate; insufficient reliable GPS points for an accurate route or pace.</small>}
+          {distance.estimated&&<small className="history-note">{distance.note}. Pace is not reported for an unverified track.</small>}
         </>}
         {category(selected)==='Mobility'&&<>
           <p className="history-note">{workout.mobility?.kind==='cooldown'?'Cool-down':'Warm-up'} · {formatOutdoorDuration(Number(workout.mobility?.duration_seconds||0))}</p>
@@ -178,7 +193,12 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
         {(workout.note||workout.notes)&&<div className="history-notes"><strong>Notes</strong><p>{workout.note||workout.notes}</p></div>}
       </article>
       {editing&&<EditableWorkout key={selected.id} sessionRow={selected}
-        onCancel={()=>setEditing(false)} onSaved={async()=>{setEditing(false);setMessage('Workout saved.');await load();onChanged?.()}}/>}
+        onCancel={()=>setEditing(false)} onSaved={async()=>{
+          setEditing(false);setMessage('Workout saved.')
+          await load()
+          setMonth(date=>new Date(date))
+          onChanged?.()
+        }}/>} 
       {deleting&&<section className="simple-card history-delete-confirm" role="alertdialog" aria-label="Delete this workout?">
         <h3>Delete this workout?</h3>
         <p>This removes only <strong>{selected.title}</strong> and its linked history. It cannot be undone.</p>
@@ -204,9 +224,9 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
       </div>
       {mode==='calendar'&&<section className="simple-card history-calendar">
         <div className="history-month">
-          <button type="button" aria-label="Previous month" onClick={()=>setMonth(d=>new Date(d.getFullYear(),d.getMonth()-1,1))}>‹</button>
+          <button type="button" aria-label="Previous month" onClick={()=>changeMonth(-1)}>‹</button>
           <h3>{month.toLocaleDateString(undefined,{month:'long',year:'numeric'})}</h3>
-          <button type="button" aria-label="Next month" onClick={()=>setMonth(d=>new Date(d.getFullYear(),d.getMonth()+1,1))}>›</button>
+          <button type="button" aria-label="Next month" onClick={()=>changeMonth(1)}>›</button>
         </div>
         <div className="history-calendar-grid">
           {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(x=><b key={x}>{x}</b>)}
@@ -219,14 +239,18 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
         </div>
         <h3 className="history-day-title">{prettyDate(day)}</h3>
         <div className="history-entries">{dayRows.map(itemButton)}</div>
-        {!dayRows.length&&<p className="history-empty">No {categoryFilter==='All'?'':categoryFilter.toLowerCase()+' '}workouts recorded on this date.</p>}
+        {loadingMonth&&<p className="history-note" role="status">Loading this month's workouts…</p>}
+        {!loadingMonth&&!dayRows.length&&<p className="history-empty">No {categoryFilter==='All'?'':categoryFilter.toLowerCase()+' '}workouts recorded on this date.</p>}
       </section>}
       {mode==='list'&&<section className="simple-card">
         <h3>Completed workouts <small>({filtered.length})</small></h3>
         <div className="history-entries">{filtered.map(itemButton)}</div>
-        {!filtered.length&&<p className="history-empty">No workouts match these filters.</p>}
+        {!loading&&!filtered.length&&<p className="history-empty">No matching workouts in the loaded history.</p>}
+        {hasMore&&<button type="button" className="history-load-more" disabled={loading}
+          onClick={()=>setVisibleCount(n=>n+HISTORY_PAGE_SIZE)}>{loading?'Loading…':'Load older workouts'}</button>}
+        <small className="history-note">Showing {rows.length} most recent workouts{hasMore?' · load older sessions to search further':''}.</small>
       </section>}
-      {loading&&<p className="history-note">Loading your workout history…</p>}
+      {loading&&<p className="history-note" role="status">Loading your workout history…</p>}
     </>}
   </section>
 }
