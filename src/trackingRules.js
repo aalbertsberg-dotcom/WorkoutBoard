@@ -41,9 +41,10 @@ export function gpsMovementAssessment({
   reportedSpeed=null,priorCandidateDistance=null
 }={}){
   const distance=Math.max(0,Number(distanceMeters)||0)
+  const validAccuracy=value=>value!==null&&value!==undefined&&value!==''&&Number.isFinite(Number(value))
   const quality=Math.max(
-    Number.isFinite(Number(currentAccuracy))?Math.max(0,Number(currentAccuracy)):12,
-    Number.isFinite(Number(previousAccuracy))?Math.max(0,Number(previousAccuracy)):12
+    validAccuracy(currentAccuracy)?Math.max(0,Number(currentAccuracy)):12,
+    validAccuracy(previousAccuracy)?Math.max(0,Number(previousAccuracy)):12
   )
   const speed=reportedSpeed===null||reportedSpeed===undefined||reportedSpeed===''?null:Number(reportedSpeed)
   const knownSpeed=Number.isFinite(speed)&&speed>=0
