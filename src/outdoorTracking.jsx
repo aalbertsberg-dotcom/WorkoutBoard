@@ -418,6 +418,9 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
     setMessage('Getting GPS signal…')
     await requestWakeLock()
     if(!runningRef.current){await releaseWakeLock();return}
+    // A second start may have begun while the wake-lock promise was pending.
+    // Never open two concurrent browser GPS watchers for one workout.
+    if(watchRef.current!=null)return
     watchRef.current=navigator.geolocation.watchPosition(
       pushPosition,
       error=>{
