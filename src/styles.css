@@ -7779,3 +7779,12 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
 .community-remove-post { margin:8px 0; border:1px solid #455469; background:#1c2a3d; color:#d7e6f4; border-radius:9px; min-height:42px; padding:8px 12px; font-size:13px; }
 .community-delete-confirm { margin-top:12px; border:1px solid #974d4d; }
 .today-completed-open { margin-left:auto; }
+
+/* Explicit layout: Today workout details should never hide under delete X. */
+.today-completed-list > article > div { grid-column:1; grid-row:1; min-width:0; }
+.today-completed-list > article > b { grid-column:1; grid-row:2; }
+.today-completed-list > article > .today-completed-open {
+  grid-column:2; grid-row:1 / span 2; align-self:center;
+  margin-right:4px; min-width:64px; max-width:120px;
+}
+.today-completed-list > article > .completed-workout-delete { z-index:2; }
