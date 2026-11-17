@@ -7806,3 +7806,130 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   position:relative;
   isolation:isolate;
 }
+
+
+/* 2.6.3: universal web History entry, readable activity cards and tap targets. */
+.today-completed-workouts {
+  display:grid;
+  gap:0;
+  overflow:hidden;
+}
+.today-completed-head {
+  width:100%;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  min-height:64px;
+  padding:14px 16px;
+  border:0;
+  background:transparent;
+  text-align:left;
+  color:inherit;
+  cursor:pointer;
+}
+.today-completed-head > span { display:grid; gap:5px; min-width:0; }
+.today-completed-head strong { font-size:18px; line-height:1.2; }
+.today-completed-head small { font-size:12px; line-height:1.4; color:#a7b6c8; }
+.today-completed-head > b { font-size:24px; color:#c4e79a; }
+.today-completed-list {
+  padding:0 12px 12px;
+  gap:9px;
+}
+.today-completed-entry {
+  width:100%;
+  min-height:74px;
+  border:1px solid #324963;
+  border-radius:12px;
+  background:#0d1a2c;
+  color:inherit;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:12px 14px;
+  text-align:left;
+  cursor:pointer;
+  min-width:0;
+}
+.today-completed-entry .today-completed-info,
+.today-completed-entry .today-completed-stats {
+  display:grid;
+  gap:5px;
+  min-width:0;
+}
+.today-completed-entry .today-completed-info { flex:1 1 auto; }
+.today-completed-entry .today-completed-info strong {
+  font-size:16px;
+  line-height:1.25;
+  overflow-wrap:anywhere;
+}
+.today-completed-entry .today-completed-info small {
+  font-size:12px;
+  line-height:1.3;
+  color:#9cb0c8;
+}
+.today-completed-entry .today-completed-stats { flex:0 0 auto; text-align:right; }
+.today-completed-entry .today-completed-stats b {
+  font-size:14px;
+  color:#c7e997;
+}
+.today-completed-entry .today-completed-stats small { font-size:11px; color:#acc2d4; }
+.today-completed-entry:hover,.today-completed-entry:focus-visible {
+  border-color:#7ea764;
+  background:#14263a;
+}
+.today-choice-heading {
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:12px;
+}
+.today-choice-heading > div { flex:1 1 220px; min-width:0; }
+.today-history-access {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  padding:11px 14px;
+  min-height:44px;
+  border:1px solid #465c75;
+  border-radius:10px;
+  background:#13233a;
+  color:#d0e7fb;
+  font-size:13px;
+  font-weight:750;
+  cursor:pointer;
+}
+.today-history-access span { font-size:18px; }
+.history-load-more {
+  width:100%;
+  min-height:48px;
+  margin-top:14px;
+  border:1px solid #5b765b;
+  border-radius:10px;
+  color:#d7f4c3;
+  background:#1b3226;
+  font-size:14px;
+  font-weight:750;
+  cursor:pointer;
+}
+.history-load-more:disabled { opacity:.65; cursor:wait; }
+.history-list .progress-workout { min-width:0; }
+.workset-history button:focus-visible,
+.today-choice-screen button:focus-visible,
+.today-completed-workouts button:focus-visible {
+  outline:2px solid #bfed84;
+  outline-offset:2px;
+}
+@media(max-width:480px) {
+  .today-history-access { flex:0 0 auto; font-size:12px; }
+  .today-choice-heading > div { flex-basis:180px; }
+  .today-completed-entry { padding:12px; }
+  .today-completed-entry .today-completed-stats b { font-size:13px; }
+}
+@media(max-width:350px) {
+  .today-history-access { width:100%; justify-content:space-between; }
+  .today-completed-entry .today-completed-stats small { display:none; }
+}
