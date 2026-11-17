@@ -1,3 +1,4 @@
+import {confirmWorkset} from './worksetDialogs'
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './supabase'
 import { DrawWhiteboard } from './drawWhiteboard'
@@ -78,7 +79,7 @@ export function WhiteboardPage({session}) {
   }
 
   const remove=async note=>{
-    if(!window.confirm('Delete this whiteboard card?'))return
+    if(!await confirmWorkset('Delete this whiteboard card?'))return
     const {error}=await supabase.from('whiteboard_notes').delete().eq('id',note.id)
     if(error){setMessage(error.message);return}
     setNotes(v=>v.filter(x=>x.id!==note.id))

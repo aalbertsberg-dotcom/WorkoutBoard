@@ -1,3 +1,4 @@
+import {confirmWorkset,promptWorkset} from './worksetDialogs'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from './supabase'
 
@@ -101,8 +102,8 @@ export function DrawWhiteboard({session}) {
 
   const point=e=>{const rect=canvasRef.current.getBoundingClientRect();return{x:clamp((e.clientX-rect.left)/rect.width),y:clamp((e.clientY-rect.top)/rect.height)}}
 
-  const addPromptItem=(kind,p)=>{
-    const text=window.prompt(kind==='sticky'?'Sticky note text':'Text')
+  const addPromptItem=async(kind,p)=>{
+    const text=await promptWorkset(kind==='sticky'?'Sticky note text':'Text')
     if(!text)return
     const item=kind==='sticky'?{id:uid(),type:'sticky',text,x:p.x,y:p.y,w:.28,h:.18}:{id:uid(),type:'text',text,x:p.x,y:p.y,color}
     setRedo([]);setItems(v=>[...v,item])
@@ -121,7 +122,7 @@ export function DrawWhiteboard({session}) {
   const end=e=>{if(!drawingRef.current)return;e.preventDefault();drawingRef.current=false;currentRef.current=null}
   const undo=()=>setItems(v=>{if(!v.length)return v;const last=v[v.length-1];setRedo(r=>[last,...r]);return v.slice(0,-1)})
   const redoOne=()=>setRedo(v=>{if(!v.length)return v;const [first,...rest]=v;setItems(x=>[...x,first]);return rest})
-  const clear=()=>{if(items.length&&window.confirm('Clear this board?')){setRedo(items);setItems([])}}
+  const clear=async()=>{if(items.length&&await confirmWorkset('Clear this board?')){setRedo(items);setItems([])}}
 
   const save=async()=>{
     if(!session?.user)return;setSaving(true)
@@ -136,12 +137,12 @@ export function DrawWhiteboard({session}) {
   }
 
   const newBoard=async()=>{
-    const name=window.prompt('New board name','Board '+(boards.length+1));if(!name)return
+    const name=await promptWorkset('New board name','Board '+(boards.length+1));if(!name)return
     const {data,error}=await supabase.from('whiteboard_drawings').insert({user_id:session.user.id,title:name.trim(),drawing:{version:2,items:[],grid:true}}).select().single()
     if(error){setMessage(error.message);return}await loadBoards(data.id)
   }
   const deleteBoard=async()=>{
-    if(!boardId||!window.confirm('Delete this whiteboard?'))return
+    if(!boardId||!await confirmWorkset('Delete this whiteboard?'))return
     await supabase.from('whiteboard_drawings').delete().eq('id',boardId);await loadBoards()
   }
 

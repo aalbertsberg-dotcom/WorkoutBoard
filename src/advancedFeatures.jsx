@@ -1,3 +1,4 @@
+import {confirmWorkset,noticeWorkset} from './worksetDialogs'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase'
 
@@ -195,7 +196,7 @@ export function EditableWorkout({sessionRow,onSaved,onCancel}){
   const save=async()=>{
     setBusy(true);const m=metricsFromWorkout(workout)
     const {error}=await supabase.rpc('update_my_training_session',{target_session:sessionRow.id,new_title:title,new_workout:workout,new_total_volume:m.volume,new_estimated_1rm:m.e1rm,new_bodyweight:bodyweight===''?null:Number(bodyweight)})
-    setBusy(false);if(error){alert(error.message);return}onSaved?.()
+    setBusy(false);if(error){await noticeWorkset(error.message);return}onSaved?.()
   }
   return <section className="edit-workout-card">
     <div className="section-heading"><div><span className="card-label">EDIT COMPLETED WORKOUT</span><h3>{sessionRow.title}</h3></div></div>
@@ -410,7 +411,7 @@ export function BackupRestorePanel({session}) {
   }
   const restore=async e=>{
     const file=e.target.files?.[0];if(!file)return
-    if(!window.confirm('Merge this Workset backup into the current account?')){e.target.value='';return}
+    if(!await confirmWorkset('Merge this Workset backup into the current account?')){e.target.value='';return}
     setBusy(true)
     try{
       const data=JSON.parse(await file.text())

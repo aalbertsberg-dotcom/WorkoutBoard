@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './supabase'
-import { DialogPortal } from './worksetDialogs'
+import { DialogPortal,confirmWorkset } from './worksetDialogs'
 import { allArchivePrograms, archiveProgramById, makePlannedFromArchive } from './archivePrograms'
 import { ProgressToolbox, WorkoutTemplates } from './trainingTools'
 import { AdvancedProgressCenter, PlannedWorkoutTools, ShareImportPanel, AdminDashboardSummary } from './advancedFeatures'
@@ -1781,7 +1781,7 @@ export function AdminPanel({ programs }) {
   const resetUserTraining = async () => {
     if(!selected)return
     const label=selected.display_name||selected.email||'this user'
-    if(!window.confirm(`Reset ALL workouts and 1 rep maxes for ${label}? This cannot be undone.`))return
+    if(!await confirmWorkset(`Reset ALL workouts and 1 rep maxes for ${label}? This cannot be undone.`))return
     setMessage('Resetting training data…')
     const {error}=await supabase.rpc('admin_reset_training',{target_user:selected.user_id})
     if(error){setMessage('Run the product-upgrades migration first: '+error.message);return}
@@ -1803,7 +1803,7 @@ export function AdminPanel({ programs }) {
   }
 
   const deleteSession = async row => {
-    if(!selected||!window.confirm(`Delete "${row.title}" from this user's history? This cannot be undone.`))return
+    if(!selected||!await confirmWorkset(`Delete "${row.title}" from this user's history? This cannot be undone.`))return
     const {error}=await supabase.rpc('admin_delete_training_session',{target_user:selected.user_id,target_session:row.id})
     if(error){setMessage('Run the product-upgrades migration first: '+error.message);return}
     setSessions(rows=>rows.filter(r=>r.id!==row.id));setMessage('Session deleted.');await loadUsers()

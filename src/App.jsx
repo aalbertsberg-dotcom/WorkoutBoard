@@ -1,3 +1,4 @@
+import { DialogPortal,confirmWorkset } from './worksetDialogs'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase'
 import { PlatformProgress, PlanPage, AdminPanel, FeedbackPanel } from './platform'
@@ -2524,7 +2525,7 @@ function App() {
 
   const deleteManagedAthlete = async athlete => {
     if(!session?.user||!isAdmin||!athlete?.id)return
-    if(!window.confirm('Remove '+athlete.display_name+' from My Team?'))return
+    if(!await confirmWorkset('Remove '+athlete.display_name+' from My Team?'))return
     const {error}=await supabase.from('managed_athletes').delete()
       .eq('id',athlete.id).eq('owner_user_id',session.user.id)
     if(error){setTogetherMessage(error.message);return}
@@ -2625,7 +2626,7 @@ function App() {
 
   const removeWorksetFriend = async friend => {
     if(!friend?.user_id)return
-    if(!window.confirm('Remove '+friend.display_name+' from your Workset friends?'))return
+    if(!await confirmWorkset('Remove '+friend.display_name+' from your Workset friends?'))return
     const {error}=await supabase.rpc('remove_workset_friend',{target_friend:friend.user_id})
     if(error){setFriendMessage(error.message);return}
     setSelectedFriendIds(ids=>ids.filter(id=>id!==friend.user_id))
@@ -3987,11 +3988,11 @@ function App() {
 
             <div className="save-line">● {saveState}</div>
             {!log.complete&&<button type="button" className="secondary-action cancel-workout-button" onClick={()=>setClassicCancelConfirm(true)}>Cancel workout</button>}
-            {classicCancelConfirm&&<section className="cancel-workout-confirm">
+            {classicCancelConfirm&&<DialogPortal label="Cancel this workout?" onDismiss={()=>{if(!classicCancelling)setClassicCancelConfirm(false)}}><section className="cancel-workout-confirm">
               <strong>Cancel this workout?</strong>
               <p>Your in-progress entries will be discarded and will not count as a completed workout.</p>
               <div><button type="button" className="secondary-action" onClick={()=>setClassicCancelConfirm(false)} disabled={classicCancelling}>Keep workout</button><button type="button" className="danger-action" onClick={cancelClassicWorkout} disabled={classicCancelling}>{classicCancelling?'Cancelling…':'Yes, cancel'}</button></div>
-            </section>}
+            </section></DialogPortal>}
             <div className="finish-wrap">
               <button className={'finish ' + (log.complete ? 'done' : '')} onClick={finishWorkout} disabled={classicCancelling}>
                 {log.complete ? '✓ WORKOUT FINISHED' : sharedWorkoutActive ? 'FINISH MY SHARED WORKOUT' : 'FINISH WORKOUT'}

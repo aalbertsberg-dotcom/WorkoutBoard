@@ -1,3 +1,4 @@
+import {confirmWorkset} from './worksetDialogs'
 import {useEffect,useState} from 'react'
 import {supabase} from './supabase'
 import {AGILE_8,COOL_DOWN} from './mobilityRoutines'
@@ -16,9 +17,9 @@ export default function MobilitySession({session,initialMode='warmup',onBack,onS
   useEffect(()=>{const id=setInterval(()=>setElapsed(Math.floor((Date.now()-startedAt)/1000)),1000);return()=>clearInterval(id)},[startedAt])
   useEffect(()=>{setMode(initialMode);setChecked({});setStartedAt(Date.now());setElapsed(0);setNote('');setMessage('')},[initialMode])
   useEffect(()=>{
-    const onNativeBack=event=>{
+    const onNativeBack=async event=>{
       event.preventDefault()
-      if(Object.values(checked).some(Boolean)&&!window.confirm('Leave this routine without saving?'))return
+      if(Object.values(checked).some(Boolean)&&!await confirmWorkset('Leave this routine without saving?'))return
       onBack?.()
     }
     window.addEventListener('workset-native-back',onNativeBack)
