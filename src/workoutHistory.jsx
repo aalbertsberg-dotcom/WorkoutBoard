@@ -1,32 +1,23 @@
 import { useEffect,useMemo,useState } from 'react'
 import { supabase } from './supabase'
 import { RouteMap,outdoorMetrics,formatPace,formatOutdoorDuration,outdoorActivityKind } from './outdoorTracking'
-import { outdoorDistancePresentation,hasReliableOutdoorRoute } from './trackingRules'
+import { outdoorDistancePresentation,hasReliableOutdoorRoute,hasVerifiedOutdoorRoute } from './trackingRules'
 import { effectiveSteps } from './stepTracking'
 import { EditableWorkout } from './advancedFeatures'
+import { HISTORY_PAGE_SIZE,completedWorkoutKind,completedWorkoutSummary,workoutHistoryMatches,workoutHistoryDayKey } from './workoutHistoryUtils'
 
-const dateKey=(row)=>String(row?.session_date||row?.completed_at||'').slice(0,10)
+const dateKey=workoutHistoryDayKey
 const localDay=()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')}
-const prettyDate=key=>new Date(key+'T12:00:00').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric',year:'numeric'})
+const prettyDate=key=>{
+  const date=new Date(String(key||'')+'T12:00:00')
+  return Number.isNaN(date.getTime())?'Unknown date':date.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric',year:'numeric'})
+}
 const formatNumber=v=>Number(v||0).toLocaleString()
-const category=row=>{
-  if(row?.workout?.mobility)return 'Mobility'
-  if(outdoorActivityKind(row?.workout?.quick_cardio_kind||row?.workout?.metcon?.activity||row?.title))return 'Cardio'
-  return 'Strength'
-}
-const summary=row=>{
-  if(category(row)==='Mobility')return (row?.workout?.mobility?.items||[]).filter(x=>x.done).length+' movements'
-  if(category(row)==='Cardio'){
-    const d=outdoorDistancePresentation(row?.workout?.outdoor)
-    const steps=effectiveSteps(row?.workout?.outdoor)
-    return (d.meters>0?d.label:'Timed workout')+(steps?' · '+formatNumber(steps)+' steps':'')
-  }
-  return Number(row?.total_volume||0)>0?formatNumber(row.total_volume)+' lb volume':'Strength session'
-}
+const category=completedWorkoutKind
+const summary=completedWorkoutSummary
 const monthGrid=date=>{
   const first=new Date(date.getFullYear(),date.getMonth(),1)
-  const start=new Date(first)
-  start.setDate(first.getDate()-first.getDay())
+  const start=new Date(first);start.setDate(first.getDate()-first.getDay())
   return Array.from({length:42},(_,i)=>{
     const d=new Date(start);d.setDate(start.getDate()+i)
     return {key:`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,
@@ -36,7 +27,11 @@ const monthGrid=date=>{
 
 export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onChanged}){
   const [rows,setRows]=useState([])
+  const [monthRows,setMonthRows]=useState([])
+  const [visibleCount,setVisibleCount]=useState(HISTORY_PAGE_SIZE)
+  const [hasMore,setHasMore]=useState(false)
   const [loading,setLoading]=useState(true)
+  const [loadingMonth,setLoadingMonth]=useState(true)
   const [message,setMessage]=useState('')
   const [mode,setMode]=useState('calendar')
   const [month,setMonth]=useState(()=>new Date())
@@ -49,16 +44,37 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
   const [busy,setBusy]=useState(false)
 
   const load=async()=>{
-    if(!session?.user?.id){setRows([]);setLoading(false);return}
+    if(!session?.user?.id){setRows([]);setHasMore(false);setLoading(false);return}
     setLoading(true)
     const {data,error}=await supabase.from('training_sessions').select('*')
       .eq('user_id',session.user.id).not('completed_at','is',null)
-      .order('completed_at',{ascending:false}).limit(500)
+      .order('completed_at',{ascending:false}).range(0,visibleCount)
     if(error)setMessage(error.message)
-    else setRows(data||[])
+    else{
+      setRows((data||[]).slice(0,visibleCount))
+      setHasMore((data||[]).length>visibleCount)
+    }
     setLoading(false)
   }
-  useEffect(()=>{load()},[session?.user?.id])
+  useEffect(()=>{load()},[session?.user?.id,visibleCount])
+  // Fetch calendar dates independently, including months older than list results.
+  useEffect(()=>{
+    if(!session?.user?.id){setMonthRows([]);setLoadingMonth(false);return}
+    let cancelled=false
+    const grid=monthGrid(month)
+    setLoadingMonth(true)
+    supabase.from('training_sessions').select('*')
+      .eq('user_id',session.user.id).not('completed_at','is',null)
+      .gte('session_date',grid[0].key).lte('session_date',grid.at(-1).key)
+      .order('completed_at',{ascending:false}).limit(1000)
+      .then(({data,error})=>{
+        if(cancelled)return
+        if(error)setMessage(error.message)
+        else setMonthRows(data||[])
+        setLoadingMonth(false)
+      })
+    return()=>{cancelled=true}
+  },[session?.user?.id,month])
   useEffect(()=>{if(initialWorkoutId){setSelectedId(initialWorkoutId);setEditing(false);setDeleting(false)}},[initialWorkoutId])
   useEffect(()=>{
     const onNativeBack=event=>{
@@ -72,21 +88,14 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
     window.addEventListener('workset-native-back',onNativeBack)
     return()=>window.removeEventListener('workset-native-back',onNativeBack)
   },[deleting,editing,selectedId])
-  const selected=rows.find(row=>row.id===selectedId)||null
+  const selected=rows.find(row=>row.id===selectedId)||monthRows.find(row=>row.id===selectedId)||null
   const dates=useMemo(()=>{
     const map={}
-    for(const row of rows){const key=dateKey(row);if(key)map[key]=(map[key]||0)+1}
+    for(const row of monthRows){const key=dateKey(row);if(key)map[key]=(map[key]||0)+1}
     return map
-  },[rows])
-  const filtered=useMemo(()=>{
-    const q=query.toLowerCase().trim()
-    return rows.filter(row=>
-      (categoryFilter==='All'||category(row)===categoryFilter) &&
-      (!q||[row.title,row.program,JSON.stringify((row.workout?.exercises||[]).map(x=>x.name)),
-        String(row.session_date)].join(' ').toLowerCase().includes(q))
-    )
-  },[rows,query,categoryFilter])
-  const dayRows=filtered.filter(row=>dateKey(row)===day)
+  },[monthRows])
+  const filtered=useMemo(()=>rows.filter(row=>workoutHistoryMatches(row,categoryFilter,query)),[rows,query,categoryFilter])
+  const dayRows=monthRows.filter(row=>workoutHistoryMatches(row,categoryFilter)&&dateKey(row)===day)
   const select=row=>{setSelectedId(row.id);setEditing(false);setDeleting(false);setMessage('')}
 
   const deleteSelected=async()=>{
