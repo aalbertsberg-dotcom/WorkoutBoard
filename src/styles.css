@@ -8094,7 +8094,25 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   .pocket-live-metrics { margin-top:5px; }
   .pocket-live-metrics>div { padding:10px 6px; }
   .pocket-slide-track { min-height:68px; }
-  .pocket-slide-thumb { width:60px; min-width:60px; }
-  .pocket-intro { font-size:12px; }
+  .pocket-slide-thumb { font-size:31px; }
+  .pocket-intro { display:none; }
   .pocket-caution { font-size:10px; }
+}
+
+@media(max-height:520px) {
+  .pocket-overlay { padding-top:12px; padding-bottom:12px; }
+  .pocket-overlay-content { gap:6px; }
+  .pocket-overlay-top h2 { font-size:17px; }
+  .pocket-lock-icon { font-size:20px; }
+  .pocket-live-metrics { margin-top:0; }
+  .pocket-live-metrics>div { padding:5px 6px; gap:2px; }
+  .pocket-live-metrics strong { font-size:22px; }
+  .pocket-tracking-status { padding:6px 10px; }
+  .pocket-tracking-status small { font-size:10px; }
+  .pocket-unlock-controls { gap:6px; }
+  .pocket-unlock-controls h3 { font-size:14px; }
+  .pocket-slide-track { min-height:60px; }
+  .pocket-slide-thumb { top:4px; bottom:4px; }
+  .pocket-hold-unlock { min-height:42px; }
+  .pocket-caution { display:none; }
 }
