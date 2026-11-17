@@ -103,3 +103,8 @@ test('Release guard is initialized only after the workout progress helper',()=>{
   const app=readFileSync(new URL('../src/App.jsx',import.meta.url),'utf8')
   assert.ok(app.indexOf('const updateBlocked=Boolean(')>app.indexOf('const plannedWorkoutHasProgress = row => {'))
 })
+
+test('Update toast stays out of the way of an unfinished workout',()=>{
+  const app=readFileSync(new URL('../src/App.jsx',import.meta.url),'utf8')
+  assert.match(app,/releaseUpdate&&!updateBlocked&&<div className="release-update-toast"/)
+})

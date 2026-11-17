@@ -4513,7 +4513,7 @@ function App() {
               : offlineStatus.pending+' change'+(offlineStatus.pending===1?'':'s')+' waiting'}</span>
       </div>}
 
-      {releaseUpdate&&<div className="release-update-toast" role="status">
+      {releaseUpdate&&!updateBlocked&&<div className="release-update-toast" role="status">
         <div><strong>WorkSet update ready</strong><span>{updateBlocked?'Finish the workout and sync pending changes before updating.':'Safe to update — your workout data is preserved.'}</span></div>
         <button type="button" onClick={applyReleaseUpdate} disabled={updateBlocked}>{updateBlocked?'Later':'Update'}</button>
       </div>}
