@@ -63,7 +63,8 @@ export default function PocketMode({activity='walk',elapsed='0:00',distance='0.0
     holdStartRef.current=Date.now()
     setHolding(true)
     holdTimerRef.current=window.setTimeout(()=>{
-      const held=Date.now()-holdStartRef.current
+      // The three-second timer completed; avoid a 1 ms clock-rounding miss.
+      const held=Math.max(POCKET_HOLD_UNLOCK_MS,Date.now()-holdStartRef.current)
       holdTimerRef.current=null
       holdStartRef.current=0
       setHolding(false)
