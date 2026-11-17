@@ -14,6 +14,7 @@ import { outdoorDistancePresentation } from './trackingRules'
 import { Capacitor } from '@capacitor/core'
 import { App as NativeApp } from '@capacitor/app'
 import { androidBackAction } from './androidNavigation'
+import { emailRedirectUrl } from './nativeAuth'
 import { getActiveWorkoutId,setActiveWorkoutId,clearActiveWorkoutId,cancelledWorkoutIds,getWorkoutCancellationBarrier,rememberWorkoutCancellation,isOpenWorkout,selectWorkoutToRestore } from './workoutLifecycle'
 import QRCode from 'qrcode'
 import { BarcodeDetector as BarcodeDetectorPonyfill } from 'barcode-detector/ponyfill'
@@ -392,7 +393,12 @@ const programOrder = ['andy-hybrid-12','andy-531-original-6','new-531-leader-anc
 const dbNameToProgram = Object.fromEntries(Object.entries(programs).map(([id,p]) => [p.dbName,id]))
 const defaultOneRms = { Squat:'', Bench:'', Deadlift:'', Press:'' }
 const round5 = n => Math.round(n / 5) * 5
-const appUrl = () => new URL(import.meta.env.BASE_URL, window.location.origin).toString()
+const appUrl = () => emailRedirectUrl({
+  native:Capacitor.isNativePlatform(),
+  publicWebUrl:import.meta.env.VITE_PUBLIC_APP_URL,
+  baseUrl:import.meta.env.BASE_URL,
+  origin:window.location.origin,
+})
 
 function targetWeight(oneRm, pct, basis) {
   if (!oneRm || pct == null) return null

@@ -1,0 +1,75 @@
+name: Build WorkSet iOS (simulator validation)
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'package.json'
+      - 'capacitor.config.json'
+      - 'scripts/configure-ios.sh'
+      - '.github/workflows/ios-build.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'package.json'
+      - 'capacitor.config.json'
+      - 'scripts/configure-ios.sh'
+      - '.github/workflows/ios-build.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  ios-simulator:
+    name: iOS build (unsigned simulator)
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Show Xcode version
+        run: xcodebuild -version
+      - name: Install dependencies
+        run: npm install
+      - name: Shared WorkSet regression tests
+        run: npm test
+      - name: Build WorkSet native web assets
+        run: npm run build:native
+        env:
+          WORKSET_NATIVE_BUILD: 'true'
+          VITE_SUPABASE_URL: https://lplybuzlgowxeszkvtqe.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_PUBLIC_APP_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+      - name: Create iOS wrapper and sync native plugins
+        run: |
+          npx cap add ios
+          npx cap sync ios
+      - name: Configure iOS privacy and background location
+        run: |
+          bash scripts/configure-ios.sh
+          /usr/libexec/PlistBuddy -c 'Print :NSLocationAlwaysAndWhenInUseUsageDescription' ios/App/App/Info.plist
+          /usr/libexec/PlistBuddy -c 'Print :UIBackgroundModes' ios/App/App/Info.plist
+      - name: Build unsigned iOS simulator
+        run: |
+          xcodebuild \
+            -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/WorkSet-iOS" \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+      - name: Upload simulator build for inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: WorkSet-iOS-Simulator
+          path: ${{ runner.temp }}/WorkSet-iOS/Build/Products/Debug-iphonesimulator/App.app
+          if-no-files-found: error

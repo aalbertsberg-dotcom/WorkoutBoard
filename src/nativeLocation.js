@@ -1,17 +1,26 @@
 import { Capacitor,registerPlugin } from '@capacitor/core'
+import { supportsNativeBackgroundGps,nativeGpsPlatformLabel } from './nativePlatforms'
 
-// Native Android only. Chrome/PWA continues using the existing geolocation API.
-// A foreground location notification remains visible during a workout.
+// Android foreground-service location and iOS background Core Location share
+// the same watcher API. Chrome/PWA continues using foreground geolocation.
+// Recording only runs during an explicitly started activity.
 const BackgroundGeolocation=registerPlugin('BackgroundGeolocation')
 export function canTrackInBackground(){
-  return Capacitor.isNativePlatform() && Capacitor.getPlatform()==='android'
+  return supportsNativeBackgroundGps(Capacitor.isNativePlatform(),Capacitor.getPlatform())
+}
+
+export function nativeGpsDeviceName(){
+  return nativeGpsPlatformLabel(Capacitor.isNativePlatform(),Capacitor.getPlatform())
 }
 
 export async function startNativeLocationWatch(onPosition,onError){
   if(!canTrackInBackground())return null
   const id=await BackgroundGeolocation.addWatcher({
+    // Required for location updates during an active workout on both iOS
+    // and Android. iOS will show its location-use indicator; Android shows a
+    // persistent foreground-service notification.
     backgroundTitle:'WorkSet activity in progress',
-    backgroundMessage:'Location is being recorded. Open WorkSet to pause or finish.',
+    backgroundMessage:'Workout GPS recording active. Open WorkSet to pause or finish.',
     requestPermissions:true,
     stale:false,
     distanceFilter:3,
