@@ -104,3 +104,27 @@ test('Every collapsed disclosure refers to an existing hidden panel',async({page
     await expect(page.locator('#'+id)).toHaveAttribute('hidden','')
   }
 })
+
+
+test('Secondary tools open safely, then return to their minimized state',async({page})=>{
+  const errors=[]
+  page.on('pageerror',error=>errors.push(error.message))
+  await page.route('https://example.supabase.co/**',async route=>{
+    await route.fulfill({status:200,contentType:'application/json',
+      headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*'},
+      body:'[]'})
+  })
+  await openMe(page)
+  for(const id of ['overview','preferences','security','app-data','community']){
+    const toggle=page.locator('[data-me-section="'+id+'"] .me-section-toggle')
+    await toggle.click()
+    await expect(toggle).toHaveAttribute('aria-expanded','true')
+    if(id==='app-data')await expect(page.getByRole('button',{name:'Download full backup'})).toBeVisible()
+    if(id==='community')await expect(page.getByRole('button',{name:'Share WorkSet'})).toBeVisible()
+    await toggle.click()
+    await expect(toggle).toHaveAttribute('aria-expanded','false')
+  }
+  expect(errors).toEqual([])
+  await page.reload()
+  await expect(page.locator('.me-section-toggle[aria-expanded="true"]')).toHaveCount(0)
+})
