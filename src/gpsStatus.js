@@ -23,14 +23,16 @@ export function describeOutdoorGps({outdoor={},running=false,permission='prompt'
       gpsReady:false,stale:false,routeRecording:false}
   }
   if(!running){
+    // Once the workout has received live fixes, a pause is not a fresh
+    // preflight. Do not accidentally show "Ready" while tracking is paused.
+    if(points.length||hadFix)return {phase:'paused',label:'GPS paused',detail:'Workout route recording is paused.',
+      tone:'muted',gpsReady:false,stale:false,routeRecording:false}
     if(checkFresh&&health.preflight_error_code==null){
       const weak=Number(checkAccuracy)>35
       return {phase:weak?'weak-preflight':'acquired',label:(weak?'GPS weak':'GPS acquired')+shownAccuracy(checkAccuracy),
         detail:'Location fix confirmed. Route recording starts when you tap Start.',
         tone:weak?'warning':'success',gpsReady:true,stale:false,routeRecording:false}
     }
-    if(points.length||hadFix)return {phase:'paused',label:'GPS paused',detail:'Workout route recording is paused.',
-      tone:'muted',gpsReady:false,stale:false,routeRecording:false}
     if(health.preflight_error_code!=null)return {phase:'check-failed',label:'GPS check failed',
       detail:'Try the location check again before starting.',tone:'warning',
       gpsReady:false,stale:false,routeRecording:false}

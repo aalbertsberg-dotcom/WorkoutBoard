@@ -39,3 +39,13 @@ test('Failed or expired preflight check does not look like a good fix',()=>{
   const expired=describeOutdoorGps({now,outdoor:{gps_health:{preflight_at:new Date(now-300001).toISOString(),preflight_accuracy_m:10}}})
   assert.equal(expired.phase,'unchecked')
 })
+
+test('Pausing a workout never advertises preflight readiness after actual GPS fixes',()=>{
+  const state=describeOutdoorGps({now,running:false,outdoor:{
+    distance_m:35,points:[{lat:30,lng:-89},{lat:30.0003,lng:-89}],
+    gps_health:{preflight_at:new Date(now-40000).toISOString(),
+      preflight_accuracy_m:10,received:4,last_received_at:new Date(now-1000).toISOString()}
+  }})
+  assert.equal(state.phase,'paused')
+  assert.match(state.label,/paused/)
+})
