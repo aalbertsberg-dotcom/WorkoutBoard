@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import {progressWorkoutLink} from './historyNavigation.js'
 import { supabase } from './supabase'
 import { DialogPortal,OverlayPortal,confirmWorkset } from './worksetDialogs'
 import { allArchivePrograms, archiveProgramById, makePlannedFromArchive } from './archivePrograms'
@@ -117,6 +118,7 @@ export function PlatformProgress({
   onOpenWeight=null,
   onOpenMeasurements=null,
   onOpenHistory=null,
+  onOpenWorkout=null,
   onSectionChange=null,
   trackedProgramInfo=null,
   trackedProgramsInfo=[],
@@ -373,12 +375,12 @@ export function PlatformProgress({
 
   const recentCombined=[
     ...progress.completed.map(r=>({
-      id:'legacy-'+r.id,date:r.completed_at,title:r.lift+' Day',
+      id:'legacy-'+r.id,legacyId:r.id,date:r.completed_at,title:r.lift+' Day',
       subtitle:(programs[dbNameToProgram[r.program]]?.shortName||r.program)+(r.week?' · Week '+r.week:''),
       volume:r._metrics?.volume||0,e1rm:r._metrics?.estimated1rm||0
     })),
     ...flexSessions.map(r=>({
-      id:'flex-'+r.id,date:r.completed_at||r.session_date,title:r.title,
+      id:'flex-'+r.id,sessionId:r.id,date:r.completed_at||r.session_date,title:r.title,
       subtitle:r.program||'Custom workout',volume:Number(r.total_volume||0),e1rm:Number(r.estimated_1rm||0),
       activityLabel:r.workout?.mobility
         ? (r.workout.mobility.items||[]).filter(x=>x.done).length+' movements'
@@ -572,7 +574,13 @@ export function PlatformProgress({
 
     {effectiveMode==='mine'?<>
       <div className="progress-section-tabs">
-        {['Overview','Strength','Cardio','Weight & Measurements','History'].map(section=><button key={section} className={progressSection===section?'active':''} onClick={()=>selectProgressSection(section)}>{section}</button>)}
+        {['Overview','Strength','Cardio','Weight & Measurements','History'].map(section=><button
+          type="button" key={section} className={progressSection===section?'active':''}
+          aria-current={progressSection===section?'page':undefined}
+          onClick={event=>{
+            selectProgressSection(section)
+            event.currentTarget.scrollIntoView({block:'nearest',inline:'center',behavior:'smooth'})
+          }}>{section}</button>)}
       </div>
 
       {progressSection==='Overview'&&<>
@@ -755,8 +763,19 @@ export function PlatformProgress({
         {onOpenHistory&&<button type="button" className="wide-button" onClick={onOpenHistory}>Open workout calendar and details ›</button>}
         <section className="simple-card">
           <div className="section-heading"><div><span className="card-label">RECENT WORKOUTS</span><h3>Completed workouts</h3></div></div>
-          <div className="history-list">{recentCombined.map(row=><article className="progress-workout" key={row.id}><div><strong>{new Date(row.date).toLocaleDateString(undefined,{month:'short',day:'numeric'})} · {row.title}</strong><span>{row.subtitle}</span></div><div><strong>{row.activityLabel||formatWeight(row.volume)+' lb'}</strong><span>{row.e1rm?'e1RM '+formatWeight(row.e1rm):''}</span></div></article>)}
-          {!recentCombined.length&&<div className="empty-state action-empty"><strong>No completed workouts yet.</strong><span>Finish a workout and it will show here.</span></div>}</div>
+          <div className="history-list">
+            {ready===null&&<div className="history-loading-state" role="status">Loading completed workouts…</div>}
+            {ready!==null&&recentCombined.map(row=><button type="button"
+              className="progress-workout progress-workout-link" key={row.id}
+              aria-label={'View '+row.title+' workout details'}
+              onClick={()=>{const id=progressWorkoutLink(row);if(id){if(onOpenWorkout)onOpenWorkout(id);else onOpenHistory?.()}}}>
+              <span className="progress-workout-copy"><strong>{new Date(row.date).toLocaleDateString(undefined,{month:'short',day:'numeric'})} · {row.title}</strong><small>{row.subtitle}</small></span>
+              <span className="progress-workout-meta"><strong>{row.activityLabel||formatWeight(row.volume)+' lb'}</strong><small>{row.e1rm?'e1RM '+formatWeight(row.e1rm):'View details ›'}</small></span>
+              <span className="progress-workout-arrow" aria-hidden="true">›</span>
+            </button>)}
+            {ready===false&&!recentCombined.length&&<div className="history-loading-state" role="status">Workout history is unavailable. Reconnect and reopen Progress.</div>}
+            {ready===true&&!recentCombined.length&&<div className="empty-state action-empty"><strong>No completed workouts yet.</strong><span>Finish a workout and it will show here.</span></div>}
+          </div>
         </section>
 
         <ProgressToolbox session={session} legacyHistory={progress.completed} flexSessions={flexSessions} formatWeight={formatWeight} initialTab="Exercises"/>

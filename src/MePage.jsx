@@ -1,5 +1,5 @@
 import {PlatformProgress,FeedbackPanel} from './platform'
-import {InstallAppButton,ExportDataButton} from './productFeatures'
+import {InstallAppButton,AppUpdateControls,ExportDataButton} from './productFeatures'
 import {AccountSecurityPanel,BackupRestorePanel,WorkoutSettingsPanel} from './advancedFeatures'
 import {MeSection,MeDisplayNameEditor,MeOneRmEditor} from './MeSections'
 
@@ -13,7 +13,7 @@ export default function MePage({
   oneRmEstimate,oneRmRounded,oneRmTrainingMax,oneRmLift,setOneRmLift,oneRmNotice,
   calculatedOneRms,baselineTestChoice,setBaselineTestChoice,onStartBaseline,
   trackedProgramsInfo,personalProgramName,shareInvite,inviteState,
-  isAdmin,feedbackUnread,onOpenAdmin,onSignOut,appUrl
+  isAdmin,feedbackUnread,onOpenAdmin,onSignOut,appUrl,onRefreshWorkset,refreshBlocked=false
 }){
   return <section className="page-section me-page" aria-label="Me">
     {displayName==='WorkoutAdmin'&&!isAdmin&&<section className="admin-setup-warning">
@@ -36,6 +36,8 @@ export default function MePage({
         <b aria-hidden="true">›</b>
       </button>
     </nav>
+
+    <AppUpdateControls onRefresh={onRefreshWorkset} refreshBlocked={refreshBlocked}/>
 
     <div className="me-section-group">
       <div className="me-section-group-label">YOUR TRAINING</div>
@@ -62,7 +64,9 @@ export default function MePage({
           <MeOneRmEditor lifts={lifts} values={oneRepMaxes} onSave={onSaveOneRm}/>
         </section>
 
-        <section className="me-inner-card" aria-label="1 rep max calculator">
+        <MeSection id="strength-calculator" title="1RM Calculator"
+          description="Estimate a max from your weight and reps" icon="≈">
+          <section className="me-inner-card" aria-label="1 rep max calculator">
           <div className="me-inner-heading">
             <span className="card-label">1RM CALCULATOR</span>
             <h4>Estimate from a rep set</h4>
@@ -98,9 +102,12 @@ export default function MePage({
                 :oneRmLift?'Add '+oneRmRounded+' lb to '+oneRmLift+' 1RM':'Choose a lift to save this estimate'}
             </button>
           </div>}
-        </section>
+          </section>
+        </MeSection>
 
-        <section className="me-inner-card" aria-label="Estimated 1 rep maxes">
+        <MeSection id="strength-estimates" title="Best estimated 1RMs"
+          description="Calculated from completed workouts" icon="▥">
+          <section className="me-inner-card" aria-label="Estimated 1 rep maxes">
           <div className="me-inner-heading"><span className="card-label">CALCULATED FROM WORKOUTS</span><h4>Best estimated 1RMs</h4></div>
           <p>Calculated from completed lift sets. Use a result or run a strength baseline to verify it.</p>
           <div className="one-rm-summary">
@@ -113,6 +120,12 @@ export default function MePage({
               </div>
             })}
           </div>
+          </section>
+        </MeSection>
+
+        <MeSection id="strength-baseline" title="Strength Baseline Tests"
+          description="Test one lift, upper/lower, or all four" icon="◉">
+          <section className="me-inner-card" aria-label="Strength baseline tests">
           <div className="baseline-test-picker">
             <label htmlFor="me-baseline-choice" className="me-baseline-label">Start a strength baseline</label>
             <select id="me-baseline-choice" value={baselineTestChoice} onChange={e=>setBaselineTestChoice(e.target.value)}>
@@ -124,7 +137,8 @@ export default function MePage({
             </select>
             <button type="button" className="wide-button" disabled={!baselineTestChoice} onClick={onStartBaseline}>Start test</button>
           </div>
-        </section>
+          </section>
+        </MeSection>
       </MeSection>
 
       <MeSection id="programs" title="My Programs"
@@ -154,8 +168,8 @@ export default function MePage({
       <MeSection id="app-data" title="App & Data"
         description="Install, updates, exports, backup and restore" icon="▣">
         <div className="me-inner-card">
-          <div className="me-inner-heading"><span className="card-label">APP</span><h4>Install & update WorkSet</h4></div>
-          <p>Install WorkSet, check for updates, or refresh when the installed app looks stale.</p>
+          <div className="me-inner-heading"><span className="card-label">APP</span><h4>Install WorkSet</h4></div>
+          <p>Add WorkSet to your home screen. Update checking and refresh are available at the top of Me.</p>
           <InstallAppButton/>
         </div>
         <div className="me-inner-card">

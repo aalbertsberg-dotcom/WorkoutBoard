@@ -1131,69 +1131,62 @@ export function ExerciseHistoryStrip({history,lift,formatWeight}) {
   </div>
 }
 
-export function InstallAppButton() {
-  const [prompt,setPrompt]=useState(null)
-  const [installed,setInstalled]=useState(()=>window.matchMedia?.('(display-mode: standalone)').matches||false)
+/** Always-visible version check. Never clears caches or unregisters workers. */
+export function AppUpdateControls({onRefresh,refreshBlocked=false}){
   const [updateState,setUpdateState]=useState('')
   const [availableBuild,setAvailableBuild]=useState(null)
-
-  useEffect(()=>{
-    const before=e=>{e.preventDefault();setPrompt(e)}
-    const installedHandler=()=>{setInstalled(true);setPrompt(null)}
-    window.addEventListener('beforeinstallprompt',before)
-    window.addEventListener('appinstalled',installedHandler)
-    return ()=>{window.removeEventListener('beforeinstallprompt',before);window.removeEventListener('appinstalled',installedHandler)}
-  },[])
-
-  const cleanReload=async buildId=>{
-    setUpdateState('Refreshing…')
-    try{
-      if('caches' in window){
-        const keys=await caches.keys()
-        await Promise.all(keys.filter(key=>/^(workoutboard|workset)-/i.test(key)).map(key=>caches.delete(key)))
-      }
-      if('serviceWorker' in navigator){
-        const regs=await navigator.serviceWorker.getRegistrations()
-        await Promise.all(regs.map(reg=>reg.unregister()))
-      }
-    }catch{}
-    const url=new URL(window.location.href)
-    url.searchParams.set('_workset_refresh',String(buildId||Date.now()).slice(0,16))
-    window.location.replace(url.toString())
-  }
-
+  const [checking,setChecking]=useState(false)
   const checkForUpdate=async()=>{
-    setUpdateState('Checking…')
+    if(checking)return
+    setChecking(true);setUpdateState('Checking…')
     try{
-      const res=await fetch(import.meta.env.BASE_URL+'version.json?ts='+Date.now(),{cache:'no-store'})
-      if(!res.ok)throw new Error('Version check failed')
-      const info=await res.json()
+      const response=await fetch(import.meta.env.BASE_URL+'version.json?ts='+Date.now(),{cache:'no-store'})
+      if(!response.ok)throw new Error('Version check failed')
+      const info=await response.json()
       if(info?.buildId&&info.buildId!==__WORKSET_BUILD_ID__){
         setAvailableBuild(info.buildId)
-        setUpdateState('Update available')
+        setUpdateState('New version available.')
       }else{
         setAvailableBuild(null)
-        setUpdateState('Up to date')
+        setUpdateState('Up to date.')
       }
-    }catch{
-      setUpdateState('Could not check')
-    }
+    }catch{setUpdateState('Could not check. Check your connection.')}
+    finally{setChecking(false)}
   }
-
-  if (installed) return <div className="installed-app-controls">
-    <div className="status-message">
-      <strong>Workset v{__WORKSET_APP_VERSION__}</strong>
-      <span>Build {String(__WORKSET_BUILD_ID__).slice(0,8)}{updateState?' · '+updateState:''}</span>
+  return <section className="me-update-card" aria-label="App updates">
+    <div className="me-update-heading">
+      <div><strong>WorkSet v{__WORKSET_APP_VERSION__}</strong><small>Version & updates</small></div>
+      <span className="me-update-build">Build {String(__WORKSET_BUILD_ID__).slice(0,8)}</span>
     </div>
-    <div className="app-update-actions">
-      <button type="button" className="wide-button" onClick={availableBuild?()=>cleanReload(availableBuild):checkForUpdate} disabled={updateState==='Checking…'||updateState==='Refreshing…'}>
-        {availableBuild?'Update Workset':updateState==='Checking…'?'Checking…':'Check for update'}
+    <div className="me-update-actions">
+      <button type="button" className="secondary-action" onClick={checkForUpdate} disabled={checking}>
+        {checking?'Checking…':'Check for updates'}
       </button>
-      <button type="button" className="secondary-action" onClick={()=>cleanReload(availableBuild||Date.now())} disabled={updateState==='Refreshing…'}>Refresh Workset</button>
+      <button type="button" className="secondary-action" onClick={onRefresh}
+        disabled={refreshBlocked||!onRefresh}>
+        {availableBuild?'Update now':'Refresh WorkSet'}
+      </button>
     </div>
-  </div>
+    {refreshBlocked&&<small role="status" className="me-update-note">Finish any active workout and sync saved changes before refreshing.</small>}
+    {updateState&&<small role="status" className="me-update-note">{updateState}</small>}
+  </section>
+}
 
-  return <button className="wide-button" disabled={!prompt} onClick={async()=>{if(!prompt)return;await prompt.prompt();setPrompt(null)}}>{prompt?'Install Workset':'Install from your browser menu'}</button>
+export function InstallAppButton(){
+  const [prompt,setPrompt]=useState(null)
+  const [installed,setInstalled]=useState(()=>window.matchMedia?.('(display-mode: standalone)').matches||false)
+  useEffect(()=>{
+    const before=e=>{e.preventDefault();setPrompt(e)}
+    const done=()=>{setInstalled(true);setPrompt(null)}
+    window.addEventListener('beforeinstallprompt',before)
+    window.addEventListener('appinstalled',done)
+    return()=>{window.removeEventListener('beforeinstallprompt',before);window.removeEventListener('appinstalled',done)}
+  },[])
+  if(installed)return <p className="me-inline-status">WorkSet is installed on this device.</p>
+  return <button type="button" className="wide-button" disabled={!prompt}
+    onClick={async()=>{if(!prompt)return;await prompt.prompt();setPrompt(null)}}>
+    {prompt?'Install WorkSet':'Install from your browser menu'}
+  </button>
 }
 
 function download(name,content,type='application/json') {

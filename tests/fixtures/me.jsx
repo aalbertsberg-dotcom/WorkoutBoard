@@ -46,6 +46,7 @@ function Fixture(){
       personalProgramName="Sample strength" shareInvite={()=>setNavigation('Invite opened')} inviteState=""
       isAdmin={false} feedbackUnread={0} onOpenAdmin={()=>setNavigation('Admin opened')}
       onSignOut={()=>setNavigation('Sign out clicked')} appUrl="http://localhost:4173/"
+      onRefreshWorkset={()=>setNavigation('Refreshed safely')} refreshBlocked={false}
     />
     <output id="me-test-navigation" role="status">{navigation}</output>
     <output id="me-test-backend" role="status">Saves: {ops}</output>

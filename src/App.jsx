@@ -1236,6 +1236,7 @@ function App() {
   const [todayCompletedWorkouts,setTodayCompletedWorkouts] = useState([])
   const [completedDeletePrompt,setCompletedDeletePrompt] = useState(null)
   const [historyWorkoutId,setHistoryWorkoutId] = useState(null)
+  const [historyOpenedFromProgress,setHistoryOpenedFromProgress]=useState(false)
   const [mobilityMode,setMobilityMode] = useState('warmup')
   const [deletingCompletedWorkout,setDeletingCompletedWorkout] = useState(false)
   const [workoutStartError,setWorkoutStartError] = useState('')
@@ -1335,7 +1336,13 @@ function App() {
   },[])
 
   const openProgress = (section='Overview') => navigateTo('progress',{progressSection:section})
-  const openHistory = (id=null) => {setHistoryWorkoutId(id);navigateTo('history')}
+  const openHistory = (id=null) => {
+    const fromProgress=activeTab==='progress'
+    setHistoryWorkoutId(id)
+    setHistoryOpenedFromProgress(fromProgress)
+    navigateTo('history')
+    window.history.replaceState({...window.history.state,workoutId:id,historyFromProgress:fromProgress},'',window.location.href)
+  }
   const openMobility = mode => {setMobilityMode(mode);navigateTo('mobility')}
 
   useEffect(()=>{
@@ -1351,6 +1358,10 @@ function App() {
         setExtraWorkoutOpen(false)
       }
       setActiveTab(state.tab)
+      if(state.tab==='history'){
+        setHistoryWorkoutId(state.workoutId||null)
+        setHistoryOpenedFromProgress(Boolean(state.historyFromProgress))
+      }
       setProgressStartSection(state.progressSection||'Overview')
       setAppNavDepth(Number(state.worksetDepth||0))
     }else{
@@ -1377,6 +1388,10 @@ function App() {
       }
       if(!next?.worksetApp)return
       setActiveTab(next.tab||'today')
+      if(next.tab==='history'){
+        setHistoryWorkoutId(next.workoutId||null)
+        setHistoryOpenedFromProgress(Boolean(next.historyFromProgress))
+      }
       setProgressStartSection(next.progressSection||'Overview')
       setAppNavDepth(Number(next.worksetDepth||0))
     }
@@ -1420,9 +1435,7 @@ function App() {
 
   const applyReleaseUpdate=()=>{
     if(!releaseUpdate?.buildId||updateBlocked)return
-    const url=new URL(window.location.href)
-    url.searchParams.set('_workset_release',String(releaseUpdate.buildId).slice(0,12))
-    window.location.replace(url.toString())
+    refreshWorkset()
   }
 
   const personalProgram = programs[activeProgram]
@@ -1878,6 +1891,18 @@ function App() {
     (plannedToday&&(plannedToday.status==='started'||plannedWorkoutHasProgress(plannedToday)))||
     (showRegularToday&&!log.complete)
   )
+  const refreshWorkset=()=>{
+    if(updateBlocked)return
+    // Keep the current navigation entry, workout detail and Progress section.
+    // The service worker already prefers network responses and has versioned caches.
+    window.history.replaceState({
+      ...(window.history.state||{}),worksetApp:true,
+      tab:activeTab,progressSection:progressStartSection,
+      workoutId:activeTab==='history'?historyWorkoutId:null,
+      historyFromProgress:historyOpenedFromProgress,
+    },'',window.location.href)
+    window.location.reload()
+  }
 
   const standaloneWorkoutHasUserProgress = row => {
     const workout=row?.workout||{}
@@ -4328,7 +4353,9 @@ function App() {
             onSaved={async id=>{await refreshPlannedToday();openHistory(id)}}/>
         ) : activeTab === 'history' ? (
           <WorkoutHistory session={session} initialWorkoutId={historyWorkoutId}
-            onBack={openToday} onChanged={refreshPlannedToday}/>
+            legacyHistory={progress.completed}
+            fromProgress={historyOpenedFromProgress}
+            onBack={navigateBack} onChanged={refreshPlannedToday}/>
         ) : activeTab === 'progress' ? (
           <section className="page-section progress-page">
             <div className="progress-page-top">
@@ -4353,6 +4380,7 @@ function App() {
               initialSection={progressStartSection}
               onSectionChange={section=>openProgress(section)}
               onOpenHistory={()=>openHistory()}
+              onOpenWorkout={id=>openHistory(id)}
             />
           </section>
         ) : activeTab === 'admin' ? (
@@ -4383,6 +4411,8 @@ function App() {
             onOpenAdmin={()=>{setFeedbackUnread(0);navigateTo('admin')}}
             onSignOut={()=>supabase.auth.signOut()}
             appUrl={appUrl()}
+            onRefreshWorkset={refreshWorkset}
+            refreshBlocked={updateBlocked}
           />
         )}
 

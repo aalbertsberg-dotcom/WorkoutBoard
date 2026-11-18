@@ -114,3 +114,17 @@ test('Release updates are blocked until durable pending-workout queue has loaded
   assert.match(app,/ready:false/)
   assert.match(app,/!offlineStatus.ready\|\|!offlineStatus.online/)
 })
+
+
+test('Manual reload retains navigation and never wipes service-worker caches',()=>{
+  const load=path=>readFileSync(new URL('../'+path,import.meta.url),'utf8')
+  const app=load('src/App.jsx')
+  const features=load('src/productFeatures.jsx')
+  assert.match(app,/const refreshWorkset=\(\)=>\{/)
+  assert.match(app,/if\(updateBlocked\)return/)
+  assert.match(app,/window\.history\.replaceState\(\{/)
+  assert.match(app,/window\.location\.reload\(\)/)
+  assert.doesNotMatch(features,/caches\.delete\(/)
+  assert.doesNotMatch(features,/\.unregister\(\)/)
+  assert.match(features,/export function AppUpdateControls/)
+})
