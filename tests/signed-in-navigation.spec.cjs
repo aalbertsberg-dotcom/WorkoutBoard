@@ -1,7 +1,7 @@
 const {test,expect}=require('@playwright/test')
 
 const userId='00000000-0000-4000-8000-000000000001'
-async function signedIn(page){
+async function signedIn(page,{withStartedWalk=false}={}){
   await page.addInitScript(user=>{
     const expires=Math.floor(Date.now()/1000)+86400*365
     localStorage.setItem('sb-example-auth-token',JSON.stringify({
@@ -27,6 +27,22 @@ async function signedIn(page){
     if(url.includes('/auth/v1/user')){
       await route.fulfill({status:200,contentType:'application/json',headers,
         body:JSON.stringify({id:userId,aud:'authenticated',role:'authenticated',email:'tester@example.test',user_metadata:{},app_metadata:{}})})
+      return
+    }
+    if(withStartedWalk && method==='GET' && url.includes('/rest/v1/planned_workouts')){
+      const now=new Date().toISOString()
+      const row={
+        id:'00000000-0000-4000-8000-000000000002',user_id:userId,
+        title:'Walk',scheduled_date:now.slice(0,10),status:'started',
+        created_at:now,updated_at:now,
+        workout:{
+          version:2,type:'flexible',standalone:true,started_explicitly:true,
+          quick_cardio:true,quick_cardio_kind:'walk',
+          exercises:[],quick_timer_started_at:null,quick_timer_elapsed_seconds:0,
+          metcon:{activity:'Walk',intensity:'Light',duration:'',distance:''}
+        }
+      }
+      await route.fulfill({status:200,contentType:'application/json',headers,body:JSON.stringify([row])})
       return
     }
     if(url.includes('/rpc/is_workout_admin')){
@@ -78,5 +94,15 @@ test('Real signed-in History and Progress shortcuts keep navigation working',asy
   await expect(page.locator('.app-header h1')).toHaveText('Me')
   await page.getByRole('button',{name:/Progress & Analytics/}).click()
   await expect(page.locator('.app-header h1')).toHaveText('Progress')
+  expect(errors).toEqual([])
+})
+
+test('Resuming an active Walk renders GPS status without crashing',async({page})=>{
+  const errors=[]
+  page.on('pageerror',error=>errors.push(error.message))
+  await signedIn(page,{withStartedWalk:true})
+  await expect(page.locator('.quick-cardio-runner')).toBeVisible({timeout:15000})
+  await expect(page.locator('.quick-cardio-gps-badge')).toBeVisible()
+  await expect(page.locator('.workset-crash-screen')).toHaveCount(0)
   expect(errors).toEqual([])
 })
