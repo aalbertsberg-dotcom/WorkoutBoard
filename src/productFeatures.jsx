@@ -8,7 +8,7 @@ import { OutdoorTracker, emptyOutdoorTrack, outdoorActivityKind, outdoorMetrics 
 import {describeOutdoorGps} from './gpsStatus.js'
 import GpsStatusBadge from './GpsStatusBadge.jsx'
 import { effectiveSteps } from './stepTracking'
-import { validWeightDraft,validRepsDraft,displayedSetWeight,recordedWeightValue,canFinishQuickCardio,withoutUnreliableRoute,outdoorDistancePresentation } from './trackingRules'
+import { validWeightDraft,validRepsDraft,displayedSetWeight,recordedWeightValue,canFinishQuickCardio,withoutUnreliableRoute,outdoorDistancePresentation,autosaveDelayMs } from './trackingRules'
 
 function partnerSetTarget(maxes,set) {
   const lift=set?.weight_lift
@@ -184,6 +184,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
   const cancelRequestedRef=useRef(false)
   const inFlightSaveRef=useRef(Promise.resolve())
   const revisionRef=useRef(0)
+  const unsavedSinceRef=useRef(0)
   const [draftReady,setDraftReady]=useState(false)
 
   const lastCancelRequestRef=useRef(cancelRequestToken)
@@ -291,8 +292,11 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
 
   useEffect(()=>{
     if (!planned?.id || !draftReady || saveState !== 'Unsaved' || cancelRequestedRef.current) return
+    if(!unsavedSinceRef.current)unsavedSinceRef.current=Date.now()
+    const unsavedFor=Date.now()-unsavedSinceRef.current
     const timer=setTimeout(async()=>{
       if(cancelRequestedRef.current)return
+      unsavedSinceRef.current=0
       setSaveState('Saving…')
       const updatedAt=new Date().toISOString()
       const revision=revisionRef.current
@@ -307,7 +311,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       const result=await save
       if(!cancelRequestedRef.current&&revision===revisionRef.current)
         setSaveState(result.error?'Save failed: '+result.error.message:result.offline?'Saved offline':'Saved')
-    },workout.quick_cardio?2200:700)
+    },autosaveDelayMs(unsavedFor,Boolean(workout.quick_cardio)))
     return ()=>clearTimeout(timer)
   },[workout,planned?.id,saveState,draftReady])
 
