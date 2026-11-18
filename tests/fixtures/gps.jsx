@@ -12,11 +12,9 @@ function Fixture(){
   const status=describeOutdoorGps({outdoor,running,elapsedSeconds})
   return <main className="page-section">
     <div className="quick-cardio-timer">
-      <div className="quick-cardio-timer-heading">
-        <span className="quick-cardio-timer-state">{running?'TIMING NOW':'READY'}</span>
-        <GpsStatusBadge status={status}
-          onClick={()=>document.getElementById('workset-gps-panel')?.scrollIntoView({block:'start'})}/>
-      </div>
+      <span className="quick-cardio-timer-state">{running?'TIMING NOW':'READY'}</span>
+      <GpsStatusBadge status={status}
+        onClick={()=>document.getElementById('workset-gps-panel')?.scrollIntoView({block:'start'})}/>
       <button type="button" onClick={()=>{setRunning(x=>!x);setElapsedSeconds(0)}}>{running?'Pause mock walk':'Start mock walk'}</button>
     </div>
     <OutdoorTracker activity="walk" outdoor={outdoor} onChange={setOutdoor}

@@ -819,13 +819,11 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       </section>
 
       <section className="quick-cardio-timer">
-        <div className="quick-cardio-timer-heading">
-          <span className="quick-cardio-timer-state">
-            {workout.quick_timer_started_at ? 'TIMING NOW' : quickElapsedSeconds ? 'PAUSED' : 'READY'}
-          </span>
-          {quickOutdoorGps&&<GpsStatusBadge status={quickOutdoorGps}
-            onClick={()=>document.getElementById('workset-gps-panel')?.scrollIntoView({behavior:'smooth',block:'start'})}/>}
-        </div>
+        <span className="quick-cardio-timer-state">
+          {workout.quick_timer_started_at ? 'TIMING NOW' : quickElapsedSeconds ? 'PAUSED' : 'READY'}
+        </span>
+        {quickOutdoorGps&&<GpsStatusBadge status={quickOutdoorGps}
+          onClick={()=>document.getElementById('workset-gps-panel')?.scrollIntoView({behavior:'smooth',block:'start'})}/>}
         <strong>{formatQuickTime(quickElapsedSeconds)}</strong>
         <p className="quick-cardio-timer-hint">
           {workout.quick_timer_started_at
