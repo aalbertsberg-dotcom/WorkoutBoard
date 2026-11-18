@@ -2,7 +2,7 @@ const {defineConfig}=require('@playwright/test')
 
 module.exports=defineConfig({
   testDir:'.',
-  testMatch:['mobile-smoke.spec.cjs','history-buttons.spec.cjs'],
+  testMatch:['mobile-smoke.spec.cjs','history-buttons.spec.cjs','me-page.spec.cjs'],
   timeout:25000,
   expect:{timeout:6000},
   retries:process.env.CI?1:0,
