@@ -143,3 +143,21 @@ test('Weak live GPS fix is flagged without inventing distance',async({page})=>{
   await expect(page.locator('.quick-cardio-gps-badge')).toHaveAttribute('data-gps-phase','weak')
   await expect(page.locator('#gps-distance')).toHaveText('0')
 })
+
+test('Android zero-speed fixes begin recording a short real walk without a 45 m gate',async({page})=>{
+  await openGps(page)
+  await page.getByRole('button',{name:'Check GPS before starting'}).click()
+  await page.getByRole('button',{name:'Start mock walk'}).click()
+  await expect.poll(async()=>page.evaluate(()=>window.__gps.startCount)).toBe(1)
+  await expect(page.getByText('Location verified · a route records only after Start.')).toHaveCount(0)
+  await page.evaluate(()=>{
+    const t=Date.now()-4000
+    window.__gps.emit(30.4,5,0,t)
+    window.__gps.emit(30.40009,5,0,t+1200)
+    window.__gps.emit(30.40013,5,0,t+2600)
+  })
+  await expect.poll(async()=>Number(await page.locator('#gps-distance').innerText())).toBeGreaterThan(10)
+  await expect(page.locator('.outdoor-gps-status b')).toContainText('Recording route')
+  await page.evaluate(()=>window.__gps.emit(30.400135,5,0,Date.now()))
+  await expect(page.locator('.outdoor-gps-status')).not.toContainText('GPS acquired · waiting for consistent movement')
+})
