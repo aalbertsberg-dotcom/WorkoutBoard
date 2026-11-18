@@ -311,9 +311,14 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
         if(!decision.accept){
           candidateMovementRef.current=decision.pending
             ?{anchorTime:last.t,distance:segment}:null
-          setMessage(decision.reason==='stationary'
-            ? 'Stationary · GPS movement not counted'
-            : 'GPS acquired · waiting for consistent movement')
+          // Once a route exists, individual noisy fixes are normal. Do not
+          // replace the active "Recording route" message with "GPS acquired".
+          const recording=points.length>=2&&Number(prev.distance_m||0)>0
+          setMessage(recording
+            ? 'GPS tracking · filtering location noise'
+            : decision.reason==='stationary'
+              ? 'Stationary · GPS movement not counted'
+              : 'GPS acquired · waiting for consistent movement')
           return
         }
         candidateMovementRef.current=null
@@ -661,7 +666,7 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
       {running&&(gpsStale||permission==='denied'||!gpsReady)&&
         <button type="button" className="secondary-action" onClick={retryGps}>Retry GPS</button>}
       {running&&gpsReady&&<small>GPS updates are arriving. Distance counts only confirmed movement.</small>}
-      {gpsCheckResult&&<small role="status">{gpsCheckResult}</small>}
+      {!running&&gpsCheckResult&&<small role="status">{gpsCheckResult}</small>}
     </div>
     {running&&<div className="outdoor-pocket-control">
       <button type="button" className="outdoor-pocket-button"
