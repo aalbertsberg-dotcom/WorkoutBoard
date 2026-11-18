@@ -48,27 +48,23 @@ export function gpsMovementAssessment({
   )
   const speed=reportedSpeed===null||reportedSpeed===undefined||reportedSpeed===''?null:Number(reportedSpeed)
   const knownSpeed=Number.isFinite(speed)&&speed>=0
-  // Android browsers can report speed=0 even while a person is walking.
-  // Don't permanently discard coherent, large position changes, but require
-  // displacement substantially beyond GPS uncertainty and a confirming fix.
+  // Android Chrome often reports speed=0 while walking. A fixed 45-metre
+  // "stationary" gate made accurate GPS fixes wait minutes before recording.
+  // Use the same accuracy-based noise floor as other fixes, but require two
+  // progressively farther readings to corroborate a zero-speed position.
   const lowSpeed=knownSpeed&&speed<0.45
-  const stationaryFloor=Math.max(45,quality*2.2)
-  if(lowSpeed&&distance<stationaryFloor)
-    return {accept:false,pending:false,reason:'stationary',minimumMeters:stationaryFloor}
   const strongMotion=knownSpeed&&speed>=0.65
   const goodFix=quality<=8
-  // Low-quality indoor GPS gets a larger dead zone; reliable walking-speed
-  // fixes with high accuracy remain responsive.
   const minimumMeters=Math.max(5,Math.min(40,quality*(strongMotion&&goodFix?0.85:1.65)))
+  if(lowSpeed&&distance<minimumMeters)
+    return {accept:false,pending:false,reason:'stationary',minimumMeters}
   if(distance<minimumMeters)return {accept:false,pending:false,reason:'noise',minimumMeters}
-  // With uncertain location or no hardware speed, require a second fix
-  // consistently farther from the last trusted anchor.
   if(!strongMotion||!goodFix){
     const previous=priorCandidateDistance===null||priorCandidateDistance===undefined
       ?null:Number(priorCandidateDistance)
     const progression=Math.max(3,quality*0.2)
     if(!Number.isFinite(previous)||distance<previous+progression)
-      return {accept:false,pending:true,reason:'awaiting-consistency',minimumMeters}
+      return {accept:false,pending:true,reason:lowSpeed&&Number.isFinite(previous)?'stationary':'awaiting-consistency',minimumMeters}
   }
   return {accept:true,pending:false,reason:'movement',minimumMeters}
 }
