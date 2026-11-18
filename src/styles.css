@@ -8342,3 +8342,6 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   .me-identity-avatar {display:none}
   .me-identity-main {grid-template-columns:minmax(0,1fr) auto}
 }
+
+/* Keep aria-controls targets present without mounting inactive feature screens. */
+.me-section-content[hidden] {display:none !important;}

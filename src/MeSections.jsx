@@ -16,7 +16,7 @@ export function MeSection({id,title,description,children,icon='◇'}){
         <span className="me-section-chevron" aria-hidden="true">{open?'⌃':'⌄'}</span>
       </button>
     </h3>
-    {open&&<div className="me-section-content" id={panelId}>{children}</div>}
+    <div className="me-section-content" id={panelId} hidden={!open}>{open?children:null}</div>
   </section>
 }
 

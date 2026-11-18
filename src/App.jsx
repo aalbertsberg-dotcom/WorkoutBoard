@@ -1694,7 +1694,8 @@ function App() {
         setTodayCompletedWorkouts(cached.todayCompletedWorkouts||[])
         setCompletedTrainingSessions(cached.completedTrainingSessions||[])
         setTogetherTracking(cached.togetherTracking||[])
-        setOneRepMaxes(cached.oneRepMaxes||defaultOneRms)
+        latestOneRmsRef.current=cached.oneRepMaxes||defaultOneRms
+        setOneRepMaxes(latestOneRmsRef.current)
         setIsAdmin(Boolean(cached.isAdmin))
         setShowRegularToday(false)
         setDataLoading(false)
@@ -1821,6 +1822,7 @@ function App() {
       setShowRegularToday(false)
       setTogetherTracking(trackingData || [])
 
+      latestOneRmsRef.current=loadedOneRms
       setOneRepMaxes(loadedOneRms)
 
       const completed = new Set(rows.filter(r => r.program === chosen.dbName && r.week === currentWeek && r.completed_at).map(r => r.lift))

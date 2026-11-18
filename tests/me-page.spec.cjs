@@ -94,3 +94,13 @@ test('All collapsed navigation buttons are fully reachable on narrow and desktop
     expect(box.reachable).toBe(true)
   }
 })
+
+
+test('Every collapsed disclosure refers to an existing hidden panel',async({page})=>{
+  await openMe(page)
+  const buttons=page.locator('.me-section-toggle')
+  for(let i=0;i<await buttons.count();i++){
+    const id=await buttons.nth(i).getAttribute('aria-controls')
+    await expect(page.locator('#'+id)).toHaveAttribute('hidden','')
+  }
+})
