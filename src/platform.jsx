@@ -574,7 +574,13 @@ export function PlatformProgress({
 
     {effectiveMode==='mine'?<>
       <div className="progress-section-tabs">
-        {['Overview','Strength','Cardio','Weight & Measurements','History'].map(section=><button key={section} className={progressSection===section?'active':''} onClick={()=>selectProgressSection(section)}>{section}</button>)}
+        {['Overview','Strength','Cardio','Weight & Measurements','History'].map(section=><button
+          type="button" key={section} className={progressSection===section?'active':''}
+          aria-current={progressSection===section?'page':undefined}
+          onClick={event=>{
+            selectProgressSection(section)
+            event.currentTarget.scrollIntoView({block:'nearest',inline:'center',behavior:'smooth'})
+          }}>{section}</button>)}
       </div>
 
       {progressSection==='Overview'&&<>
