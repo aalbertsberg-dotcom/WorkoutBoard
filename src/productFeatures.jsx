@@ -583,8 +583,14 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       }:{}),
       complete:true,savedAt:now,baseline_results:baselineResults
     }
-    const completionOutdoor=quickOutdoorMetrics&&(quickOutdoorMetrics.distanceM>0||quickStepCount>0) ? {
+    // Outdoor activities always get outdoor stats—even when GPS failed.
+    // Showing strength "0 sets / 0 lb" for a 47-minute walk is misleading.
+    const completionOutdoor=quickOutdoorKind&&quickOutdoorMetrics ? {
       kind:quickOutdoorKind,
+      gpsFixes:Number(reliableOutdoor?.gps_health?.received||0),
+      gpsLastAccuracy:Number(reliableOutdoor?.last_accuracy_m||0)||null,
+      gpsError:reliableOutdoor?.gps_health?.error_code??null,
+      gpsUnavailable:quickOutdoorMetrics.distanceM<=0,
       miles:quickOutdoorMetrics.miles,
       distanceM:quickOutdoorMetrics.distanceM,
       distanceLabel:distanceDisplay.label,
@@ -804,6 +810,10 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
         </div>
       </section>
 
+      {quickOutdoorKind&&<button type="button" className="quick-cardio-gps-link"
+        onClick={()=>document.getElementById('workset-gps-panel')?.scrollIntoView({behavior:'smooth',block:'start'})}>
+        📍 GPS & location status <span aria-hidden="true">›</span>
+      </button>}
       <section className="quick-cardio-timer">
         <span className="quick-cardio-timer-state">
           {workout.quick_timer_started_at ? 'TIMING NOW' : quickElapsedSeconds ? 'PAUSED' : 'READY'}

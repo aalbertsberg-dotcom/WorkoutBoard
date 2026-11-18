@@ -196,12 +196,48 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
   const [motionFeedback,setMotionFeedback]=useState(motionSupported?'Motion sensor starts with the timer':'Motion sensor not available')
   const [message,setMessage]=useState('')
   const [permission,setPermission]=useState('prompt')
+  const [gpsCheckBusy,setGpsCheckBusy]=useState(false)
+  const [gpsCheckResult,setGpsCheckResult]=useState('')
+  const [gpsHeartbeat,setGpsHeartbeat]=useState(()=>{
+    const saved=current.gps_health||{}
+    return {received:Number(saved.received||0),last_received_at:saved.last_received_at||null,
+      last_accuracy_m:saved.last_accuracy_m??current.last_accuracy_m??null,error_code:saved.error_code??null}
+  })
+  const gpsHeartbeatRef=useRef(gpsHeartbeat)
+  const lastGpsHeartbeatSaveRef=useRef(0)
+  const [gpsTick,setGpsTick]=useState(Date.now())
   outdoorRef.current=current
   elapsedRef.current=elapsedSeconds
   runningRef.current=running
   onChangeRef.current=onChange
 
   const metrics=useMemo(()=>outdoorMetrics(current,elapsedSeconds,activity),[current,elapsedSeconds,activity])
+
+  // A heartbeat stores counts/accuracy, not extra coordinates. This lets a
+  // completed workout distinguish "no fix" from "GPS got a fix but no route".
+  const recordGpsHeartbeat=(patch={},force=false)=>{
+    const prev=gpsHeartbeatRef.current
+    const next={...prev,...patch}
+    gpsHeartbeatRef.current=next
+    setGpsHeartbeat(next)
+    const now=Date.now()
+    if(force||!lastGpsHeartbeatSaveRef.current||now-lastGpsHeartbeatSaveRef.current>=20000){
+      const last=outdoorRef.current||emptyOutdoorTrack(activity)
+      const changed={...last,gps_health:next,
+        last_accuracy_m:next.last_accuracy_m??last.last_accuracy_m,
+        updated_at:new Date(now).toISOString()}
+      outdoorRef.current=changed
+      onChangeRef.current?.(changed)
+      lastGpsHeartbeatSaveRef.current=now
+    }
+    return next
+  }
+  useEffect(()=>{
+    if(!running)return
+    const timer=setInterval(()=>setGpsTick(Date.now()),8000)
+    setGpsTick(Date.now())
+    return()=>clearInterval(timer)
+  },[running])
 
   useEffect(()=>{
     let cancelled=false
@@ -219,8 +255,15 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
     if(!runningRef.current)return
     const nextPoint=pointFromPosition(position)
     if(!Number.isFinite(nextPoint.lat)||!Number.isFinite(nextPoint.lng))return
+    const health=recordGpsHeartbeat({
+      received:gpsHeartbeatRef.current.received+1,
+      last_received_at:new Date(nextPoint.t).toISOString(),
+      last_accuracy_m:nextPoint.a,
+      error_code:null
+    })
+    setPermission('granted')
     if(nextPoint.a!=null&&nextPoint.a>50){
-      setMessage('Waiting for a better GPS signal…')
+      setMessage('GPS fix is too inaccurate (±'+Math.round(nextPoint.a)+' m). Waiting for a better signal…')
       return
     }
     const prev=outdoorRef.current||emptyOutdoorTrack(activity)
@@ -308,6 +351,7 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
       version:1,
       activity,
       status:'tracking',
+      gps_health:health,
       points:nextPoints,
       distance_m:Math.round(distance*10)/10,
       elevation_gain_m:Math.round(elevation*10)/10,
@@ -318,6 +362,7 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
     }
     outdoorRef.current=next
     onChangeRef.current?.(next)
+    lastGpsHeartbeatSaveRef.current=Date.now()
     setMessage(nextPoint.gap_reason==='no_updates'
       ? 'GPS paused while screen was locked · gap marked'
       : 'GPS locked')
@@ -415,21 +460,29 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
       return
     }
     if(watchRef.current!=null)return
-    setMessage('Getting GPS signal…')
-    await requestWakeLock()
-    if(!runningRef.current){await releaseWakeLock();return}
-    // A second start may have begun while the wake-lock promise was pending.
-    // Never open two concurrent browser GPS watchers for one workout.
-    if(watchRef.current!=null)return
-    watchRef.current=navigator.geolocation.watchPosition(
-      pushPosition,
-      error=>{
-        if(error?.code===1){setPermission('denied');setMessage('Location permission is off. Timer still works; enter distance manually.')}
-        else if(error?.code===2)setMessage('GPS signal unavailable. Keep moving with a clear view of the sky.')
-        else setMessage('Still getting your GPS position…')
-      },
-      {enableHighAccuracy:true,maximumAge:1000,timeout:15000}
-    )
+    setMessage('Waiting for your first GPS fix…')
+    if(!runningRef.current)return
+    // Start the location watcher immediately. Wake-lock acquisition is
+    // independent and must never delay or prevent the GPS permission request.
+    try{
+      watchRef.current=navigator.geolocation.watchPosition(
+        pushPosition,
+        error=>{
+          recordGpsHeartbeat({error_code:error?.code||0,error_at:new Date().toISOString()},true)
+          if(error?.code===1){
+            setPermission('denied')
+            setMessage('Location blocked. Allow location for WorkSet in Chrome site permissions.')
+          }else if(error?.code===2)setMessage('GPS signal unavailable. Try an open outdoor area or Retry GPS.')
+          else setMessage('GPS timed out. Use Retry GPS if it does not recover.')
+        },
+        {enableHighAccuracy:true,maximumAge:1000,timeout:20000}
+      )
+    }catch(error){
+      recordGpsHeartbeat({error_code:'watch_failed',error_at:new Date().toISOString()},true)
+      setMessage('Could not start GPS: '+String(error?.message||'location unavailable'))
+      setPermission('denied')
+    }
+    void requestWakeLock()
   }
 
   useEffect(()=>{
@@ -528,13 +581,59 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
     onChangeRef.current?.(next)
   }
 
+  const lastGpsReceived=Date.parse(gpsHeartbeat.last_received_at||'')||0
+  const gpsStale=running&&(
+    lastGpsReceived?gpsTick-lastGpsReceived>30000:elapsedSeconds>=25
+  )
+  const gpsWeak=Number(gpsHeartbeat.last_accuracy_m)>35
+  const gpsReady=running&&gpsHeartbeat.received>0&&!gpsStale
+  const gpsDisplayStatus=permission==='denied'?'Location permission blocked':
+    !running?'GPS ready to check':
+    gpsStale?'No GPS updates · use Retry GPS':
+    !gpsReady?'Waiting for GPS location':
+    gpsWeak?'GPS weak · ±'+Math.round(gpsHeartbeat.last_accuracy_m)+' m':
+    'GPS receiving locations'
+  const checkGps=()=>{
+    if(!navigator.geolocation?.getCurrentPosition){
+      setGpsCheckResult('Location is unavailable in this browser.')
+      return
+    }
+    if(gpsCheckBusy)return
+    setGpsCheckBusy(true)
+    setGpsCheckResult('Checking phone location…')
+    navigator.geolocation.getCurrentPosition(
+      position=>{
+        setGpsCheckBusy(false)
+        const accuracy=Number(position.coords?.accuracy)
+        setPermission('granted')
+        setGpsCheckResult('Location available'+(Number.isFinite(accuracy)?' · ±'+Math.round(accuracy)+' m':''))
+        if(runningRef.current)pushPosition(position)
+      },
+      error=>{
+        setGpsCheckBusy(false)
+        if(error?.code===1)setPermission('denied')
+        setGpsCheckResult(error?.code===1
+          ?'Location blocked. In Chrome, allow Location for this site.'
+          :error?.code===2?'Location unavailable. Try outdoors and check phone Location settings.'
+          :'Location check timed out. Try again outdoors.')
+      },
+      {enableHighAccuracy:true,maximumAge:0,timeout:15000}
+    )
+  }
+  const retryGps=()=>{
+    if(!running)return
+    stopWatch()
+    setMessage('Restarting GPS watch…')
+    startWatch()
+  }
+
   const paceMode=activity!=='bike'
   const signal=current?.last_accuracy_m
   const liveFix=hasLiveGpsFix(current)
   const credibleRoute=hasReliableOutdoorRoute(current)
   const partialRoute=hasRecordingGaps(current)
   const feetTracked=Math.round(metrics.distanceM*3.28084)
-  return <section className="outdoor-tracker">
+  return <section className="outdoor-tracker" id="workset-gps-panel">
     <div className="outdoor-live-grid">
       <div><span>Distance</span><strong>{metrics.miles?metrics.miles.toFixed(metrics.miles<10?2:1):'0.00'} mi</strong>{feetTracked>0&&metrics.miles<0.1&&<small className="outdoor-short-distance">{feetTracked} ft tracked</small>}</div>
       <div><span>{paceMode?'Avg pace':'Avg speed'}</span><strong>{paceMode?formatPace(metrics.avgPaceSecPerMile):(metrics.avgMph?metrics.avgMph.toFixed(1)+' mph':'—')}</strong></div>
@@ -542,10 +641,20 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
       <div><span>Elevation</span><strong>{Math.round(metrics.elevationGainM*3.28084)} ft</strong></div>
     </div>
 
-    <div className="outdoor-gps-status">
-      <span className={(running&&permission!=='denied')?'live':''}>{running?'● GPS':'GPS paused'}</span>
-      <b>{message||((current.points||[]).length?'Route saved':'GPS starts with the timer')}</b>
-      {signal!=null&&<small>±{Math.round(signal)} m</small>}
+    <div className="outdoor-gps-status" role="status" aria-live="polite">
+      <span className={gpsReady&&permission!=='denied'?'live':''}>{gpsReady?'● GPS':'◯ GPS'}</span>
+      <b>{gpsDisplayStatus}</b>
+      {message&&<small>{message}</small>}
+      {gpsHeartbeat.received>0&&<small>{gpsHeartbeat.received} location update{gpsHeartbeat.received===1?'':'s'} received</small>}
+    </div>
+    <div className="outdoor-gps-actions">
+      {!running&&<button type="button" className="secondary-action" onClick={checkGps} disabled={gpsCheckBusy}>
+        {gpsCheckBusy?'Checking GPS…':'Check GPS before starting'}
+      </button>}
+      {running&&(gpsStale||permission==='denied'||!gpsReady)&&
+        <button type="button" className="secondary-action" onClick={retryGps}>Retry GPS</button>}
+      {running&&gpsReady&&<small>GPS updates are arriving. Distance counts only confirmed movement.</small>}
+      {gpsCheckResult&&<small role="status">{gpsCheckResult}</small>}
     </div>
     {running&&<div className="outdoor-pocket-control">
       <button type="button" className="outdoor-pocket-button"
@@ -558,7 +667,7 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
       activity={activity}
       elapsed={formatOutdoorDuration(elapsedSeconds)}
       distance={(metrics.miles||0).toFixed(2)+' mi'}
-      gps={permission==='denied'?'GPS permission required':partialRoute?'GPS has gaps':!liveFix?'Waiting for GPS':signal!=null&&signal>35?'GPS weak · ±'+Math.round(signal)+' m':'GPS recording'}
+      gps={gpsDisplayStatus+(partialRoute?' · route gaps':'')}
       wakeStatus={wakeStatus}
       onUnlock={()=>setPocketLocked(false)}
     />}

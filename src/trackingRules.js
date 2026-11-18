@@ -48,7 +48,13 @@ export function gpsMovementAssessment({
   )
   const speed=reportedSpeed===null||reportedSpeed===undefined||reportedSpeed===''?null:Number(reportedSpeed)
   const knownSpeed=Number.isFinite(speed)&&speed>=0
-  if(knownSpeed&&speed<0.45)return {accept:false,pending:false,reason:'stationary',minimumMeters:0}
+  // Android browsers can report speed=0 even while a person is walking.
+  // Don't permanently discard coherent, large position changes, but require
+  // displacement substantially beyond GPS uncertainty and a confirming fix.
+  const lowSpeed=knownSpeed&&speed<0.45
+  const stationaryFloor=Math.max(45,quality*2.2)
+  if(lowSpeed&&distance<stationaryFloor)
+    return {accept:false,pending:false,reason:'stationary',minimumMeters:stationaryFloor}
   const strongMotion=knownSpeed&&speed>=0.65
   const goodFix=quality<=8
   // Low-quality indoor GPS gets a larger dead zone; reliable walking-speed

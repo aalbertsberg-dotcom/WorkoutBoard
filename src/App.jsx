@@ -3636,7 +3636,14 @@ function App() {
                 <div><span className="card-label">WORKOUT COMPLETE</span><h2>{completionSummary.title||'Workout complete'}</h2><p>{completionSummary.program||trackedProgramsInfo.find(x=>x.key===plannedToday?.workout?.tracking_program_key)?.name||trackedTodayInfo?.name||'Workout'}</p></div>
                 {completionSummary.outdoor?<div className="completion-outdoor-summary">
                   {completionSummary.outdoor.routeAvailable&&completionSummary.outdoor.points?.length>1&&<RouteMap points={completionSummary.outdoor.points} compact/>}
-                  {completionSummary.outdoor.distanceEstimated&&<p className="completion-gps-note">Approximate GPS distance. A reliable route and pace were not recorded for this short walk.</p>}
+                  {completionSummary.outdoor.gpsUnavailable
+                    ?<p className="completion-gps-note" role="status">
+                      {completionSummary.outdoor.gpsFixes>0
+                        ?'GPS location was received, but no reliable movement was recorded. The workout time was saved.'
+                        :'No GPS location was recorded. The workout time was saved; check Location permissions before your next outdoor activity.'}
+                    </p>
+                    :completionSummary.outdoor.distanceEstimated&&
+                      <p className="completion-gps-note">GPS distance is approximate; no verified route or pace was recorded.</p>}
                   <div className="completion-stats outdoor-completion-stats">
                     <div><span>Distance{completionSummary.outdoor.distanceEstimated?' (estimate)':''}</span><strong>{completionSummary.outdoor.distanceLabel||Number(completionSummary.outdoor.miles||0).toFixed(2)+' mi'}</strong></div>
                     <div><span>Time</span><strong>{formatOutdoorDuration(completionSummary.outdoor.elapsedSeconds)}</strong></div>
