@@ -128,3 +128,31 @@ test('Manual reload retains navigation and never wipes service-worker caches',()
   assert.doesNotMatch(features,/\.unregister\(\)/)
   assert.match(features,/export function AppUpdateControls/)
 })
+
+test('Offline save is explicitly rejected when both storage engines are unavailable',async()=>{
+  globalThis.navigator.onLine=false
+  const old=globalThis.localStorage.setItem
+  globalThis.localStorage.setItem=()=>{throw new Error('Quota exceeded')}
+  try{
+    const result=await upsertOfflineFirst(null,{
+      userId:'athlete-test',table:'planned_workouts',
+      payload:{id:'not-saved',title:'Storage failure'},
+      dedupeKey:'planned:not-saved',
+    })
+    assert.ok(result.error,'A storage failure must return an error')
+    assert.equal(result.offline,false,'Never claim Saved offline without a durable write')
+  }finally{globalThis.localStorage.setItem=old}
+})
+test('Syncing one account leaves another account’s queued changes untouched',async()=>{
+  globalThis.navigator.onLine=false
+  await queueUpsert({userId:'athlete-A',table:'planned_workouts',payload:{id:'a1'}})
+  await queueUpsert({userId:'athlete-B',table:'planned_workouts',payload:{id:'b1'}})
+  globalThis.navigator.onLine=true
+  const saved=[]
+  const supabase={from:()=>({upsert:async payload=>{saved.push(payload.id);return {error:null}}})}
+  const result=await syncOfflineQueue(supabase,'athlete-A')
+  assert.equal(result.synced,1)
+  assert.deepEqual(saved,['a1'])
+  assert.equal(getPendingOfflineCount('athlete-A'),0)
+  assert.equal(getPendingOfflineCount('athlete-B'),1)
+})

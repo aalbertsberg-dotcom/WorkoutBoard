@@ -13,7 +13,7 @@ test('Me starts organized and collapsed, with profile and History/Progress short
   for(let i=0;i<await sections.count();i++)
     await expect(sections.nth(i)).toHaveAttribute('aria-expanded','false')
   await expect(page.getByText('Your current 1RMs')).toHaveCount(0)
-  await expect(page.getByRole('button',{name:'Download full backup'})).toHaveCount(0)
+  await expect(page.getByRole('button',{name:'Download training backup'})).toHaveCount(0)
   await page.getByRole('button',{name:/Workout History/}).click()
   await expect(page.locator('#me-test-navigation')).toContainText('History opened')
   await page.getByRole('button',{name:/Progress & Analytics/}).click()
@@ -121,7 +121,7 @@ test('Secondary tools open safely, then return to their minimized state',async({
     const toggle=page.locator('[data-me-section="'+id+'"] .me-section-toggle')
     await toggle.click()
     await expect(toggle).toHaveAttribute('aria-expanded','true')
-    if(id==='app-data')await expect(page.getByRole('button',{name:'Download full backup'})).toBeVisible()
+    if(id==='app-data')await expect(page.getByRole('button',{name:'Download training backup'})).toBeVisible()
     if(id==='community')await expect(page.getByRole('button',{name:'Share WorkSet'})).toBeVisible()
     await toggle.click()
     await expect(toggle).toHaveAttribute('aria-expanded','false')
@@ -162,4 +162,42 @@ test('Strength tools remain compact until individually expanded',async({page})=>
   await expect(page.getByRole('spinbutton',{name:'Weight lifted'})).toHaveCount(0)
   await page.locator('[data-me-section="strength-calculator"] > .me-section-title > .me-section-toggle').click()
   await expect(page.getByRole('spinbutton',{name:'Weight lifted'})).toBeVisible()
+})
+
+
+test('Rejected 1RM save keeps the previous stored value when section reopens',async({page})=>{
+  await openMe(page)
+  const strength=page.locator('[data-me-section="strength"] > .me-section-title > .me-section-toggle')
+  await strength.click()
+  const field=page.locator('.me-max-field').filter({has:page.getByText('Bench',{exact:true})})
+  await expect(field.getByRole('spinbutton')).toHaveValue('200')
+  await field.getByRole('spinbutton').fill('9999')
+  await field.getByRole('button',{name:'Save'}).click()
+  await expect(field.getByText('Simulated max save rejected.')).toBeVisible()
+  await strength.click()
+  await strength.click()
+  await expect(page.locator('.me-max-field').filter({has:page.getByText('Bench',{exact:true})})
+    .getByRole('spinbutton')).toHaveValue('200')
+})
+
+test('Account backup never reports success when a data table fails',async({page})=>{
+  await page.route('https://example.supabase.co/**',async route=>{
+    const url=route.request().url()
+    if(route.request().method()==='OPTIONS'){
+      await route.fulfill({status:204,headers:{
+        'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'apikey,authorization,content-type,prefer,x-client-info',
+        'Access-Control-Allow-Methods':'GET,OPTIONS'}})
+      return
+    }
+    const failed=url.includes('/rest/v1/program_library')
+    await route.fulfill({status:failed?500:200,
+      contentType:'application/json',
+      headers:{'Access-Control-Allow-Origin':'*'},
+      body:failed?JSON.stringify({message:'Simulated account backup failure'}):'[]'})
+  })
+  await openMe(page)
+  await page.locator('[data-me-section="app-data"] > .me-section-title > .me-section-toggle').click()
+  await page.getByRole('button',{name:'Download training backup'}).click()
+  await expect(page.getByText(/Backup NOT downloaded.*program_library/)).toBeVisible()
+  await expect(page.getByText('Training backup downloaded successfully.')).toHaveCount(0)
 })
