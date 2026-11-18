@@ -1,0 +1,82 @@
+const {test,expect}=require('@playwright/test')
+
+const userId='00000000-0000-4000-8000-000000000001'
+async function signedIn(page){
+  await page.addInitScript(user=>{
+    const expires=Math.floor(Date.now()/1000)+86400*365
+    localStorage.setItem('sb-example-auth-token',JSON.stringify({
+      access_token:'e2e.mock.access.token',
+      refresh_token:'e2e-mock-refresh',
+      expires_at:expires,
+      expires_in:86400*365,
+      token_type:'bearer',
+      user:{id:user,aud:'authenticated',role:'authenticated',
+        email:'tester@example.test',email_confirmed_at:'2026-01-01T00:00:00Z',
+        created_at:'2026-01-01T00:00:00Z',user_metadata:{},app_metadata:{}}
+    }))
+  },userId)
+  await page.route('https://example.supabase.co/**',async route=>{
+    const req=route.request(),url=req.url(),method=req.method()
+    const headers={
+      'Access-Control-Allow-Origin':'*',
+      'Access-Control-Allow-Methods':'GET,POST,PATCH,DELETE,OPTIONS',
+      'Access-Control-Allow-Headers':'apikey,authorization,content-type,prefer,x-client-info',
+      'Access-Control-Expose-Headers':'Content-Range'
+    }
+    if(method==='OPTIONS'){await route.fulfill({status:204,headers});return}
+    if(url.includes('/auth/v1/user')){
+      await route.fulfill({status:200,contentType:'application/json',headers,
+        body:JSON.stringify({id:userId,aud:'authenticated',role:'authenticated',email:'tester@example.test',user_metadata:{},app_metadata:{}})})
+      return
+    }
+    if(url.includes('/rpc/is_workout_admin')){
+      await route.fulfill({status:200,contentType:'application/json',headers,body:'false'})
+      return
+    }
+    if(url.includes('/rest/v1/profiles')){
+      const row={id:userId,display_name:'Test Athlete',active_program:'andy-hybrid-12',current_week:1,community_opt_in:false}
+      const singular=(req.headers()['accept']||'').includes('application/vnd.pgrst.object+json')
+      await route.fulfill({status:200,contentType:'application/json',headers,body:JSON.stringify(singular?row:[row])})
+      return
+    }
+    if(url.includes('/rpc/')){
+      await route.fulfill({status:200,contentType:'application/json',headers,body:'[]'})
+      return
+    }
+    await route.fulfill({status:200,contentType:'application/json',headers,body:'[]'})
+  })
+  await page.goto('/')
+}
+test('Real signed-in WorkSet navigates Today, Together, Plan, Board and Me without errors',async({page})=>{
+  const errors=[]
+  page.on('pageerror',e=>errors.push(e.message))
+  await signedIn(page)
+  await expect(page.locator('.app-header h1')).toHaveText('Today',{timeout:15000})
+  const nav=page.viewportSize().width<700
+    ?page.getByRole('navigation',{name:'Workset mobile navigation'})
+    :page.locator('.primary-nav')
+  await expect(nav).toBeVisible()
+  for(const [label,title] of [['Together','Together'],['Plan','Plan'],['Board','Whiteboard'],['Today','Today']]){
+    await nav.getByRole('button',{name:label}).click()
+    await expect(page.locator('.app-header h1')).toHaveText(title)
+  }
+  await page.locator('.account-chip').click()
+  await expect(page.locator('.app-header h1')).toHaveText('Me')
+  await expect(page.getByRole('button',{name:/Workout History/})).toBeVisible()
+  await expect(page.getByRole('button',{name:/Progress & Analytics/})).toBeVisible()
+  expect(errors).toEqual([])
+})
+test('Real signed-in History and Progress shortcuts keep navigation working',async({page})=>{
+  const errors=[]
+  page.on('pageerror',e=>errors.push(e.message))
+  await signedIn(page)
+  await page.locator('.account-chip').click()
+  await expect(page.locator('.app-header h1')).toHaveText('Me')
+  await page.getByRole('button',{name:/Workout History/}).click()
+  await expect(page.locator('.app-header h1')).toHaveText('History')
+  await page.getByRole('button',{name:'← Back'}).first().click()
+  await expect(page.locator('.app-header h1')).toHaveText('Me')
+  await page.getByRole('button',{name:/Progress & Analytics/}).click()
+  await expect(page.locator('.app-header h1')).toHaveText('Progress')
+  expect(errors).toEqual([])
+})
