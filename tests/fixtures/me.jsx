@@ -23,6 +23,7 @@ function Fixture(){
   }
   const saveRm=async(name,value)=>{
     setOps(v=>v+1)
+    if(Number(value)===9999)return {error:new Error('Simulated max save rejected.')}
     setOneRepMaxes(v=>({...v,[name]:value===''?'':Number(value)}))
     return {error:null}
   }
