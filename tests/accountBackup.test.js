@@ -53,3 +53,10 @@ test('Restore rewrites ownership to current account and stops on first failure',
 test('Legacy version 2 backups remain compatible',()=>{
   assert.doesNotThrow(()=>validateAccountBackup({format:'WorkoutBoard Backup',version:2,tables:{workout_logs:[]}}))
 })
+
+test('Backup merge restores legacy logs before dependent training sessions',()=>{
+  const names=ACCOUNT_BACKUP_TABLES.map(x=>x.name)
+  assert.ok(names.indexOf('workout_logs')<names.indexOf('training_sessions'))
+  assert.ok(names.indexOf('program_library')<names.indexOf('planned_workouts'))
+  assert.ok(names.indexOf('program_versions')<names.indexOf('user_program_tracking'))
+})

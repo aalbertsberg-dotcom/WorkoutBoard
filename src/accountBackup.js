@@ -15,8 +15,9 @@ export const ACCOUNT_BACKUP_TABLES=[
   {name:'exercise_timer_presets',owner:'user_id'},
   {name:'user_program_tracking',owner:'user_id'},
   {name:'planned_workouts',owner:'user_id'},
-  {name:'training_sessions',owner:'user_id'},
+  // Session rows can refer to legacy workout-log IDs, so restore logs first.
   {name:'workout_logs',owner:'user_id'},
+  {name:'training_sessions',owner:'user_id'},
   {name:'training_goals',owner:'user_id'},
   {name:'body_measurements',owner:'user_id'},
   {name:'whiteboard_notes',owner:'user_id'},
