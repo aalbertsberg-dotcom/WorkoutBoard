@@ -8247,3 +8247,98 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   outline:3px solid #b4d9ff;
   outline-offset:2px;
 }
+
+
+/* WorkSet 2.7.0 — calm, compact Me landing page. Expand sections only on demand. */
+.me-page {display:grid;gap:12px;min-width:0}
+.me-identity-card {
+  border:1px solid #334764;background:linear-gradient(130deg,#132039,#101b2d 75%);
+  border-radius:16px;padding:16px;display:grid;gap:12px;min-width:0
+}
+.me-identity-main {display:grid;grid-template-columns:36px minmax(0,1fr) auto;gap:11px;align-items:center}
+.me-identity-avatar {
+  width:36px;height:36px;display:grid;place-items:center;
+  color:#c6f793;background:#1c3630;border:1px solid #496b56;border-radius:50%;font-size:21px
+}
+.me-identity-text {display:grid;gap:3px;min-width:0}
+.me-identity-text h2 {margin:0;font-size:21px;line-height:1.2;overflow-wrap:anywhere}
+.me-identity-text p {margin:0;color:#99aac0;font-size:12px;overflow-wrap:anywhere}
+.me-edit-name {
+  border:1px solid #425774;background:#192840;color:#d7e4f5;
+  min-height:44px;padding:8px 10px;border-radius:10px;font-size:12px;font-weight:750
+}
+.me-name-form {display:grid;grid-template-columns:minmax(0,1fr);gap:7px;border-top:1px solid #34455e;padding-top:12px}
+.me-name-form label {font-size:12px;font-weight:800;color:#b5c8de}
+.me-name-form input {width:100%;min-width:0;min-height:46px;padding:9px 12px;border:1px solid #536780;border-radius:9px;background:#0c1727;color:white}
+.me-name-actions {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:3px}
+.me-name-actions button {min-height:44px}
+.me-inline-status {margin:0;color:#c6e5a9;font-size:12px;overflow-wrap:anywhere}
+.me-quick-links {display:grid;gap:8px}
+.me-quick-links button,.me-admin-link {
+  display:grid;grid-template-columns:34px minmax(0,1fr) auto;
+  gap:10px;align-items:center;text-align:left;
+  min-width:0;width:100%;padding:12px;
+  border:1px solid #33465e;border-radius:13px;
+  background:#111b2d;color:#ecf2fa
+}
+.me-quick-links button > span:nth-child(2),.me-admin-link > span:first-child {display:grid;gap:3px;min-width:0}
+.me-quick-links button strong,.me-admin-link strong {font-size:14px}
+.me-quick-links button small,.me-admin-link small {color:#96a7be;font-size:11px;line-height:1.4}
+.me-quick-links button > b,.me-admin-link > span:last-child {color:#a5b8d0;font-size:21px;font-weight:650}
+.me-shortcut-icon {display:grid;place-items:center;width:33px;height:33px;border-radius:9px;background:#1d3140;color:#b6dcff;font-size:17px}
+.me-section-group {display:grid;gap:8px;min-width:0;margin-top:5px}
+.me-section-group-label {padding:3px 4px;color:#8497b1;font-size:10px;font-weight:900;letter-spacing:.12em}
+.me-collapsible {border:1px solid #2d4059;background:#101b2d;border-radius:13px;min-width:0;overflow:hidden}
+.me-collapsible.is-open {border-color:#4a5f7a}
+.me-section-title {margin:0;font-size:inherit;line-height:normal}
+.me-section-toggle {
+  width:100%;min-height:65px;padding:11px 13px;
+  display:grid;grid-template-columns:30px minmax(0,1fr) 20px;align-items:center;gap:10px;
+  border:0;background:transparent;color:#eff5ff;text-align:left
+}
+.me-section-icon {display:grid;place-items:center;width:30px;height:30px;border:1px solid #30425d;border-radius:9px;background:#18283b;color:#aecdff;font-size:14px}
+.me-section-label {display:grid;gap:4px;min-width:0}
+.me-section-label strong {font-size:14px;font-weight:800}
+.me-section-label small {font-size:11px;line-height:1.35;color:#9caec5}
+.me-section-chevron {color:#b6c7dc;text-align:center;font-size:22px;line-height:1}
+.me-section-toggle:focus-visible,.me-quick-links button:focus-visible,.me-edit-name:focus-visible,.me-admin-link:focus-visible {
+  outline:3px solid #a3d3ff;outline-offset:-3px
+}
+.me-section-content {display:grid;gap:10px;padding:0 12px 13px;min-width:0;border-top:1px solid #293b53}
+.me-section-content > :first-child {margin-top:12px}
+.me-inner-card {
+  display:grid;gap:12px;min-width:0;padding:12px;
+  border:1px solid #2d415a;border-radius:12px;background:#111e31
+}
+.me-inner-heading {display:grid;gap:3px}
+.me-inner-heading h4 {margin:0;font-size:16px;color:#f0f5fd}
+.me-inner-card p {margin:0;color:#a3b5c8;font-size:12px;line-height:1.5}
+.me-inner-card .wide-button {min-height:44px}
+.me-inner-card .one-rm-result {justify-self:start}
+.me-max-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.me-max-field {display:grid;gap:6px;min-width:0}
+.me-max-field label {color:#b7c5d6;font-size:12px;font-weight:800}
+.me-max-input-row {display:grid;grid-template-columns:minmax(0,1fr) 57px;gap:6px;min-width:0}
+.me-max-input-row .input-with-unit {min-width:0}
+.me-max-input-row .input-with-unit input {min-width:0;width:100%;font-size:16px}
+.me-max-save {min-height:44px;border:1px solid #4c6741;border-radius:9px;background:#243525;color:#d9f6c2;font-size:12px;font-weight:850;padding:7px 3px}
+.me-max-save:disabled {opacity:.5;border-color:#34465f;background:#1a283a;color:#94a3b8;cursor:default}
+.me-max-field .me-inline-status {line-height:1.35}
+.me-baseline-label {color:#b6c5d6;font-size:12px;font-weight:750}
+.me-inner-card .baseline-test-picker {display:grid;gap:8px}
+.me-section-content .simple-card {margin:0;min-width:0}
+.me-section-content .settings-panel,.me-section-content .feedback-panel {min-width:0}
+.me-admin-link {grid-template-columns:minmax(0,1fr) auto;margin-top:5px}
+.me-signout {margin-top:8px;min-height:44px}
+@media(max-width:420px){
+  .me-identity-card {padding:13px}
+  .me-identity-main {gap:8px}
+  .me-edit-name {padding:8px;font-size:11px}
+  .me-section-content {padding:0 9px 11px}
+  .me-inner-card {padding:10px}
+}
+@media(max-width:360px){
+  .me-max-grid {grid-template-columns:1fr}
+  .me-identity-avatar {display:none}
+  .me-identity-main {grid-template-columns:minmax(0,1fr) auto}
+}
