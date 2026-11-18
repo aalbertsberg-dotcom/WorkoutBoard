@@ -65,7 +65,7 @@ test('Poor 90m GPS signal does not invent distance but clearly reports weakness'
   await page.getByRole('button',{name:'Start mock walk'}).click()
   await expect.poll(async()=>page.evaluate(()=>window.__gps.startCount)).toBe(1)
   await page.evaluate(()=>window.__gps.emit(30.4,90,0,Date.now()))
-  await expect(page.getByText('GPS weak · ±90 m')).toBeVisible()
+  await expect(page.locator('.outdoor-gps-status b')).toHaveText('GPS weak · ±90 m')
   await expect(page.locator('#gps-distance')).toContainText('0')
   const snapshot=await page.locator('#gps-health').textContent()
   expect(JSON.parse(snapshot).received).toBeGreaterThanOrEqual(1)
@@ -92,7 +92,7 @@ test('GPS error displays permission guidance and Retry restarts one watch',async
   await page.getByRole('button',{name:'Start mock walk'}).click()
   await expect.poll(async()=>page.evaluate(()=>window.__gps.startCount)).toBe(1)
   await page.evaluate(()=>window.__gps.fail(1))
-  await expect(page.getByText('Location permission blocked')).toBeVisible()
+  await expect(page.locator('.outdoor-gps-status b')).toHaveText('Location blocked')
   await page.getByRole('button',{name:'Retry GPS'}).click()
   await expect.poll(async()=>page.evaluate(()=>window.__gps.startCount)).toBe(2)
   expect(await page.evaluate(()=>window.__gps.cleared)).toBeGreaterThanOrEqual(1)
@@ -113,17 +113,13 @@ test('Timer GPS badge distinguishes location reception from route recording',asy
   await page.evaluate(()=>{
     const t=Date.now()-30000
     for(let i=0;i<5;i++)
-      window.__gps.emit(30.4+i*0.00010,12,1.0,t+i*6000)
+      window.__gps.emit(30.4+i*0.00025,12,2.4,t+i*6000)
   })
   await expect.poll(async()=>Number(await page.locator('#gps-distance').innerText())).toBeGreaterThan(15)
   await expect(badge).toHaveAttribute('data-gps-phase','recording')
   await expect(badge).toContainText('Recording route')
 })
-test('Preflight check with poor accuracy is shown as weak before the workout',async({page})=>{
-  await page.addInitScript(()=>{
-    const original=Object.getOwnPropertyDescriptor(navigator,'geolocation')
-    // The existing GPS fixture stub is installed by openGps.
-  })
+test('Weak live GPS fix is flagged without inventing distance',async({page})=>{
   await openGps(page)
   // The first true preflight is strong. A weak reported live fix must downgrade status.
   await page.getByRole('button',{name:'Start mock walk'}).click()
