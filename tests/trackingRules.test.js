@@ -177,3 +177,24 @@ test('good outdoor fixes still allow plausible walking',()=>{
   const missingAccuracy=gpsMovementAssessment({distanceMeters:6,currentAccuracy:null,previousAccuracy:null,reportedSpeed:1})
   assert.equal(missingAccuracy.accept,false)
 })
+
+test('Android speed=0 can still register corroborated large movement',()=>{
+  const first=gpsMovementAssessment({
+    distanceMeters:105,currentAccuracy:40,previousAccuracy:40,
+    reportedSpeed:0
+  })
+  assert.equal(first.accept,false)
+  assert.equal(first.pending,true)
+  const second=gpsMovementAssessment({
+    distanceMeters:118,currentAccuracy:40,previousAccuracy:40,
+    reportedSpeed:0,priorCandidateDistance:105
+  })
+  assert.equal(second.accept,true)
+  assert.equal(second.reason,'movement')
+  const jitter=gpsMovementAssessment({
+    distanceMeters:38,currentAccuracy:40,previousAccuracy:40,
+    reportedSpeed:0,priorCandidateDistance:30
+  })
+  assert.equal(jitter.accept,false)
+  assert.equal(jitter.reason,'stationary')
+})
