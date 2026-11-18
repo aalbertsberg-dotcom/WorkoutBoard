@@ -8428,3 +8428,51 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
 .outdoor-gps-status b{overflow-wrap:anywhere}
 .outdoor-gps-status small{font-size:11px;line-height:1.4;color:#b9c8da}
 .completion-gps-note{line-height:1.5}
+
+
+/* WorkSet 2.7.3 — a small, honest GPS indicator next to the workout timer. */
+.quick-cardio-timer > .quick-cardio-timer-heading {
+  width:100%;
+  min-width:0;
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  justify-content:space-between;
+  gap:7px 10px;
+}
+.quick-cardio-timer .quick-cardio-gps-badge {
+  min-width:0;
+  max-width:100%;
+  min-height:36px;
+  border:1px solid #425a68;
+  border-radius:18px;
+  padding:6px 10px;
+  background:#172536;
+  color:#c8d6e5;
+  font-size:12px;
+  font-weight:750;
+  line-height:1.25;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  cursor:pointer;
+  overflow-wrap:anywhere;
+}
+.quick-cardio-gps-badge .quick-cardio-gps-dot {font-size:8px;flex:none}
+.quick-cardio-gps-badge .quick-cardio-gps-chevron {font-size:17px;font-weight:700;line-height:1;flex:none}
+.quick-cardio-gps-badge.gps-tone-success {background:#172b21;border-color:#456b4b;color:#c2ecc6}
+.quick-cardio-gps-badge.gps-tone-warning {background:#302719;border-color:#82643e;color:#f3d6a2}
+.quick-cardio-gps-badge.gps-tone-error {background:#361e25;border-color:#99545a;color:#ffbfc6}
+.quick-cardio-gps-badge.gps-tone-pending {background:#202a3a;border-color:#4b607e;color:#bfd7f2}
+.quick-cardio-gps-badge:focus-visible {outline:3px solid #a3d3ff;outline-offset:2px}
+.outdoor-gps-state-detail {
+  width:100%;
+  flex-basis:100%;
+  color:#bed1df !important;
+  font-size:12px !important;
+  line-height:1.45;
+}
+@media(max-width:450px){
+  .quick-cardio-timer > .quick-cardio-timer-heading {justify-content:center}
+  .quick-cardio-timer .quick-cardio-gps-badge {font-size:11px;padding:6px 9px}
+}
