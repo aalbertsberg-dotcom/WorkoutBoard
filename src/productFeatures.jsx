@@ -178,6 +178,9 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
   const [activeSetByExercise,setActiveSetByExercise]=useState({})
   const [removeExercisePrompt,setRemoveExercisePrompt]=useState(null)
   const [quickClock,setQuickClock]=useState(()=>Date.now())
+  const [cardioDetailsOpen,setCardioDetailsOpen]=useState(()=>Boolean(
+    workout?.note||workout?.metcon?.distance||workout?.metcon?.duration||workout?.metcon?.calories
+  ))
   const cancelRequestedRef=useRef(false)
   const inFlightSaveRef=useRef(Promise.resolve())
   const revisionRef=useRef(0)
@@ -850,10 +853,16 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
 
       <section className="simple-card quick-cardio-fields">
         <div className="quick-cardio-details-head">
-          <span className="quick-cardio-section-label">Workout details</span>
-          <small>Enter these during or after your workout.</small>
+          <span className="quick-cardio-section-label">Workout details <small>(optional)</small></span>
+          {quickOutdoorKind
+            ? <button type="button" className="secondary-action" aria-expanded={cardioDetailsOpen}
+                onClick={()=>setCardioDetailsOpen(value=>!value)}>
+                {cardioDetailsOpen?'Hide details':'Add details / manual distance'}
+              </button>
+            : <small>Enter these during or after your workout.</small>}
         </div>
 
+        {(!quickOutdoorKind||cardioDetailsOpen)&&<>
         <label className="quick-cardio-field">
           <span>Duration</span>
           <input value={workout.metcon?.duration||''} onChange={e=>setQuickMetcon('duration',e.target.value)} placeholder={quickElapsedSeconds?formatQuickTime(quickElapsedSeconds):'e.g. 30 min'}/>
@@ -883,6 +892,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
           <span>Notes <small>optional</small></span>
           <textarea value={workout.note||''} onChange={e=>change('note',e.target.value)} placeholder="Route, how it felt, anything worth remembering…"/>
         </label>
+        </>}
       </section>
 
       <div className="quick-cardio-actions">
