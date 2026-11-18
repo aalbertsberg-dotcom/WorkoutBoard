@@ -198,3 +198,39 @@ test('Android speed=0 can still register corroborated large movement',()=>{
   assert.equal(jitter.accept,false)
   assert.equal(jitter.reason,'stationary')
 })
+
+test('zero-speed Chrome walking begins recording after two accurate progressive fixes',()=>{
+  const stationary=gpsMovementAssessment({
+    distanceMeters:4,currentAccuracy:5,previousAccuracy:5,reportedSpeed:0
+  })
+  assert.equal(stationary.accept,false)
+  assert.equal(stationary.reason,'stationary')
+  const first=gpsMovementAssessment({
+    distanceMeters:9,currentAccuracy:5,previousAccuracy:5,reportedSpeed:0
+  })
+  assert.equal(first.accept,false)
+  assert.equal(first.pending,true)
+  const coherent=gpsMovementAssessment({
+    distanceMeters:13,currentAccuracy:5,previousAccuracy:5,reportedSpeed:0,priorCandidateDistance:9
+  })
+  assert.equal(coherent.accept,true)
+  assert.equal(coherent.reason,'movement')
+})
+test('zero-speed GPS jitter cannot accumulate distance without progression',()=>{
+  const first=gpsMovementAssessment({
+    distanceMeters:24,currentAccuracy:12,previousAccuracy:12,reportedSpeed:0
+  })
+  assert.equal(first.accept,false)
+  const returned=gpsMovementAssessment({
+    distanceMeters:21,currentAccuracy:12,previousAccuracy:12,reportedSpeed:0,priorCandidateDistance:24
+  })
+  assert.equal(returned.accept,false)
+  const insufficient=gpsMovementAssessment({
+    distanceMeters:26,currentAccuracy:12,previousAccuracy:12,reportedSpeed:0,priorCandidateDistance:24
+  })
+  assert.equal(insufficient.accept,false)
+  const progress=gpsMovementAssessment({
+    distanceMeters:29,currentAccuracy:12,previousAccuracy:12,reportedSpeed:0,priorCandidateDistance:24
+  })
+  assert.equal(progress.accept,true)
+})
