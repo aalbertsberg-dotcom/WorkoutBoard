@@ -44,7 +44,10 @@ test('Preflight Check GPS is available before timer starts',async({page})=>{
   await openGps(page)
   await expect(page.getByRole('button',{name:'Check GPS before starting'})).toBeVisible()
   await page.getByRole('button',{name:'Check GPS before starting'}).click()
-  await expect(page.getByText('Location available · ±12 m')).toBeVisible()
+  await expect(page.locator('.quick-cardio-gps-badge')).toContainText('GPS acquired · ±12 m')
+  await expect(page.locator('.quick-cardio-gps-badge')).toHaveAttribute('data-gps-phase','acquired')
+  await expect(page.getByText('Location verified · a route records only after Start.')).toBeVisible()
+  await expect(page.getByText('Location fix confirmed. Route recording starts when you tap Start.')).toBeVisible()
   const stats=await page.evaluate(()=>({checks:window.__gps.preflightCount,starts:window.__gps.startCount}))
   expect(stats.checks).toBe(1)
   expect(stats.starts).toBe(0)
@@ -53,7 +56,8 @@ test('GPS watch starts even when screen wake-lock never resolves',async({page})=
   await openGps(page)
   await page.getByRole('button',{name:'Start mock walk'}).click()
   await expect.poll(async()=>page.evaluate(()=>window.__gps.startCount)).toBe(1)
-  await expect(page.getByText('Waiting for GPS location')).toBeVisible()
+  await expect(page.locator('.quick-cardio-gps-badge')).toContainText('Waiting for GPS')
+  await expect(page.locator('.quick-cardio-gps-badge')).toHaveAttribute('data-gps-phase','waiting')
   await expect(page.getByRole('button',{name:'Retry GPS'})).toBeVisible()
 })
 test('Poor 90m GPS signal does not invent distance but clearly reports weakness',async({page})=>{
@@ -61,7 +65,7 @@ test('Poor 90m GPS signal does not invent distance but clearly reports weakness'
   await page.getByRole('button',{name:'Start mock walk'}).click()
   await expect.poll(async()=>page.evaluate(()=>window.__gps.startCount)).toBe(1)
   await page.evaluate(()=>window.__gps.emit(30.4,90,0,Date.now()))
-  await expect(page.getByText('GPS weak · ±90 m')).toBeVisible()
+  await expect(page.locator('.outdoor-gps-status b')).toHaveText('GPS weak · ±90 m')
   await expect(page.locator('#gps-distance')).toContainText('0')
   const snapshot=await page.locator('#gps-health').textContent()
   expect(JSON.parse(snapshot).received).toBeGreaterThanOrEqual(1)
@@ -88,8 +92,54 @@ test('GPS error displays permission guidance and Retry restarts one watch',async
   await page.getByRole('button',{name:'Start mock walk'}).click()
   await expect.poll(async()=>page.evaluate(()=>window.__gps.startCount)).toBe(1)
   await page.evaluate(()=>window.__gps.fail(1))
-  await expect(page.getByText('Location permission blocked')).toBeVisible()
+  await expect(page.locator('.outdoor-gps-status b')).toHaveText('Location blocked')
   await page.getByRole('button',{name:'Retry GPS'}).click()
   await expect.poll(async()=>page.evaluate(()=>window.__gps.startCount)).toBe(2)
   expect(await page.evaluate(()=>window.__gps.cleared)).toBeGreaterThanOrEqual(1)
+})
+
+test('Timer GPS badge distinguishes location reception from route recording',async({page})=>{
+  await openGps(page)
+  const badge=page.locator('.quick-cardio-gps-badge')
+  await expect(badge).toHaveAttribute('data-gps-phase','unchecked')
+  await page.getByRole('button',{name:'Check GPS before starting'}).click()
+  await expect(badge).toHaveAttribute('data-gps-phase','acquired')
+  await expect(page.locator('#gps-distance')).toHaveText('0')
+  // Simulate the exact screen tap after scrolling, not Playwright's
+  // sometimes overly aggressive auto-scroll click algorithm.
+  await badge.scrollIntoViewIfNeeded()
+  const target=await badge.evaluate(node=>{
+    const rect=node.getBoundingClientRect()
+    const x=rect.left+rect.width/2,y=rect.top+rect.height/2
+    const found=document.elementFromPoint(x,y)
+    return {x,y,width:rect.width,height:rect.height,
+      tappable:node===found||node.contains(found),
+      hit:found?.className||found?.nodeName}
+  })
+  expect(target.width).toBeGreaterThan(40)
+  expect(target.height).toBeGreaterThanOrEqual(35)
+  expect(target.tappable).toBe(true)
+  if(page.viewportSize().width<700)await page.touchscreen.tap(target.x,target.y)
+  else await page.mouse.click(target.x,target.y)
+  await expect(page.locator('#workset-gps-panel')).toBeInViewport()
+  await page.getByRole('button',{name:'Start mock walk'}).click()
+  await expect.poll(async()=>page.evaluate(()=>window.__gps.startCount)).toBe(1)
+  await expect(badge).toHaveAttribute('data-gps-phase','waiting')
+  await page.evaluate(()=>{
+    const t=Date.now()-30000
+    for(let i=0;i<5;i++)
+      window.__gps.emit(30.4+i*0.00025,12,2.4,t+i*6000)
+  })
+  await expect.poll(async()=>Number(await page.locator('#gps-distance').innerText())).toBeGreaterThan(15)
+  await expect(badge).toHaveAttribute('data-gps-phase','recording')
+  await expect(badge).toContainText('Recording route')
+})
+test('Weak live GPS fix is flagged without inventing distance',async({page})=>{
+  await openGps(page)
+  // The first true preflight is strong. A weak reported live fix must downgrade status.
+  await page.getByRole('button',{name:'Start mock walk'}).click()
+  await expect.poll(async()=>page.evaluate(()=>window.__gps.startCount)).toBe(1)
+  await page.evaluate(()=>window.__gps.emit(30.4,65,0,Date.now()))
+  await expect(page.locator('.quick-cardio-gps-badge')).toHaveAttribute('data-gps-phase','weak')
+  await expect(page.locator('#gps-distance')).toHaveText('0')
 })
