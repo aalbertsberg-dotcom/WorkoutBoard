@@ -1,4 +1,5 @@
 import {confirmWorkset,noticeWorkset} from './worksetDialogs'
+import {buildAccountBackup,mergeAccountBackup} from './accountBackup.js'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase'
 
@@ -396,37 +397,55 @@ export function AccountSecurityPanel({session,appUrl}) {
   return <section className="simple-card"><div className="section-heading"><div><span className="card-label">EMAIL & SECURITY</span><h3>{session.user.email}</h3></div></div><div className="security-status"><span>Email confirmed</span><strong>{session.user.email_confirmed_at?'Yes':'No'}</strong></div><div className="security-actions"><button onClick={reset} disabled={busy}>Send password reset</button>{!session.user.email_confirmed_at&&<button onClick={resend} disabled={busy}>Resend confirmation</button>}</div><p className="helper-text">These use Supabase transactional email. Reliable production delivery requires custom SMTP configured in Supabase.</p>{message&&<div className="status-message">{message}</div>}</section>
 }
 
-const backupTables=['workout_logs','training_sessions','planned_workouts','training_maxes','profiles','whiteboard_notes','training_goals','body_measurements','workout_templates','user_program_tracking','equipment_profiles','exercise_substitutions','exercise_timer_presets','program_versions']
 export function BackupRestorePanel({session}) {
-  const [busy,setBusy]=useState(false),[message,setMessage]=useState(''),fileRef=useRef(null)
+  const [busy,setBusy]=useState(false)
+  const [message,setMessage]=useState('')
+  const fileRef=useRef(null)
   const backup=async()=>{
-    setBusy(true);const data={format:'WorkoutBoard Backup',version:2,exported_at:new Date().toISOString(),user_email:session.user.email,tables:{}}
-    for(const table of backupTables){
-      let q=supabase.from(table).select('*')
-      if(table==='profiles')q=q.eq('id',session.user.id);else q=q.eq('user_id',session.user.id)
-      const {data:rows,error}=await q
-      if(!error)data.tables[table]=rows||[]
-    }
-    download(`Workset-backup-${today()}.json`,JSON.stringify(data,null,2));setBusy(false);setMessage('Backup downloaded.')
-  }
-  const restore=async e=>{
-    const file=e.target.files?.[0];if(!file)return
-    if(!await confirmWorkset('Merge this Workset backup into the current account?')){e.target.value='';return}
+    if(busy)return
     setBusy(true)
+    setMessage('')
     try{
-      const data=JSON.parse(await file.text())
-      if(data.format!=='WorkoutBoard Backup')throw new Error('Not a compatible Workset backup file')
-      for(const table of backupTables){
-        const rows=data.tables?.[table]||[];if(!rows.length)continue
-        const fixed=rows.map(row=>table==='profiles'?{...row,id:session.user.id}:{...row,user_id:session.user.id})
-        const {error}=await supabase.from(table).upsert(fixed)
-        if(error)throw new Error(table+': '+error.message)
-      }
-      setMessage('Backup restored/merged successfully.')
-    }catch(err){setMessage(err.message)}
-    setBusy(false);e.target.value=''
+      if(navigator.onLine===false)throw new Error('Connect to the internet before downloading a complete training backup.')
+      const data=await buildAccountBackup(supabase,{
+        userId:session?.user?.id,email:session?.user?.email
+      })
+      download('WorkSet-training-backup-'+today()+'.json',JSON.stringify(data,null,2))
+      setMessage('Training backup downloaded successfully.')
+    }catch(error){
+      setMessage('Backup NOT downloaded: '+(error?.message||'Could not read every table.'))
+    }finally{setBusy(false)}
   }
-  return <section className="simple-card"><div className="section-heading"><div><span className="card-label">BACKUP / RESTORE</span><h3>Full Workset backup package</h3></div></div><p className="helper-text">JSON is used here because CSV cannot restore nested workouts, programs, board cards, and settings reliably.</p><div className="backup-actions"><button onClick={backup} disabled={busy}>Download full backup</button><button onClick={()=>fileRef.current?.click()} disabled={busy}>Restore backup</button><input ref={fileRef} type="file" accept="application/json,.json" onChange={restore} hidden/></div>{message&&<div className="status-message">{message}</div>}</section>
+  const restore=async event=>{
+    const file=event.target.files?.[0]
+    if(!file)return
+    try{
+      if(!await confirmWorkset('Merge this training backup into your current account? Existing matching records may be updated; nothing will be deleted.',{
+        title:'Restore training backup',confirmLabel:'Merge backup',cancelLabel:'Keep current data',danger:false
+      }))return
+      setBusy(true)
+      setMessage('')
+      const data=JSON.parse(await file.text())
+      const result=await mergeAccountBackup(supabase,data,{userId:session?.user?.id})
+      setMessage(result.imported+' training records merged. Reload WorkSet to view updated history.')
+    }catch(error){
+      setMessage('Restore incomplete: '+(error?.message||'Unexpected error'))
+    }finally{
+      setBusy(false)
+      event.target.value=''
+    }
+  }
+  return <section className="simple-card">
+    <div className="section-heading"><div><span className="card-label">ACCOUNT RECOVERY</span>
+      <h3>Training data backup & restore</h3></div></div>
+    <p className="helper-text">Includes workouts, 1RMs, saved programs, measurements and board drawings. Does not include sign-in credentials, social connections or uploaded photo files. A download is only reported successful when every included table has been read.</p>
+    <div className="backup-actions">
+      <button type="button" onClick={backup} disabled={busy}>{busy?'Working…':'Download training backup'}</button>
+      <button type="button" onClick={()=>fileRef.current?.click()} disabled={busy}>Restore training backup</button>
+      <input ref={fileRef} type="file" accept="application/json,.json" onChange={restore} hidden/>
+    </div>
+    {message&&<div className="status-message" role="status">{message}</div>}
+  </section>
 }
 
 export function AdminDashboardSummary() {
