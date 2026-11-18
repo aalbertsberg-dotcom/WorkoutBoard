@@ -762,7 +762,7 @@ export function PlatformProgress({
             {ready!==null&&recentCombined.map(row=><button type="button"
               className="progress-workout progress-workout-link" key={row.id}
               aria-label={'View '+row.title+' workout details'}
-              onClick={()=>{const id=progressWorkoutLink(row);if(id)onOpenWorkout?.(id)??onOpenHistory?.()}}>
+              onClick={()=>{const id=progressWorkoutLink(row);if(id){if(onOpenWorkout)onOpenWorkout(id);else onOpenHistory?.()}}}>
               <span className="progress-workout-copy"><strong>{new Date(row.date).toLocaleDateString(undefined,{month:'short',day:'numeric'})} · {row.title}</strong><small>{row.subtitle}</small></span>
               <span className="progress-workout-meta"><strong>{row.activityLabel||formatWeight(row.volume)+' lb'}</strong><small>{row.e1rm?'e1RM '+formatWeight(row.e1rm):'View details ›'}</small></span>
               <span className="progress-workout-arrow" aria-hidden="true">›</span>

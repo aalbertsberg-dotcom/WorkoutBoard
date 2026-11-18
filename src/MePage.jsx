@@ -1,5 +1,5 @@
 import {PlatformProgress,FeedbackPanel} from './platform'
-import {InstallAppButton,ExportDataButton} from './productFeatures'
+import {InstallAppButton,AppUpdateControls,ExportDataButton} from './productFeatures'
 import {AccountSecurityPanel,BackupRestorePanel,WorkoutSettingsPanel} from './advancedFeatures'
 import {MeSection,MeDisplayNameEditor,MeOneRmEditor} from './MeSections'
 
@@ -13,7 +13,7 @@ export default function MePage({
   oneRmEstimate,oneRmRounded,oneRmTrainingMax,oneRmLift,setOneRmLift,oneRmNotice,
   calculatedOneRms,baselineTestChoice,setBaselineTestChoice,onStartBaseline,
   trackedProgramsInfo,personalProgramName,shareInvite,inviteState,
-  isAdmin,feedbackUnread,onOpenAdmin,onSignOut,appUrl
+  isAdmin,feedbackUnread,onOpenAdmin,onSignOut,appUrl,onRefreshWorkset,refreshBlocked=false
 }){
   return <section className="page-section me-page" aria-label="Me">
     {displayName==='WorkoutAdmin'&&!isAdmin&&<section className="admin-setup-warning">
@@ -36,6 +36,8 @@ export default function MePage({
         <b aria-hidden="true">›</b>
       </button>
     </nav>
+
+    <AppUpdateControls onRefresh={onRefreshWorkset} refreshBlocked={refreshBlocked}/>
 
     <div className="me-section-group">
       <div className="me-section-group-label">YOUR TRAINING</div>
@@ -154,8 +156,8 @@ export default function MePage({
       <MeSection id="app-data" title="App & Data"
         description="Install, updates, exports, backup and restore" icon="▣">
         <div className="me-inner-card">
-          <div className="me-inner-heading"><span className="card-label">APP</span><h4>Install & update WorkSet</h4></div>
-          <p>Install WorkSet, check for updates, or refresh when the installed app looks stale.</p>
+          <div className="me-inner-heading"><span className="card-label">APP</span><h4>Install WorkSet</h4></div>
+          <p>Add WorkSet to your home screen. Update checking and refresh are available at the top of Me.</p>
           <InstallAppButton/>
         </div>
         <div className="me-inner-card">

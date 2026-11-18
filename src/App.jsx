@@ -1337,9 +1337,11 @@ function App() {
 
   const openProgress = (section='Overview') => navigateTo('progress',{progressSection:section})
   const openHistory = (id=null) => {
+    const fromProgress=activeTab==='progress'
     setHistoryWorkoutId(id)
-    setHistoryOpenedFromProgress(activeTab==='progress')
+    setHistoryOpenedFromProgress(fromProgress)
     navigateTo('history')
+    window.history.replaceState({...window.history.state,workoutId:id,historyFromProgress:fromProgress},'',window.location.href)
   }
   const openMobility = mode => {setMobilityMode(mode);navigateTo('mobility')}
 
@@ -1356,6 +1358,10 @@ function App() {
         setExtraWorkoutOpen(false)
       }
       setActiveTab(state.tab)
+      if(state.tab==='history'){
+        setHistoryWorkoutId(state.workoutId||null)
+        setHistoryOpenedFromProgress(Boolean(state.historyFromProgress))
+      }
       setProgressStartSection(state.progressSection||'Overview')
       setAppNavDepth(Number(state.worksetDepth||0))
     }else{
@@ -1382,6 +1388,10 @@ function App() {
       }
       if(!next?.worksetApp)return
       setActiveTab(next.tab||'today')
+      if(next.tab==='history'){
+        setHistoryWorkoutId(next.workoutId||null)
+        setHistoryOpenedFromProgress(Boolean(next.historyFromProgress))
+      }
       setProgressStartSection(next.progressSection||'Overview')
       setAppNavDepth(Number(next.worksetDepth||0))
     }
@@ -1425,9 +1435,7 @@ function App() {
 
   const applyReleaseUpdate=()=>{
     if(!releaseUpdate?.buildId||updateBlocked)return
-    const url=new URL(window.location.href)
-    url.searchParams.set('_workset_release',String(releaseUpdate.buildId).slice(0,12))
-    window.location.replace(url.toString())
+    refreshWorkset()
   }
 
   const personalProgram = programs[activeProgram]
@@ -1883,6 +1891,18 @@ function App() {
     (plannedToday&&(plannedToday.status==='started'||plannedWorkoutHasProgress(plannedToday)))||
     (showRegularToday&&!log.complete)
   )
+  const refreshWorkset=()=>{
+    if(updateBlocked)return
+    // Keep the current navigation entry, workout detail and Progress section.
+    // The service worker already prefers network responses and has versioned caches.
+    window.history.replaceState({
+      ...(window.history.state||{}),worksetApp:true,
+      tab:activeTab,progressSection:progressStartSection,
+      workoutId:activeTab==='history'?historyWorkoutId:null,
+      historyFromProgress:historyOpenedFromProgress,
+    },'',window.location.href)
+    window.location.reload()
+  }
 
   const standaloneWorkoutHasUserProgress = row => {
     const workout=row?.workout||{}
@@ -4391,6 +4411,8 @@ function App() {
             onOpenAdmin={()=>{setFeedbackUnread(0);navigateTo('admin')}}
             onSignOut={()=>supabase.auth.signOut()}
             appUrl={appUrl()}
+            onRefreshWorkset={refreshWorkset}
+            refreshBlocked={updateBlocked}
           />
         )}
 
