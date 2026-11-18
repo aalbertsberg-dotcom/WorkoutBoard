@@ -14,6 +14,7 @@ import WorkoutHistory from './workoutHistory'
 import MobilitySession from './mobilitySession'
 import { outdoorDistancePresentation } from './trackingRules'
 import { completedWorkoutSummary } from './workoutHistoryUtils'
+import {createQueuedPatchSaver} from './reliableSaves.js'
 import { Capacitor } from '@capacitor/core'
 import { App as NativeApp } from '@capacitor/app'
 import { androidBackAction } from './androidNavigation'
@@ -1168,7 +1169,9 @@ function App() {
   const [lift,setLift] = useState('Squat')
   const [oneRepMaxes,setOneRepMaxes] = useState(defaultOneRms)
   const latestOneRmsRef=useRef(null)
-  const oneRmSaveChainRef=useRef(Promise.resolve())
+  const oneRmSaveCoordinatorsRef=useRef(new Map())
+  const activeOneRmUserRef=useRef(null)
+  activeOneRmUserRef.current=session?.user?.id||null
   const [oneRmWeight,setOneRmWeight] = useState('')
   const [oneRmReps,setOneRmReps] = useState(5)
   const [oneRmLift,setOneRmLift] = useState('')
@@ -1708,6 +1711,7 @@ function App() {
         setCompletedTrainingSessions(cached.completedTrainingSessions||[])
         setTogetherTracking(cached.togetherTracking||[])
         latestOneRmsRef.current=cached.oneRepMaxes||defaultOneRms
+        oneRmSaveCoordinatorsRef.current.get(userId)?.rebase(latestOneRmsRef.current)
         setOneRepMaxes(latestOneRmsRef.current)
         setIsAdmin(Boolean(cached.isAdmin))
         setShowRegularToday(false)
@@ -1836,6 +1840,7 @@ function App() {
       setTogetherTracking(trackingData || [])
 
       latestOneRmsRef.current=loadedOneRms
+      oneRmSaveCoordinatorsRef.current.get(userId)?.rebase(loadedOneRms)
       setOneRepMaxes(loadedOneRms)
 
       const completed = new Set(rows.filter(r => r.program === chosen.dbName && r.week === currentWeek && r.completed_at).map(r => r.lift))
@@ -2761,7 +2766,7 @@ function App() {
 
   const saveOneRepMaxes = async next => {
     const cleaned=Object.fromEntries(lifts.map(name=>[name,next[name]===''?'':round2(Math.max(0,Number(next[name])||0))]))
-    if (!session?.user) return {error:null}
+    if (!session?.user) return {error:new Error('Sign in to save your 1RMs.')}
     const updatedAt=new Date().toISOString()
     const oneRmPayload={
       user_id:session.user.id,
@@ -2789,27 +2794,46 @@ function App() {
         onConflict:'user_id',dedupeKey:'training-maxes:'+session.user.id,
       }),
     ])
-    let authError=null
-    if(navigator.onLine!==false&&!session.offline){
-      const authResult=await supabase.auth.updateUser({data:{...session.user.user_metadata,one_rep_maxes:cleaned}})
-      authError=authResult.error||null
+    // The database is authoritative. Auth profile metadata is a legacy
+    // convenience mirror and must not turn a successful DB save into a failure.
+    if(!oneRmResult.error&&!tmResult.error&&navigator.onLine!==false&&!session.offline){
+      try{
+        const authResult=await supabase.auth.updateUser({data:{...session.user.user_metadata,one_rep_maxes:cleaned}})
+        if(authResult.error)console.warn('Optional 1RM profile metadata sync did not complete.')
+      }catch{console.warn('Optional 1RM profile metadata sync is unavailable.')}
     }
-    return {error:oneRmResult.error||tmResult.error||authError||null,offline:Boolean(oneRmResult.offline||tmResult.offline)}
+    return {error:oneRmResult.error||tmResult.error||null,offline:Boolean(oneRmResult.offline||tmResult.offline)}
+  }
+
+  // Each account gets its own ordered save queue. Only confirmed (or
+  // durably queued offline) values enter the displayed 1RM state.
+  const queueOneRmPatch=patch=>{
+    const ownerId=session?.user?.id
+    if(!ownerId)return Promise.resolve({error:new Error('Sign in to save your 1RMs.')})
+    let saver=oneRmSaveCoordinatorsRef.current.get(ownerId)
+    if(!saver){
+      saver=createQueuedPatchSaver({
+        initial:latestOneRmsRef.current||oneRepMaxes,
+        persist:next=>saveOneRepMaxes(next),
+        onCommit:next=>{
+          if(activeOneRmUserRef.current===ownerId){
+            latestOneRmsRef.current=next
+            setOneRepMaxes(next)
+          }
+        }
+      })
+      oneRmSaveCoordinatorsRef.current.set(ownerId,saver)
+    }
+    return saver.save(patch)
   }
 
   const setOneRm = async (name,raw,{notify=false}={}) => {
     const value = raw === '' ? '' : round2(Math.max(0,Number(raw)))
-    // Serialize writes so rapid lift edits never overwrite another lift.
-    const next={...(latestOneRmsRef.current||oneRepMaxes),[name]:value}
-    latestOneRmsRef.current=next
-    setOneRepMaxes(next)
-    const save=oneRmSaveChainRef.current.catch(()=>{}).then(()=>saveOneRepMaxes(next))
-    oneRmSaveChainRef.current=save
-    const result=await save
+    const result=await queueOneRmPatch({[name]:value})
     if(notify){
       const notice=result?.error
-        ? {type:'error',text:'Could not save '+name+' 1RM.'}
-        : {type:'success',name,value,text:name+' 1RM saved at '+Number(value).toFixed(2)+' lb'}
+        ? {type:'error',text:'Could not save '+name+' 1RM: '+(result.error.message||'Try again.')}
+        : {type:'success',name,value,text:value===''?name+' 1RM cleared':name+' 1RM saved at '+Number(value).toFixed(2)+' lb'}
       setOneRmNotice(notice)
       setTimeout(()=>setOneRmNotice(current=>current===notice?null:current),2800)
     }
@@ -2829,9 +2853,8 @@ function App() {
   const acceptAllBaselineResults = async () => {
     const rows=baselineFinishReview?.results||[]
     if(!rows.length)return
-    const next={...oneRepMaxes}
-    for(const result of rows)next[result.lift]=round2(result.estimated_1rm)
-    const saved=await saveOneRepMaxes(next)
+    const patch=Object.fromEntries(rows.map(result=>[result.lift,round2(result.estimated_1rm)]))
+    const saved=await queueOneRmPatch(patch)
     if(saved?.error){
       const notice={type:'error',text:'Could not save baseline 1RMs.'}
       setOneRmNotice(notice)
