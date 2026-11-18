@@ -5,6 +5,7 @@ import { outdoorDistancePresentation,hasReliableOutdoorRoute,hasVerifiedOutdoorR
 import { effectiveSteps } from './stepTracking'
 import { EditableWorkout } from './advancedFeatures'
 import { DialogPortal } from './worksetDialogs'
+import {isLegacyWorkoutLink,legacyWorkoutDetail} from './historyNavigation.js'
 import { HISTORY_PAGE_SIZE,completedWorkoutKind,completedWorkoutSummary,workoutHistoryMatches,workoutHistoryDayKey } from './workoutHistoryUtils'
 
 const dateKey=workoutHistoryDayKey
@@ -26,7 +27,7 @@ const monthGrid=date=>{
   })
 }
 
-export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onChanged}){
+export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onChanged,legacyHistory=[],fromProgress=false}){
   const [rows,setRows]=useState([])
   const [monthRows,setMonthRows]=useState([])
   const [visibleCount,setVisibleCount]=useState(HISTORY_PAGE_SIZE)
@@ -89,7 +90,10 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
     window.addEventListener('workset-native-back',onNativeBack)
     return()=>window.removeEventListener('workset-native-back',onNativeBack)
   },[deleting,editing,selectedId])
-  const selected=rows.find(row=>row.id===selectedId)||monthRows.find(row=>row.id===selectedId)||null
+  const legacySelected=isLegacyWorkoutLink(selectedId)
+    ?legacyWorkoutDetail(legacyHistory.find(row=>String(row.id)===String(selectedId).slice(7)))
+    :null
+  const selected=rows.find(row=>row.id===selectedId)||monthRows.find(row=>row.id===selectedId)||legacySelected||null
   const dates=useMemo(()=>{
     const map={}
     for(const row of monthRows){const key=dateKey(row);if(key)map[key]=(map[key]||0)+1}
@@ -140,8 +144,8 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
         <h2>{selected?'Workout details':'Your training calendar'}</h2>
         <p>{selected?'Everything recorded for this session':'What you did, when you did it — no charts to dig through'}</p>
       </div>
-      <button type="button" className="secondary-action" onClick={selected?openList:onBack}>
-        {selected?'← All workouts':'← Today'}
+      <button type="button" className="secondary-action" onClick={selected&&fromProgress?onBack:selected?openList:onBack}>
+        {selected&&fromProgress?'← Progress':selected?'← All workouts':'← Back'}
       </button>
     </div>
     {message&&<div className="status-message" role="status">{message}</div>}
@@ -153,10 +157,12 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
             <p>{prettyDate(dateKey(selected))}{selected.completed_at?' · '+new Date(selected.completed_at).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):''}</p>
             {selected.program&&<small>{selected.program}</small>}
           </div>
-          <div className="history-detail-actions" role="group" aria-label="Workout actions">
-            <button type="button" className="secondary-action" onClick={()=>{setEditing(x=>!x);setDeleting(false)}}>{editing?'Close editor':'Edit'}</button>
-            <button type="button" className="secondary-action danger-lite" onClick={()=>{setDeleting(true);setEditing(false)}}>Delete</button>
-          </div>
+          {selected.__legacy
+            ?<p className="history-legacy-badge">Older program workout · read-only history</p>
+            :<div className="history-detail-actions" role="group" aria-label="Workout actions">
+              <button type="button" className="secondary-action" onClick={()=>{setEditing(x=>!x);setDeleting(false)}}>{editing?'Close editor':'Edit'}</button>
+              <button type="button" className="secondary-action danger-lite" onClick={()=>{setDeleting(true);setEditing(false)}}>Delete</button>
+            </div>}
         </div>
         {category(selected)==='Cardio'&&<>
           {hasReliableOutdoorRoute(outdoor)

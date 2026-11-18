@@ -1236,6 +1236,7 @@ function App() {
   const [todayCompletedWorkouts,setTodayCompletedWorkouts] = useState([])
   const [completedDeletePrompt,setCompletedDeletePrompt] = useState(null)
   const [historyWorkoutId,setHistoryWorkoutId] = useState(null)
+  const [historyOpenedFromProgress,setHistoryOpenedFromProgress]=useState(false)
   const [mobilityMode,setMobilityMode] = useState('warmup')
   const [deletingCompletedWorkout,setDeletingCompletedWorkout] = useState(false)
   const [workoutStartError,setWorkoutStartError] = useState('')
@@ -1335,7 +1336,11 @@ function App() {
   },[])
 
   const openProgress = (section='Overview') => navigateTo('progress',{progressSection:section})
-  const openHistory = (id=null) => {setHistoryWorkoutId(id);navigateTo('history')}
+  const openHistory = (id=null) => {
+    setHistoryWorkoutId(id)
+    setHistoryOpenedFromProgress(activeTab==='progress')
+    navigateTo('history')
+  }
   const openMobility = mode => {setMobilityMode(mode);navigateTo('mobility')}
 
   useEffect(()=>{
@@ -4328,7 +4333,9 @@ function App() {
             onSaved={async id=>{await refreshPlannedToday();openHistory(id)}}/>
         ) : activeTab === 'history' ? (
           <WorkoutHistory session={session} initialWorkoutId={historyWorkoutId}
-            onBack={openToday} onChanged={refreshPlannedToday}/>
+            legacyHistory={progress.completed}
+            fromProgress={historyOpenedFromProgress}
+            onBack={navigateBack} onChanged={refreshPlannedToday}/>
         ) : activeTab === 'progress' ? (
           <section className="page-section progress-page">
             <div className="progress-page-top">
@@ -4353,6 +4360,7 @@ function App() {
               initialSection={progressStartSection}
               onSectionChange={section=>openProgress(section)}
               onOpenHistory={()=>openHistory()}
+              onOpenWorkout={id=>openHistory(id)}
             />
           </section>
         ) : activeTab === 'admin' ? (
