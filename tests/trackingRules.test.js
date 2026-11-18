@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {
   validWeightDraft,validRepsDraft,displayedSetWeight,recordedWeightValue,
   canFinishQuickCardio,hasReliableOutdoorRoute,paceIsMeaningful,withoutUnreliableRoute,
-  hasLiveGpsFix,gpsJitterFloorMeters,outdoorDistancePresentation,shouldSplitGpsTrack,hasRecordingGaps,hasVerifiedOutdoorRoute,gpsMovementAssessment
+  hasLiveGpsFix,gpsJitterFloorMeters,outdoorDistancePresentation,shouldSplitGpsTrack,hasRecordingGaps,hasVerifiedOutdoorRoute,gpsMovementAssessment,autosaveDelayMs
 } from '../src/trackingRules.js'
 
 test('erasing 135 stays erased even when a previous set offers 135',()=>{
@@ -233,4 +233,14 @@ test('zero-speed GPS jitter cannot accumulate distance without progression',()=>
     distanceMeters:29,currentAccuracy:12,previousAccuracy:12,reportedSpeed:0,priorCandidateDistance:24
   })
   assert.equal(progress.accept,true)
+})
+
+test('a continuous outdoor location stream cannot starve the cloud autosave',()=>{
+  assert.equal(autosaveDelayMs(0,true),2200)
+  assert.equal(autosaveDelayMs(7000,true),2200)
+  assert.equal(autosaveDelayMs(11000,true),1000)
+  assert.equal(autosaveDelayMs(11999,true),1)
+  assert.equal(autosaveDelayMs(12000,true),0)
+  assert.equal(autosaveDelayMs(35000,true),0)
+  assert.equal(autosaveDelayMs(12000,false),700)
 })
