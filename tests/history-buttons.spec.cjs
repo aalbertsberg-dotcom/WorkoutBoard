@@ -45,17 +45,21 @@ async function openHistory(page){
   return {requests,wasDeleted:()=>deleted}
 }
 
-test('History Edit and Delete are equal-size, aligned and clickable',async({page})=>{
+test('History Edit and Delete are compact, vertically stacked and clickable',async({page})=>{
   await openHistory(page)
   const edit=page.getByRole('button',{name:'Edit',exact:true})
   const remove=page.getByRole('button',{name:'Delete',exact:true})
   const a=await edit.boundingBox(),b=await remove.boundingBox()
   const viewport=page.viewportSize()
-  expect(Math.abs(a.y-b.y)).toBeLessThanOrEqual(2)
+  const card=await page.locator('.history-detail').boundingBox()
+  expect(Math.abs(a.x-b.x)).toBeLessThanOrEqual(2)
+  expect(b.y).toBeGreaterThanOrEqual(a.y+a.height+5)
   expect(Math.abs(a.height-b.height)).toBeLessThanOrEqual(2)
   expect(Math.abs(a.width-b.width)).toBeLessThanOrEqual(2)
   expect(a.height).toBeGreaterThanOrEqual(44)
   expect(b.height).toBeGreaterThanOrEqual(44)
+  expect(a.width).toBeLessThanOrEqual(130)
+  expect(a.width/card.width).toBeLessThan(0.45)
   expect(b.x+b.width).toBeLessThanOrEqual(viewport.width+1)
   expect(await remove.evaluate(node=>getComputedStyle(node).borderTopStyle)).toBe('solid')
   expect(await remove.evaluate(node=>getComputedStyle(node).borderTopWidth)).toBe('1px')
