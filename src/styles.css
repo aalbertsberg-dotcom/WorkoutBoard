@@ -8410,3 +8410,21 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   .progress-workout-link .progress-workout-copy strong{font-size:13px}
   .progress-workout-link .progress-workout-meta strong{font-size:12px}
 }
+
+
+/* WorkSet 2.7.2 — GPS preflight, live status and recovery controls. */
+.quick-cardio-gps-link{
+  display:flex;justify-content:space-between;align-items:center;gap:8px;
+  width:100%;min-height:48px;border:1px solid #4b694f;border-radius:12px;
+  padding:10px 13px;color:#d8f4d1;background:#14291e;
+  font-weight:800;font-size:14px;text-align:left;
+}
+.quick-cardio-gps-link span{font-size:22px}
+.outdoor-tracker{scroll-margin-top:18px}
+.outdoor-gps-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:8px 0 12px}
+.outdoor-gps-actions button{min-height:44px;padding:9px 12px;max-width:100%;font-size:13px}
+.outdoor-gps-actions small{font-size:12px;line-height:1.5;color:#bacad9}
+.outdoor-gps-status{flex-wrap:wrap;gap:5px 10px}
+.outdoor-gps-status b{overflow-wrap:anywhere}
+.outdoor-gps-status small{font-size:11px;line-height:1.4;color:#b9c8da}
+.completion-gps-note{line-height:1.5}

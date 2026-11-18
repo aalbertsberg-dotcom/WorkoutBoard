@@ -633,7 +633,7 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
   const credibleRoute=hasReliableOutdoorRoute(current)
   const partialRoute=hasRecordingGaps(current)
   const feetTracked=Math.round(metrics.distanceM*3.28084)
-  return <section className="outdoor-tracker">
+  return <section className="outdoor-tracker" id="workset-gps-panel">
     <div className="outdoor-live-grid">
       <div><span>Distance</span><strong>{metrics.miles?metrics.miles.toFixed(metrics.miles<10?2:1):'0.00'} mi</strong>{feetTracked>0&&metrics.miles<0.1&&<small className="outdoor-short-distance">{feetTracked} ft tracked</small>}</div>
       <div><span>{paceMode?'Avg pace':'Avg speed'}</span><strong>{paceMode?formatPace(metrics.avgPaceSecPerMile):(metrics.avgMph?metrics.avgMph.toFixed(1)+' mph':'—')}</strong></div>
