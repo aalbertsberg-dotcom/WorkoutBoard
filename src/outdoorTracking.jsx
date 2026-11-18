@@ -5,6 +5,7 @@ import { MIN_MOVING_SPEED_MPS,paceIsMeaningful,hasReliableOutdoorRoute,hasRecord
 import { createMotionStepCounter,effectiveSteps,readMotionMagnitude,initialMotionAccess,gpsMarkerCount } from './stepTracking'
 import { canTrackInBackground,nativeGpsDeviceName,startNativeLocationWatch,stopNativeLocationWatch } from './nativeLocation'
 import PocketMode from './PocketMode'
+import {describeOutdoorGps} from './gpsStatus.js'
 
 export const METERS_PER_MILE=1609.344
 const MOTION_ACCESS_HINT_KEY='workset-browser-motion-granted-v1'
@@ -200,7 +201,7 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
   const [gpsCheckResult,setGpsCheckResult]=useState('')
   const [gpsHeartbeat,setGpsHeartbeat]=useState(()=>{
     const saved=current.gps_health||{}
-    return {received:Number(saved.received||0),last_received_at:saved.last_received_at||null,
+    return {...saved,received:Number(saved.received||0),last_received_at:saved.last_received_at||null,
       last_accuracy_m:saved.last_accuracy_m??current.last_accuracy_m??null,error_code:saved.error_code??null}
   })
   const gpsHeartbeatRef=useRef(gpsHeartbeat)
@@ -581,18 +582,13 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
     onChangeRef.current?.(next)
   }
 
-  const lastGpsReceived=Date.parse(gpsHeartbeat.last_received_at||'')||0
-  const gpsStale=running&&(
-    lastGpsReceived?gpsTick-lastGpsReceived>30000:elapsedSeconds>=25
-  )
-  const gpsWeak=Number(gpsHeartbeat.last_accuracy_m)>35
-  const gpsReady=running&&gpsHeartbeat.received>0&&!gpsStale
-  const gpsDisplayStatus=permission==='denied'?'Location permission blocked':
-    !running?'GPS ready to check':
-    gpsStale?'No GPS updates · use Retry GPS':
-    !gpsReady?'Waiting for GPS location':
-    gpsWeak?'GPS weak · ±'+Math.round(gpsHeartbeat.last_accuracy_m)+' m':
-    'GPS receiving locations'
+  const gpsUi=describeOutdoorGps({
+    outdoor:{...current,gps_health:gpsHeartbeat},
+    running,permission,elapsedSeconds,now:gpsTick
+  })
+  const gpsStale=gpsUi.stale
+  const gpsReady=gpsUi.gpsReady
+  const gpsDisplayStatus=gpsUi.label
   const checkGps=()=>{
     if(!navigator.geolocation?.getCurrentPosition){
       setGpsCheckResult('Location is unavailable in this browser.')
@@ -606,12 +602,22 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
         setGpsCheckBusy(false)
         const accuracy=Number(position.coords?.accuracy)
         setPermission('granted')
-        setGpsCheckResult('Location available'+(Number.isFinite(accuracy)?' · ±'+Math.round(accuracy)+' m':''))
+        recordGpsHeartbeat({
+          preflight_at:new Date().toISOString(),
+          preflight_accuracy_m:Number.isFinite(accuracy)?accuracy:null,
+          preflight_error_code:null,
+          last_accuracy_m:Number.isFinite(accuracy)?accuracy:gpsHeartbeatRef.current.last_accuracy_m,
+          error_code:null
+        },true)
+        setGpsCheckResult('Location verified · a route records only after Start.')
         if(runningRef.current)pushPosition(position)
       },
       error=>{
         setGpsCheckBusy(false)
         if(error?.code===1)setPermission('denied')
+        recordGpsHeartbeat({
+          preflight_at:null,preflight_accuracy_m:null,preflight_error_code:error?.code||'unknown'
+        },true)
         setGpsCheckResult(error?.code===1
           ?'Location blocked. In Chrome, allow Location for this site.'
           :error?.code===2?'Location unavailable. Try outdoors and check phone Location settings.'
@@ -644,6 +650,7 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
     <div className="outdoor-gps-status" role="status" aria-live="polite">
       <span className={gpsReady&&permission!=='denied'?'live':''}>{gpsReady?'● GPS':'◯ GPS'}</span>
       <b>{gpsDisplayStatus}</b>
+      <small className="outdoor-gps-state-detail">{gpsUi.detail}</small>
       {message&&<small>{message}</small>}
       {gpsHeartbeat.received>0&&<small>{gpsHeartbeat.received} location update{gpsHeartbeat.received===1?'':'s'} received</small>}
     </div>
