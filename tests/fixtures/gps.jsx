@@ -8,7 +8,7 @@ function Fixture(){
   const [outdoor,setOutdoor]=useState(()=>emptyOutdoorTrack('walk'))
   const [elapsedSeconds,setElapsedSeconds]=useState(0)
   return <main className="page-section">
-    <button type="button" onClick={()=>{setRunning(x=>!x);setElapsedSeconds(31)}}>{running?'Pause mock walk':'Start mock walk'}</button>
+    <button type="button" onClick={()=>{setRunning(x=>!x);setElapsedSeconds(0)}}>{running?'Pause mock walk':'Start mock walk'}</button>
     <OutdoorTracker activity="walk" outdoor={outdoor} onChange={setOutdoor}
       running={running} elapsedSeconds={elapsedSeconds}/>
     <output id="gps-distance" aria-label="Recorded distance">{Number(outdoor.distance_m||0)}</output>
