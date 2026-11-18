@@ -234,11 +234,11 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
     return next
   }
   useEffect(()=>{
-    if(!running)return
+    // Expire preflight readiness even if the user leaves the timer paused.
     const timer=setInterval(()=>setGpsTick(Date.now()),8000)
     setGpsTick(Date.now())
     return()=>clearInterval(timer)
-  },[running])
+  },[])
 
   useEffect(()=>{
     let cancelled=false
