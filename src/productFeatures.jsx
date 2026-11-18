@@ -824,7 +824,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
             {workout.quick_timer_started_at ? 'TIMING NOW' : quickElapsedSeconds ? 'PAUSED' : 'READY'}
           </span>
           {quickOutdoorGps&&<GpsStatusBadge status={quickOutdoorGps}
-            onClick={()=>document.getElementById('workset-gps-panel')?.scrollIntoView({behavior:'smooth',block:'start'})}/>
+            onClick={()=>document.getElementById('workset-gps-panel')?.scrollIntoView({behavior:'smooth',block:'start'})}/>}
         </div>
         <strong>{formatQuickTime(quickElapsedSeconds)}</strong>
         <p className="quick-cardio-timer-hint">
