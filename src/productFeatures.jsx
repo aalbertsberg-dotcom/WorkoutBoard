@@ -336,6 +336,12 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
     setWorkout(v=>({...v,conditioningEnabled:true,metcon:{...(v.metcon||{}),[key]:value}}))
   }
   const quickOutdoorKind=quickCardio ? outdoorActivityKind(workout.quick_cardio_kind||workout.metcon?.activity||planned?.title) : ''
+  const quickOutdoorGps=quickOutdoorKind
+    ?describeOutdoorGps({
+      outdoor:workout.outdoor||emptyOutdoorTrack(quickOutdoorKind),
+      running:Boolean(workout.quick_timer_started_at),
+      elapsedSeconds:quickElapsedSeconds,now:quickClock
+    }):null
   const canFinishCardio=canFinishQuickCardio(quickElapsedSeconds,workout.metcon?.duration)
   const setQuickOutdoor=value=>{
     setSaveState('Unsaved')
@@ -558,12 +564,6 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
     const quickDurationText=quickCardio&&quickElapsedSeconds>0 ? formatQuickTime(quickElapsedSeconds) : ''
     const reliableOutdoor=quickOutdoorKind ? withoutUnreliableRoute(workout.outdoor||emptyOutdoorTrack(quickOutdoorKind)) : null
     const quickOutdoorMetrics=quickOutdoorKind ? outdoorMetrics(reliableOutdoor,quickElapsedSeconds,quickOutdoorKind) : null
-  const quickOutdoorGps=quickOutdoorKind
-    ?describeOutdoorGps({
-      outdoor:workout.outdoor||emptyOutdoorTrack(quickOutdoorKind),
-      running:Boolean(workout.quick_timer_started_at),
-      elapsedSeconds:quickElapsedSeconds,now:quickClock
-    }):null
     const distanceDisplay=quickOutdoorKind?outdoorDistancePresentation(reliableOutdoor):null
     const quickStepCount=quickOutdoorKind==='walk'||quickOutdoorKind==='run'?effectiveSteps(reliableOutdoor):0
     const gpsDistanceText=distanceDisplay?.meters>0
