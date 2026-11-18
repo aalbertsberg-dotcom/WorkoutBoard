@@ -105,14 +105,22 @@ test('Timer GPS badge distinguishes location reception from route recording',asy
   await page.getByRole('button',{name:'Check GPS before starting'}).click()
   await expect(badge).toHaveAttribute('data-gps-phase','acquired')
   await expect(page.locator('#gps-distance')).toHaveText('0')
-  // A visible badge is not enough: the center tap must actually hit it.
-  const tappable=await badge.evaluate(node=>{
+  // Simulate the exact screen tap after scrolling, not Playwright's
+  // sometimes overly aggressive auto-scroll click algorithm.
+  await badge.scrollIntoViewIfNeeded()
+  const target=await badge.evaluate(node=>{
     const rect=node.getBoundingClientRect()
-    const found=document.elementFromPoint(rect.left+rect.width/2,rect.top+rect.height/2)
-    return node===found||node.contains(found)
+    const x=rect.left+rect.width/2,y=rect.top+rect.height/2
+    const found=document.elementFromPoint(x,y)
+    return {x,y,width:rect.width,height:rect.height,
+      tappable:node===found||node.contains(found),
+      hit:found?.className||found?.nodeName}
   })
-  expect(tappable).toBe(true)
-  await badge.click()
+  expect(target.width).toBeGreaterThan(40)
+  expect(target.height).toBeGreaterThanOrEqual(35)
+  expect(target.tappable).toBe(true)
+  if(page.viewportSize().width<700)await page.touchscreen.tap(target.x,target.y)
+  else await page.mouse.click(target.x,target.y)
   await expect(page.locator('#workset-gps-panel')).toBeInViewport()
   await page.getByRole('button',{name:'Start mock walk'}).click()
   await expect.poll(async()=>page.evaluate(()=>window.__gps.startCount)).toBe(1)
