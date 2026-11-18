@@ -105,6 +105,13 @@ test('Timer GPS badge distinguishes location reception from route recording',asy
   await page.getByRole('button',{name:'Check GPS before starting'}).click()
   await expect(badge).toHaveAttribute('data-gps-phase','acquired')
   await expect(page.locator('#gps-distance')).toHaveText('0')
+  // A visible badge is not enough: the center tap must actually hit it.
+  const tappable=await badge.evaluate(node=>{
+    const rect=node.getBoundingClientRect()
+    const found=document.elementFromPoint(rect.left+rect.width/2,rect.top+rect.height/2)
+    return node===found||node.contains(found)
+  })
+  expect(tappable).toBe(true)
   await badge.click()
   await expect(page.locator('#workset-gps-panel')).toBeInViewport()
   await page.getByRole('button',{name:'Start mock walk'}).click()

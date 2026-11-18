@@ -8434,11 +8434,13 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
 .quick-cardio-timer > .quick-cardio-timer-heading {
   width:100%;
   min-width:0;
-  display:flex;
-  flex-wrap:wrap;
+  display:grid;
+  grid-template-columns:max-content minmax(0,1fr);
   align-items:center;
-  justify-content:space-between;
+  justify-items:stretch;
   gap:7px 10px;
+  position:relative;
+  isolation:isolate;
 }
 .quick-cardio-timer .quick-cardio-gps-badge {
   min-width:0;
@@ -8457,6 +8459,11 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   gap:6px;
   cursor:pointer;
   overflow-wrap:anywhere;
+  justify-self:end;
+  position:relative;
+  z-index:2;
+  pointer-events:auto;
+  text-align:left;
 }
 .quick-cardio-gps-badge .quick-cardio-gps-dot {font-size:8px;flex:none}
 .quick-cardio-gps-badge .quick-cardio-gps-chevron {font-size:17px;font-weight:700;line-height:1;flex:none}
@@ -8473,6 +8480,10 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   line-height:1.45;
 }
 @media(max-width:450px){
-  .quick-cardio-timer > .quick-cardio-timer-heading {justify-content:center}
+  .quick-cardio-timer > .quick-cardio-timer-heading {grid-template-columns:max-content minmax(0,1fr)}
   .quick-cardio-timer .quick-cardio-gps-badge {font-size:11px;padding:6px 9px}
+}
+@media(max-width:320px){
+  .quick-cardio-timer > .quick-cardio-timer-heading {grid-template-columns:minmax(0,1fr)}
+  .quick-cardio-timer .quick-cardio-gps-badge {justify-self:center}
 }
