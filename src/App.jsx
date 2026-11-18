@@ -1,4 +1,5 @@
 import { DialogPortal,OverlayPortal,confirmWorkset } from './worksetDialogs'
+import MePage from './MePage'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase'
 import { PlatformProgress, PlanPage, AdminPanel, FeedbackPanel } from './platform'
@@ -1166,6 +1167,8 @@ function App() {
   const [week,setWeek] = useState(1)
   const [lift,setLift] = useState('Squat')
   const [oneRepMaxes,setOneRepMaxes] = useState(defaultOneRms)
+  const latestOneRmsRef=useRef(null)
+  const oneRmSaveChainRef=useRef(Promise.resolve())
   const [oneRmWeight,setOneRmWeight] = useState('')
   const [oneRmReps,setOneRmReps] = useState(5)
   const [oneRmLift,setOneRmLift] = useState('')
@@ -2731,7 +2734,6 @@ function App() {
 
   const saveOneRepMaxes = async next => {
     const cleaned=Object.fromEntries(lifts.map(name=>[name,next[name]===''?'':round2(Math.max(0,Number(next[name])||0))]))
-    setOneRepMaxes(cleaned)
     if (!session?.user) return {error:null}
     const updatedAt=new Date().toISOString()
     const oneRmPayload={
@@ -2770,7 +2772,13 @@ function App() {
 
   const setOneRm = async (name,raw,{notify=false}={}) => {
     const value = raw === '' ? '' : round2(Math.max(0,Number(raw)))
-    const result=await saveOneRepMaxes({...oneRepMaxes,[name]:value})
+    // Serialize writes so rapid lift edits never overwrite another lift.
+    const next={...(latestOneRmsRef.current||oneRepMaxes),[name]:value}
+    latestOneRmsRef.current=next
+    setOneRepMaxes(next)
+    const save=oneRmSaveChainRef.current.catch(()=>{}).then(()=>saveOneRepMaxes(next))
+    oneRmSaveChainRef.current=save
+    const result=await save
     if(notify){
       const notice=result?.error
         ? {type:'error',text:'Could not save '+name+' 1RM.'}
@@ -3047,11 +3055,16 @@ function App() {
   }
 
   const saveDisplayName = async name => {
-    if (!session?.user) return
-    const clean = name.trim()
-    if (!clean) return
-    await supabase.from('profiles').update({display_name:clean,updated_at:new Date().toISOString()}).eq('id',session.user.id)
-    setProfile(v => ({...v,display_name:clean}))
+    if (!session?.user)return {error:new Error('Sign in to save your display name.')}
+    const clean=String(name||'').trim()
+    if (!clean||clean.length>80)return {error:new Error('Choose a name between 1 and 80 characters.')}
+    if (navigator.onLine===false)return {error:new Error('Connect to the internet to save your name.')}
+    const {error}=await supabase.from('profiles')
+      .update({display_name:clean,updated_at:new Date().toISOString()})
+      .eq('id',session.user.id).select('id').single()
+    if(error)return {error}
+    setProfile(v=>v?{...v,display_name:clean}:v)
+    return {error:null}
   }
 
   const jumpToWorkout = (programId,targetWeek,targetLift='Squat') => {
@@ -4343,153 +4356,32 @@ function App() {
         ) : activeTab === 'admin' ? (
           <AdminPanel programs={programs} />
         ) : (
-          <section className="page-section">
-            {displayName === 'WorkoutAdmin' && !isAdmin && (
-              <section className="admin-setup-warning">
-                <span className="card-label">ADMIN SETUP INCOMPLETE</span>
-                <h3>WorkoutAdmin account exists, but the admin role has not been granted yet.</h3>
-                <p>Run the admin migration and one-time grant query in Supabase. Then sign out and back in.</p>
-              </section>
-            )}
-
-            <section className="profile-card">
-              <span className="card-label">ACCOUNT</span>
-              <h2>{displayName}</h2>
-              <p>{session.user.email}</p>
-              <label>Display name<input defaultValue={displayName} onBlur={e => saveDisplayName(e.target.value)} /></label>
-            </section>
-
-            <section className="simple-card account-history-entry">
-              <div><span className="card-label">WORKOUTS</span><h3>Your training history</h3><p>Calendar, saved activities and workout details.</p></div>
-              <button type="button" className="wide-button" onClick={()=>openHistory()}>Open Workout History</button>
-            </section>
-
-            <PlatformProgress
-              view="mine"
-              compact
-              onOpenProgress={()=>openProgress('Overview')}
-              onOpenHistory={()=>openHistory()}
-              onOpenWeight={()=>openProgress('Weight & Measurements')}
-              onOpenMeasurements={()=>openProgress('Weight & Measurements')}
-              session={session}
-              profile={profile}
-              setProfile={setProfile}
-              progress={progress}
-              lifts={lifts}
-              formatWeight={formatWeight}
-              programs={programs}
-              dbNameToProgram={dbNameToProgram}
-            />
-
-            <section className="simple-card" id="one-rm-center">
-              <div className="section-heading"><div><span className="card-label">1 REP MAXES</span><h3>Your current 1RMs</h3></div></div>
-              <p className="helper-text">Saved to 2 decimals. Programs calculate their own training max and working percentages from these numbers.</p>
-              <div className="tm-grid">
-                {lifts.map(x => (
-                  <label key={x}><span>{x}</span>
-                    <div className="input-with-unit">
-                      <input type="number" inputMode="decimal" value={oneRepMaxes[x] || ''} placeholder="0"
-                        onFocus={e => e.currentTarget.select()}
-                        onChange={e => setOneRm(x,e.target.value)} />
-                      <b>lb</b>
-                    </div>
-                  </label>
-                ))}
-              </div>
-            </section>
-
-            <section className="simple-card one-rm-card">
-              <div className="section-heading"><div><span className="card-label">1RM CALCULATOR</span><h3>Estimate from a rep set</h3></div>{oneRmEstimate>0&&<b className="one-rm-result">{oneRmRounded} lb</b>}</div>
-              <p className="helper-text">Uses the Epley estimate: weight × (1 + reps ÷ 30). Best used with lower-rep sets; it is an estimate, not a tested max.</p>
-              <div className="one-rm-inputs">
-                <label><span>Weight lifted</span><div className="input-with-unit"><input type="number" inputMode="decimal" value={oneRmWeight} placeholder="225" onFocus={e=>e.currentTarget.select()} onChange={e=>setOneRmWeight(e.target.value===''?'':Math.max(0,Number(e.target.value)))}/><b>lb</b></div></label>
-                <label><span>Reps</span><input type="number" inputMode="numeric" min="1" max="15" value={oneRmReps} onFocus={e=>e.currentTarget.select()} onChange={e=>setOneRmReps(Math.max(1,Math.min(15,Number(e.target.value)||1)))}/></label>
-              </div>
-              {oneRmEstimate>0&&<div className="one-rm-summary">
-                <div><span>Estimated 1RM</span><strong>{oneRmRounded} lb</strong></div>
-                <div><span>85% training max</span><strong>{oneRmTrainingMax} lb</strong></div>
-              </div>}
-              {oneRmEstimate>0&&<div className="one-rm-apply">
-                <label className="one-rm-add-to"><span>Add estimate to</span>
-                  <select value={oneRmLift} onChange={e=>setOneRmLift(e.target.value)}>
-                    <option value="">Choose lift…</option>
-                    {lifts.map(name=><option key={name} value={name}>{name}</option>)}
-                  </select>
-                </label>
-                <button className="wide-button" type="button" disabled={!oneRmLift||!oneRmRounded} onClick={()=>setOneRm(oneRmLift,oneRmRounded,{notify:true})}>
-                  {oneRmNotice?.type==='success'&&oneRmNotice.name===oneRmLift&&Number(oneRmNotice.value)===Number(oneRmRounded)
-                    ? `✓ Saved ${oneRmLift} at ${oneRmRounded} lb`
-                    : oneRmLift?`Add ${oneRmRounded} lb to ${oneRmLift} 1RM`:'Choose a lift to save this estimate'}
-                </button>
-              </div>}
-            </section>
-
-            <section className="simple-card one-rm-card">
-              <div className="section-heading"><div><span className="card-label">CALCULATED FROM WORKOUTS</span><h3>Best estimated 1RMs</h3></div></div>
-              <p className="helper-text">Calculated from completed main-lift sets using Epley. Use one as your saved 1RM, or test it with a baseline workout.</p>
-              <div className="one-rm-summary">
-                {lifts.map(name=>{
-                  const candidate=calculatedOneRms[name]
-                  return <div key={name}><span>{name}</span><strong>{candidate?candidate.value.toFixed(2)+' lb':'—'}</strong>{candidate&&<small>{candidate.weight} × {candidate.reps}</small>}{candidate&&<button type="button" onClick={()=>setOneRm(name,candidate.value,{notify:true})}>Use</button>}</div>
-                })}
-              </div>
-              <p className="helper-text"><strong>Would you like to test this now?</strong></p>
-              <div className="baseline-test-picker">
-                <select value={baselineTestChoice} onChange={e=>setBaselineTestChoice(e.target.value)}>
-                  <option value="">Choose a baseline test…</option>
-                  <option value="full">All 4 lifts</option>
-                  <option value="upper">Upper</option>
-                  <option value="lower">Lower</option>
-                  {lifts.map(name=><option key={name} value={'single:'+name}>Test {name}</option>)}
-                </select>
-                <button className="wide-button" type="button" disabled={!baselineTestChoice} onClick={startSelectedBaseline}>Start test</button>
-              </div>
-            </section>
-
-            <section className="simple-card">
-              <div className="section-heading"><div><span className="card-label">{trackedProgramsInfo.length>1?'TRACKED PROGRAMS':'CURRENT PROGRAM'}</span><h3>{trackedProgramsInfo.length>1?trackedProgramsInfo.length+' active programs':trackedProgramsInfo[0]?.name||personalProgram.name}</h3></div></div>
-              {trackedProgramsInfo.length>0&&<div className="me-tracked-program-list">{trackedProgramsInfo.map(info=><div key={info.key}>
-                <div><strong>{info.name}</strong><span>{info.nextTitle?'Next: '+info.nextTitle:info.complete?'Complete':'Tracking'}</span></div>
-                <b>{info.completed}/{info.total}</b>
-              </div>)}</div>}
-              <button className="wide-button" onClick={() => navigateTo('program')}>Plan & programs</button>
-            </section>
-
-            <section className="simple-card">
-              <div className="section-heading"><div><span className="card-label">INVITE</span><h3>Invite someone</h3></div></div>
-              <p className="helper-text">Anyone you invite gets their own account, program, maxes, history, and progress dashboard.</p>
-              <button className="wide-button invite-button" onClick={shareInvite}>Share Workset</button>
-              {inviteState && <div className="invite-status">{inviteState}</div>}
-            </section>
-
-            <FeedbackPanel session={session} profile={profile} />
-
-            <section className="simple-card">
-              <div className="section-heading"><div><span className="card-label">APP</span><h3>Install & update Workset</h3></div></div>
-              <p className="helper-text">Install Workset, check for a new release, or force a clean refresh if the installed app ever looks stale.</p>
-              <InstallAppButton />
-            </section>
-
-            <section className="simple-card">
-              <div className="section-heading"><div><span className="card-label">BACKUP</span><h3>Export your data</h3></div></div>
-              <p className="helper-text">Downloads your completed session history as CSV.</p>
-              <ExportDataButton userId={session.user.id} />
-            </section>
-
-            <WorkoutSettingsPanel session={session} />
-            <AccountSecurityPanel session={session} appUrl={appUrl()} />
-            <BackupRestorePanel session={session} />
-
-            {isAdmin && (
-              <section className="simple-card admin-entry">
-                <div className="section-heading"><div><span className="card-label">WORKSET ADMIN</span><h3>Administration</h3></div></div>
-                <p className="helper-text">View users, workout history, progress totals, training maxes, and manage current programs.</p>
-                <button className="wide-button admin-button" onClick={() => {setFeedbackUnread(0);navigateTo('admin')}}>Open Admin{feedbackUnread?` · ${feedbackUnread} feedback`:''}</button>
-              </section>
-            )}
-
-            <button className="signout-button" onClick={() => supabase.auth.signOut()}>Sign out</button>
-          </section>
+          <MePage
+            session={session}
+            displayName={displayName} onSaveDisplayName={saveDisplayName}
+            onOpenHistory={()=>openHistory()}
+            onOpenProgress={()=>openProgress('Overview')}
+            onOpenWeight={()=>openProgress('Weight & Measurements')}
+            onOpenPrograms={()=>navigateTo('program')}
+            profile={profile} setProfile={setProfile}
+            progress={progress} lifts={lifts} formatWeight={formatWeight}
+            programs={programs} dbNameToProgram={dbNameToProgram}
+            oneRepMaxes={oneRepMaxes} onSaveOneRm={(name,value)=>setOneRm(name,value,{notify:true})}
+            oneRmWeight={oneRmWeight} setOneRmWeight={setOneRmWeight}
+            oneRmReps={oneRmReps} setOneRmReps={setOneRmReps}
+            oneRmEstimate={oneRmEstimate} oneRmRounded={oneRmRounded}
+            oneRmTrainingMax={oneRmTrainingMax}
+            oneRmLift={oneRmLift} setOneRmLift={setOneRmLift}
+            oneRmNotice={oneRmNotice} calculatedOneRms={calculatedOneRms}
+            baselineTestChoice={baselineTestChoice} setBaselineTestChoice={setBaselineTestChoice}
+            onStartBaseline={startSelectedBaseline}
+            trackedProgramsInfo={trackedProgramsInfo} personalProgramName={personalProgram.name}
+            shareInvite={shareInvite} inviteState={inviteState}
+            isAdmin={isAdmin} feedbackUnread={feedbackUnread}
+            onOpenAdmin={()=>{setFeedbackUnread(0);navigateTo('admin')}}
+            onSignOut={()=>supabase.auth.signOut()}
+            appUrl={appUrl()}
+          />
         )}
 
         <div className="bottom-space" />
