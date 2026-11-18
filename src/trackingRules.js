@@ -92,6 +92,15 @@ export function recordedWeightValue(set, legacy=0) {
   return Number(legacy)||0
 }
 
+// A busy GPS stream must not postpone a cloud save indefinitely.
+// Keep the normal debounce for strength and idle cardio edits, but cap a
+// continuously changing outdoor workout at a 12-second unsaved window.
+export function autosaveDelayMs(unsavedForMs=0,quickCardio=false) {
+  if(!quickCardio)return 700
+  const elapsed=Math.max(0,Number(unsavedForMs)||0)
+  return Math.max(0,Math.min(2200,12000-elapsed))
+}
+
 export function canFinishQuickCardio(elapsedSeconds, manualDuration='') {
   // The timer must have actually run; alternatively a real manual duration was entered.
   return Number(elapsedSeconds)>=5 || /[1-9]/.test(String(manualDuration||''))
