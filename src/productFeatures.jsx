@@ -5,6 +5,7 @@ import { supabase } from './supabase'
 import { MetconTracker } from './advancedFeatures'
 import { offlineUuid, queueUpsert, upsertOfflineFirst, isOfflineError, readOfflineState, writeOfflineState } from './offline'
 import { OutdoorTracker, emptyOutdoorTrack, outdoorActivityKind, outdoorMetrics } from './outdoorTracking'
+import {describeOutdoorGps} from './gpsStatus.js'
 import { effectiveSteps } from './stepTracking'
 import { validWeightDraft,validRepsDraft,displayedSetWeight,recordedWeightValue,canFinishQuickCardio,withoutUnreliableRoute,outdoorDistancePresentation } from './trackingRules'
 
@@ -556,6 +557,12 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
     const quickDurationText=quickCardio&&quickElapsedSeconds>0 ? formatQuickTime(quickElapsedSeconds) : ''
     const reliableOutdoor=quickOutdoorKind ? withoutUnreliableRoute(workout.outdoor||emptyOutdoorTrack(quickOutdoorKind)) : null
     const quickOutdoorMetrics=quickOutdoorKind ? outdoorMetrics(reliableOutdoor,quickElapsedSeconds,quickOutdoorKind) : null
+  const quickOutdoorGps=quickOutdoorKind
+    ?describeOutdoorGps({
+      outdoor:workout.outdoor||emptyOutdoorTrack(quickOutdoorKind),
+      running:Boolean(workout.quick_timer_started_at),
+      elapsedSeconds:quickElapsedSeconds,now:quickClock
+    }):null
     const distanceDisplay=quickOutdoorKind?outdoorDistancePresentation(reliableOutdoor):null
     const quickStepCount=quickOutdoorKind==='walk'||quickOutdoorKind==='run'?effectiveSteps(reliableOutdoor):0
     const gpsDistanceText=distanceDisplay?.meters>0
@@ -810,14 +817,18 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
         </div>
       </section>
 
-      {quickOutdoorKind&&<button type="button" className="quick-cardio-gps-link"
-        onClick={()=>document.getElementById('workset-gps-panel')?.scrollIntoView({behavior:'smooth',block:'start'})}>
-        📍 GPS & location status <span aria-hidden="true">›</span>
-      </button>}
       <section className="quick-cardio-timer">
-        <span className="quick-cardio-timer-state">
-          {workout.quick_timer_started_at ? 'TIMING NOW' : quickElapsedSeconds ? 'PAUSED' : 'READY'}
-        </span>
+        <div className="quick-cardio-timer-heading">
+          <span className="quick-cardio-timer-state">
+            {workout.quick_timer_started_at ? 'TIMING NOW' : quickElapsedSeconds ? 'PAUSED' : 'READY'}
+          </span>
+          {quickOutdoorGps&&<button type="button"
+            className={'quick-cardio-gps-badge gps-tone-'+quickOutdoorGps.tone}
+            aria-label={'GPS status: '+quickOutdoorGps.label+'. View GPS details'}
+            onClick={()=>document.getElementById('workset-gps-panel')?.scrollIntoView({behavior:'smooth',block:'start'})}>
+            <span aria-hidden="true">●</span> {quickOutdoorGps.label} <span aria-hidden="true">›</span>
+          </button>}
+        </div>
         <strong>{formatQuickTime(quickElapsedSeconds)}</strong>
         <p className="quick-cardio-timer-hint">
           {workout.quick_timer_started_at
