@@ -82,6 +82,13 @@ export function TrainingTimer() {
 
   useEffect(()=>()=>{releaseWake()},[])
 
+  // Beats mode uses the existing optional screen wake lock, too.
+  useEffect(()=>{
+    if(mode!=='Beats')return
+    if(beatsRunning)void requestWake()
+    else void releaseWake()
+  },[mode,beatsRunning,keepAwake])
+
   const totalInterval=rounds*(workSeconds+breakSeconds)
   const target = mode==='Rest' ? restSeconds
     : mode==='AMRAP'||mode==='Metcon' ? duration
