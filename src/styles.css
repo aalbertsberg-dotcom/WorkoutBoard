@@ -8497,3 +8497,79 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   .quick-cardio-timer > .quick-cardio-timer-hint,
   .quick-cardio-timer > div {grid-column:1}
 }
+
+/* Optional beat/metronome timer — compact enough for mobile workout cards. */
+.beats-timer {
+  border:1px solid #364a65;
+  border-radius:12px;
+  background:#101d2e;
+  overflow:hidden;
+}
+.beats-compact { margin:10px 0; }
+.beats-compact > summary {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:12px 14px;
+  cursor:pointer;
+  list-style:none;
+  color:#f3f7fc;
+  font-weight:850;
+}
+.beats-compact > summary::-webkit-details-marker { display:none; }
+.beats-compact > summary span { display:grid; gap:2px; }
+.beats-compact > summary small { font-size:11px; font-weight:500; color:#a5b4c8; }
+.beats-compact > summary b { font-size:10px; color:#bef264; }
+.beats-body { display:grid; gap:12px; padding:12px; }
+.beats-hero { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.beats-hero > div:first-child { display:flex; align-items:baseline; gap:7px; }
+.beats-hero strong { font-size:clamp(36px,9vw,56px); line-height:1; font-variant-numeric:tabular-nums; }
+.beats-hero span { color:#99abc2; font-size:12px; font-weight:800; }
+.beats-pulses { display:flex; gap:7px; }
+.beats-pulses span {
+  width:14px;
+  height:14px;
+  background:#31445b;
+  border:1px solid #65748a;
+  border-radius:50%;
+  transition:background-color .08s ease,border-color .08s ease;
+}
+.beats-pulses span.active { background:#bef264; border-color:#bef264; }
+.beats-bpm-label { color:#9eacc0; font-size:12px; font-weight:800; }
+.beats-adjust { display:grid; grid-template-columns:52px minmax(56px,1fr) 52px auto; gap:6px; }
+.beats-adjust button,
+.beats-presets button {
+  min-height:44px;
+  border:1px solid #405573;
+  border-radius:9px;
+  background:#17273b;
+  color:#f3f7fc;
+  font-weight:850;
+  cursor:pointer;
+}
+.beats-adjust input {
+  width:100%;
+  min-width:0;
+  min-height:44px;
+  text-align:center;
+  border:1px solid #65748a;
+  border-radius:9px;
+  background:#081727;
+  color:#fff;
+  font-size:18px;
+  font-weight:800;
+}
+.beats-adjust .beats-tap { padding:0 12px; white-space:nowrap; }
+.beats-presets { display:flex; gap:6px; flex-wrap:wrap; }
+.beats-presets button { flex:1 1 45px; min-width:45px; padding:0 6px; }
+.beats-presets button.active { background:#304719; border-color:#8dba4d; color:#e1fbb0; }
+.beats-actions { display:grid; grid-template-columns:1fr auto; gap:12px; align-items:center; }
+.beats-actions > button { min-height:46px; }
+.beats-actions label { display:flex; align-items:center; gap:7px; color:#cbd5e1; font-weight:750; }
+.beats-actions input { width:20px; height:20px; }
+.beats-body .helper-text { margin:0; }
+@media(max-width:400px) {
+  .beats-adjust { grid-template-columns:46px minmax(50px,1fr) 46px; }
+  .beats-adjust .beats-tap { grid-column:1 / -1; }
+}
