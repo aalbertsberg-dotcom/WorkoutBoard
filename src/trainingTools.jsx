@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase'
 import BeatTimer from './BeatTimer'
 import { readOfflineState, writeOfflineState, upsertOfflineFirst } from './offline'
@@ -30,6 +30,10 @@ export function TrainingTimer() {
   const [mode,setMode]=useState('Rest')
   const [beatsRunning,setBeatsRunning]=useState(false)
   const [beatsTempo,setBeatsTempo]=useState(120)
+  const onBeatsActive=useCallback(active=>{
+    setBeatsRunning(active)
+    if(active)setExpanded(false)
+  },[])
   const [running,setRunning]=useState(false)
   const [elapsed,setElapsed]=useState(0)
   const [restSeconds,setRestSeconds]=useState(()=>Number(localStorage.getItem('wb-rest-seconds')||90))
@@ -190,7 +194,7 @@ export function TrainingTimer() {
     <div className="training-timer">
       <div className="timer-modes">{['Rest','Stopwatch','AMRAP','EMOM','Intervals','Metcon','Beats'].map(x=><button type="button" key={x} className={mode===x?'active':''} onClick={()=>{pause();reset();setBeatsRunning(false);setMode(x)}}>{x}</button>)}</div>
 
-      {mode==='Beats'?<BeatTimer onActiveChange={setBeatsRunning} onTempoChange={setBeatsTempo}/>:<>
+      {mode==='Beats'?<BeatTimer onActiveChange={onBeatsActive} onTempoChange={setBeatsTempo}/>:<>
 
       <div className="timer-display">
         {phase&&<span className={'timer-phase '+phase.toLowerCase()}>{phase}</span>}
