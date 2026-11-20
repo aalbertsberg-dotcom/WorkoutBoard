@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase'
+import BeatTimer from './BeatTimer'
 import { readOfflineState, writeOfflineState, upsertOfflineFirst } from './offline'
 
 const pad=n=>String(Math.max(0,Math.floor(n))).padStart(2,'0')
@@ -27,6 +28,8 @@ function beep() {
 
 export function TrainingTimer() {
   const [mode,setMode]=useState('Rest')
+  const [beatsRunning,setBeatsRunning]=useState(false)
+  const [beatsTempo,setBeatsTempo]=useState(120)
   const [running,setRunning]=useState(false)
   const [elapsed,setElapsed]=useState(0)
   const [restSeconds,setRestSeconds]=useState(()=>Number(localStorage.getItem('wb-rest-seconds')||90))
@@ -145,6 +148,7 @@ export function TrainingTimer() {
     return()=>window.removeEventListener('workoutboard:rest-timer',listener)
   },[restSeconds])
 
+  const timerActive=running||(mode==='Beats'&&beatsRunning)
   let display=elapsed
   let phase=''
   let round=''
@@ -168,16 +172,18 @@ export function TrainingTimer() {
   if(mode==='Stopwatch') display=elapsed
 
   return <>
-    {running&&!expanded&&<button type="button" className={'floating-workout-timer '+(phase?phase.toLowerCase():'')} onClick={()=>setExpanded(true)}>
-      <span>{phase||mode}</span><strong>{fmt(display)}</strong>{round&&<small>{round}</small>}
+    {timerActive&&!expanded&&<button type="button" className={'floating-workout-timer '+(phase?phase.toLowerCase():'')} onClick={()=>setExpanded(true)}>
+      <span>{phase||mode}</span><strong>{mode==='Beats'?`${beatsTempo} BPM`:fmt(display)}</strong>{round&&<small>{round}</small>}
     </button>}
-    <details className={'training-timer-panel '+(running&&!expanded?'timer-floating-active':'')} open={expanded} onToggle={e=>setExpanded(e.currentTarget.open)}>
+    <details className={'training-timer-panel '+(timerActive&&!expanded?'timer-floating-active':'')} open={expanded} onToggle={e=>setExpanded(e.currentTarget.open)}>
     <summary>
-      <span><b>⏱ Timer</b><small>{running?`${mode} · ${fmt(display)}`:'Rest / Metcon / EMOM / Intervals'}</small></span>
-      {running&&<i className="timer-live-dot">LIVE</i>}
+      <span><b>⏱ Timer</b><small>{timerActive?`${mode} · ${mode==='Beats'?beatsTempo+' BPM':fmt(display)}`:'Rest / Metcon / EMOM / Intervals / Beats'}</small></span>
+      {timerActive&&<i className="timer-live-dot">LIVE</i>}
     </summary>
     <div className="training-timer">
-      <div className="timer-modes">{['Rest','Stopwatch','AMRAP','EMOM','Intervals','Metcon'].map(x=><button key={x} className={mode===x?'active':''} onClick={()=>{pause();reset();setMode(x)}}>{x}</button>)}</div>
+      <div className="timer-modes">{['Rest','Stopwatch','AMRAP','EMOM','Intervals','Metcon','Beats'].map(x=><button type="button" key={x} className={mode===x?'active':''} onClick={()=>{pause();reset();setBeatsRunning(false);setMode(x)}}>{x}</button>)}</div>
+
+      {mode==='Beats'?<BeatTimer onActiveChange={setBeatsRunning} onTempoChange={setBeatsTempo}/>:<>
 
       <div className="timer-display">
         {phase&&<span className={'timer-phase '+phase.toLowerCase()}>{phase}</span>}
@@ -202,7 +208,8 @@ export function TrainingTimer() {
         <button className="secondary-action" onClick={reset}>Reset</button>
       </div>
       <label className="wake-toggle"><input type="checkbox" checked={keepAwake} onChange={e=>{setKeepAwake(e.target.checked);localStorage.setItem('wb-setting-wake-lock',String(e.target.checked));if(!e.target.checked)releaseWake();else if(running)requestWake()}}/><span>Keep screen awake while timer runs</span><b>{'wakeLock' in navigator?(wakeActive?'ON':'Available'):'Not supported'}</b></label>
-      <p className="helper-text">Rest mode can start automatically when you mark a set complete. Wake lock only works while WorkoutBoard is visible and the browser/device allows it.</p>
+      <p className="helper-text">Rest mode can start automatically when you mark a set complete. Wake lock only works while WorkSet is visible and the browser/device allows it.</p>
+      </>}
     </div>
   </details>
   </>
