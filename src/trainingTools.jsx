@@ -192,7 +192,7 @@ export function TrainingTimer() {
       {timerActive&&<i className="timer-live-dot">LIVE</i>}
     </summary>
     <div className="training-timer">
-      <div className="timer-modes">{['Rest','Stopwatch','AMRAP','EMOM','Intervals','Metcon','Beats'].map(x=><button type="button" key={x} className={mode===x?'active':''} onClick={()=>{if(mode===x)return;pause();reset();setBeatsRunning(false);setMode(x)}}>{x}</button>)}</div>
+      <div className="timer-modes">{['Rest','Beats','Stopwatch','AMRAP','EMOM','Intervals','Metcon'].map(x=><button type="button" key={x} className={mode===x?'active':''} onClick={()=>{if(mode===x)return;pause();reset();setBeatsRunning(false);setMode(x)}}>{x}</button>)}</div>
 
       {mode==='Beats'?<BeatTimer onActiveChange={onBeatsActive} onTempoChange={setBeatsTempo}/>:<>
 
