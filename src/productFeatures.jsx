@@ -7,6 +7,7 @@ import { offlineUuid, queueUpsert, upsertOfflineFirst, isOfflineError, readOffli
 import { OutdoorTracker, emptyOutdoorTrack, outdoorActivityKind, outdoorMetrics } from './outdoorTracking'
 import {describeOutdoorGps} from './gpsStatus.js'
 import GpsStatusBadge from './GpsStatusBadge.jsx'
+import BeatTimer from './BeatTimer'
 import { effectiveSteps } from './stepTracking'
 import { validWeightDraft,validRepsDraft,displayedSetWeight,recordedWeightValue,canFinishQuickCardio,withoutUnreliableRoute,outdoorDistancePresentation,autosaveDelayMs } from './trackingRules'
 
@@ -854,6 +855,8 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
         running={Boolean(workout.quick_timer_started_at)}
         elapsedSeconds={quickElapsedSeconds}
       />}
+
+      {quickOutdoorKind&&<BeatTimer compact/>}
 
       <section className="simple-card quick-cardio-fields">
         <div className="quick-cardio-details-head">
