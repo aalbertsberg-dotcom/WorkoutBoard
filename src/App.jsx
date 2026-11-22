@@ -18,6 +18,7 @@ import {createQueuedPatchSaver} from './reliableSaves.js'
 import { Capacitor } from '@capacitor/core'
 import { App as NativeApp } from '@capacitor/app'
 import { androidBackAction } from './androidNavigation'
+import { navigationTransition } from './navigationHistory'
 import { emailRedirectUrl } from './nativeAuth'
 import {validFriendEmail,friendInviteMailto} from './inviteLinks'
 import { getActiveWorkoutId,setActiveWorkoutId,clearActiveWorkoutId,cancelledWorkoutIds,getWorkoutCancellationBarrier,rememberWorkoutCancellation,isOpenWorkout,selectWorkoutToRestore } from './workoutLifecycle'
@@ -1250,6 +1251,7 @@ function App() {
   const [feedbackUnread,setFeedbackUnread] = useState(0)
   const [feedbackToast,setFeedbackToast] = useState(null)
   const [progressStartSection,setProgressStartSection] = useState('Overview')
+  const [trackFocus,setTrackFocus] = useState(null)
   const [appNavDepth,setAppNavDepth] = useState(()=>Number(window.history.state?.worksetDepth||0))
   const androidBackHandlerRef=useRef(null)
   const [completedTrainingSessions,setCompletedTrainingSessions] = useState([])
@@ -1260,13 +1262,20 @@ function App() {
 
   const navigateTo = (tab,{progressSection=null,replace=false}={}) => {
     const section=progressSection || (tab==='progress'?progressStartSection:'Overview')
-    if(tab===activeTab && (tab!=='progress'||section===progressStartSection))return
-    const currentDepth=Number(window.history.state?.worksetDepth||appNavDepth||0)
-    const nextDepth=replace?currentDepth:currentDepth+1
-    const state={...(window.history.state||{}),worksetApp:true,tab,progressSection:section,worksetDepth:nextDepth}
-    if(replace)window.history.replaceState(state,'',window.location.href)
+    const depth=Number(window.history.state?.worksetDepth||appNavDepth||0)
+    const transition=navigationTransition({
+      fromTab:activeTab,toTab:tab,
+      currentSection:progressStartSection,targetSection:section,
+      depth,replace,
+    })
+    if(transition.action==='none')return
+    // Section switches stay on the same page; root navigation starts a fresh
+    // location. Only opening a detail screen adds a Back step.
+    const state={...(window.history.state||{}),worksetApp:true,tab,progressSection:section,
+      worksetDepth:transition.depth}
+    if(transition.action==='replace')window.history.replaceState(state,'',window.location.href)
     else window.history.pushState(state,'',window.location.href)
-    setAppNavDepth(nextDepth)
+    setAppNavDepth(transition.depth)
     if(tab==='progress')setProgressStartSection(section)
     setActiveTab(tab)
   }
@@ -1341,6 +1350,7 @@ function App() {
   },[])
 
   const openProgress = (section='Overview') => navigateTo('progress',{progressSection:section})
+  const openTrack = (section='strength') => {setTrackFocus(section);navigateTo('me')}
   const openHistory = (id=null) => {
     const fromProgress=activeTab==='progress'
     setHistoryWorkoutId(id)
@@ -2370,6 +2380,7 @@ function App() {
 
   const openMe = async () => {
     await refreshTrackedProgramsInfo()
+    setTrackFocus(null)
     navigateTo('me')
   }
 
@@ -4406,7 +4417,8 @@ function App() {
               <div>
                 <span className="card-label">YOUR PROGRESS</span>
                 <h2>Progress & Analytics</h2>
-                <p>Charts, PRs, strength trends, body metrics, goals, history, consistency and everything you track.</p>
+                <p>View trends, workout history, records and saved results. To change a value, use Track &amp; Update in Me.</p>
+                <button type="button" className="progress-to-track" onClick={()=>openTrack('strength')}>Track &amp; Update ›</button>
               </div>
             </div>
             <PlatformProgress
@@ -4422,6 +4434,9 @@ function App() {
               trackedProgramInfo={trackedTodayInfo}
               trackedProgramsInfo={trackedProgramsInfo}
               initialSection={progressStartSection}
+              oneRepMaxes={oneRepMaxes}
+              onTrackStrength={()=>openTrack('strength')}
+              onTrackMeasurements={()=>openTrack('measurements')}
               onSectionChange={section=>openProgress(section)}
               onOpenHistory={()=>openHistory()}
               onOpenWorkout={id=>openHistory(id)}
@@ -4435,8 +4450,9 @@ function App() {
             displayName={displayName} onSaveDisplayName={saveDisplayName}
             onOpenHistory={()=>openHistory()}
             onOpenProgress={()=>openProgress('Overview')}
-            onOpenWeight={()=>openProgress('Weight & Measurements')}
+            onOpenWeight={()=>openTrack('measurements')}
             onOpenPrograms={()=>navigateTo('program')}
+            autoOpenSection={trackFocus}
             profile={profile} setProfile={setProfile}
             progress={progress} lifts={lifts} formatWeight={formatWeight}
             programs={programs} dbNameToProgram={dbNameToProgram}
