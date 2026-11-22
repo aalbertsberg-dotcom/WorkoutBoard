@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase'
 import BeatTimer from './BeatTimer'
+import {keepTimerPanelVisible,canSwitchTimerMode,timerIsActive} from './timerPolicies'
 import {buildPersonalRecords} from './personalRecords'
 import { readOfflineState, writeOfflineState, upsertOfflineFirst } from './offline'
 
@@ -27,8 +28,9 @@ function beep() {
   if(vibrate) try { navigator.vibrate?.([120,60,120]) } catch {}
 }
 
-export function TrainingTimer() {
+export function TrainingTimer({showPanel=true,onReveal=null}) {
   const [mode,setMode]=useState('Rest')
+  const [modeMessage,setModeMessage]=useState('')
   const [beatsRunning,setBeatsRunning]=useState(false)
   const [beatsTempo,setBeatsTempo]=useState(120)
   // Keep the BPM controls visible on Start. The user may collapse them
@@ -130,11 +132,12 @@ export function TrainingTimer() {
 
   const start=()=>{
     if(running)return
+    setModeMessage('')
     endBeeped.current=false
     startAt.current=Date.now()
     baseElapsed.current=elapsed
     setRunning(true)
-    setExpanded(false)
+    setExpanded(keepTimerPanelVisible(mode))
   }
   const pause=()=>{
     if(!running)return
@@ -148,9 +151,12 @@ export function TrainingTimer() {
     baseElapsed.current=0
     startAt.current=null
     endBeeped.current=false
+    setModeMessage('')
     releaseWake()
   }
   const startRest=(seconds=restSeconds)=>{
+    // An auto-rest event must not replace an ongoing AMRAP/EMOM/Metcon workout.
+    if((running||elapsed>0)&&mode!=='Rest')return
     setMode('Rest');setRestSeconds(seconds);localStorage.setItem('wb-rest-seconds',String(seconds))
     setElapsed(0);baseElapsed.current=0;startAt.current=Date.now();endBeeped.current=false;setRunning(true);setExpanded(false)
   }
@@ -159,9 +165,22 @@ export function TrainingTimer() {
     const listener=e=>startRest(Number(e.detail?.seconds||restSeconds))
     window.addEventListener('workoutboard:rest-timer',listener)
     return()=>window.removeEventListener('workoutboard:rest-timer',listener)
-  },[restSeconds])
+  },[restSeconds,mode,running,elapsed])
 
-  const timerActive=running||(mode==='Beats'&&beatsRunning)
+  const timerActive=timerIsActive({running,beatsRunning,mode})
+  const switchMode=next=>{
+    if(mode===next)return
+    if(!canSwitchTimerMode({running,beatsRunning,elapsed})){
+      setModeMessage('Pause and reset the current timer before switching modes.')
+      setExpanded(true)
+      return
+    }
+    setModeMessage('');setMode(next)
+  }
+  const revealTimer=()=>{
+    setExpanded(true)
+    if(!showPanel)onReveal?.()
+  }
   let display=elapsed
   let phase=''
   let round=''
@@ -185,16 +204,23 @@ export function TrainingTimer() {
   if(mode==='Stopwatch') display=elapsed
 
   return <>
-    {timerActive&&!expanded&&<button type="button" className={'floating-workout-timer '+(phase?phase.toLowerCase():'')} onClick={()=>setExpanded(true)}>
+    {timerActive&&(!expanded||!showPanel)&&<button type="button" className={'floating-workout-timer '+(phase?phase.toLowerCase():'')} onClick={revealTimer}>
       <span>{phase||mode}</span><strong>{mode==='Beats'?`${beatsTempo} BPM`:fmt(display)}</strong>{round&&<small>{round}</small>}
     </button>}
-    <details className={'training-timer-panel '+(timerActive&&!expanded?'timer-floating-active':'')} open={expanded} onToggle={e=>setExpanded(e.currentTarget.open)}>
+    {showPanel&&<details className={'training-timer-panel '+(timerActive&&!expanded?'timer-floating-active':'')} open={expanded} onToggle={e=>{
+      // Work timers remain visible while running; only Rest can collapse
+      // automatically into a floating timer.
+      if(timerActive&&keepTimerPanelVisible(mode)&&!e.currentTarget.open){
+        setExpanded(true)
+      }else setExpanded(e.currentTarget.open)
+    }}>
     <summary>
       <span><b>⏱ Timer</b><small>{timerActive?`${mode} · ${mode==='Beats'?beatsTempo+' BPM':fmt(display)}`:'Rest / Metcon / EMOM / Intervals / Beats'}</small></span>
       {timerActive&&<i className="timer-live-dot">LIVE</i>}
     </summary>
     <div className="training-timer">
-      <div className="timer-modes">{['Rest','Beats','Stopwatch','AMRAP','EMOM','Intervals','Metcon'].map(x=><button type="button" key={x} className={mode===x?'active':''} onClick={()=>{if(mode===x)return;pause();reset();setBeatsRunning(false);setMode(x)}}>{x}</button>)}</div>
+      <div className="timer-modes">{['Rest','Beats','Stopwatch','AMRAP','EMOM','Intervals','Metcon'].map(x=><button type="button" key={x} className={mode===x?'active':''} onClick={()=>switchMode(x)}>{x}</button>)}</div>
+      {modeMessage&&<p className="timer-mode-warning" role="status">{modeMessage}</p>}
 
       {mode==='Beats'?<BeatTimer onActiveChange={onBeatsActive} onTempoChange={setBeatsTempo}/>:<>
 
@@ -224,7 +250,7 @@ export function TrainingTimer() {
       <p className="helper-text">Rest mode can start automatically when you mark a set complete. Wake lock only works while WorkSet is visible and the browser/device allows it.</p>
       </>}
     </div>
-  </details>
+  </details>}
   </>
 }
 
