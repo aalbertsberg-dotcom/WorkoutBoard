@@ -210,13 +210,7 @@ export function TrainingTimer({showPanel=true,onReveal=null}) {
     {timerActive&&(!expanded||!showPanel)&&<button type="button" className={'floating-workout-timer '+(phase?phase.toLowerCase():'')} onClick={revealTimer}>
       <span>{phase||mode}</span><strong>{mode==='Beats'?`${beatsTempo} BPM`:fmt(display)}</strong>{round&&<small>{round}</small>}
     </button>}
-    {showPanel&&<details className={'training-timer-panel '+(timerActive&&!expanded?'timer-floating-active':'')} open={expanded} onToggle={e=>{
-      // Work timers remain visible while running; only Rest can collapse
-      // automatically into a floating timer.
-      if(timerActive&&keepTimerPanelVisible(mode)&&!e.currentTarget.open){
-        setExpanded(true)
-      }else setExpanded(e.currentTarget.open)
-    }}>
+    {showPanel&&<details className={'training-timer-panel '+(timerActive&&!expanded?'timer-floating-active':'')} open={expanded} onToggle={e=>setExpanded(e.currentTarget.open)}>
     <summary>
       <span><b>⏱ Timer</b><small>{timerActive?`${mode} · ${mode==='Beats'?beatsTempo+' BPM':fmt(display)}`:'Rest / Metcon / EMOM / Intervals / Beats'}</small></span>
       {timerActive&&<i className="timer-live-dot">LIVE</i>}
