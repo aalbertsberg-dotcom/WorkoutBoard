@@ -2,6 +2,7 @@ import {confirmWorkset,noticeWorkset} from './worksetDialogs'
 import {buildAccountBackup,mergeAccountBackup} from './accountBackup.js'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase'
+import {buildPersonalRecords,REP_PR_TARGETS} from './personalRecords'
 
 const today=()=>new Date().toISOString().slice(0,10)
 const round5=n=>Math.round(Number(n||0)/5)*5
@@ -252,20 +253,6 @@ export function CompletedWorkoutCenter({session}) {
   </section>
 }
 
-function repPrs(rows){
-  const map={}
-  for(const r of rows){
-    const list=[]
-    for(const s of r.workout?.main||[])list.push({name:r.primary_lift||r.title,weight:Number(s.weight||0),reps:Number(s.actualReps||0)})
-    for(const x of r.workout?.exercises||[]){const p=parseSet(x.result);if(p)list.push({name:x.name,weight:p.weight,reps:p.reps})}
-    for(const x of list){
-      if(!x.weight||!x.reps)continue
-      const key=x.name||'Exercise';if(!map[key])map[key]={}
-      for(const rr of [1,3,5,8,10])if(x.reps>=rr)map[key][rr]=Math.max(map[key][rr]||0,x.weight)
-    }
-  }
-  return map
-}
 function monthCells(month){
   const first=new Date(month.getFullYear(),month.getMonth(),1),last=new Date(month.getFullYear(),month.getMonth()+1,0)
   const start=new Date(first);start.setDate(first.getDate()-first.getDay())
@@ -299,7 +286,7 @@ export function AdvancedProgressCenter({session}) {
     setPhotoUrls(urls)
   }
   useEffect(()=>{load()},[session?.user?.id])
-  const prs=useMemo(()=>repPrs(sessions),[sessions])
+  const prs=useMemo(()=>buildPersonalRecords(sessions),[sessions])
   const totalVolume=sessions.reduce((a,r)=>a+Number(r.total_volume||0),0)
   const achievements=useMemo(()=>{
     const arr=[]
@@ -336,7 +323,16 @@ export function AdvancedProgressCenter({session}) {
   return <section className="advanced-progress">
     <div className="segmented advanced-tabs">{['History','Records','Month','Milestones','Equipment','Photos'].map(x=><button className={tab===x?'active':''} key={x} onClick={()=>setTab(x)}>{x}</button>)}</div>
     {tab==='History'&&<CompletedWorkoutCenter session={session}/>}
-    {tab==='Records'&&<section className="simple-card"><div className="section-heading"><div><span className="card-label">PERSONAL RECORDS</span><h3>Rep PR table</h3></div></div><div className="rep-pr-table"><div className="rep-pr-head"><b>Exercise</b>{[1,3,5,8,10].map(r=><b key={r}>{r}RM</b>)}</div>{Object.entries(prs).sort().map(([name,v])=><div key={name}><strong>{name}</strong>{[1,3,5,8,10].map(r=><span key={r}>{v[r]?v[r]+' lb':'—'}</span>)}</div>)}</div></section>}
+    {tab==='Records'&&<section className="simple-card">
+      <div className="section-heading"><div><span className="card-label">PERSONAL RECORDS</span><h3>Your strongest completed sets</h3></div></div>
+      <p className="helper-text">Only completed weighted sets count. A “5+ reps” record is your heaviest set of at least 5 reps; estimated 1RM is calculated, not a tested max.</p>
+      {prs.length
+        ? <div className="rep-pr-card-grid">{prs.map(pr=><article className="rep-pr-card" key={pr.name}>
+            <div className="rep-pr-card-head"><strong>{pr.name}</strong><div><span>Best estimated 1RM</span><b>{Math.round(pr.e1rm)} lb</b><small>{pr.weight} lb × {pr.reps} reps</small></div></div>
+            <div className="rep-pr-buckets">{REP_PR_TARGETS.map(reps=><div key={reps}><span>{reps}+ reps</span><strong>{pr.bestByReps[reps]?pr.bestByReps[reps]+' lb':'—'}</strong></div>)}</div>
+          </article>)}</div>
+        : <div className="empty-state action-empty"><strong>No completed weighted sets yet.</strong><span>Finish weighted strength sets and your records will appear here.</span></div>}
+    </section>}
     {tab==='Month'&&<section className="simple-card"><div className="month-head"><button onClick={()=>setMonth(new Date(month.getFullYear(),month.getMonth()-1,1))}>‹</button><h3>{month.toLocaleDateString(undefined,{month:'long',year:'numeric'})}</h3><button onClick={()=>setMonth(new Date(month.getFullYear(),month.getMonth()+1,1))}>›</button></div><div className="month-grid">{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(x=><b key={x}>{x}</b>)}{cells.map(d=>{const key=d.toISOString().slice(0,10),done=doneByDate[key]?.length||0,pl=scheduleByDateSafe(scheduledByDate,key),same=d.getMonth()===month.getMonth();return <div className={(same?'':'muted')+(done?' has-done':'')+(pl?' has-plan':'')} key={key}><span>{d.getDate()}</span>{done>0&&<i>{done}✓</i>}{pl>0&&!done&&<i>{pl} plan</i>}</div>})}</div></section>}
     {tab==='Milestones'&&<section className="simple-card"><div className="section-heading"><div><span className="card-label">MILESTONES</span><h3>Earned from your actual training</h3></div></div><div className="milestone-grid">{achievements.map(x=><div key={x}>✓ {x}</div>)}</div>{!achievements.length&&<div className="empty-state">No milestones yet. Keep logging workouts and they will appear automatically.</div>}</section>}
     {tab==='Equipment'&&<section className="equipment-stack"><section className="simple-card"><div className="section-heading"><div><span className="card-label">EQUIPMENT PROFILES</span><h3>Home / commercial / travel</h3></div></div><div className="equipment-form"><input value={equipmentDraft.name} onChange={e=>setEquipmentDraft(v=>({...v,name:e.target.value}))}/><input value={equipmentDraft.equipment} onChange={e=>setEquipmentDraft(v=>({...v,equipment:e.target.value}))} placeholder="Equipment, comma separated"/><input value={equipmentDraft.plates} onChange={e=>setEquipmentDraft(v=>({...v,plates:e.target.value}))} placeholder="Plates"/><button onClick={saveEquipment}>Save profile</button></div><div className="equipment-list">{profiles.map(p=><div key={p.id}><div><strong>{p.name}</strong><span>{(p.equipment||[]).join(', ')}</span></div><button className={p.is_active?'active':''} onClick={()=>activate(p.id)}>{p.is_active?'Active':'Use'}</button></div>)}</div></section><section className="simple-card"><div className="section-heading"><div><span className="card-label">SUBSTITUTIONS</span><h3>Exercise swaps</h3></div></div><div className="sub-form"><input value={subDraft.exercise} onChange={e=>setSubDraft(v=>({...v,exercise:e.target.value}))}/><span>→</span><input value={subDraft.substitute} onChange={e=>setSubDraft(v=>({...v,substitute:e.target.value}))}/><input value={subDraft.reason} onChange={e=>setSubDraft(v=>({...v,reason:e.target.value}))} placeholder="Reason / equipment"/><button onClick={addSub}>Add</button></div>{subs.map(s=><div className="sub-row" key={s.id}><strong>{s.exercise}</strong><span>→ {s.substitute}</span><small>{s.reason}</small></div>)}</section></section>}
