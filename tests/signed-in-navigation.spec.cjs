@@ -290,11 +290,16 @@ test('Board draft survives switching tabs and Move drags a saved stroke',async({
   await expect(board).toBeVisible({timeout:15000})
   await expect.poll(async()=>page.evaluate(k=>JSON.parse(localStorage.getItem(k)||'null')?.items?.length,key)).toBe(1)
   await board.getByRole('button',{name:'Move',exact:true}).click()
-  const before=await page.evaluate(k=>JSON.parse(localStorage.getItem(k)).items[0].start.x,key)
+  const savedShape=await page.evaluate(k=>JSON.parse(localStorage.getItem(k)).items[0],key)
+  const before=savedShape.start.x
   const restored=await canvas.boundingBox()
   const q=(x,y)=>({x:restored.x+x*restored.width,y:restored.y+y*restored.height})
-  await page.mouse.move(q(.43,.44).x,q(.43,.44).y);await page.mouse.down()
-  await page.mouse.move(q(.54,.48).x,q(.54,.48).y,{steps:6});await page.mouse.up()
+  // Grab the actual center of the restored line, not an approximate pixel.
+  const grab={x:(savedShape.start.x+savedShape.end.x)/2,y:(savedShape.start.y+savedShape.end.y)/2}
+  await page.mouse.move(q(grab.x,grab.y).x,q(grab.x,grab.y).y)
+  await page.mouse.down()
+  await page.mouse.move(q(grab.x+.1,grab.y+.04).x,q(grab.x+.1,grab.y+.04).y,{steps:12})
+  await page.mouse.up()
   await expect.poll(async()=>page.evaluate(k=>JSON.parse(localStorage.getItem(k)).items[0].start.x,key)).toBeGreaterThan(before)
   expect(errors).toEqual([])
 })
@@ -425,7 +430,7 @@ test('Weight entry stays readable with the keyboard open on narrow phones',async
   for(const width of [320,360,390]){
     await page.setViewportSize({width,height:780})
     const card=section.locator('.measurement-edit-card').first()
-    const opener=card.getByRole('button',{name:/Bodyweight/})
+    const opener=card.locator('button.measurement-edit-main')
     if(await opener.count())await opener.click()
     const field=section.getByRole('spinbutton',{name:'Enter Bodyweight in lb'})
     await field.fill('197.33')
