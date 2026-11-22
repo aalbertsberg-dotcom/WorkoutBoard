@@ -182,7 +182,7 @@ test('Walk includes an independent optional beat timer with adjustable tempo',as
   expect(errors).toEqual([])
 })
 
-test('Progress overview and Records show the same modern completed strength PR',async({page})=>{
+test('Completed strength records do not automatically become new PR announcements',async({page})=>{
   const errors=[]
   page.on('pageerror',e=>errors.push(e.message))
   await signedIn(page,{withStrengthSession:true})
@@ -190,8 +190,7 @@ test('Progress overview and Records show the same modern completed strength PR',
   await page.getByRole('button',{name:/Progress & Analytics/}).click()
   await expect(page.locator('.app-header h1')).toHaveText('Progress')
   const overview=page.locator('.recent-pr-home')
-  await expect(overview).toContainText('Bench Press',{timeout:15000})
-  await expect(overview).not.toContainText('No PRs yet')
+  await expect(overview).toContainText('No PRs yet',{timeout:15000})
   await page.locator('.progress-section-tabs').getByRole('button',{name:'History'}).click()
   await page.locator('.advanced-tabs').getByRole('button',{name:'Records'}).click()
   await expect(page.locator('.rep-pr-card')).toContainText('Bench Press')
