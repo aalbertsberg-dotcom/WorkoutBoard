@@ -343,3 +343,64 @@ test('Beats remains mounted and can be stopped after visiting Board',async({page
   await expect(page.locator('.floating-workout-timer')).toHaveCount(0)
   expect(errors).toEqual([])
 })
+
+test('Main Board can be cleared after confirmation without deleting a saved board',async({page})=>{
+  const errors=[]
+  page.on('pageerror',error=>errors.push(error.message))
+  await signedIn(page)
+  const nav=page.getByRole('navigation',{name:'Workset mobile navigation'})
+  await nav.getByRole('button',{name:'Board'}).click()
+  const board=page.locator('.draw-board-section')
+  await expect(board).toBeVisible({timeout:15000})
+  const clearButton=board.getByRole('button',{name:'Clear Main Board'})
+  await expect(clearButton).toBeEnabled()
+  await board.getByRole('button',{name:'Line'}).click()
+  const rect=await board.locator('canvas').boundingBox()
+  await page.mouse.move(rect.x+rect.width*.2,rect.y+rect.height*.25)
+  await page.mouse.down()
+  await page.mouse.move(rect.x+rect.width*.6,rect.y+rect.height*.6,{steps:5})
+  await page.mouse.up()
+  const draftKey='workset-board-draft-v1:'+userId+':unsaved'
+  await expect.poll(()=>page.evaluate(k=>JSON.parse(localStorage.getItem(k)||'null')?.items?.length,draftKey)).toBe(1)
+  await clearButton.click()
+  await expect(page.getByRole('alertdialog')).toContainText('Clear the unsaved Main Board?')
+  await page.getByRole('alertdialog').getByRole('button',{name:'Cancel'}).click()
+  await expect.poll(()=>page.evaluate(k=>JSON.parse(localStorage.getItem(k)||'null')?.items?.length,draftKey)).toBe(1)
+  await clearButton.click()
+  await page.getByRole('alertdialog').getByRole('button',{name:'Confirm'}).click()
+  await expect(board.getByRole('status')).toContainText('Main Board cleared')
+  await expect.poll(()=>page.evaluate(k=>localStorage.getItem(k),draftKey)).toBeNull()
+  expect(errors).toEqual([])
+})
+
+test('Intervals mobile countdown and inputs never extend past the phone width',async({page})=>{
+  const errors=[]
+  page.on('pageerror',error=>errors.push(error.message))
+  await page.setViewportSize({width:360,height:780})
+  await signedIn(page)
+  const timer=page.locator('.training-timer-panel')
+  await timer.locator('summary').click()
+  await timer.getByRole('button',{name:'Intervals'}).click()
+  const elements='.timer-display,.timer-display strong,.timer-round,.timer-phase,.timer-settings-grid input,.timer-controls button'
+  for(const width of [320,360,390]){
+    await page.setViewportSize({width,height:780})
+    const layout=await page.evaluate(selector=>{
+      const viewport=document.documentElement.clientWidth
+      const panel=document.querySelector('.training-timer-panel').getBoundingClientRect()
+      return [...document.querySelectorAll(selector)].filter(x=>x.getClientRects().length)
+        .map(x=>({tag:x.tagName,text:x.textContent?.trim().slice(0,30),right:x.getBoundingClientRect().right,
+          left:x.getBoundingClientRect().left,panelRight:panel.right,viewport}))
+    },elements)
+    expect(layout.length).toBeGreaterThan(5)
+    for(const item of layout){
+      expect(item.left,item.text).toBeGreaterThanOrEqual(-1)
+      expect(item.right,item.text).toBeLessThanOrEqual(item.panelRight+1)
+      expect(item.right,item.text).toBeLessThanOrEqual(width+1)
+    }
+  }
+  await timer.getByRole('button',{name:'Start',exact:true}).click()
+  await expect(timer.locator('.timer-phase')).toContainText('WORK')
+  await expect(timer.locator('.timer-round')).toContainText('Round 1 /')
+  await expect(timer.locator('.timer-display strong')).toBeVisible()
+  expect(errors).toEqual([])
+})
