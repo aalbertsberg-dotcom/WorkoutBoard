@@ -8746,3 +8746,52 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   .draw-actions {grid-template-columns:repeat(2,minmax(0,1fr));}
   .draw-tools button:first-child {border-color:#6c8daa;}
 }
+
+/* 2.7.14 — Interval timer mobile overflow regression.
+   Number inputs have a browser intrinsic minimum width; three 1fr columns
+   could enlarge the timer grid and push the countdown outside the viewport. */
+.training-timer-panel {
+  min-width:0;
+  max-width:100%;
+}
+.training-timer {
+  grid-template-columns:minmax(0,1fr);
+  min-width:0;
+  max-width:100%;
+}
+.training-timer > *,
+.timer-modes,
+.timer-display,
+.timer-settings-grid,
+.timer-controls {
+  min-width:0;
+  max-width:100%;
+  box-sizing:border-box;
+}
+.timer-settings-grid,
+.training-timer .timer-settings-grid {
+  width:100%;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+}
+.timer-settings-grid label {
+  min-width:0;
+  max-width:100%;
+  overflow:hidden;
+}
+.timer-settings-grid input {
+  display:block;
+  width:100%;
+  min-width:0;
+  max-width:100%;
+  box-sizing:border-box;
+}
+.timer-display {
+  width:100%;
+  overflow:hidden;
+  text-align:center;
+}
+.timer-display strong {
+  max-width:100%;
+  font-size:clamp(38px,11vw,70px);
+}
+.timer-round,.timer-phase {max-width:100%;overflow-wrap:break-word;}
