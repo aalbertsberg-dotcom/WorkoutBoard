@@ -606,10 +606,11 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
               {isEditing?<form className="measurement-inline-form" onSubmit={e=>{e.preventDefault();saveInlineMeasurement(key)}}>
                 <span className="measurement-inline-label">{label}</span>
                 <div className="measurement-inline-row">
-                  <div className="input-with-unit"><input autoFocus type="number" step={unit==='%'?'0.1':'0.01'} inputMode="decimal" value={inlineMeasurementValue} onChange={e=>{setInlineMeasurementValue(e.target.value);setInlineMeasurementStatus('')}}/><b>{unit}</b></div>
+                  <div className="input-with-unit"><input aria-label={'Enter '+label+' in '+unit} autoFocus type="number" step={unit==='%'?'0.1':'0.01'} inputMode="decimal" value={inlineMeasurementValue} onChange={e=>{setInlineMeasurementValue(e.target.value);setInlineMeasurementStatus('')}}/><b>{unit}</b></div>
                   <button type="button" className="measurement-inline-icon cancel" aria-label={'Cancel '+label+' edit'} onClick={()=>{setEditingMeasurementKey('');setInlineMeasurementStatus('')}}>×</button>
                   <button type="submit" className="measurement-inline-icon save" aria-label={'Save '+label} disabled={inlineMeasurementStatus==='Saving…'}>{inlineMeasurementStatus==='Saving…'?'…':'✓'}</button>
                 </div>
+                <output className="measurement-entry-preview">{inlineMeasurementValue!==''?inlineMeasurementValue+' '+unit:'Enter '+label.toLowerCase()+' above'}</output>
                 <small className={inlineMeasurementStatus&&inlineMeasurementStatus!=='Saving…'&&inlineMeasurementStatus!==key?'measurement-inline-error':'measurement-inline-context'}>
                   {inlineMeasurementStatus&&inlineMeasurementStatus!=='Saving…'&&inlineMeasurementStatus!==key?inlineMeasurementStatus:context}
                 </small>
