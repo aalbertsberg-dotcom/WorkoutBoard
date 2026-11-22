@@ -49,6 +49,8 @@ export function TrainingTimer({showPanel=true,onReveal=null}) {
   const [keepAwake,setKeepAwake]=useState(()=>localStorage.getItem('wb-setting-wake-lock')!=='false')
   const [wakeActive,setWakeActive]=useState(false)
   const [expanded,setExpanded]=useState(false)
+  const restGuardRef=useRef(null)
+  restGuardRef.current={mode,running,elapsed}
   const startAt=useRef(null)
   const baseElapsed=useRef(0)
   const wakeRef=useRef(null)
@@ -156,7 +158,8 @@ export function TrainingTimer({showPanel=true,onReveal=null}) {
   }
   const startRest=(seconds=restSeconds)=>{
     // An auto-rest event must not replace an ongoing AMRAP/EMOM/Metcon workout.
-    if((running||elapsed>0)&&mode!=='Rest')return
+    const state=restGuardRef.current
+    if((state?.running||state?.elapsed>0)&&state?.mode!=='Rest')return
     setMode('Rest');setRestSeconds(seconds);localStorage.setItem('wb-rest-seconds',String(seconds))
     setElapsed(0);baseElapsed.current=0;startAt.current=Date.now();endBeeped.current=false;setRunning(true);setExpanded(false)
   }
@@ -165,7 +168,7 @@ export function TrainingTimer({showPanel=true,onReveal=null}) {
     const listener=e=>startRest(Number(e.detail?.seconds||restSeconds))
     window.addEventListener('workoutboard:rest-timer',listener)
     return()=>window.removeEventListener('workoutboard:rest-timer',listener)
-  },[restSeconds,mode,running,elapsed])
+  },[restSeconds])
 
   const timerActive=timerIsActive({running,beatsRunning,mode})
   const switchMode=next=>{
