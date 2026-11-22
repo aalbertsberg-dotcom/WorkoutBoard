@@ -75,9 +75,11 @@ export function DrawWhiteboard({session}) {
     const userId=session.user.id
     const {data,error}=await supabase.from('whiteboard_drawings').select('*').eq('user_id',userId).order('updated_at',{ascending:false})
     if(error){
-      // Never discard an on-device draft because a network request failed.
+      // Never discard a saved-board draft because a network request failed.
+      const last=window.localStorage.getItem('workset-board-current:'+userId)
+      restoreContent(last&&last!=='unsaved'?{id:last,title:'Board',drawing:{items:[]}}:null,userId)
       setMessage(error.message+' — your local draft is kept.')
-      restoreContent(null,userId);setLoaded(true);return
+      setLoaded(true);return
     }
     const rows=data||[]
     setBoards(rows)
@@ -90,10 +92,11 @@ export function DrawWhiteboard({session}) {
   useEffect(()=>{loadBoards()},[session?.user?.id])
 
   const selectBoard=id=>{
+    if(!session?.user)return
     saveDraftOnDevice()
-    const record=boards.find(x=>x.id===id)
-    if(!record)return
-    window.localStorage.setItem('workset-board-current:'+session.user.id,id)
+    const record=id?boards.find(x=>x.id===id):null
+    if(id&&!record)return
+    window.localStorage.setItem('workset-board-current:'+session.user.id,id||'unsaved')
     restoreContent(record,session.user.id)
   }
 
