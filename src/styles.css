@@ -8573,3 +8573,90 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   .beats-adjust { grid-template-columns:46px minmax(50px,1fr) 46px; }
   .beats-adjust .beats-tap { grid-column:1 / -1; }
 }
+
+/* 2.7.8 - Records on small screens: preserve complete information without a clipped wide table. */
+.rep-pr-card-grid {
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));
+  gap:12px;
+  min-width:0;
+}
+.rep-pr-card {
+  min-width:0;
+  padding:12px;
+  border:1px solid #314461;
+  border-radius:12px;
+  background:#0d1728;
+}
+.rep-pr-card-head {
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:10px;
+  margin-bottom:12px;
+}
+.rep-pr-card-head > strong {
+  min-width:0;
+  overflow-wrap:anywhere;
+  font-size:14px;
+  color:#f3f7fc;
+}
+.rep-pr-card-head > div { display:grid;gap:2px;text-align:right;flex-shrink:0; }
+.rep-pr-card-head > div span,
+.rep-pr-card-head > div small { color:#a7b6c9;font-size:10px; }
+.rep-pr-card-head > div b { color:#d9f99d;font-size:17px; }
+.rep-pr-buckets {
+  display:grid;
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  gap:5px;
+}
+.rep-pr-buckets > div {
+  min-width:0;
+  display:grid;
+  gap:4px;
+  padding:8px 3px;
+  border:1px solid #283951;
+  border-radius:7px;
+  text-align:center;
+  background:#152337;
+}
+.rep-pr-buckets span {font-size:9px;color:#a7b6c9;white-space:nowrap;}
+.rep-pr-buckets strong {font-size:clamp(10px,2.8vw,13px);color:#f3f7fc;white-space:nowrap;}
+.progress-history-extra-tools {
+  min-width:0;
+  border:1px solid #344761;
+  border-radius:12px;
+  overflow:hidden;
+}
+.progress-history-extra-tools > summary {
+  cursor:pointer;
+  list-style:none;
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:space-between;
+  gap:4px 12px;
+  padding:14px;
+  font-size:13px;
+  font-weight:850;
+  background:#101d30;
+}
+.progress-history-extra-tools > summary::-webkit-details-marker { display:none; }
+.progress-history-extra-tools > summary small {color:#96a8bf;font-weight:550;font-size:11px;}
+.progress-history-extra-tools > .progress-toolbox { padding:12px; }
+.beats-explainer {
+  margin:0;
+  padding:9px 10px;
+  border-radius:9px;
+  border:1px solid #355573;
+  background:#0c1c2c;
+  color:#c3d1df;
+  font-size:12px;
+  line-height:1.45;
+}
+.beats-explainer strong {color:#f3f7fc;}
+@media(max-width:400px) {
+  .rep-pr-card {padding:10px;}
+  .rep-pr-buckets {gap:3px;}
+  .rep-pr-buckets > div {padding:8px 1px;}
+  .rep-pr-card-head > div b {font-size:15px;}
+}
