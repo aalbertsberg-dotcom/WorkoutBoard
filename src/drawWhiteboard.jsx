@@ -1,6 +1,7 @@
 import {confirmWorkset,promptWorkset} from './worksetDialogs'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from './supabase'
+import {hitTestBoardItem,moveBoardItem,boardItemBounds,readBoardDraft,saveBoardDraft,clearBoardDraft,preferredBoardContent} from './whiteboardModel'
 
 const palette=['#111827','#dc2626','#2563eb','#16a34a','#9333ea','#ea580c']
 const clamp=v=>Math.max(0,Math.min(1,v))
@@ -17,11 +18,14 @@ async function fileToDataUrl(file){
 
 export function DrawWhiteboard({session}) {
   const canvasRef=useRef(null),wrapRef=useRef(null),drawingRef=useRef(false),currentRef=useRef(null),imageInputRef=useRef(null),imageCacheRef=useRef({})
+  const draggingRef=useRef(null),dirtyRef=useRef(false),boardStateRef=useRef(null)
   const [boards,setBoards]=useState([])
   const [boardId,setBoardId]=useState(null)
   const [boardTitle,setBoardTitle]=useState('Main Board')
   const [items,setItems]=useState([])
   const [redo,setRedo]=useState([])
+  const [undoHistory,setUndoHistory]=useState([])
+  const [selectedId,setSelectedId]=useState(null)
   const [tool,setTool]=useState('pen')
   const [color,setColor]=useState('#111827')
   const [width,setWidth]=useState(4)
@@ -31,29 +35,60 @@ export function DrawWhiteboard({session}) {
   const [loaded,setLoaded]=useState(false)
   const [zoom,setZoom]=useState(1)
 
+  boardStateRef.current={items,boardTitle,grid,boardId}
+
+  const saveDraftOnDevice=()=>{
+    if(!loaded||!dirtyRef.current||!session?.user?.id)return
+    const state=boardStateRef.current
+    const ok=saveBoardDraft(window.localStorage,session.user.id,state.boardId,
+      {items:state.items,title:state.boardTitle,grid:state.grid})
+    if(!ok)setMessage('Could not save draft on this device. Use Save board to sync it now.')
+  }
+  useEffect(()=>{saveDraftOnDevice()},[items,boardTitle,grid,boardId,loaded,session?.user?.id])
+  useEffect(()=>()=>{saveDraftOnDevice()},[session?.user?.id])
+
+  const rememberChange=()=>{
+    setUndoHistory(history=>[...history.slice(-49),boardStateRef.current.items])
+    setRedo([])
+    dirtyRef.current=true
+  }
+  const restoreContent=(record,userId)=>{
+    const raw=record?.drawing||{}
+    const saved={title:record?.title||'Main Board',items:Array.isArray(raw.items)?raw.items:(raw.strokes||[]).map(x=>({...x,type:'stroke'})),
+      grid:raw.grid!==false,updatedAt:Date.parse(record?.updated_at||'')||0}
+    const draft=readBoardDraft(window.localStorage,userId,record?.id||null)
+    const content=preferredBoardContent(saved,draft)
+    dirtyRef.current=content.source==='draft'
+    setBoardId(record?.id||null);setBoardTitle(content.title);setGrid(content.grid)
+    setItems(content.items);setRedo([]);setUndoHistory([]);setSelectedId(null)
+    setMessage(dirtyRef.current?'Recovered your unsaved draft on this device.':'')
+  }
+
   const loadBoards=async(preferId=null)=>{
     if(!session?.user)return
-    const {data,error}=await supabase.from('whiteboard_drawings').select('*').eq('user_id',session.user.id).order('updated_at',{ascending:false})
-    if(error){setMessage(error.message);setLoaded(true);return}
-    setBoards(data||[])
-    const chosen=(data||[]).find(x=>x.id===preferId)||(data||[])[0]
-    if(chosen){
-      const d=chosen.drawing||{}
-      setBoardId(chosen.id);setBoardTitle(chosen.title||'Main Board');setGrid(d.grid!==false)
-      setItems(Array.isArray(d.items)?d.items:(d.strokes||[]).map(s=>({...s,type:'stroke'})))
-    }else{
-      setBoardId(null);setBoardTitle('Main Board');setGrid(true);setItems([])
+    const userId=session.user.id
+    const {data,error}=await supabase.from('whiteboard_drawings').select('*').eq('user_id',userId).order('updated_at',{ascending:false})
+    if(error){
+      // Never discard an on-device draft because a network request failed.
+      setMessage(error.message+' — your local draft is kept.')
+      restoreContent(null,userId);setLoaded(true);return
     }
-    setRedo([]);setLoaded(true)
+    const rows=data||[]
+    setBoards(rows)
+    const last=window.localStorage.getItem('workset-board-current:'+userId)
+    const chosen=rows.find(x=>x.id===(preferId||last))||(last==='unsaved'?null:rows[0])
+    restoreContent(chosen||null,userId)
+    setLoaded(true)
   }
 
   useEffect(()=>{loadBoards()},[session?.user?.id])
 
   const selectBoard=id=>{
-    const b=boards.find(x=>x.id===id);if(!b)return
-    const d=b.drawing||{}
-    setBoardId(b.id);setBoardTitle(b.title||'Board');setGrid(d.grid!==false)
-    setItems(Array.isArray(d.items)?d.items:(d.strokes||[]).map(s=>({...s,type:'stroke'})));setRedo([]);setMessage('')
+    saveDraftOnDevice()
+    const record=boards.find(x=>x.id===id)
+    if(!record)return
+    window.localStorage.setItem('workset-board-current:'+session.user.id,id)
+    restoreContent(record,session.user.id)
   }
 
   const drawArrow=(ctx,x1,y1,x2,y2)=>{
