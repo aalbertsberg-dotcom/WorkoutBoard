@@ -191,18 +191,20 @@ export function TrainingTimer({showPanel=true,onReveal=null}) {
     display=Math.max(0,target-elapsed)
   }
   if(mode==='EMOM'){
-    const minute=Math.min(emomMinutes,Math.floor(elapsed/60)+1)
+    const finished=elapsed>=emomMinutes*60
+    const minute=finished?emomMinutes:Math.min(emomMinutes,Math.floor(elapsed/60)+1)
     round=`Minute ${minute} / ${emomMinutes}`
-    display=Math.max(0,60-(elapsed%60))
+    display=finished?0:Math.max(0,60-(elapsed%60))
   }
   if(mode==='Intervals'){
     const cycle=workSeconds+breakSeconds
-    const idx=Math.min(rounds-1,Math.floor(elapsed/cycle))
+    const finished=elapsed>=totalInterval
+    const idx=finished?rounds-1:Math.min(rounds-1,Math.floor(elapsed/cycle))
     const inCycle=elapsed-idx*cycle
     const working=inCycle<workSeconds
-    phase=working?'WORK':'REST'
+    phase=finished?'DONE':working?'WORK':'REST'
     round=`Round ${idx+1} / ${rounds}`
-    display=working?Math.max(0,workSeconds-inCycle):Math.max(0,cycle-inCycle)
+    display=finished?0:working?Math.max(0,workSeconds-inCycle):Math.max(0,cycle-inCycle)
   }
   if(mode==='Stopwatch') display=elapsed
 
@@ -225,7 +227,7 @@ export function TrainingTimer({showPanel=true,onReveal=null}) {
         {phase&&<span className={'timer-phase '+phase.toLowerCase()}>{phase}</span>}
         {round&&<span className="timer-round">{round}</span>}
         <strong>{fmt(display)}</strong>
-        <small>{running?(wakeActive?'Screen awake':'Timer running'):'Ready'}</small>
+        <small>{running?(wakeActive?'Screen awake':'Timer running'):(target!=null&&elapsed>=target?'Complete':elapsed>0?'Paused':'Ready')}</small>
       </div>
 
       {!running&&mode==='Rest'&&<div className="timer-presets">
