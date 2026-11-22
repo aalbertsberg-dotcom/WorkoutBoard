@@ -323,3 +323,23 @@ test('AMRAP stays open, remains active across Board and cannot be silently repla
   await expect(timer).toContainText('Minute 1 /')
   expect(errors).toEqual([])
 })
+
+test('Beats remains mounted and can be stopped after visiting Board',async({page})=>{
+  const errors=[]
+  page.on('pageerror',error=>errors.push(error.message))
+  await signedIn(page)
+  const timer=page.locator('.training-timer-panel')
+  await timer.locator('summary').click()
+  await timer.getByRole('button',{name:'Beats'}).click()
+  await timer.getByRole('checkbox',{name:'Sound'}).uncheck()
+  await timer.getByRole('button',{name:'Start beats'}).click()
+  await expect(timer.getByRole('button',{name:'Stop beats'})).toBeVisible()
+  const nav=page.getByRole('navigation',{name:'Workset mobile navigation'})
+  await nav.getByRole('button',{name:'Board'}).click()
+  await expect(page.locator('.floating-workout-timer')).toContainText('120 BPM')
+  await nav.getByRole('button',{name:'Today'}).click()
+  await expect(timer.getByRole('button',{name:'Stop beats'})).toBeVisible()
+  await timer.getByRole('button',{name:'Stop beats'}).click()
+  await expect(page.locator('.floating-workout-timer')).toHaveCount(0)
+  expect(errors).toEqual([])
+})
