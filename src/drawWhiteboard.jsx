@@ -251,11 +251,18 @@ export function DrawWhiteboard({session}) {
     }
     setSaving(false)
     if(error||!record){setMessage(error?.message||'Save failed. Your draft is still stored on this device.');return}
-    dirtyRef.current=false
+    // Preserve any edit made while the network save was in flight.
+    const live=boardStateRef.current
+    const changedWhileSaving=JSON.stringify({items:live.items,grid:live.grid,title:live.boardTitle})
+      !==JSON.stringify({items,grid,title:boardTitle})
+    dirtyRef.current=changedWhileSaving
     clearBoardDraft(window.localStorage,userId,previousId)
+    if(changedWhileSaving)saveBoardDraft(window.localStorage,userId,record.id,{
+      items:live.items,grid:live.grid,title:live.boardTitle
+    })
     window.localStorage.setItem('workset-board-current:'+userId,record.id)
     setBoardId(record.id);setBoards(v=>[record,...v.filter(b=>b.id!==record.id)])
-    setMessage('Saved across devices.')
+    setMessage(changedWhileSaving?'Saved prior changes. Newer edits are still kept as a draft; Save again to sync.':'Saved across devices.')
   }
 
   const newBoard=async()=>{
