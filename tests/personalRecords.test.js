@@ -20,8 +20,9 @@ test('modern completed sets populate PRs without legacy result strings',()=>{
   assert.equal(best[0].bestByReps[5],145)
   assert.equal(best[0].bestByReps[8],135)
   assert.equal(best[0].bestByReps[10],undefined)
-  assert.equal(best[0].weight,145)
-  assert.equal(best[0].reps,5)
+  // Highest Epley estimate is 135 × 8 even though 145 × 5 is heavier.
+  assert.equal(best[0].weight,135)
+  assert.equal(best[0].reps,8)
 })
 test('unfinished and planned sets cannot become strength records',()=>{
   const sessions=[modern([{weight:500,reps:5,done:false}]),modern([{weight:450,reps:5,done:true}],null)]
