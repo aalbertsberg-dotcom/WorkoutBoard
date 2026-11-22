@@ -197,3 +197,72 @@ test('Completed strength records do not automatically become new PR announcement
   await expect(page.locator('.rep-pr-card')).toContainText('165 lb')
   expect(errors).toEqual([])
 })
+
+test('Progress tabs stay in one browser Back step and data entry is in Me',async({page})=>{
+  const errors=[]
+  page.on('pageerror',e=>errors.push(e.message))
+  await signedIn(page,{withStrengthSession:true})
+  await page.locator('.account-chip').click()
+  await page.getByRole('button',{name:/View Progress & Analytics/}).click()
+  await expect(page.locator('.app-header h1')).toHaveText('Progress')
+  const depth=await page.evaluate(()=>window.history.state?.worksetDepth)
+  expect(depth).toBe(1)
+  const tabs=page.locator('.progress-section-tabs')
+  for(const section of ['Strength','Cardio','Weight & Measurements','Overview','Strength']){
+    await tabs.getByRole('button',{name:section,exact:true}).click()
+    await expect(tabs.getByRole('button',{name:section,exact:true})).toHaveAttribute('aria-current','page')
+    expect(await page.evaluate(()=>window.history.state?.worksetDepth)).toBe(depth)
+  }
+  await expect(page.locator('.progress-saved-maxes')).toBeVisible()
+  await expect(page.locator('.progress-saved-maxes input')).toHaveCount(0)
+  await page.getByRole('button',{name:'← Back'}).first().click()
+  await expect(page.locator('.app-header h1')).toHaveText('Me')
+  expect(errors).toEqual([])
+})
+
+test('Track & Update opens saved 1RM editor; charts remain read-only',async({page})=>{
+  const errors=[]
+  page.on('pageerror',e=>errors.push(e.message))
+  await signedIn(page,{withStrengthSession:true})
+  await page.locator('.account-chip').click()
+  await page.getByRole('button',{name:/View Progress & Analytics/}).click()
+  await page.locator('.progress-section-tabs').getByRole('button',{name:'Strength'}).click()
+  await expect(page.locator('.progress-saved-maxes')).toBeVisible()
+  await page.locator('.progress-saved-maxes').getByRole('button',{name:/Track.*update saved 1RMs/}).click()
+  await expect(page.locator('.app-header h1')).toHaveText('Me')
+  const track=page.locator('[data-me-section="strength"]')
+  await expect(track.locator('.me-section-toggle')).toHaveAttribute('aria-expanded','true')
+  await expect(track.getByRole('spinbutton',{name:'Bench'})).toBeVisible()
+  expect(errors).toEqual([])
+})
+
+test('Weight & Measurements charts are view-only; Track contains a bodyweight input',async({page})=>{
+  const errors=[]
+  page.on('pageerror',e=>errors.push(e.message))
+  await signedIn(page)
+  await page.locator('.account-chip').click()
+  await page.getByRole('button',{name:/View Progress & Analytics/}).click()
+  await page.locator('.progress-section-tabs').getByRole('button',{name:'Weight & Measurements'}).click()
+  await expect(page.locator('.quick-weight-form')).toHaveCount(0)
+  await expect(page.locator('.measurement-edit-card')).toHaveCount(0)
+  await page.locator('.progress-weight-readonly').getByRole('button',{name:/Track weight/}).click()
+  await expect(page.locator('.app-header h1')).toHaveText('Me')
+  const track=page.locator('[data-me-section="measurements"]')
+  await expect(track.locator('.me-section-toggle')).toHaveAttribute('aria-expanded','true')
+  await expect(track.getByRole('button',{name:/Bodyweight/})).toBeVisible()
+  expect(errors).toEqual([])
+})
+
+test('Primary destinations do not accumulate browser history',async({page})=>{
+  const errors=[]
+  page.on('pageerror',e=>errors.push(e.message))
+  await signedIn(page)
+  const bottom=page.getByRole('navigation',{name:'Workset mobile navigation'})
+  for(const name of ['Together','Plan','Board','Today','Together']){
+    const button=bottom.getByRole('button',{name})
+    if(await bottom.isVisible())await button.click()
+    else await page.locator('.primary-nav').getByRole('button',{name}).click()
+    expect(await page.evaluate(()=>window.history.state?.worksetDepth)).toBe(0)
+  }
+  expect(errors).toEqual([])
+})
