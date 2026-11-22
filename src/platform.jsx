@@ -778,8 +778,11 @@ export function PlatformProgress({
           </div>
         </section>
 
-        <ProgressToolbox session={session} legacyHistory={progress.completed} flexSessions={flexSessions} formatWeight={formatWeight} initialTab="Exercises"/>
         <AdvancedProgressCenter session={session}/>
+        <details className="progress-history-extra-tools">
+          <summary>More history tools <small>Exercises, calendar, goals & measurements</small></summary>
+          <ProgressToolbox session={session} legacyHistory={progress.completed} flexSessions={flexSessions} formatWeight={formatWeight} initialTab="Exercises"/>
+        </details>
       </>}    </>:<>
       {ready===false?<div className="setup-needed"><span className="card-label">PLATFORM UPDATE NEEDED</span><h2>Community is ready in the app</h2><p>Run the platform-foundation SQL migration once to enable it.</p></div>:<>
         <section className="community-control">
