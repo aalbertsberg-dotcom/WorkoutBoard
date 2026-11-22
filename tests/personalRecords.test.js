@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {completedStrengthSets,buildPersonalRecords,REP_PR_TARGETS} from '../src/personalRecords.js'
+import {completedStrengthSets,buildPersonalRecords,REP_PR_TARGETS,mainLiftName,completedMainLiftSets,strengthTrendFromCompletedSets} from '../src/personalRecords.js'
 
 const modern=(sets,completed='2026-11-20T12:00:00Z')=>({
   completed_at:completed,session_date:'2026-11-20',
@@ -57,4 +57,32 @@ test('non-weighted cardio and unrealistic rep counts are ignored',()=>{
   const rows=[{completed_at:'2026-01-01',workout:{exercises:[{name:'Walk',setProgress:[{weight:0,reps:120,done:true}]},{name:'Bench',setProgress:[{weight:100,reps:500,done:true}]}]}}]
   assert.deepEqual(buildPersonalRecords(rows),[])
   assert.deepEqual(REP_PR_TARGETS,[1,3,5,8,10])
+})
+
+test('Progress strength trend shows actual completed Deadlift and Back Squat sets',()=>{
+  const rows=[
+    {completed_at:'2026-11-20T10:00:00Z',workout:{exercises:[
+      {name:'Back Squat',setProgress:[{weight:205,reps:6,done:true}]},
+      {name:'Front Squat',setProgress:[{weight:135,reps:8,done:true}]}
+    ]}},
+    {completed_at:'2026-11-21T10:00:00Z',workout:{exercises:[
+      {name:'Deadlift',setProgress:[{weight:275,reps:2,done:true},{weight:315,reps:2,done:false}]}
+    ]}}
+  ]
+  const trend=strengthTrendFromCompletedSets(rows)
+  assert.equal(trend.length,2)
+  assert.deepEqual(trend.map(x=>x.lift),['Squat','Deadlift'])
+  assert.equal(trend[0].e1rm,205*(1+6/30))
+  assert.equal(trend[1].e1rm,275*(1+2/30))
+  assert.equal(completedMainLiftSets(rows).length,2)
+  assert.equal(mainLiftName('Front Squat'),null)
+})
+test('multiple sets in one workout create one best trend point per lift',()=>{
+  const rows=[{completed_at:'2026-11-22T10:00:00Z',workout:{exercises:[
+    {name:'Bench Press',setProgress:[{weight:135,reps:8,done:true},{weight:165,reps:5,done:true}]}
+  ]}}]
+  const trend=strengthTrendFromCompletedSets(rows)
+  assert.equal(trend.length,1)
+  assert.equal(trend[0].lift,'Bench')
+  assert.equal(trend[0].weight,165)
 })
