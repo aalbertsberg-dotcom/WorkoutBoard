@@ -2,6 +2,8 @@ import {PlatformProgress,FeedbackPanel} from './platform'
 import {InstallAppButton,AppUpdateControls,ExportDataButton} from './productFeatures'
 import {AccountSecurityPanel,BackupRestorePanel,WorkoutSettingsPanel} from './advancedFeatures'
 import {MeSection,MeDisplayNameEditor,MeOneRmEditor} from './MeSections'
+import {ProgressToolbox} from './trainingTools'
+import {useEffect,useState} from 'react'
 
 /** The Me landing page is navigation-first, with secondary tools closed by default.
  * Existing tools are mounted only when explicitly expanded. */
@@ -13,8 +15,22 @@ export default function MePage({
   oneRmEstimate,oneRmRounded,oneRmTrainingMax,oneRmLift,setOneRmLift,oneRmNotice,
   calculatedOneRms,baselineTestChoice,setBaselineTestChoice,onStartBaseline,
   trackedProgramsInfo,personalProgramName,shareInvite,inviteState,
-  isAdmin,feedbackUnread,onOpenAdmin,onSignOut,appUrl,onRefreshWorkset,refreshBlocked=false
+  isAdmin,feedbackUnread,onOpenAdmin,onSignOut,appUrl,onRefreshWorkset,refreshBlocked=false,
+  autoOpenSection=null,
 }){
+  const [trackTarget,setTrackTarget]=useState(autoOpenSection)
+  const [trackRequest,setTrackRequest]=useState(autoOpenSection?1:0)
+  const jumpToTrack=section=>{
+    setTrackTarget(section)
+    setTrackRequest(request=>request+1)
+    // Let the section open before scrolling. App-level navigation scroll reset
+    // finishes first when arriving here from Progress.
+    setTimeout(()=>document.querySelector('[data-me-section="'+section+'"]')
+      ?.scrollIntoView({block:'start',behavior:'smooth'}),140)
+  }
+  useEffect(()=>{
+    if(autoOpenSection)jumpToTrack(autoOpenSection)
+  },[autoOpenSection])
   return <section className="page-section me-page" aria-label="Me">
     {displayName==='WorkoutAdmin'&&!isAdmin&&<section className="admin-setup-warning">
       <span className="card-label">ADMIN SETUP INCOMPLETE</span>
@@ -32,7 +48,12 @@ export default function MePage({
       </button>
       <button type="button" onClick={onOpenProgress}>
         <span className="me-shortcut-icon" aria-hidden="true">⌁</span>
-        <span><strong>Progress & Analytics</strong><small>Charts, PRs, trends and measurements</small></span>
+        <span><strong>View Progress & Analytics</strong><small>Read-only charts, records and history</small></span>
+        <b aria-hidden="true">›</b>
+      </button>
+      <button type="button" onClick={()=>jumpToTrack('strength')}>
+        <span className="me-shortcut-icon" aria-hidden="true">✎</span>
+        <span><strong>Track &amp; Update</strong><small>Saved 1RMs, weight, measurements and goals</small></span>
         <b aria-hidden="true">›</b>
       </button>
     </nav>
@@ -40,21 +61,22 @@ export default function MePage({
     <AppUpdateControls onRefresh={onRefreshWorkset} refreshBlocked={refreshBlocked}/>
 
     <div className="me-section-group">
-      <div className="me-section-group-label">YOUR TRAINING</div>
+      <div className="me-section-group-label">YOUR TRAINING · TRACK &amp; UPDATE</div>
 
       <MeSection id="overview" title="Training at a glance"
         description="Workout totals, current weight and latest PR" icon="◫">
         <PlatformProgress view="mine" compact
           onOpenProgress={onOpenProgress}
           onOpenHistory={onOpenHistory}
-          onOpenWeight={onOpenWeight} onOpenMeasurements={onOpenWeight}
+          onOpenWeight={()=>jumpToTrack('measurements')} onOpenMeasurements={()=>jumpToTrack('measurements')}
           session={session} profile={profile} setProfile={setProfile}
           progress={progress} lifts={lifts} formatWeight={formatWeight}
           programs={programs} dbNameToProgram={dbNameToProgram}/>
       </MeSection>
 
-      <MeSection id="strength" title="Strength & 1RMs"
-        description="Current maxes, calculator and baseline tests" icon="◆">
+      <MeSection id="strength" title="Track Strength &amp; 1RMs"
+        description="Edit saved maxes, use the calculator or take a baseline test" icon="◆"
+        openOnRequest={trackTarget==='strength'?trackRequest:0}>
         <section className="me-inner-card" aria-label="Current 1 rep maxes">
           <div className="me-inner-heading">
             <span className="card-label">SAVED STRENGTH</span>
@@ -139,6 +161,20 @@ export default function MePage({
           </div>
           </section>
         </MeSection>
+      </MeSection>
+
+      <MeSection id="measurements" title="Track Weight &amp; Measurements"
+        description="Log today's weight, body measurements and check-ins" icon="◫"
+        openOnRequest={trackTarget==='measurements'?trackRequest:0}>
+        <ProgressToolbox session={session} legacyHistory={progress.completed}
+          formatWeight={formatWeight} onlyTab="Measurements"/>
+      </MeSection>
+
+      <MeSection id="goals" title="Track Goals"
+        description="Set and update training targets" icon="◎"
+        openOnRequest={trackTarget==='goals'?trackRequest:0}>
+        <ProgressToolbox session={session} legacyHistory={progress.completed}
+          formatWeight={formatWeight} onlyTab="Goals"/>
       </MeSection>
 
       <MeSection id="programs" title="My Programs"
