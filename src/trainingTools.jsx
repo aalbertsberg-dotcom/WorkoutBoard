@@ -235,6 +235,7 @@ const circumferenceFields=[
   ['right_calf','Right calf'],['chest','Chest'],
 ]
 const editableMeasurementFields=[
+  ['bodyweight','Bodyweight','lb'],
   ...circumferenceFields.map(([key,label])=>[key,label,'in']),
   ['body_fat','Body fat','%'],
 ]
@@ -276,7 +277,7 @@ function parseResult(text){
   return m?{weight:Number(m[1]),reps:Number(m[2]),e1rm:Number(m[1])*(1+Number(m[2])/30)}:null
 }
 
-export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],formatWeight,initialTab='PRs',onlyTab=null,onMeasurementMetricChange=null,onMeasurementsChanged=null}) {
+export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],formatWeight,initialTab='PRs',onlyTab=null,allowedTabs=null,onMeasurementMetricChange=null,onMeasurementsChanged=null}) {
   const [tab,setTab]=useState(onlyTab||initialTab)
   const activeTab=onlyTab||tab
   const [goals,setGoals]=useState([])
@@ -511,7 +512,7 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
   const summaryMeasurement=todayMeasurementCount?todayMeasurement:latestBodyMeasurement
   return <section className="progress-toolbox">
     {!onlyTab&&<div className="segmented toolbox-tabs">
-      {['PRs','Exercises','Calendar','Goals','Measurements'].map(x=><button key={x} className={tab===x?'active':''} onClick={()=>setTab(x)}>{x}</button>)}
+      {['PRs','Exercises','Calendar','Goals','Measurements'].filter(x=>!allowedTabs||allowedTabs.includes(x)).map(x=><button key={x} className={tab===x?'active':''} onClick={()=>setTab(x)}>{x}</button>)}
     </div>}
 
     {activeTab==='PRs'&&<section className="simple-card">
@@ -599,7 +600,7 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
         <form className="measurement-form expanded-measurement-form" onSubmit={saveMeasurement}>
           <label className="measurement-date-field"><span>Date</span><input type="date" value={measurement.measured_on} onChange={e=>chooseMeasurementDate(e.target.value)}/></label>
 
-          <p className="measurement-save-rule"><strong>Same date = same entry.</strong> Saving again updates only the fields you enter. Weight is logged separately above.</p>
+          <p className="measurement-save-rule"><strong>Same date = same entry.</strong> Saving again updates only the fields you enter. Use the Bodyweight card above to log weight.</p>
 
           <fieldset className="measurement-group">
             <legend>Upper body</legend>
