@@ -1,7 +1,7 @@
 const {test,expect}=require('@playwright/test')
 
 const userId='00000000-0000-4000-8000-000000000001'
-async function signedIn(page,{withStartedWalk=false}={}){
+async function signedIn(page,{withStartedWalk=false,withStrengthSession=false}={}){
   await page.addInitScript(user=>{
     const expires=Math.floor(Date.now()/1000)+86400*365
     localStorage.setItem('sb-example-auth-token',JSON.stringify({
@@ -41,6 +41,23 @@ async function signedIn(page,{withStartedWalk=false}={}){
           exercises:[],quick_timer_started_at:null,quick_timer_elapsed_seconds:0,
           metcon:{activity:'Walk',intensity:'Light',duration:'',distance:''}
         }
+      }
+      await route.fulfill({status:200,contentType:'application/json',headers,body:JSON.stringify([row])})
+      return
+    }
+    if(withStrengthSession && method==='GET' && url.includes('/rest/v1/training_sessions')){
+      const now=new Date().toISOString()
+      const row={
+        id:'00000000-0000-4000-8000-000000000004',user_id:userId,
+        title:'Bench workout',primary_lift:'Bench',program:'Test strength',
+        session_date:now.slice(0,10),completed_at:now,legacy_log_id:null,
+        total_volume:990,estimated_1rm:0,
+        workout:{version:2,type:'flexible',exercises:[
+          {id:'bench',name:'Bench Press',result:'',setProgress:[
+            {weight:135,reps:5,done:true},
+            {weight:165,reps:5,done:true}
+          ]}
+        ]}
       }
       await route.fulfill({status:200,contentType:'application/json',headers,body:JSON.stringify([row])})
       return
@@ -162,5 +179,22 @@ test('Walk includes an independent optional beat timer with adjustable tempo',as
   await expect(beats.locator('summary')).toContainText('135 BPM · Playing')
   await beats.getByRole('button',{name:'Stop beats'}).click()
   await expect(beats.locator('summary')).toContainText('Optional cadence')
+  expect(errors).toEqual([])
+})
+
+test('Progress overview and Records show the same modern completed strength PR',async({page})=>{
+  const errors=[]
+  page.on('pageerror',e=>errors.push(e.message))
+  await signedIn(page,{withStrengthSession:true})
+  await page.locator('.account-chip').click()
+  await page.getByRole('button',{name:/Progress & Analytics/}).click()
+  await expect(page.locator('.app-header h1')).toHaveText('Progress')
+  const overview=page.locator('.recent-pr-home')
+  await expect(overview).toContainText('Bench Press',{timeout:15000})
+  await expect(overview).not.toContainText('No PRs yet')
+  await page.locator('.progress-section-tabs').getByRole('button',{name:'History'}).click()
+  await page.locator('.advanced-tabs').getByRole('button',{name:'Records'}).click()
+  await expect(page.locator('.rep-pr-card')).toContainText('Bench Press')
+  await expect(page.locator('.rep-pr-card')).toContainText('165 lb')
   expect(errors).toEqual([])
 })
