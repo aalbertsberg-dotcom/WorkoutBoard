@@ -125,7 +125,7 @@ export function WhiteboardPage({session}) {
         <div>
           <span className="card-label">DRAW WHITEBOARD</span>
           <h2>Sketch it out</h2>
-          <p>Use your mouse, finger, or stylus. Save the board to sync it across devices.</p>
+          <p>Draw with your finger or stylus. Choose Move to drag an object. Changes stay as a draft on this device; Save board to sync across devices.</p>
         </div>
       </section>
       <DrawWhiteboard session={session} />
