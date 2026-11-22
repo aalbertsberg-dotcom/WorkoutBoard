@@ -288,6 +288,8 @@ test('Board draft survives switching tabs and Move drags a saved stroke',async({
   await nav.getByRole('button',{name:'Today'}).click()
   await nav.getByRole('button',{name:'Board'}).click()
   await expect(board).toBeVisible({timeout:15000})
+  // The returned page appears before its async Board load finishes.
+  await expect(canvas).toHaveAttribute('data-loaded','true',{timeout:15000})
   await expect.poll(async()=>page.evaluate(k=>JSON.parse(localStorage.getItem(k)||'null')?.items?.length,key)).toBe(1)
   await board.getByRole('button',{name:'Move',exact:true}).click()
   const savedShape=await page.evaluate(k=>JSON.parse(localStorage.getItem(k)).items[0],key)

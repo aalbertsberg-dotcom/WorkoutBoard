@@ -335,10 +335,10 @@ export function DrawWhiteboard({session}) {
         <button type="button" onClick={()=>setZoom(v=>Math.min(2.2,Math.round((v+.1)*10)/10))} disabled={zoom>=2.2}>+</button>
       </div>
       <div className="draw-board-pan" ref={wrapRef}>
-        <canvas ref={canvasRef} data-tool={tool} aria-label="Whiteboard canvas: choose Move to select and drag an object"
+        <canvas ref={canvasRef} data-tool={tool} data-loaded={loaded?'true':'false'} aria-label="Whiteboard canvas: choose Move to select and drag an object"
           onPointerDown={start} onPointerMove={move} onPointerUp={end} onPointerCancel={end} onPointerLeave={e=>{if(!e.currentTarget.hasPointerCapture?.(e.pointerId))end(e)}}/>
       </div>
     </div>
-    <div className="draw-board-bottom"><span role="status">{message||(dirtyRef.current?'Draft kept on this device. Tap Save board to sync across devices.':'Choose Move to grab shapes, strokes, text or images. Changes are kept as a draft until saved.')}</span><div><button className="secondary-action" onClick={exportPng}>Export PNG</button><button className="primary-action" onClick={save} disabled={saving}>{saving?'Saving…':'Save board'}</button></div></div>
+    <div className="draw-board-bottom"><span role="status">{!loaded?'Loading board…':message||(dirtyRef.current?'Draft kept on this device. Tap Save board to sync across devices.':'Choose Move to grab shapes, strokes, text or images. Changes are kept as a draft until saved.')}</span><div><button className="secondary-action" onClick={exportPng}>Export PNG</button><button className="primary-action" onClick={save} disabled={saving}>{saving?'Saving…':'Save board'}</button></div></div>
   </section>
 }
