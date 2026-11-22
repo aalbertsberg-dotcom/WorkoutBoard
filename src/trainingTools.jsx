@@ -31,9 +31,10 @@ export function TrainingTimer() {
   const [mode,setMode]=useState('Rest')
   const [beatsRunning,setBeatsRunning]=useState(false)
   const [beatsTempo,setBeatsTempo]=useState(120)
+  // Keep the BPM controls visible on Start. The user may collapse them
+  // manually; that is when the floating active-timer button is useful.
   const onBeatsActive=useCallback(active=>{
     setBeatsRunning(active)
-    if(active)setExpanded(false)
   },[])
   const [running,setRunning]=useState(false)
   const [elapsed,setElapsed]=useState(0)
