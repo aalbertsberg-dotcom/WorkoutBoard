@@ -404,3 +404,57 @@ test('Intervals mobile countdown and inputs never extend past the phone width',a
   await expect(timer.locator('.timer-display strong')).toBeVisible()
   expect(errors).toEqual([])
 })
+
+test('Weight entry stays readable with the keyboard open on narrow phones',async({page})=>{
+  const errors=[]
+  page.on('pageerror',e=>errors.push(e.message))
+  await page.setViewportSize({width:360,height:780})
+  await signedIn(page)
+  await page.locator('.account-chip').click()
+  const section=page.locator('[data-me-section="measurements"]')
+  await section.locator('.me-section-toggle').click()
+  await expect(section.locator('.measurement-edit-card')).toBeVisible({timeout:15000})
+  for(const width of [320,360,390]){
+    await page.setViewportSize({width,height:780})
+    const card=section.locator('.measurement-edit-card').filter({has:page.getByRole('button',{name:/Bodyweight/})})
+    if(await card.getByRole('button',{name:/Bodyweight/}).isVisible())
+      await card.getByRole('button',{name:/Bodyweight/}).click()
+    const field=section.getByRole('spinbutton',{name:'Enter Bodyweight in lb'})
+    await field.fill('197.33')
+    await expect(field).toHaveValue('197.33')
+    await expect(card.locator('.measurement-entry-preview')).toHaveText('197.33 lb')
+    const layout=await page.evaluate(()=>{
+      const panel=document.querySelector('.measurement-edit-card.editing')
+      const field=panel.querySelector('.measurement-inline-row input')
+      const bounds=field.getBoundingClientRect(),card=panel.getBoundingClientRect()
+      return {inputWidth:bounds.width,inputRight:bounds.right,cardRight:card.right,
+        viewport:document.documentElement.clientWidth,cardWidth:card.width}
+    })
+    expect(layout.inputWidth).toBeGreaterThan(120)
+    expect(layout.cardWidth).toBeGreaterThan(240)
+    expect(layout.inputRight).toBeLessThanOrEqual(layout.cardRight+1)
+    expect(layout.cardRight).toBeLessThanOrEqual(layout.viewport+1)
+  }
+  await section.getByRole('button',{name:'Cancel Bodyweight edit'}).click()
+  expect(errors).toEqual([])
+})
+
+test('Editing a saved 1RM expands the focused input instead of clipping its digits',async({page})=>{
+  const errors=[]
+  page.on('pageerror',e=>errors.push(e.message))
+  await page.setViewportSize({width:320,height:780})
+  await signedIn(page)
+  await page.locator('.account-chip').click()
+  const strength=page.locator('[data-me-section="strength"]')
+  await strength.locator('.me-section-toggle').click()
+  const field=strength.locator('#me-max-Bench')
+  await field.fill('197.33')
+  await expect(field).toHaveValue('197.33')
+  const layout=await field.evaluate(input=>{
+    const active=input.closest('.me-max-field'),field=input.getBoundingClientRect(),parent=active.getBoundingClientRect()
+    return {width:field.width,parentWidth:parent.width,right:field.right,parentRight:parent.right}
+  })
+  expect(layout.width).toBeGreaterThan(140)
+  expect(layout.right).toBeLessThanOrEqual(layout.parentRight+1)
+  expect(errors).toEqual([])
+})
