@@ -1,8 +1,9 @@
 import {useEffect,useState} from 'react'
 
 /** Accessible, intentionally closed-by-default section. Unopened tools are not mounted. */
-export function MeSection({id,title,description,children,icon='◇'}){
-  const [open,setOpen]=useState(false)
+export function MeSection({id,title,description,children,icon='◇',openOnRequest=0}){
+  const [open,setOpen]=useState(openOnRequest>0)
+  useEffect(()=>{if(openOnRequest>0)setOpen(true)},[openOnRequest])
   const panelId='me-section-'+id
   return <section className={'me-collapsible'+(open?' is-open':'')} data-me-section={id}>
     <h3 className="me-section-title">
