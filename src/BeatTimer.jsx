@@ -32,7 +32,7 @@ export default function BeatTimer({compact=false,onActiveChange,onTempoChange}){
   const [bpm,setBpm]=useState(()=>clampBeatBpm(readSetting('workset-beats-bpm',120)))
   const [draft,setDraft]=useState(()=>String(clampBeatBpm(readSetting('workset-beats-bpm',120))))
   const [playing,setPlaying]=useState(false)
-  const [sound,setSound]=useState(()=>readSetting('workset-beats-sound',readSetting('wb-setting-sound','true'))!=='false')
+  const [sound,setSound]=useState(()=>readSetting('workset-beats-sound','true')!=='false')
   const [visualBeat,setVisualBeat]=useState(0)
   const [warning,setWarning]=useState('')
   const contextRef=useRef(null)
@@ -114,6 +114,7 @@ export default function BeatTimer({compact=false,onActiveChange,onTempoChange}){
   },[])
 
   const controls=<div className="beats-body">
+    <p className="beats-explainer"><strong>BPM = beats per minute.</strong> At 60 BPM, the timer clicks once per second; at 120 BPM, twice per second. Follow one click per step if using it for walking cadence. This is a pace guide, not a heart-rate reading.</p>
     <div className="beats-hero">
       <div><strong>{bpm}</strong><span>BPM</span></div>
       <div className="beats-pulses" aria-label={playing?'Metronome running':'Metronome stopped'}>
@@ -142,8 +143,9 @@ export default function BeatTimer({compact=false,onActiveChange,onTempoChange}){
         if(event.target.checked)prepareAudio()
       }}/> Sound</label>
     </div>
+    {!sound&&<small role="status">Sound is off. Enable Sound to hear the beats.</small>}
     {warning&&<small role="status">{warning}</small>}
-    <p className="helper-text">Every fourth beat is accented. Audio works while this page is active; locked-screen playback depends on your browser.</p>
+    <p className="helper-text">Each click is one beat; every fourth is accented. Playback while the screen is locked depends on your browser.</p>
   </div>
 
   if(!compact)return <section className="beats-timer" aria-label="Beats timer">{controls}</section>
