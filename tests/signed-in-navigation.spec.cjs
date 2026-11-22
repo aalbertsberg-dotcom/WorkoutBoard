@@ -279,6 +279,7 @@ test('Board draft survives switching tabs and Move drags a saved stroke',async({
   await expect(board).toBeVisible({timeout:15000})
   await board.getByRole('button',{name:'Line'}).click()
   const canvas=board.locator('canvas')
+  await canvas.scrollIntoViewIfNeeded()
   const r=await canvas.boundingBox()
   const p=(x,y)=>({x:r.x+x*r.width,y:r.y+y*r.height})
   await page.mouse.move(p(.2,.25).x,p(.2,.25).y);await page.mouse.down()
@@ -294,11 +295,15 @@ test('Board draft survives switching tabs and Move drags a saved stroke',async({
   await board.getByRole('button',{name:'Move',exact:true}).click()
   const savedShape=await page.evaluate(k=>JSON.parse(localStorage.getItem(k)).items[0],key)
   const before=savedShape.start.x
+  await canvas.scrollIntoViewIfNeeded()
   const restored=await canvas.boundingBox()
   const q=(x,y)=>({x:restored.x+x*restored.width,y:restored.y+y*restored.height})
   // Grab the actual center of the restored line, not an approximate pixel.
   const grab={x:(savedShape.start.x+savedShape.end.x)/2,y:(savedShape.start.y+savedShape.end.y)/2}
-  await page.mouse.move(q(grab.x,grab.y).x,q(grab.x,grab.y).y)
+  const hitPoint=q(grab.x,grab.y)
+  expect(hitPoint.y).toBeGreaterThanOrEqual(0)
+  expect(hitPoint.y).toBeLessThan(page.viewportSize().height)
+  await page.mouse.move(hitPoint.x,hitPoint.y)
   await page.mouse.down()
   await page.mouse.move(q(grab.x+.1,grab.y+.04).x,q(grab.x+.1,grab.y+.04).y,{steps:12})
   await page.mouse.up()
