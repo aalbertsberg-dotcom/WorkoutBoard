@@ -3581,7 +3581,8 @@ function App() {
           <button className={activeTab === 'whiteboard' ? 'active' : ''} onClick={() => navigateTo('whiteboard')}><b>□</b><span>Board</span></button>
         </nav>
 
-        {activeTab === 'today' && !plannedToday?.workout?.quick_cardio && <TrainingTimer />}
+        {/* Remain mounted across tabs so active AMRAP, EMOM and Metcon timers keep running. */}
+        <TrainingTimer showPanel={activeTab==='today'} onReveal={()=>navigateTo('today')} />
 
         {dataLoading ? (
           <div className="loading-card">Loading your workouts…</div>
