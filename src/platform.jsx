@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {progressWorkoutLink} from './historyNavigation.js'
+import {recentPersonalRecords} from './personalRecords.js'
 import { supabase } from './supabase'
 import { DialogPortal,OverlayPortal,confirmWorkset } from './worksetDialogs'
 import { allArchivePrograms, archiveProgramById, makePlannedFromArchive } from './archivePrograms'
@@ -392,26 +393,9 @@ export function PlatformProgress({
     }))
   ].sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,15)
 
-  const recentPrs=useMemo(()=>{
-    const events=[]
-    const best={}
-    const rows=[
-      ...progress.completed.map(r=>({date:r.completed_at,key:r.lift,label:r.lift,e1rm:Number(r._metrics?.estimated1rm||0),set:r._metrics?.bestSet})),
-      ...flexSessions.flatMap(r=>(r.workout?.exercises||[]).map(item=>{
-        const m=String(item.result||'').replace(/[×X]/g,'x').match(/(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/i)
-        const weight=m?Number(m[1]):0,reps=m?Number(m[2]):0
-        return {date:r.completed_at||r.session_date,key:item.name||r.title,label:item.name||r.title,e1rm:weight&&reps?weight*(1+reps/30):0,set:weight&&reps?{weight,reps}:null}
-      }))
-    ].sort((a,b)=>String(a.date).localeCompare(String(b.date)))
-    for(const row of rows){
-      if(!row.e1rm)continue
-      if(row.e1rm>(best[row.key]||0)){
-        best[row.key]=row.e1rm
-        events.push(row)
-      }
-    }
-    return events.sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,3)
-  },[progress.completed,flexSessions])
+  const recentPrs=useMemo(()=>
+    recentPersonalRecords([...progress.completed,...flexSessions])
+  ,[progress.completed,flexSessions])
 
   const outdoorSessions=useMemo(()=>flexSessions
     .filter(row=>{
@@ -542,6 +526,13 @@ export function PlatformProgress({
     if(!result.offline)await loadData()
   }
 
+  // Avoid briefly showing a false "no workouts / no PRs" dashboard while
+  // the first online fetch is still in progress (visible on mobile navigation).
+  if(!compact&&effectiveMode==='mine'&&ready===null){
+    return <section className="page-section" aria-label="Loading progress">
+      <div className="loading-card" role="status">{navigator.onLine===false?'Connect to load your saved progress.':'Loading your progress and personal records…'}</div>
+    </section>
+  }
   if(compact){
     const latestPr=recentPrs[0]
     return <section className="progress-summary-card">
