@@ -64,3 +64,18 @@ export function buildPersonalRecords(rows=[]){
   }
   return [...map.values()].sort((a,b)=>b.e1rm-a.e1rm||a.name.localeCompare(b.name))
 }
+
+// Recent all-time bests shown on the Progress landing page.
+// This is intentionally based on the same completed sets as the Records tab.
+export function recentPersonalRecords(rows=[],limit=3){
+  return buildPersonalRecords(rows)
+    .sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||a.name.localeCompare(b.name))
+    .slice(0,Math.max(0,limit))
+    .map(record=>({
+      key:record.name.toLocaleLowerCase(),
+      label:record.name,
+      date:record.date,
+      e1rm:record.e1rm,
+      set:{weight:record.weight,reps:record.reps}
+    }))
+}
