@@ -278,11 +278,27 @@ export function DrawWhiteboard({session}) {
     await loadBoards(data.id)
   }
   const deleteBoard=async()=>{
-    if(!boardId||!session?.user||!await confirmWorkset('Delete this whiteboard?'))return
-    const id=boardId,userId=session.user.id
+    if(!session?.user||saving)return
+    const userId=session.user.id
+    if(!boardId){
+      // The default Main Board has no server row, but it can still contain a
+      // substantial local draft. Delete must never silently do nothing.
+      if(!await confirmWorkset('Clear the unsaved Main Board? This removes its drawing and on-device draft.'))return
+      dirtyRef.current=false
+      clearBoardDraft(window.localStorage,userId,null)
+      window.localStorage.setItem('workset-board-current:'+userId,'unsaved')
+      boardStateRef.current={items:[],boardTitle:'Main Board',grid:true,boardId:null}
+      setItems([]);setRedo([]);setUndoHistory([]);setSelectedId(null)
+      setBoardTitle('Main Board');setGrid(true)
+      setMessage('Main Board cleared. Its unsaved draft was removed.')
+      return
+    }
+    if(!await confirmWorkset('Delete "'+boardTitle+'"? The saved board and its draft will be removed.'))return
+    const id=boardId
     const {error}=await supabase.from('whiteboard_drawings').delete().eq('id',id).eq('user_id',userId)
     if(error){setMessage(error.message);return}
-    dirtyRef.current=false;clearBoardDraft(window.localStorage,userId,id)
+    dirtyRef.current=false
+    clearBoardDraft(window.localStorage,userId,id)
     window.localStorage.removeItem('workset-board-current:'+userId)
     await loadBoards()
   }
@@ -302,7 +318,7 @@ export function DrawWhiteboard({session}) {
     <div className="draw-board-manager">
       <select value={boardId||''} onChange={e=>selectBoard(e.target.value)}><option value="">Unsaved board</option>{boards.map(b=><option value={b.id} key={b.id}>{b.title}</option>)}</select>
       <input value={boardTitle} onChange={e=>{dirtyRef.current=true;setBoardTitle(e.target.value)}} placeholder="Board name"/>
-      <button onClick={newBoard}>+ Board</button><button onClick={deleteBoard} disabled={!boardId}>Delete</button>
+      <button onClick={newBoard}>+ Board</button><button type="button" onClick={deleteBoard} disabled={saving} title={boardId?'Delete saved board':'Clear the unsaved Main Board'}>{boardId?'Delete':'Clear Main Board'}</button>
     </div>
     <div className="draw-board-toolbar">
       <div className="draw-tools">{['select','pen','highlighter','eraser','line','arrow','rect','circle','text','sticky'].map(t=><button type="button" key={t} className={tool===t?'active':''} onClick={()=>{setTool(t);if(t!=='select')setSelectedId(null)}}>{t==='select'?'Move':t[0].toUpperCase()+t.slice(1)}</button>)}</div>
