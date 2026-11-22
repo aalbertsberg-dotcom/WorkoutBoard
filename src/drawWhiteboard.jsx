@@ -45,7 +45,13 @@ export function DrawWhiteboard({session}) {
     if(!ok)setMessage('Could not save draft on this device. Use Save board to sync it now.')
   }
   useEffect(()=>{saveDraftOnDevice()},[items,boardTitle,grid,boardId,loaded,session?.user?.id])
-  useEffect(()=>()=>{saveDraftOnDevice()},[session?.user?.id])
+  useEffect(()=>()=>{
+    const state=boardStateRef.current,userId=session?.user?.id
+    if(state&&dirtyRef.current&&userId)
+      saveBoardDraft(window.localStorage,userId,state.boardId,{
+        items:state.items,title:state.boardTitle,grid:state.grid
+      })
+  },[session?.user?.id])
 
   const rememberChange=()=>{
     setUndoHistory(history=>[...history.slice(-49),boardStateRef.current.items])
@@ -223,47 +229,78 @@ export function DrawWhiteboard({session}) {
   }
 
   const save=async()=>{
-    if(!session?.user)return;setSaving(true)
+    if(!session?.user||saving)return
+    const userId=session.user.id
+    saveDraftOnDevice();setSaving(true)
+    const previousId=boardId
     const payload={version:2,items,grid}
-    let error
-    if(boardId)({error}=await supabase.from('whiteboard_drawings').update({title:boardTitle,drawing:payload,updated_at:new Date().toISOString()}).eq('id',boardId))
-    else {
-      const res=await supabase.from('whiteboard_drawings').insert({user_id:session.user.id,title:boardTitle,drawing:payload,updated_at:new Date().toISOString()}).select().single()
-      error=res.error;if(res.data)setBoardId(res.data.id)
+    let error=null,record=null
+    if(previousId){
+      const res=await supabase.from('whiteboard_drawings')
+        .update({title:boardTitle,drawing:payload,updated_at:new Date().toISOString()})
+        .eq('id',previousId).eq('user_id',userId).select('*').single()
+      error=res.error;record=res.data
+    }else{
+      const res=await supabase.from('whiteboard_drawings')
+        .insert({user_id:userId,title:boardTitle,drawing:payload,updated_at:new Date().toISOString()})
+        .select('*').single()
+      error=res.error;record=res.data
     }
-    setSaving(false);setMessage(error?error.message:'Board saved.');if(!error)await loadBoards(boardId)
+    setSaving(false)
+    if(error||!record){setMessage(error?.message||'Save failed. Your draft is still stored on this device.');return}
+    dirtyRef.current=false
+    clearBoardDraft(window.localStorage,userId,previousId)
+    window.localStorage.setItem('workset-board-current:'+userId,record.id)
+    setBoardId(record.id);setBoards(v=>[record,...v.filter(b=>b.id!==record.id)])
+    setMessage('Saved across devices.')
   }
 
   const newBoard=async()=>{
-    const name=await promptWorkset('New board name','Board '+(boards.length+1));if(!name)return
-    const {data,error}=await supabase.from('whiteboard_drawings').insert({user_id:session.user.id,title:name.trim(),drawing:{version:2,items:[],grid:true}}).select().single()
-    if(error){setMessage(error.message);return}await loadBoards(data.id)
+    saveDraftOnDevice()
+    const name=await promptWorkset('New board name','Board '+(boards.length+1))
+    if(!name||!session?.user)return
+    const {data,error}=await supabase.from('whiteboard_drawings').insert({
+      user_id:session.user.id,title:name.trim(),
+      drawing:{version:2,items:[],grid:true}
+    }).select().single()
+    if(error||!data){setMessage(error?.message||'Could not add board');return}
+    window.localStorage.setItem('workset-board-current:'+session.user.id,data.id)
+    await loadBoards(data.id)
   }
   const deleteBoard=async()=>{
-    if(!boardId||!await confirmWorkset('Delete this whiteboard?'))return
-    await supabase.from('whiteboard_drawings').delete().eq('id',boardId);await loadBoards()
+    if(!boardId||!session?.user||!await confirmWorkset('Delete this whiteboard?'))return
+    const id=boardId,userId=session.user.id
+    const {error}=await supabase.from('whiteboard_drawings').delete().eq('id',id).eq('user_id',userId)
+    if(error){setMessage(error.message);return}
+    dirtyRef.current=false;clearBoardDraft(window.localStorage,userId,id)
+    window.localStorage.removeItem('workset-board-current:'+userId)
+    await loadBoards()
   }
 
   const addImage=async e=>{
     const file=e.target.files?.[0];if(!file)return
-    try{const src=await fileToDataUrl(file);setItems(v=>[...v,{id:uid(),type:'image',src,x:.08,y:.08,w:.55,h:.55}]);setRedo([])}catch{setMessage('Could not load that image.')}
+    try{
+      const src=await fileToDataUrl(file)
+      rememberChange();setItems(v=>[...v,{id:uid(),type:'image',src,x:.08,y:.08,w:.55,h:.55}])
+    }catch{setMessage('Could not load that image.')}
     e.target.value=''
   }
+
   const exportPng=()=>{const c=canvasRef.current;if(!c)return;const a=document.createElement('a');a.href=c.toDataURL('image/png');a.download=`Workset-${boardTitle.replace(/[^a-z0-9]+/gi,'-')}.png`;document.body.appendChild(a);a.click();a.remove()}
 
   return <section className="draw-board-section">
     <div className="draw-board-manager">
       <select value={boardId||''} onChange={e=>selectBoard(e.target.value)}><option value="">Unsaved board</option>{boards.map(b=><option value={b.id} key={b.id}>{b.title}</option>)}</select>
-      <input value={boardTitle} onChange={e=>setBoardTitle(e.target.value)} placeholder="Board name"/>
+      <input value={boardTitle} onChange={e=>{dirtyRef.current=true;setBoardTitle(e.target.value)}} placeholder="Board name"/>
       <button onClick={newBoard}>+ Board</button><button onClick={deleteBoard} disabled={!boardId}>Delete</button>
     </div>
     <div className="draw-board-toolbar">
-      <div className="draw-tools">{['pen','highlighter','eraser','line','arrow','rect','circle','text','sticky'].map(t=><button key={t} className={tool===t?'active':''} onClick={()=>setTool(t)}>{t[0].toUpperCase()+t.slice(1)}</button>)}</div>
+      <div className="draw-tools">{['select','pen','highlighter','eraser','line','arrow','rect','circle','text','sticky'].map(t=><button type="button" key={t} className={tool===t?'active':''} onClick={()=>{setTool(t);if(t!=='select')setSelectedId(null)}}>{t==='select'?'Move':t[0].toUpperCase()+t.slice(1)}</button>)}</div>
       <div className="draw-colors">{palette.map(c=><button key={c} className={color===c?'active':''} style={{background:c}} onClick={()=>setColor(c)} aria-label={'Use '+c}/>)}</div>
       <label className="draw-width">Size<input type="range" min="2" max="14" value={width} onChange={e=>setWidth(Number(e.target.value))}/></label>
-      <label className="draw-grid-toggle"><input type="checkbox" checked={grid} onChange={e=>setGrid(e.target.checked)}/> Grid</label>
+      <label className="draw-grid-toggle"><input type="checkbox" checked={grid} onChange={e=>{dirtyRef.current=true;setGrid(e.target.checked)}}/> Grid</label>
       <button onClick={()=>imageInputRef.current?.click()}>Image</button><input ref={imageInputRef} type="file" accept="image/*" hidden onChange={addImage}/>
-      <div className="draw-actions"><button onClick={undo} disabled={!items.length}>Undo</button><button onClick={redoOne} disabled={!redo.length}>Redo</button><button onClick={clear} disabled={!items.length}>Clear</button></div>
+      <div className="draw-actions"><button type="button" onClick={undo} disabled={!undoHistory.length}>Undo</button><button type="button" onClick={redoOne} disabled={!redo.length}>Redo</button><button type="button" onClick={removeSelected} disabled={!selectedId}>Delete selected</button><button type="button" onClick={clear} disabled={!items.length}>Clear</button></div>
     </div>
     <div className="draw-board-wrap">
       <div className="draw-board-zoom" aria-label="Whiteboard zoom controls">
@@ -272,9 +309,10 @@ export function DrawWhiteboard({session}) {
         <button type="button" onClick={()=>setZoom(v=>Math.min(2.2,Math.round((v+.1)*10)/10))} disabled={zoom>=2.2}>+</button>
       </div>
       <div className="draw-board-pan" ref={wrapRef}>
-        <canvas ref={canvasRef} onPointerDown={start} onPointerMove={move} onPointerUp={end} onPointerCancel={end} onPointerLeave={end}/>
+        <canvas ref={canvasRef} data-tool={tool} aria-label="Whiteboard canvas: choose Move to select and drag an object"
+          onPointerDown={start} onPointerMove={move} onPointerUp={end} onPointerCancel={end} onPointerLeave={e=>{if(!e.currentTarget.hasPointerCapture?.(e.pointerId))end(e)}}/>
       </div>
     </div>
-    <div className="draw-board-bottom"><span>{message||'Draw, add shapes/text/stickies, or place an image and draw over it.'}</span><div><button className="secondary-action" onClick={exportPng}>Export PNG</button><button className="primary-action" onClick={save} disabled={saving}>{saving?'Saving…':'Save board'}</button></div></div>
+    <div className="draw-board-bottom"><span role="status">{message||(dirtyRef.current?'Draft kept on this device. Tap Save board to sync across devices.':'Choose Move to grab shapes, strokes, text or images. Changes are kept as a draft until saved.')}</span><div><button className="secondary-action" onClick={exportPng}>Export PNG</button><button className="primary-action" onClick={save} disabled={saving}>{saving?'Saving…':'Save board'}</button></div></div>
   </section>
 }
