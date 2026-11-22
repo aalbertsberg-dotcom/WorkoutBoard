@@ -130,34 +130,97 @@ export function DrawWhiteboard({session}) {
       }
       ctx.restore()
     }
+    if(selectedId&&tool==='select'){
+      const target=items.find(x=>x.id===selectedId)
+      const b=boardItemBounds(target,w,h)
+      if(b){
+        ctx.save();ctx.lineWidth=2;ctx.strokeStyle='#2563eb';ctx.setLineDash([6,4])
+        ctx.strokeRect(b.x1*w-7,b.y1*h-7,Math.max(14,(b.x2-b.x1)*w+14),Math.max(14,(b.y2-b.y1)*h+14))
+        ctx.restore()
+      }
+    }
   }
 
-  useEffect(()=>{drawAll()},[items,grid,zoom])
-  useEffect(()=>{const ro=new ResizeObserver(drawAll);if(wrapRef.current)ro.observe(wrapRef.current);return()=>ro.disconnect()},[items,grid,zoom])
+  useEffect(()=>{drawAll()},[items,grid,zoom,selectedId,tool])
+  useEffect(()=>{const ro=new ResizeObserver(drawAll);if(wrapRef.current)ro.observe(wrapRef.current);return()=>ro.disconnect()},[items,grid,zoom,selectedId,tool])
 
-  const point=e=>{const rect=canvasRef.current.getBoundingClientRect();return{x:clamp((e.clientX-rect.left)/rect.width),y:clamp((e.clientY-rect.top)/rect.height)}}
+  const point=e=>{
+    const rect=canvasRef.current.getBoundingClientRect()
+    return {x:clamp((e.clientX-rect.left)/rect.width),y:clamp((e.clientY-rect.top)/rect.height)}
+  }
 
   const addPromptItem=async(kind,p)=>{
     const text=await promptWorkset(kind==='sticky'?'Sticky note text':'Text')
     if(!text)return
     const item=kind==='sticky'?{id:uid(),type:'sticky',text,x:p.x,y:p.y,w:.28,h:.18}:{id:uid(),type:'text',text,x:p.x,y:p.y,color}
-    setRedo([]);setItems(v=>[...v,item])
+    rememberChange();setItems(v=>[...v,item]);setSelectedId(item.id)
   }
-
   const start=e=>{
-    if(!loaded)return;e.preventDefault();canvasRef.current.setPointerCapture?.(e.pointerId);const p=point(e)
-    if(tool==='text'||tool==='sticky'){addPromptItem(tool,p);return}
-    drawingRef.current=true;setRedo([])
+    if(!loaded||saving)return
+    e.preventDefault();canvasRef.current.setPointerCapture?.(e.pointerId)
+    const p=point(e)
+    if(tool==='select'){
+      const canvas=canvasRef.current
+      const hit=hitTestBoardItem(items,p,canvas.clientWidth,canvas.clientHeight)
+      setSelectedId(hit)
+      draggingRef.current=hit?{id:hit,start:p,original:items.find(x=>x.id===hit),snapshot:items,moved:false,
+        width:canvas.clientWidth,height:canvas.clientHeight}:null
+      return
+    }
+    if(tool==='text'||tool==='sticky'){void addPromptItem(tool,p);return}
+    rememberChange();drawingRef.current=true;setSelectedId(null)
     const item=['line','arrow','rect','circle'].includes(tool)
       ? {id:uid(),type:'shape',shape:tool,color,width,start:p,end:p}
       : {id:uid(),type:'stroke',tool,color,width:tool==='eraser'?Math.max(18,width*4):tool==='highlighter'?Math.max(16,width*3):width,points:[p]}
     currentRef.current=item;setItems(v=>[...v,item])
   }
-  const move=e=>{if(!drawingRef.current||!currentRef.current)return;e.preventDefault();const p=point(e),id=currentRef.current.id;setItems(v=>v.map(x=>x.id===id?(x.type==='shape'?{...x,end:p}:{...x,points:[...(x.points||[]),p]}):x))}
-  const end=e=>{if(!drawingRef.current)return;e.preventDefault();drawingRef.current=false;currentRef.current=null}
-  const undo=()=>setItems(v=>{if(!v.length)return v;const last=v[v.length-1];setRedo(r=>[last,...r]);return v.slice(0,-1)})
-  const redoOne=()=>setRedo(v=>{if(!v.length)return v;const [first,...rest]=v;setItems(x=>[...x,first]);return rest})
-  const clear=async()=>{if(items.length&&await confirmWorkset('Clear this board?')){setRedo(items);setItems([])}}
+  const move=e=>{
+    const drag=draggingRef.current
+    if(drag){
+      e.preventDefault()
+      const p=point(e),dx=p.x-drag.start.x,dy=p.y-drag.start.y
+      if(!drag.moved&&Math.abs(dx)*drag.width+Math.abs(dy)*drag.height<3)return
+      if(!drag.moved){
+        drag.moved=true;setUndoHistory(history=>[...history.slice(-49),drag.snapshot]);setRedo([])
+        dirtyRef.current=true
+      }
+      setItems(v=>v.map(item=>item.id===drag.id?moveBoardItem(drag.original,dx,dy,drag.width,drag.height):item))
+      return
+    }
+    if(!drawingRef.current||!currentRef.current)return
+    e.preventDefault()
+    const p=point(e),id=currentRef.current.id
+    setItems(v=>v.map(x=>x.id===id?(x.type==='shape'?{...x,end:p}:{...x,points:[...(x.points||[]),p]}):x))
+  }
+  const end=e=>{
+    if(draggingRef.current){
+      if(draggingRef.current.moved)setMessage('Moved. Draft kept on this device.')
+      draggingRef.current=null
+    }
+    if(!drawingRef.current)return
+    e.preventDefault();drawingRef.current=false;currentRef.current=null
+  }
+  const undo=()=>{
+    if(!undoHistory.length)return
+    const before=undoHistory[undoHistory.length-1]
+    setUndoHistory(v=>v.slice(0,-1));setRedo(v=>[...v.slice(-49),items])
+    setItems(before);dirtyRef.current=true;setSelectedId(null)
+  }
+  const redoOne=()=>{
+    if(!redo.length)return
+    const after=redo[redo.length-1]
+    setRedo(v=>v.slice(0,-1));setUndoHistory(v=>[...v.slice(-49),items])
+    setItems(after);dirtyRef.current=true;setSelectedId(null)
+  }
+  const removeSelected=()=>{
+    if(!selectedId)return
+    rememberChange();setItems(v=>v.filter(item=>item.id!==selectedId));setSelectedId(null)
+  }
+  const clear=async()=>{
+    if(items.length&&await confirmWorkset('Clear this board?')){
+      rememberChange();setItems([]);setSelectedId(null)
+    }
+  }
 
   const save=async()=>{
     if(!session?.user)return;setSaving(true)
