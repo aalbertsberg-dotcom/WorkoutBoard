@@ -64,3 +64,31 @@ export function buildPersonalRecords(rows=[]){
   }
   return [...map.values()].sort((a,b)=>b.e1rm-a.e1rm||a.name.localeCompare(b.name))
 }
+
+// Do not conflate different movements (e.g. Front Squat with Back Squat).
+// Used by analytics only; never overwrites the user's saved 1RM baseline.
+export function mainLiftName(name){
+  const normalized=String(name||'').toLowerCase().trim().replace(/\s+/g,' ')
+  if(['squat','back squat','barbell squat'].includes(normalized))return 'Squat'
+  if(['bench','bench press','barbell bench press','flat bench press'].includes(normalized))return 'Bench'
+  if(['deadlift','conventional deadlift'].includes(normalized))return 'Deadlift'
+  if(['press','strict press','overhead press','barbell overhead press'].includes(normalized))return 'Press'
+  return null
+}
+
+export function completedMainLiftSets(rows=[]){
+  return completedStrengthSets(rows).flatMap(set=>{
+    const lift=mainLiftName(set.name)
+    return lift?[{...set,lift}]:[]
+  })
+}
+
+// One best set per lift per completed workout, for a useful training trend.
+export function strengthTrendFromCompletedSets(rows=[]){
+  const best=new Map()
+  for(const set of completedMainLiftSets(rows)){
+    const key=set.lift+':'+String(set.date)
+    if(!best.has(key)||set.e1rm>best.get(key).e1rm)best.set(key,set)
+  }
+  return [...best.values()].sort((a,b)=>String(a.date).localeCompare(String(b.date)))
+}
