@@ -19,6 +19,7 @@ import { Capacitor } from '@capacitor/core'
 import { App as NativeApp } from '@capacitor/app'
 import { androidBackAction } from './androidNavigation'
 import { emailRedirectUrl } from './nativeAuth'
+import {validFriendEmail,friendInviteMailto} from './inviteLinks'
 import { getActiveWorkoutId,setActiveWorkoutId,clearActiveWorkoutId,cancelledWorkoutIds,getWorkoutCancellationBarrier,rememberWorkoutCancellation,isOpenWorkout,selectWorkoutToRestore } from './workoutLifecycle'
 import QRCode from 'qrcode'
 import { BarcodeDetector as BarcodeDetectorPonyfill } from 'barcode-detector/ponyfill'
@@ -1193,6 +1194,7 @@ function App() {
   const [friendAddOpen,setFriendAddOpen] = useState(false)
   const [friendEmail,setFriendEmail] = useState('')
   const [friendMessage,setFriendMessage] = useState('')
+  const [friendInviteAddress,setFriendInviteAddress] = useState('')
   const [friendManageOpen,setFriendManageOpen] = useState(false)
   const [managedAthletes,setManagedAthletes] = useState([])
   const [selectedManagedAthleteIds,setSelectedManagedAthleteIds] = useState([])
@@ -2641,10 +2643,17 @@ function App() {
 
   const requestWorksetFriend = async () => {
     const email=String(friendEmail||'').trim()
-    if(!email){setFriendMessage('Enter their Workset account email.');return}
-    setFriendMessage('Sending friend request…')
+    if(!validFriendEmail(email)){setFriendMessage('Enter a valid email address, like name@example.com.');return}
+    setFriendInviteAddress('')
+    setFriendMessage('Looking for their WorkSet account…')
     const {data,error}=await supabase.rpc('request_workset_friend_by_email',{target_email:email})
-    if(error){setFriendMessage(error.message);return}
+    if(error){
+      if(/No Workset account found for that email/i.test(error.message)){
+        setFriendInviteAddress(email)
+        setFriendMessage('They have not joined WorkSet yet. You can invite them by email.')
+      }else setFriendMessage(error.message)
+      return
+    }
     const result=data?.[0]
     setFriendEmail('')
     if(result?.friendship_status==='accepted'){
@@ -4146,8 +4155,13 @@ function App() {
                   </div>:<p className="helper-text">No Workset friends yet. Add someone by the email they use for Workset.</p>}
 
                   {friendAddOpen&&<div className="friend-add-panel">
-                    <label><span>Workset email</span><input type="email" value={friendEmail} onChange={e=>setFriendEmail(e.target.value)} placeholder="name@example.com"/></label>
-                    <div><button type="button" className="secondary-action" onClick={()=>{setFriendAddOpen(false);setFriendEmail('');setFriendMessage('')}}>Cancel</button><button type="button" className="primary-action" onClick={requestWorksetFriend}>Send request</button></div>
+                    <label><span>Friend's email</span><input type="email" value={friendEmail} onChange={e=>{setFriendEmail(e.target.value);setFriendInviteAddress('');setFriendMessage('')}} placeholder="name@example.com"/></label>
+                    <div><button type="button" className="secondary-action" onClick={()=>{setFriendAddOpen(false);setFriendEmail('');setFriendMessage('');setFriendInviteAddress('')}}>Cancel</button><button type="button" className="primary-action" onClick={requestWorksetFriend}>Find friend</button></div>
+                    {friendInviteAddress&&<div className="friend-email-invite">
+                      <p>No account yet for <strong>{friendInviteAddress}</strong>.</p>
+                      <a className="primary-action" href={friendInviteMailto(friendInviteAddress,appUrl())}>Open email invitation</a>
+                      <small>This opens your email app with a WorkSet signup link. Review and send the email yourself.</small>
+                    </div>}
                   </div>}
 
                   {outgoingFriendRequests.length>0&&<div className="friend-pending-list">
