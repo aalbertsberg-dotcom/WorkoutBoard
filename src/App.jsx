@@ -1262,7 +1262,7 @@ function App() {
 
   const navigateTo = (tab,{progressSection=null,replace=false}={}) => {
     const section=progressSection || (tab==='progress'?progressStartSection:'Overview')
-    const depth=Number(window.history.state?.worksetDepth||appNavDepth||0)
+    const depth=Number(window.history.state?.worksetDepth??appNavDepth??0)
     const transition=navigationTransition({
       fromTab:activeTab,toTab:tab,
       currentSection:progressStartSection,targetSection:section,
@@ -1281,7 +1281,7 @@ function App() {
   }
 
   const navigateBack = () => {
-    const depth=Number(window.history.state?.worksetDepth||appNavDepth||0)
+    const depth=Number(window.history.state?.worksetDepth??appNavDepth??0)
     if(depth>0){
       window.history.back()
       return
@@ -1306,7 +1306,7 @@ function App() {
       completion:Boolean(completionSummary),
       overlay:Boolean(extraWorkoutOpen),
       preview:Boolean(nextDayPreviewOpen),
-      depth:Number(window.history.state?.worksetDepth||appNavDepth||0),
+      depth:Number(window.history.state?.worksetDepth??appNavDepth??0),
       tab:activeTab,
     })
     switch(action){
