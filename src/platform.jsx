@@ -685,7 +685,8 @@ export function PlatformProgress({
         </section>
 
         <section className="simple-card">
-          <div className="section-heading"><div><span className="card-label">VOLUME BY LIFT</span><h3>Where your work is going</h3></div></div>
+          <div className="section-heading"><div><span className="card-label">MAIN-LIFT VOLUME</span><h3>Completed strength sets</h3></div></div>
+          <p className="helper-text">Squat, Bench, Deadlift and Press sets only; total workout volume also includes accessory exercises.</p>
           <div className="volume-chart">{lifts.map(name=><div className="volume-bar-row" key={name}><span>{name}</span><div className="bar-track"><div className="bar-fill" style={{width:(volumeByLift[name]/maxLiftVolume*100)+'%'}}/></div><strong>{formatWeight(volumeByLift[name])}</strong></div>)}</div>
         </section>
 
