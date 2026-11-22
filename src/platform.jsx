@@ -796,7 +796,7 @@ export function PlatformProgress({
 
         <AdvancedProgressCenter session={session}/>
         <details className="progress-history-extra-tools">
-          <summary>More history tools <small>Exercises, calendar, goals & measurements</small></summary>
+          <summary>More history tools <small>Exercise library and calendar</small></summary>
           <ProgressToolbox session={session} legacyHistory={progress.completed} flexSessions={flexSessions} formatWeight={formatWeight} initialTab="Exercises" allowedTabs={['Exercises','Calendar']}/>
         </details>
       </>}    </>:<>
