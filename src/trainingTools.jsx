@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase'
-import BeatTimer from './BeatTimer'
+import BeatTimer from './BeatTimer.jsx'
 import {keepTimerPanelVisible,canSwitchTimerMode,timerIsActive} from './timerPolicies'
 import {buildPersonalRecords} from './personalRecords'
 import { readOfflineState, writeOfflineState, upsertOfflineFirst } from './offline'

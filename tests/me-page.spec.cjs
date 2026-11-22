@@ -9,7 +9,7 @@ test('Me starts organized and collapsed, with profile and History/Progress short
   await expect(page.getByRole('button',{name:/Workout History/})).toBeVisible()
   await expect(page.getByRole('button',{name:/Progress & Analytics/})).toBeVisible()
   const sections=page.locator('.me-section-toggle')
-  await expect(sections).toHaveCount(7)
+  await expect(sections).toHaveCount(9)
   for(let i=0;i<await sections.count();i++)
     await expect(sections.nth(i)).toHaveAttribute('aria-expanded','false')
   await expect(page.getByText('Your current 1RMs')).toHaveCount(0)

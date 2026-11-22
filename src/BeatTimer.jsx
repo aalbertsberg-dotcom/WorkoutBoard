@@ -1,5 +1,5 @@
 import {useEffect,useRef,useState} from 'react'
-import {beatIntervalMs,beatIsAccent,clampBeatBpm,tappedBpm} from './beatTimer'
+import {beatIntervalMs,beatIsAccent,clampBeatBpm,tappedBpm} from './beatTimer.js'
 
 const readSetting=(key,fallback)=>{
   try{return localStorage.getItem(key)??fallback}catch{return fallback}

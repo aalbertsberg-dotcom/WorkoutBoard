@@ -1,24 +1,8 @@
 name: Build WorkSet Android (testing)
 
+# Native packages remain on hold. Run explicitly from Actions when testing resumes.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'src/nativeLocation.js'
-      - 'src/nativeAuth.js'
-      - 'src/nativePlatforms.js'
-      - 'src/outdoorTracking.jsx'
-      - 'src/trackingRules.js'
-      - 'src/androidNavigation.js'
-      - 'src/App.jsx'
-      - 'src/workoutHistory.jsx'
-      - 'src/mobilitySession.jsx'
-      - 'src/styles.css'
-      - 'tests/**'
-      - 'package.json'
-      - 'capacitor.config.json'
-      - '.github/workflows/android-debug.yml'
 
 permissions:
   contents: read
