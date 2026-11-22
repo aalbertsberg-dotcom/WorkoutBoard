@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase'
 import BeatTimer from './BeatTimer'
+import {buildPersonalRecords} from './personalRecords'
 import { readOfflineState, writeOfflineState, upsertOfflineFirst } from './offline'
 
 const pad=n=>String(Math.max(0,Math.floor(n))).padStart(2,'0')
@@ -326,27 +327,7 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
   }
   useEffect(()=>{load()},[session?.user?.id])
 
-  const prs=useMemo(()=>{
-    const best={}
-    for(const row of legacyHistory){
-      if(!row.completed_at)continue
-      for(const set of row.workout?.main||[]){
-        const w=Number(set.weight||0),r=Number(set.actualReps||0)
-        if(!w||!r)continue
-        const e=w*(1+r/30), key=row.lift||'Lift'
-        if(!best[key]||e>best[key].e1rm)best[key]={name:key,weight:w,reps:r,e1rm:e,date:row.completed_at}
-      }
-    }
-    for(const row of flexSessions){
-      for(const ex of row.workout?.exercises||[]){
-        const parsed=parseResult(ex.result)
-        if(!parsed)continue
-        const key=ex.name||row.primary_lift||'Exercise'
-        if(!best[key]||parsed.e1rm>best[key].e1rm)best[key]={name:key,...parsed,date:row.completed_at||row.session_date}
-      }
-    }
-    return Object.values(best).sort((a,b)=>b.e1rm-a.e1rm)
-  },[legacyHistory,flexSessions])
+  const prs=useMemo(()=>buildPersonalRecords([...legacyHistory,...flexSessions]),[legacyHistory,flexSessions])
 
   const exerciseRows=useMemo(()=>{
     const map={}
@@ -356,8 +337,15 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
         if(!key)continue
         if(!map[key])map[key]={name:key,count:0,last:null,best:null}
         map[key].count++
-        if(!map[key].last)map[key].last={result:ex.result,date:row.completed_at||row.session_date}
-        const parsed=parseResult(ex.result)
+        const completed=(ex.setProgress||[]).filter(set=>set.done===true&&Number(set.weight_edited?set.weight:(set.weight??ex.load))>0)
+        const recent=completed.at(-1)
+        const recentWeight=recent?Number(recent.weight_edited?recent.weight:(recent.weight??ex.load)):0
+        const recentReps=recent?Number(recent.actual_reps??recent.actualReps??recent.reps):0
+        const latestText=recentWeight>0&&recentReps>0?`${recentWeight} × ${recentReps}`:ex.result
+        if(!map[key].last)map[key].last={result:latestText,date:row.completed_at||row.session_date}
+        const parsed=recentWeight>0&&recentReps>0
+          ?{weight:recentWeight,reps:recentReps,e1rm:recentWeight*(1+recentReps/30)}
+          :parseResult(ex.result)
         if(parsed&&(!map[key].best||parsed.e1rm>map[key].best.e1rm))map[key].best={...parsed,date:row.completed_at||row.session_date}
       }
     }
@@ -368,8 +356,14 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
       const lastSet=(row.workout?.main||[]).filter(x=>x.weight&&x.actualReps).at(-1)
       if(lastSet&&!map[key].last)map[key].last={result:`${lastSet.weight} × ${lastSet.actualReps}`,date:row.completed_at}
     }
+    for(const pr of prs){
+      const key=Object.keys(map).find(name=>name.toLowerCase()===pr.name.toLowerCase())||pr.name
+      if(!map[key])map[key]={name:pr.name,count:0,last:null,best:null}
+      map[key].best={weight:pr.weight,reps:pr.reps,e1rm:pr.e1rm,date:pr.date}
+      if(!map[key].last)map[key].last={result:`${pr.weight} × ${pr.reps}`,date:pr.date}
+    }
     return Object.values(map).sort((a,b)=>b.count-a.count)
-  },[legacyHistory,flexSessions])
+  },[legacyHistory,flexSessions,prs])
 
   const calendar=useMemo(()=>{
     const map={}
@@ -522,7 +516,7 @@ export function ProgressToolbox({session,legacyHistory=[],flexSessions=[],format
     {activeTab==='PRs'&&<section className="simple-card">
       <div className="section-heading"><div><span className="card-label">PR BOARD</span><h3>Your best estimated sets</h3></div></div>
       <div className="pr-grid">{prs.slice(0,12).map(x=><div className="pr-card" key={x.name}><span>{x.name}</span><strong>{x.weight} × {x.reps}</strong><small>e1RM {formatWeight(x.e1rm)} lb</small></div>)}</div>
-      {!prs.length&&<div className="empty-state">No PRs yet. Finish weighted sets and WorkoutBoard will add them automatically.</div>}
+      {!prs.length&&<div className="empty-state">No PRs yet. Finish weighted sets and WorkSet will add them automatically.</div>}
     </section>}
 
     {activeTab==='Exercises'&&<section className="simple-card">
