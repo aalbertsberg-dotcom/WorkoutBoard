@@ -8724,3 +8724,25 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
 .progress-saved-maxes .wide-button,
 .progress-weight-readonly .wide-button {min-height:44px;}
 .me-collapsible {scroll-margin-top:16px;}
+
+/* WorkSet Board editing: touch drag controls, and clear active-timer state. */
+.draw-board-pan canvas {
+  touch-action:none;
+  cursor:crosshair;
+}
+.draw-board-pan canvas[data-tool="select"] {cursor:grab;}
+.draw-board-pan canvas[data-tool="select"]:active {cursor:grabbing;}
+.timer-mode-warning {
+  margin:0;
+  padding:9px 10px;
+  border:1px solid #9f713e;
+  border-radius:9px;
+  background:#352516;
+  color:#ffddb3;
+  font-size:12px;
+  line-height:1.4;
+}
+@media (max-width:700px){
+  .draw-actions {grid-template-columns:repeat(2,minmax(0,1fr));}
+  .draw-tools button:first-child {border-color:#6c8daa;}
+}
