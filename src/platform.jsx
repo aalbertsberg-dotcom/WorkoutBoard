@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {progressWorkoutLink} from './historyNavigation.js'
+import {completedMainLiftSets,strengthTrendFromCompletedSets} from './personalRecords.js'
 import { supabase } from './supabase'
 import { DialogPortal,OverlayPortal,confirmWorkset } from './worksetDialogs'
 import { allArchivePrograms, archiveProgramById, makePlannedFromArchive } from './archivePrograms'
@@ -120,6 +121,9 @@ export function PlatformProgress({
   onOpenHistory=null,
   onOpenWorkout=null,
   onSectionChange=null,
+  oneRepMaxes={},
+  onTrackStrength=null,
+  onTrackMeasurements=null,
   trackedProgramInfo=null,
   trackedProgramsInfo=[],
   initialSection='Overview',
@@ -267,9 +271,14 @@ export function PlatformProgress({
     cursor.setDate(cursor.getDate()-7)
   }
 
+  const completedLiftSets=useMemo(()=>
+    completedMainLiftSets([...progress.completed,...flexSessions])
+  ,[progress.completed,flexSessions])
+  const completedLiftTrends=useMemo(()=>
+    strengthTrendFromCompletedSets([...progress.completed,...flexSessions])
+  ,[progress.completed,flexSessions])
   const volumeByLift=Object.fromEntries(lifts.map(x=>[x,0]))
-  progress.completed.forEach(r=>{if(volumeByLift[r.lift]!=null)volumeByLift[r.lift]+=Number(r._metrics?.volume||0)})
-  flexSessions.forEach(r=>{if(volumeByLift[r.primary_lift]!=null)volumeByLift[r.primary_lift]+=Number(r.total_volume||0)})
+  completedLiftSets.forEach(set=>{if(volumeByLift[set.lift]!=null)volumeByLift[set.lift]+=set.weight*set.reps})
   const maxLiftVolume=Math.max(1,...Object.values(volumeByLift))
 
   const flexBody=flexSessions.find(r=>Number(r.bodyweight||0))?.bodyweight
@@ -297,11 +306,8 @@ export function PlatformProgress({
 
   const strengthTrendSeries=useMemo(()=>lifts.map(name=>({
     name,
-    points:[
-      ...progress.completed.filter(r=>r.lift===name&&Number(r._metrics?.estimated1rm||0)>0).map(r=>({date:r.completed_at,value:Number(r._metrics.estimated1rm)})),
-      ...flexSessions.filter(r=>r.primary_lift===name&&Number(r.estimated_1rm||0)>0).map(r=>({date:r.completed_at||r.session_date,value:Number(r.estimated_1rm)})),
-    ]
-  })).filter(series=>series.points.length),[progress.completed,flexSessions,lifts])
+    points:completedLiftTrends.filter(set=>set.lift===name).map(set=>({date:set.date,value:set.e1rm}))
+  })).filter(series=>series.points.length),[completedLiftTrends,lifts])
 
   const bodyweightTrendSeries=useMemo(()=>[{
     name:'Bodyweight',
@@ -656,6 +662,12 @@ export function PlatformProgress({
       </>}
 
       {progressSection==='Strength'&&<>
+        <section className="simple-card progress-saved-maxes" aria-label="Saved training 1RMs">
+          <div className="section-heading"><div><span className="card-label">SAVED STRENGTH</span><h3>Your saved 1RMs</h3></div></div>
+          <p className="helper-text">These values are used to calculate program weights. They are different from estimated 1RMs derived from finished workout sets below.</p>
+          <div className="progress-saved-max-grid">{lifts.map(name=><div key={name}><span>{name}</span><strong>{Number(oneRepMaxes?.[name])>0?Number(oneRepMaxes[name]).toFixed(2)+' lb':'Not set'}</strong></div>)}</div>
+          {onTrackStrength&&<button type="button" className="wide-button" onClick={onTrackStrength}>Track / update saved 1RMs ›</button>}
+        </section>
         <section className="simple-card analytics-chart-card">
           <div className="section-heading"><div><span className="card-label">STRENGTH TREND</span><h3>Estimated 1RM over time</h3></div></div>
           <AnalyticsLineChart series={strengthTrendSeries} unit="lb" emptyText="Complete weighted Squat, Bench, Deadlift or Press workouts and the strength lines will build automatically."/>
@@ -665,9 +677,10 @@ export function PlatformProgress({
           <div className="section-heading"><div><span className="card-label">STRENGTH PROGRESS</span><h3>Estimated 1RM</h3></div></div>
           <div className="strength-list">{lifts.map(name=>{
             const stat=progress.strength[name]
-            const flexBest=Math.max(0,...flexSessions.filter(r=>r.primary_lift===name).map(r=>Number(r.estimated_1rm||0)))
-            const shown=Math.max(stat?.latest||0,flexBest)
-            return <div className="strength-row" key={name}><div><strong>{name}</strong><span>{stat?.bestSet?'Best set '+stat.bestSet.weight+' × '+stat.bestSet.reps:flexBest?'Workout estimate':'No completed data yet'}</span></div><div className="strength-number"><strong>{shown?formatWeight(shown)+' lb':'—'}</strong>{stat&&<span className={stat.delta>=0?'positive':'negative'}>{stat.delta>=0?'+':''}{formatWeight(stat.delta)} since first log</span>}</div></div>
+            const completedSets=completedLiftTrends.filter(set=>set.lift===name)
+            const bestSet=completedSets.length?completedSets.reduce((best,set)=>!best||set.e1rm>best.e1rm?set:best,null):null
+            const shown=Math.max(stat?.latest||0,bestSet?.e1rm||0)
+            return <div className="strength-row" key={name}><div><strong>{name}</strong><span>{bestSet?'Best finished set '+bestSet.weight+' × '+bestSet.reps:stat?.bestSet?'Best set '+stat.bestSet.weight+' × '+stat.bestSet.reps:'No completed sets yet'}</span></div><div className="strength-number"><strong>{shown?formatWeight(shown)+' lb':'—'}</strong>{stat&&<span className={stat.delta>=0?'positive':'negative'}>{stat.delta>=0?'+':''}{formatWeight(stat.delta)} since first log</span>}</div></div>
           })}</div>
         </section>
 
@@ -739,14 +752,10 @@ export function PlatformProgress({
       </>}
 
       {progressSection==='Weight & Measurements'&&<>
-        <section className="simple-card quick-weight-card">
-          <div className="section-heading"><div><span className="card-label">WEIGHT</span><h3>Log today's weight</h3></div><strong>{latestBodyweight?latestBodyweight+' lb':'No weight yet'}</strong></div>
-          <form className="quick-weight-form" onSubmit={saveQuickWeight}>
-            <div className="input-with-unit"><input type="number" step="0.1" inputMode="decimal" value={quickWeight} onChange={e=>{setQuickWeight(e.target.value);setQuickWeightStatus('');setQuickWeightSavedValue(null)}} placeholder={latestBodyweight||'Weight'}/><b>lb</b></div>
-            <button type="submit" className="primary-action" disabled={!quickWeight||quickWeightStatus==='Saving…'} aria-live="polite">{quickWeightStatus==='Saving…'?'Saving…':quickWeightStatus==='Saved.'?`✓ ${quickWeightSavedValue} lb saved`:'Save weight'}</button>
-          </form>
-          <p className="helper-text">Saving here adds a dated bodyweight entry and immediately feeds the Weight over time chart.</p>
-          {quickWeightStatus&&quickWeightStatus!=='Saved.'&&quickWeightStatus!=='Saving…'&&<div className="status-message">{quickWeightStatus}</div>}
+        <section className="simple-card progress-weight-readonly">
+          <div className="section-heading"><div><span className="card-label">SAVED WEIGHT</span><h3>Your latest logged weight</h3></div><strong>{latestBodyweight?latestBodyweight+' lb':'Not logged'}</strong></div>
+          <p className="helper-text">This page shows your trends. Record or update weight and measurements in Me → Track &amp; Update.</p>
+          {onTrackMeasurements&&<button type="button" className="wide-button" onClick={onTrackMeasurements}>Track weight &amp; measurements ›</button>}
         </section>
 
         <section className="body-trend-stack">
@@ -763,7 +772,7 @@ export function PlatformProgress({
           </section>
         </section>
 
-        <ProgressToolbox session={session} legacyHistory={progress.completed} flexSessions={flexSessions} formatWeight={formatWeight} onlyTab="Measurements" onMeasurementMetricChange={setBodyTrendMetric} onMeasurementsChanged={loadData}/>
+
       </>}
 
       {progressSection==='History'&&<>
@@ -788,7 +797,7 @@ export function PlatformProgress({
         <AdvancedProgressCenter session={session}/>
         <details className="progress-history-extra-tools">
           <summary>More history tools <small>Exercises, calendar, goals & measurements</small></summary>
-          <ProgressToolbox session={session} legacyHistory={progress.completed} flexSessions={flexSessions} formatWeight={formatWeight} initialTab="Exercises"/>
+          <ProgressToolbox session={session} legacyHistory={progress.completed} flexSessions={flexSessions} formatWeight={formatWeight} initialTab="Exercises" allowedTabs={['Exercises','Calendar']}/>
         </details>
       </>}    </>:<>
       {ready===false?<div className="setup-needed"><span className="card-label">PLATFORM UPDATE NEEDED</span><h2>Community is ready in the app</h2><p>Run the platform-foundation SQL migration once to enable it.</p></div>:<>
