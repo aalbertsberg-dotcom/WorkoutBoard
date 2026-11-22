@@ -8660,3 +8660,24 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   .rep-pr-buckets > div {padding:8px 1px;}
   .rep-pr-card-head > div b {font-size:15px;}
 }
+
+.friend-email-invite {
+  display:grid;
+  gap:8px;
+  margin-top:10px;
+  padding:12px;
+  border:1px solid #4f7246;
+  border-radius:10px;
+  background:#102119;
+}
+.friend-email-invite p {margin:0;font-size:12px;line-height:1.4;}
+.friend-email-invite strong {overflow-wrap:anywhere;}
+.friend-email-invite a {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-height:44px;
+  text-decoration:none;
+  text-align:center;
+}
+.friend-email-invite small {color:#b1c1b7;font-size:11px;line-height:1.4;}
