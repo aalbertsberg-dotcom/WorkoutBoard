@@ -133,8 +133,14 @@ test('Today timer offers an optional BPM mode without affecting the rest timer',
   await expect(timer.getByRole('spinbutton',{name:'Beats per minute'})).toHaveValue('120')
   await timer.getByRole('checkbox',{name:'Sound'}).uncheck()
   await timer.getByRole('button',{name:'Start beats'}).click()
+  // Start stays open so Stop, tempo adjustment, and Sound remain accessible.
+  await expect(timer.getByRole('button',{name:'Stop beats'})).toBeVisible()
+  await expect(page.locator('.floating-workout-timer')).toHaveCount(0)
+  // Floating control appears only when the user closes the open timer.
+  await timer.locator('summary').click()
   await expect(page.locator('.floating-workout-timer')).toContainText('120 BPM')
   await page.locator('.floating-workout-timer').click()
+  await expect(timer.getByRole('button',{name:'Stop beats'})).toBeVisible()
   await timer.getByRole('button',{name:'Stop beats'}).click()
   await timer.getByRole('button',{name:'Rest'}).click()
   await expect(timer.getByRole('button',{name:'Start'})).toBeVisible()
