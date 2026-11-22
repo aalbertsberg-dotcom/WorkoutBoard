@@ -8681,3 +8681,46 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   text-align:center;
 }
 .friend-email-invite small {color:#b1c1b7;font-size:11px;line-height:1.4;}
+
+/* Progress is for viewing; the separate Track & Update path lives in Me. */
+.progress-to-track {
+  margin-top:10px;
+  min-height:44px;
+  padding:10px 13px;
+  border:1px solid #547152;
+  border-radius:9px;
+  background:#1a3425;
+  color:#daf6d0;
+  font-size:13px;
+  font-weight:800;
+  text-align:left;
+}
+.progress-saved-maxes,
+.progress-weight-readonly { min-width:0; }
+.progress-saved-max-grid {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px;
+}
+.progress-saved-max-grid > div {
+  display:grid;
+  gap:5px;
+  min-width:0;
+  padding:10px;
+  border:1px solid #293e58;
+  border-radius:9px;
+  background:#0c1829;
+}
+.progress-saved-max-grid span {
+  color:#9eb0c5;
+  font-size:11px;
+  font-weight:700;
+}
+.progress-saved-max-grid strong {
+  color:#edf4fc;
+  font-size:clamp(12px,3.5vw,17px);
+  overflow-wrap:anywhere;
+}
+.progress-saved-maxes .wide-button,
+.progress-weight-readonly .wide-button {min-height:44px;}
+.me-collapsible {scroll-margin-top:16px;}
