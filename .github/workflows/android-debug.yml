@@ -52,9 +52,12 @@ jobs:
       - name: Assemble debug APK
         working-directory: android
         run: bash gradlew --no-daemon --max-workers=2 assembleDebug
+      # Keep the distributed filename stable; put versions in release notes.
+      - name: Name Android installer WorkSet.apk
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk android/app/build/outputs/apk/debug/WorkSet.apk
       - name: Upload test APK
         uses: actions/upload-artifact@v4
         with:
-          name: WorkSet-Android-Debug
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: WorkSet-Android
+          path: android/app/build/outputs/apk/debug/WorkSet.apk
           if-no-files-found: error
