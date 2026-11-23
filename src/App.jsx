@@ -1255,6 +1255,7 @@ function App() {
   const [trackFocus,setTrackFocus] = useState(null)
   const [appNavDepth,setAppNavDepth] = useState(()=>Number(window.history.state?.worksetDepth||0))
   const androidBackHandlerRef=useRef(null)
+  const androidExitConfirmingRef=useRef(false)
   const [completedTrainingSessions,setCompletedTrainingSessions] = useState([])
   const [programCompletionPrompt,setProgramCompletionPrompt] = useState(null)
   const [oneRmNotice,setOneRmNotice] = useState(null)
@@ -1298,6 +1299,22 @@ function App() {
 
   // Android hardware/system Back has its own lifecycle. Web browser history
   // remains unchanged; nested pages may consume this cancelable event first.
+  const confirmAndroidExit=async()=>{
+    // Protect against repeat Back presses while the dialog is mounting.
+    if(androidExitConfirmingRef.current)return
+    androidExitConfirmingRef.current=true
+    try{
+      const exit=await confirmWorkset(
+        'Exit WorkSet? An active timer or background activity may stop.',
+        {title:'Exit WorkSet?',cancelLabel:'Stay',confirmLabel:'Exit app',danger:false}
+      )
+      if(exit)await NativeApp.exitApp()
+    }catch(error){
+      console.warn('Android exit request could not complete',error)
+    }finally{
+      androidExitConfirmingRef.current=false
+    }
+  }
   androidBackHandlerRef.current=()=>{
     const nestedBack=new Event('workset-native-back',{cancelable:true})
     if(!window.dispatchEvent(nestedBack))return
@@ -1335,8 +1352,11 @@ function App() {
       case 'go-today':
         navigateTo('today',{replace:true})
         break
+      case 'confirm-app-exit':
+        void confirmAndroidExit()
+        break
       default:
-        NativeApp.minimizeApp().catch(()=>{})
+        break
     }
   }
   useEffect(()=>{

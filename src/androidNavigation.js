@@ -9,5 +9,5 @@ export function androidBackAction({activeWorkout=false,historyDetail=false,compl
   if(preview)return 'close-preview'
   if(Number(depth)>0)return 'history-back'
   if(tab!=='today')return 'go-today'
-  return 'minimize-app'
+  return 'confirm-app-exit'
 }
