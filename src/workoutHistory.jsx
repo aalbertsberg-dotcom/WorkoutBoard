@@ -1,7 +1,7 @@
 import { useEffect,useMemo,useState } from 'react'
 import { supabase } from './supabase'
 import { RouteMap,outdoorMetrics,formatPace,formatOutdoorDuration,outdoorActivityKind } from './outdoorTracking'
-import { outdoorDistancePresentation,hasReliableOutdoorRoute,hasVerifiedOutdoorRoute,effectiveCardioDurationSeconds } from './trackingRules'
+import { workoutDistancePresentation,hasReliableOutdoorRoute,hasVerifiedOutdoorRoute,effectiveCardioDurationSeconds } from './trackingRules'
 import { effectiveSteps } from './stepTracking'
 import { EditableWorkout } from './advancedFeatures'
 import { DialogPortal } from './worksetDialogs'
@@ -133,7 +133,7 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
   const workout=selected?.workout||{}
   const outdoor=workout.outdoor
   const kind=outdoorActivityKind(workout.quick_cardio_kind||workout.metcon?.activity||selected?.title)
-  const distance=outdoorDistancePresentation(outdoor)
+  const distance=workoutDistancePresentation(workout)
   const loggedDurationSeconds=effectiveCardioDurationSeconds(workout)
   const metrics=selected&&kind?outdoorMetrics(outdoor||{},loggedDurationSeconds,kind):null
   const strengthExercises=(workout.exercises||[]).filter(item=>item.name)
@@ -175,6 +175,7 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
             {(kind==='walk'||kind==='run')&&<div><span>Steps</span><strong>{formatNumber(effectiveSteps(outdoor))}</strong></div>}
             <div><span>{kind==='bike'?'Avg speed':'Avg pace'}</span><strong>{!hasVerifiedOutdoorRoute(outdoor)?'—':kind==='bike'?(metrics?.avgMph?metrics.avgMph.toFixed(1)+' mph':'—'):formatPace(metrics?.avgPaceSecPerMile)}</strong></div>
           </div>
+          {distance.manual&&<small className="history-note">Distance was entered manually; no GPS route was inferred.</small>}
           {distance.estimated&&<small className="history-note">{distance.note}. Pace is not reported for an unverified track.</small>}
         </>}
         {category(selected)==='Mobility'&&<>

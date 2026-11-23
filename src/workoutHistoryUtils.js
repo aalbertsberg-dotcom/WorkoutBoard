@@ -1,4 +1,4 @@
-import { outdoorDistancePresentation,effectiveCardioDurationSeconds } from './trackingRules.js'
+import { workoutDistancePresentation,effectiveCardioDurationSeconds } from './trackingRules.js'
 import { effectiveSteps } from './stepTracking.js'
 
 export const HISTORY_PAGE_SIZE=100
@@ -19,7 +19,7 @@ export function completedWorkoutSummary(row={}){
     return completed+' movement'+(completed===1?'':'s')
   }
   if(kind==='Cardio'){
-    const distance=outdoorDistancePresentation(row.workout?.outdoor)
+    const distance=workoutDistancePresentation(row.workout)
     if(distance.meters>0)return distance.label
     const storedMiles=Number(row?.outdoor_summary?.miles||0)
     if(storedMiles>0)return storedMiles.toFixed(2)+' mi'

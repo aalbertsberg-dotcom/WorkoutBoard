@@ -33,3 +33,9 @@ test('manually entered cardio duration appears correctly in saved History',()=>{
  assert.equal(completedWorkoutSummary({...walk,workout:{...walk.workout,
    quick_timer_elapsed_seconds:120}}),'2:00')
 })
+
+test('saved manual cardio distance survives without a GPS fix',()=>{
+ const walk={title:'Walk',workout:{quick_cardio:true,quick_cardio_kind:'walk',
+   metcon:{distance:'2.5 mi',duration:'30 min',distance_source:'manual'},outdoor:{distance_m:0,points:[]}}}
+ assert.equal(completedWorkoutSummary(walk),'2.5 mi')
+})

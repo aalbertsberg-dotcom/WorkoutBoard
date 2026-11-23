@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {
   validWeightDraft,validRepsDraft,displayedSetWeight,recordedWeightValue,
   canFinishQuickCardio,hasReliableOutdoorRoute,paceIsMeaningful,withoutUnreliableRoute,
-  hasLiveGpsFix,gpsJitterFloorMeters,outdoorDistancePresentation,shouldSplitGpsTrack,hasRecordingGaps,hasVerifiedOutdoorRoute,gpsMovementAssessment,autosaveDelayMs,isNewGpsFix,parseManualCardioDurationSeconds,effectiveCardioDurationSeconds
+  hasLiveGpsFix,gpsJitterFloorMeters,outdoorDistancePresentation,shouldSplitGpsTrack,hasRecordingGaps,hasVerifiedOutdoorRoute,gpsMovementAssessment,autosaveDelayMs,isNewGpsFix,parseManualCardioDurationSeconds,effectiveCardioDurationSeconds,parseManualCardioDistance,workoutDistancePresentation
 } from '../src/trackingRules.js'
 
 test('erasing 135 stays erased even when a previous set offers 135',()=>{
@@ -268,4 +268,25 @@ test('manual outdoor time parsing never invents a completed duration',()=>{
   assert.equal(effectiveCardioDurationSeconds({quick_timer_elapsed_seconds:90,metcon:{duration:'30 min'}}),90)
   assert.equal(effectiveCardioDurationSeconds({quick_timer_elapsed_seconds:0,metcon:{duration:'30 min'}}),1800)
   assert.equal(canFinishQuickCardio(0,'invalid 5'),false)
+})
+
+test('manual distances display in history without pretending GPS recorded a route',()=>{
+  const entered={quick_cardio:true,metcon:{distance:'2.5 mi',distance_source:'manual'},outdoor:{distance_m:0,points:[]}}
+  const display=workoutDistancePresentation(entered)
+  assert.equal(display.manual,true)
+  assert.equal(display.hasRoute,false)
+  assert.equal(display.label,'2.5 mi')
+  assert.ok(Math.abs(display.miles-2.5)<0.001)
+  assert.equal(parseManualCardioDistance('5 km').meters,5000)
+  assert.equal(parseManualCardioDistance('1000 m').meters,1000)
+  assert.equal(parseManualCardioDistance('1500 ft').label,'1,500 ft')
+  assert.equal(parseManualCardioDistance('short walk'),null)
+  assert.equal(parseManualCardioDistance('0 mi'),null)
+  const gps=workoutDistancePresentation({metcon:{distance:'2.5 mi',distance_source:'gps'},
+    outdoor:{distance_m:200,points:[{lat:30,lng:-88},{lat:30.001,lng:-88}]}})
+  assert.equal(gps.manual,false)
+  assert.equal(gps.hasRoute,true)
+  const override=workoutDistancePresentation({...entered,outdoor:{distance_m:200,points:[{lat:30,lng:-88},{lat:30.001,lng:-88}]}})
+  assert.equal(override.manual,true)
+  assert.equal(override.hasRoute,false)
 })

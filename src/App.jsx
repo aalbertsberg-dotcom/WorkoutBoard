@@ -3688,7 +3688,9 @@ function App() {
                 <div><span className="card-label">WORKOUT COMPLETE</span><h2>{completionSummary.title||'Workout complete'}</h2><p>{completionSummary.program||trackedProgramsInfo.find(x=>x.key===plannedToday?.workout?.tracking_program_key)?.name||trackedTodayInfo?.name||'Workout'}</p></div>
                 {completionSummary.outdoor?<div className="completion-outdoor-summary">
                   {completionSummary.outdoor.routeAvailable&&completionSummary.outdoor.points?.length>1&&<RouteMap points={completionSummary.outdoor.points} compact/>}
-                  {completionSummary.outdoor.gpsUnavailable
+                  {completionSummary.outdoor.distanceManual
+                    ?<p className="completion-gps-note">Distance entered manually; it is not a GPS measurement.</p>
+                    :completionSummary.outdoor.gpsUnavailable
                     ?<p className="completion-gps-note" role="status">
                       {completionSummary.outdoor.gpsFixes>0
                         ?'GPS location was received, but no reliable movement was recorded. The workout time was saved.'

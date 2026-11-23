@@ -197,3 +197,30 @@ export function effectiveCardioDurationSeconds(workout={}){
   if(Number.isFinite(outdoor)&&outdoor>0)return outdoor
   return parseManualCardioDurationSeconds(workout?.metcon?.duration)
 }
+
+export function parseManualCardioDistance(value){
+  const raw=String(value??'').trim().toLowerCase()
+  const match=raw.match(/^(\d+(?:\.\d+)?)\s*(miles?|mi|kilometres?|kilometers?|km|metres?|meters?|m|feet|foot|ft)?$/)
+  if(!match)return null
+  const amount=Number(match[1])
+  if(!Number.isFinite(amount)||amount<=0)return null
+  const unit=match[2]||'mi'
+  const isMiles=unit==='mi'||unit.startsWith('mile')
+  const isKm=unit==='km'||unit.startsWith('kilomet')
+  const isFeet=unit==='ft'||unit==='feet'||unit==='foot'
+  const meters=amount*(isMiles?1609.344:isKm?1000:isFeet?0.3048:1)
+  const short=isMiles?'mi':isKm?'km':isFeet?'ft':'m'
+  return {meters,miles:meters/1609.344,
+    label:amount.toLocaleString(undefined,{maximumFractionDigits:2})+' '+short}
+}
+
+export function workoutDistancePresentation(workout={}){
+  const gps=outdoorDistancePresentation(workout?.outdoor)
+  const manuallyEntered=parseManualCardioDistance(workout?.metcon?.distance)
+  if(manuallyEntered && (workout?.metcon?.distance_source==='manual'||gps.meters===0)){
+    return {...gps,...manuallyEntered,hasRoute:false,estimated:false,manual:true,
+      milesLabel:manuallyEntered.miles.toFixed(2)+' mi',
+      note:'Distance entered manually, not recorded by GPS'}
+  }
+  return {...gps,manual:false}
+}

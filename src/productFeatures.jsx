@@ -7,9 +7,9 @@ import { offlineUuid, queueUpsert, upsertOfflineFirst, isOfflineError, readOffli
 import { OutdoorTracker, emptyOutdoorTrack, outdoorActivityKind, outdoorMetrics } from './outdoorTracking'
 import {describeOutdoorGps} from './gpsStatus.js'
 import GpsStatusBadge from './GpsStatusBadge.jsx'
-import BeatTimer from './BeatTimer'
+import BeatTimer from './BeatTimer.jsx'
 import { effectiveSteps } from './stepTracking'
-import { validWeightDraft,validRepsDraft,displayedSetWeight,recordedWeightValue,canFinishQuickCardio,withoutUnreliableRoute,outdoorDistancePresentation,autosaveDelayMs } from './trackingRules'
+import { validWeightDraft,validRepsDraft,displayedSetWeight,recordedWeightValue,canFinishQuickCardio,withoutUnreliableRoute,outdoorDistancePresentation,workoutDistancePresentation,effectiveCardioDurationSeconds,autosaveDelayMs } from './trackingRules'
 
 function partnerSetTarget(maxes,set) {
   const lift=set?.weight_lift
@@ -577,6 +577,8 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
     const gpsDistanceText=distanceDisplay?.meters>0
       ? distanceDisplay.label+(distanceDisplay.estimated?' (GPS estimate)':'')
       : ''
+    const manualDistance=String(workout.metcon?.distance||'').trim()
+    const reportedDurationSeconds=effectiveCardioDurationSeconds(workout)
     const finalWorkout={
       ...workout,
       ...(quickCardio?{
@@ -594,11 +596,13 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
         metcon:{
           ...(workout.metcon||{}),
           duration:String(workout.metcon?.duration||'').trim()||quickDurationText,
-          distance:String(workout.metcon?.distance||'').trim()||gpsDistanceText,
+          distance:manualDistance||gpsDistanceText,
+          distance_source:manualDistance?'manual':gpsDistanceText?'gps':'none',
         },
       }:{}),
       complete:true,savedAt:now,baseline_results:baselineResults
     }
+    const displayedDistance=quickOutdoorKind?workoutDistancePresentation(finalWorkout):null
     // Outdoor activities always get outdoor stats—even when GPS failed.
     // Showing strength "0 sets / 0 lb" for a 47-minute walk is misleading.
     const completionOutdoor=quickOutdoorKind&&quickOutdoorMetrics ? {
@@ -607,14 +611,15 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       gpsLastAccuracy:Number(reliableOutdoor?.last_accuracy_m||0)||null,
       gpsError:reliableOutdoor?.gps_health?.error_code??null,
       gpsUnavailable:quickOutdoorMetrics.distanceM<=0,
-      miles:quickOutdoorMetrics.miles,
-      distanceM:quickOutdoorMetrics.distanceM,
-      distanceLabel:distanceDisplay.label,
-      distanceMilesLabel:distanceDisplay.milesLabel,
-      distanceNote:distanceDisplay.note,
-      distanceEstimated:distanceDisplay.estimated,
+      miles:displayedDistance.miles,
+      distanceM:displayedDistance.meters,
+      distanceLabel:displayedDistance.label,
+      distanceMilesLabel:displayedDistance.milesLabel,
+      distanceNote:displayedDistance.note,
+      distanceEstimated:displayedDistance.estimated,
+      distanceManual:displayedDistance.manual,
       routeAvailable:distanceDisplay.hasRoute,
-      elapsedSeconds:quickElapsedSeconds,
+      elapsedSeconds:reportedDurationSeconds,
       avgPaceSecPerMile:quickOutdoorMetrics.avgPaceSecPerMile,
       avgMph:quickOutdoorMetrics.avgMph,
       elevationFt:quickOutdoorMetrics.elevationGainM*3.28084,
