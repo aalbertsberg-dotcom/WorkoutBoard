@@ -2,9 +2,6 @@ name: Build WorkSet iOS (simulator validation)
 
 # Native packages remain on hold. Run explicitly from Actions when testing resumes.
 on:
-  push:
-    branches:
-      - native/workset-dual-build-2026-11-22
   workflow_dispatch:
 
 permissions:
@@ -37,6 +34,8 @@ jobs:
         run: |
           npx cap add ios
           npx cap sync ios
+      - name: Apply Option B native ios artwork
+        run: node scripts/apply-native-brand.mjs ios
       - name: Configure iOS privacy and background location
         run: |
           bash scripts/configure-ios.sh

@@ -10,9 +10,9 @@
     "test": "node --test",
     "prebuild": "node scripts/generate-brand-assets.mjs",
     "build:android": "node scripts/generate-brand-assets.mjs && vite build",
-    "android:sync": "cap sync android",
+    "android:sync": "cap sync android && node scripts/apply-native-brand.mjs android",
     "build:native": "node scripts/generate-brand-assets.mjs && vite build",
-    "ios:sync": "cap sync ios"
+    "ios:sync": "cap sync ios && node scripts/apply-native-brand.mjs ios"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
