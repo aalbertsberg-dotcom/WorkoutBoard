@@ -2,6 +2,9 @@ name: Build WorkSet Android (testing)
 
 # Native packages remain on hold. Run explicitly from Actions when testing resumes.
 on:
+  push:
+    branches:
+      - native/workset-dual-build-2026-11-22
   workflow_dispatch:
 
 permissions:
@@ -44,9 +47,11 @@ jobs:
           npx cap sync android
       - name: Apply Option B native android artwork
         run: node scripts/apply-native-brand.mjs android
+      - name: Cache Gradle dependencies
+        uses: gradle/actions/setup-gradle@v4
       - name: Assemble debug APK
         working-directory: android
-        run: bash gradlew --no-daemon assembleDebug
+        run: bash gradlew --no-daemon --max-workers=2 assembleDebug
       - name: Upload test APK
         uses: actions/upload-artifact@v4
         with:
