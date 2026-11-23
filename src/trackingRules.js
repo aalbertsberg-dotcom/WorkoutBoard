@@ -103,7 +103,7 @@ export function autosaveDelayMs(unsavedForMs=0,quickCardio=false) {
 
 export function canFinishQuickCardio(elapsedSeconds, manualDuration='') {
   // The timer must have actually run; alternatively a real manual duration was entered.
-  return Number(elapsedSeconds)>=5 || /[1-9]/.test(String(manualDuration||''))
+  return Number(elapsedSeconds)>=5 || parseManualCardioDurationSeconds(manualDuration)>0
 }
 
 export function hasReliableOutdoorRoute(outdoor) {
@@ -155,4 +155,45 @@ export function outdoorDistancePresentation(outdoor={}) {
   }
   const label=miles.toFixed(miles<10?2:1)+' mi'
   return {meters,miles,hasRoute:true,estimated:false,label,milesLabel:label,note:'GPS route recorded'}
+}
+
+export function isNewGpsFix(last,next){
+  const lat=next?.lat,lng=next?.lng,t=next?.t
+  if(lat==null||lng==null||t==null||!Number.isFinite(Number(lat))||
+    !Number.isFinite(Number(lng))||!Number.isFinite(Number(t)))return false
+  if(Math.abs(Number(lat))>90||Math.abs(Number(lng))>180||Number(t)<=0)return false
+  if(!last)return true
+  return !Number.isFinite(Number(last.t))||Number(t)>Number(last.t)
+}
+
+// A manually entered duration remains distinct from the live timer. Accept
+// common elapsed-time notations but never treat arbitrary text as time.
+export function parseManualCardioDurationSeconds(value){
+  const text=String(value??'').trim().toLowerCase()
+  if(!text)return 0
+  const colon=text.match(/^(\d{1,4}):([0-5]?\d)(?::([0-5]?\d))?$/)
+  if(colon){
+    const seconds=colon[3]===undefined
+      ?Number(colon[1])*60+Number(colon[2])
+      :Number(colon[1])*3600+Number(colon[2])*60+Number(colon[3])
+    return seconds>0?seconds:0
+  }
+  if(/^\d+(?:\.\d+)?$/.test(text))return Math.max(0,Math.round(Number(text)*60))
+  let seconds=0,count=0
+  const units=/(\d+(?:\.\d+)?)\s*(hours?|hrs?|hr|h|minutes?|mins?|min|m|seconds?|secs?|sec|s)/g
+  const residue=text.replace(units,(_,amount,unit)=>{
+    const n=Number(amount)
+    seconds+=n*(unit.startsWith('h')?3600:unit.startsWith('m')?60:1)
+    count++
+    return ' '
+  }).replace(/[\s,]+/g,'')
+  return count&&!residue&&Number.isFinite(seconds)&&seconds>0?Math.round(seconds):0
+}
+
+export function effectiveCardioDurationSeconds(workout={}){
+  const timed=Number(workout?.quick_timer_elapsed_seconds||0)
+  if(Number.isFinite(timed)&&timed>0)return timed
+  const outdoor=Number(workout?.outdoor?.elapsed_seconds||0)
+  if(Number.isFinite(outdoor)&&outdoor>0)return outdoor
+  return parseManualCardioDurationSeconds(workout?.metcon?.duration)
 }

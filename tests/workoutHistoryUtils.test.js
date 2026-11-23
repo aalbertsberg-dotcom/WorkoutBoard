@@ -25,3 +25,11 @@ test('workout history matches dates, exercise names and mobility movements',()=>
  assert.equal(workoutHistoryMatches({title:'Warmup',workout:{mobility:{items:[{title:'Groiners',done:true}]}}},'Mobility','groiners'),true)
  assert.equal(HISTORY_PAGE_SIZE,100)
 })
+
+test('manually entered cardio duration appears correctly in saved History',()=>{
+ const walk={title:'Walk',workout:{quick_cardio:true,quick_cardio_kind:'walk',
+   quick_timer_elapsed_seconds:0,metcon:{duration:'45 min'}}}
+ assert.equal(completedWorkoutSummary(walk),'45:00')
+ assert.equal(completedWorkoutSummary({...walk,workout:{...walk.workout,
+   quick_timer_elapsed_seconds:120}}),'2:00')
+})

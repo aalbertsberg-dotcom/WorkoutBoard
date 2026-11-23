@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {isOpenWorkout,selectWorkoutToRestore} from '../src/workoutLifecycle.js'
+import {isOpenWorkout,selectWorkoutToRestore,isOvernightCardioToResume} from '../src/workoutLifecycle.js'
 
 const row=(id,status,created_at,standalone=false)=>({
   id,status,created_at,workout:{started_explicitly:true,standalone}
@@ -42,4 +42,21 @@ test('cancel barrier suppresses older orphaned sessions without blocking new one
   assert.equal(selectWorkoutToRestore([oldWalk],{cancelledBefore:barrier}),null)
   assert.equal(selectWorkoutToRestore([oldWalk,newerWalk],{cancelledBefore:barrier})?.id,'new-walk')
   assert.equal(selectWorkoutToRestore([oldWalk],{preferredId:'old-walk',cancelledBefore:barrier})?.id,'old-walk')
+})
+
+test('overnight active cardio resumes only when explicitly timed and not completed',()=>{
+  const yesterday='2026-11-21',today='2026-11-22'
+  const walk={id:'overnight',status:'started',scheduled_date:yesterday,
+    created_at:'2026-11-21T23:40:00Z',
+    workout:{standalone:true,quick_cardio:true,started_explicitly:true,
+      quick_timer_started_at:'2026-11-21T23:42:00Z'}}
+  const paused={...walk,id:'paused',workout:{...walk.workout,quick_timer_started_at:null,quick_timer_elapsed_seconds:600}}
+  assert.equal(isOvernightCardioToResume(walk,yesterday,today),true)
+  assert.equal(isOvernightCardioToResume(paused,yesterday,today),true)
+  assert.equal(isOvernightCardioToResume({...walk,status:'completed'},yesterday,today),false)
+  assert.equal(isOvernightCardioToResume({...walk,scheduled_date:'2026-11-18'},yesterday,today),false)
+  assert.equal(isOvernightCardioToResume({...walk,workout:{...walk.workout,quick_timer_started_at:null}},yesterday,today),false)
+  assert.equal(selectWorkoutToRestore([walk],{cancelledIds:['overnight']}),null)
+  assert.equal(selectWorkoutToRestore([walk],{cancelledBefore:Date.parse('2026-11-22T00:00:00Z')}),null)
+  assert.equal(selectWorkoutToRestore([walk],{preferredId:'overnight'})?.id,'overnight')
 })

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { MIN_MOVING_SPEED_MPS,paceIsMeaningful,hasReliableOutdoorRoute,hasRecordingGaps,hasLiveGpsFix,gpsJitterFloorMeters,shouldSplitGpsTrack,gpsMovementAssessment } from './trackingRules'
+import { MIN_MOVING_SPEED_MPS,paceIsMeaningful,hasReliableOutdoorRoute,hasRecordingGaps,hasLiveGpsFix,gpsJitterFloorMeters,shouldSplitGpsTrack,gpsMovementAssessment,isNewGpsFix } from './trackingRules'
 import { createMotionStepCounter,effectiveSteps,readMotionMagnitude,initialMotionAccess,gpsMarkerCount } from './stepTracking'
 import { canTrackInBackground,nativeGpsDeviceName,startNativeLocationWatch,stopNativeLocationWatch } from './nativeLocation'
 import PocketMode from './PocketMode'
@@ -255,7 +255,12 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
   const pushPosition=position=>{
     if(!runningRef.current)return
     const nextPoint=pointFromPosition(position)
-    if(!Number.isFinite(nextPoint.lat)||!Number.isFinite(nextPoint.lng))return
+    const prev=outdoorRef.current||emptyOutdoorTrack(activity)
+    const points=Array.isArray(prev.points)?prev.points:[]
+    const last=points.at(-1)
+    // A cached/out-of-order browser fix is not a GPS outage. Ignore it rather
+    // than falsely marking the saved route partial after a page resumes.
+    if(!isNewGpsFix(last,nextPoint))return
     const health=recordGpsHeartbeat({
       received:gpsHeartbeatRef.current.received+1,
       last_received_at:new Date(nextPoint.t).toISOString(),
@@ -267,9 +272,6 @@ export function OutdoorTracker({activity='walk',outdoor,onChange,running=false,e
       setMessage('GPS fix is too inaccurate (±'+Math.round(nextPoint.a)+' m). Waiting for a better signal…')
       return
     }
-    const prev=outdoorRef.current||emptyOutdoorTrack(activity)
-    const points=Array.isArray(prev.points)?prev.points:[]
-    const last=points.at(-1)
     // GPS heartbeat: a stationary fix is not a lost signal.
     const precedingFixTime=lastGpsFixAtRef.current??last?.t??null
     const missingUpdates=precedingFixTime!=null&&

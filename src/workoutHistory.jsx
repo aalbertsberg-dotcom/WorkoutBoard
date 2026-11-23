@@ -1,7 +1,7 @@
 import { useEffect,useMemo,useState } from 'react'
 import { supabase } from './supabase'
 import { RouteMap,outdoorMetrics,formatPace,formatOutdoorDuration,outdoorActivityKind } from './outdoorTracking'
-import { outdoorDistancePresentation,hasReliableOutdoorRoute,hasVerifiedOutdoorRoute } from './trackingRules'
+import { outdoorDistancePresentation,hasReliableOutdoorRoute,hasVerifiedOutdoorRoute,effectiveCardioDurationSeconds } from './trackingRules'
 import { effectiveSteps } from './stepTracking'
 import { EditableWorkout } from './advancedFeatures'
 import { DialogPortal } from './worksetDialogs'
@@ -134,7 +134,8 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
   const outdoor=workout.outdoor
   const kind=outdoorActivityKind(workout.quick_cardio_kind||workout.metcon?.activity||selected?.title)
   const distance=outdoorDistancePresentation(outdoor)
-  const metrics=selected&&kind?outdoorMetrics(outdoor||{},Number(workout.quick_timer_elapsed_seconds||outdoor?.elapsed_seconds||0),kind):null
+  const loggedDurationSeconds=effectiveCardioDurationSeconds(workout)
+  const metrics=selected&&kind?outdoorMetrics(outdoor||{},loggedDurationSeconds,kind):null
   const strengthExercises=(workout.exercises||[]).filter(item=>item.name)
   const mainSets=(workout.main||[])
 
@@ -170,7 +171,7 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
             : <p className="history-note">No verified GPS route was saved for this activity. Any short GPS distance is an estimate.</p>}
           <div className="history-detail-kpis">
             <div><span>Distance</span><strong>{distance.label}</strong></div>
-            <div><span>Duration</span><strong>{formatOutdoorDuration(metrics?.elapsedSeconds||Number(workout.quick_timer_elapsed_seconds||0))}</strong></div>
+            <div><span>Duration</span><strong>{formatOutdoorDuration(loggedDurationSeconds)}</strong></div>
             {(kind==='walk'||kind==='run')&&<div><span>Steps</span><strong>{formatNumber(effectiveSteps(outdoor))}</strong></div>}
             <div><span>{kind==='bike'?'Avg speed':'Avg pace'}</span><strong>{!hasVerifiedOutdoorRoute(outdoor)?'—':kind==='bike'?(metrics?.avgMph?metrics.avgMph.toFixed(1)+' mph':'—'):formatPace(metrics?.avgPaceSecPerMile)}</strong></div>
           </div>

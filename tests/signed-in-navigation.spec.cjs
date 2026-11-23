@@ -1,7 +1,7 @@
 const {test,expect}=require('@playwright/test')
 
 const userId='00000000-0000-4000-8000-000000000001'
-async function signedIn(page,{withStartedWalk=false,withStrengthSession=false}={}){
+async function signedIn(page,{withStartedWalk=false,withStrengthSession=false,withOvernightWalk=false}={}){
   await page.addInitScript(user=>{
     const expires=Math.floor(Date.now()/1000)+86400*365
     localStorage.setItem('sb-example-auth-token',JSON.stringify({
@@ -27,6 +27,25 @@ async function signedIn(page,{withStartedWalk=false,withStrengthSession=false}={
     if(url.includes('/auth/v1/user')){
       await route.fulfill({status:200,contentType:'application/json',headers,
         body:JSON.stringify({id:userId,aud:'authenticated',role:'authenticated',email:'tester@example.test',user_metadata:{},app_metadata:{}})})
+      return
+    }
+    if(withOvernightWalk && method==='GET' && url.includes('/rest/v1/planned_workouts')){
+      const yesterday=new Date();yesterday.setDate(yesterday.getDate()-1)
+      const y=[yesterday.getFullYear(),String(yesterday.getMonth()+1).padStart(2,'0'),
+        String(yesterday.getDate()).padStart(2,'0')].join('-')
+      const now=new Date().toISOString()
+      const row={id:'00000000-0000-4000-8000-000000000007',user_id:userId,
+        title:'Walk',scheduled_date:y,status:'started',
+        created_at:new Date(Date.now()-30*60*1000).toISOString(),updated_at:now,
+        workout:{version:2,type:'flexible',standalone:true,started_explicitly:true,
+          quick_cardio:true,quick_cardio_kind:'walk',exercises:[],
+          quick_timer_started_at:new Date(Date.now()-60*1000).toISOString(),
+          quick_timer_elapsed_seconds:40,
+          metcon:{activity:'Walk',intensity:'Light',duration:'',distance:''}}
+      }
+      const isPreviousDateRequest=url.includes('scheduled_date=eq.'+y)
+      await route.fulfill({status:200,contentType:'application/json',headers,
+        body:JSON.stringify(isPreviousDateRequest?[row]:[])})
       return
     }
     if(withStartedWalk && method==='GET' && url.includes('/rest/v1/planned_workouts')){
@@ -477,5 +496,18 @@ test('Editing a saved 1RM expands the focused input instead of clipping its digi
   })
   expect(layout.width).toBeGreaterThan(140)
   expect(layout.right).toBeLessThanOrEqual(layout.parentRight+1)
+  expect(errors).toEqual([])
+})
+
+test('a started Walk from yesterday resumes after refresh instead of vanishing at midnight',async({page})=>{
+  const errors=[]
+  page.on('pageerror',error=>errors.push(error.message))
+  await signedIn(page,{withOvernightWalk:true})
+  await expect(page.locator('.quick-cardio-runner')).toBeVisible({timeout:15000})
+  await expect(page.locator('.quick-cardio-timer-state')).toHaveText('TIMING NOW')
+  await expect(page.locator('.quick-cardio-runner').getByRole('button',{name:'Pause'})).toBeVisible()
+  await page.reload()
+  await expect(page.locator('.quick-cardio-runner')).toBeVisible({timeout:15000})
+  await expect(page.locator('.quick-cardio-timer-state')).toHaveText('TIMING NOW')
   expect(errors).toEqual([])
 })

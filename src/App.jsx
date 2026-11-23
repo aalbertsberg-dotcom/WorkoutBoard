@@ -21,12 +21,13 @@ import { androidBackAction } from './androidNavigation'
 import { navigationTransition } from './navigationHistory'
 import { emailRedirectUrl } from './nativeAuth'
 import {validFriendEmail,friendInviteMailto} from './inviteLinks'
-import { getActiveWorkoutId,setActiveWorkoutId,clearActiveWorkoutId,cancelledWorkoutIds,getWorkoutCancellationBarrier,rememberWorkoutCancellation,isOpenWorkout,selectWorkoutToRestore } from './workoutLifecycle'
+import { getActiveWorkoutId,setActiveWorkoutId,clearActiveWorkoutId,cancelledWorkoutIds,getWorkoutCancellationBarrier,rememberWorkoutCancellation,isOpenWorkout,selectWorkoutToRestore,isOvernightCardioToResume } from './workoutLifecycle'
 import QRCode from 'qrcode'
 import { BarcodeDetector as BarcodeDetectorPonyfill } from 'barcode-detector/ponyfill'
 
 const WORKSET_BUILD_ID = __WORKSET_BUILD_ID__
 
+const previousLocalDateKey=()=>{const day=new Date();day.setDate(day.getDate()-1);return localDateKey(day)}
 const localDateKey=(value=new Date())=>{
   const d=value instanceof Date ? value : new Date(value)
   if(Number.isNaN(d.getTime()))return ''
@@ -1701,6 +1702,7 @@ function App() {
       setDataLoading(true)
       const userId = session.user.id
       const today = localDateKey()
+      const previousDay=previousLocalDateKey()
       const cached=readOfflineState(userId,'app-core',null)
       const restoreCached=()=>{
         if(!cached)return false
@@ -1735,12 +1737,13 @@ function App() {
         setDataLoading(false)
         return
       }
-      const [{data:profileData},{data:oneRmData},{data:tmData},{data:logsData},{data:todayPlans},{data:trackingData},{data:flexCompleted}] = await Promise.all([
+      const [{data:profileData},{data:oneRmData},{data:tmData},{data:logsData},{data:todayPlans},{data:overnightPlans},{data:trackingData},{data:flexCompleted}] = await Promise.all([
         supabase.from('profiles').select('*').eq('id',userId).single(),
         supabase.from('one_rep_maxes').select('*').eq('user_id',userId).maybeSingle(),
         supabase.from('training_maxes').select('*').eq('user_id',userId).single(),
         supabase.from('workout_logs').select('*').eq('user_id',userId).order('updated_at',{ascending:false}),
         supabase.from('planned_workouts').select('*').eq('user_id',userId).eq('scheduled_date',today).in('status',['planned','started']).order('created_at'),
+        supabase.from('planned_workouts').select('*').eq('user_id',userId).eq('scheduled_date',previousDay).eq('status','started').limit(20),
         supabase.from('user_program_tracking').select('*').eq('user_id',userId).eq('status','tracking').order('updated_at',{ascending:false}),
         supabase.from('training_sessions').select('id,title,program,week,primary_lift,workout,session_date,completed_at').eq('user_id',userId).not('completed_at','is',null).order('completed_at',{ascending:false}).limit(1000),
       ])
@@ -1786,7 +1789,8 @@ function App() {
       const workoutsToday=(flexCompleted||[]).filter(row=>(row.session_date||localDateKey(row.completed_at))===today).length
       const activeTrackKeys=new Set(activeArchiveTracks.map(row=>row.program_key))
       const cancelledIds=cancelledWorkoutIds(userId)
-      const activeRows=(todayPlans||[]).filter(row=>isOpenWorkout(row,cancelledIds))
+      const carried=(overnightPlans||[]).filter(row=>isOvernightCardioToResume(row,previousDay,today))
+      const activeRows=[...(todayPlans||[]),...carried].filter(row=>isOpenWorkout(row,cancelledIds))
       const eligible=row=>row.workout?.standalone ||
         row.workout?.started_explicitly ||
         row.workout?.scheduled_explicitly ||
@@ -2170,10 +2174,12 @@ function App() {
     if (!session?.user) return
     if(navigator.onLine===false)return plannedToday
     const today = localDateKey()
-    const [{data:activePlans},{data:completedRows},{data:activeTracking}]=await Promise.all([
+    const previousDay=previousLocalDateKey()
+    const [{data:activePlans},{data:overnightPlans},{data:completedRows},{data:activeTracking}]=await Promise.all([
       supabase.from('planned_workouts').select('*')
         .eq('user_id',session.user.id).eq('scheduled_date',today)
         .in('status',['planned','started']).order('created_at'),
+      supabase.from('planned_workouts').select('*').eq('user_id',session.user.id).eq('scheduled_date',previousDay).eq('status','started').limit(20),
       supabase.from('training_sessions').select('id,title,program,week,total_volume,session_date,completed_at,workout')
         .eq('user_id',session.user.id).eq('session_date',today).not('completed_at','is',null)
         .order('completed_at',{ascending:false}),
@@ -2185,11 +2191,13 @@ function App() {
     const eligible=row=>row.workout?.standalone ||
       row.workout?.started_explicitly || row.workout?.scheduled_explicitly ||
       plannedWorkoutHasProgress(row) || !row.workout?.tracking_program_key
-    let activePlan=selectWorkoutToRestore(activePlans,{
+    const carried=(overnightPlans||[]).filter(row=>isOvernightCardioToResume(row,previousDay,today))
+    const allActivePlans=[...(activePlans||[]),...carried]
+    let activePlan=selectWorkoutToRestore(allActivePlans,{
       preferredId:getActiveWorkoutId(session.user.id)||plannedTodayRef.current?.id,
       cancelledIds,cancelledBefore:getWorkoutCancellationBarrier(session.user.id),eligible
     })
-    const standaloneRows=(activePlans||[]).filter(row=>
+    const standaloneRows=allActivePlans.filter(row=>
       isOpenWorkout(row,cancelledIds)&&row.workout?.standalone&&!row.workout?.tracking_program_key
     )
     const progressedStandalone=[...standaloneRows].reverse().find(row=>

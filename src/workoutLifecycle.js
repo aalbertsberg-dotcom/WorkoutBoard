@@ -70,3 +70,14 @@ export function selectWorkoutToRestore(rows,{preferredId=null,cancelledIds=[],ca
     return String(b.created_at||'').localeCompare(String(a.created_at||''))
   })[0]||null
 }
+
+// Only a genuine, explicitly started overnight cardio session is carried
+// into the next day. Older scheduled or cancelled workouts remain untouched.
+export function isOvernightCardioToResume(row,previousDay,today){
+  if(!row||row.scheduled_date!==previousDay||!(previousDay<today))return false
+  const workout=row.workout||{}
+  return row.status==='started' && Boolean(workout.standalone) &&
+    Boolean(workout.started_explicitly) && Boolean(workout.quick_cardio) &&
+    (Boolean(workout.quick_timer_started_at) ||
+      Number(workout.quick_timer_elapsed_seconds||0)>0)
+}

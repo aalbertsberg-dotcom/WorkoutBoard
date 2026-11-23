@@ -1,4 +1,4 @@
-import { outdoorDistancePresentation } from './trackingRules.js'
+import { outdoorDistancePresentation,effectiveCardioDurationSeconds } from './trackingRules.js'
 import { effectiveSteps } from './stepTracking.js'
 
 export const HISTORY_PAGE_SIZE=100
@@ -25,7 +25,7 @@ export function completedWorkoutSummary(row={}){
     if(storedMiles>0)return storedMiles.toFixed(2)+' mi'
     const steps=effectiveSteps(row.workout?.outdoor)
     if(steps>0)return steps.toLocaleString()+' steps'
-    const seconds=Math.max(0,Number(row.workout?.quick_timer_elapsed_seconds||0))
+    const seconds=effectiveCardioDurationSeconds(row.workout)
     if(seconds>0)return (seconds>=3600?Math.floor(seconds/3600)+':':'')+
       String(Math.floor(seconds%3600/60)).padStart(seconds>=3600?2:1,'0')+':'+
       String(Math.floor(seconds%60)).padStart(2,'0')

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {
   validWeightDraft,validRepsDraft,displayedSetWeight,recordedWeightValue,
   canFinishQuickCardio,hasReliableOutdoorRoute,paceIsMeaningful,withoutUnreliableRoute,
-  hasLiveGpsFix,gpsJitterFloorMeters,outdoorDistancePresentation,shouldSplitGpsTrack,hasRecordingGaps,hasVerifiedOutdoorRoute,gpsMovementAssessment,autosaveDelayMs
+  hasLiveGpsFix,gpsJitterFloorMeters,outdoorDistancePresentation,shouldSplitGpsTrack,hasRecordingGaps,hasVerifiedOutdoorRoute,gpsMovementAssessment,autosaveDelayMs,isNewGpsFix,parseManualCardioDurationSeconds,effectiveCardioDurationSeconds
 } from '../src/trackingRules.js'
 
 test('erasing 135 stays erased even when a previous set offers 135',()=>{
@@ -243,4 +243,29 @@ test('a continuous outdoor location stream cannot starve the cloud autosave',()=
   assert.equal(autosaveDelayMs(12000,true),0)
   assert.equal(autosaveDelayMs(35000,true),0)
   assert.equal(autosaveDelayMs(12000,false),700)
+})
+
+test('duplicate or out-of-order GPS fixes do not create false recording gaps',()=>{
+  const previous={lat:30.4,lng:-88.9,t:2000}
+  assert.equal(isNewGpsFix(previous,{lat:30.41,lng:-88.9,t:1999}),false)
+  assert.equal(isNewGpsFix(previous,{lat:30.41,lng:-88.9,t:2000}),false)
+  assert.equal(isNewGpsFix(previous,{lat:30.41,lng:-88.9,t:2001}),true)
+  assert.equal(isNewGpsFix(null,{lat:30.4,lng:-88.9,t:2000}),true)
+  assert.equal(isNewGpsFix(previous,{lat:105,lng:-88.9,t:2001}),false)
+  assert.equal(isNewGpsFix(previous,{lat:30.41,lng:188,t:2001}),false)
+  assert.equal(isNewGpsFix(previous,{lat:NaN,lng:-88.9,t:2001}),false)
+})
+test('manual outdoor time parsing never invents a completed duration',()=>{
+  assert.equal(parseManualCardioDurationSeconds('30 min'),1800)
+  assert.equal(parseManualCardioDurationSeconds('1 hr 25 min'),5100)
+  assert.equal(parseManualCardioDurationSeconds('1:25:00'),5100)
+  assert.equal(parseManualCardioDurationSeconds('32:15'),1935)
+  assert.equal(parseManualCardioDurationSeconds('15'),900)
+  assert.equal(parseManualCardioDurationSeconds('90 seconds'),90)
+  assert.equal(parseManualCardioDurationSeconds('30 min ago'),0)
+  assert.equal(parseManualCardioDurationSeconds('123 miles'),0)
+  assert.equal(parseManualCardioDurationSeconds('0'),0)
+  assert.equal(effectiveCardioDurationSeconds({quick_timer_elapsed_seconds:90,metcon:{duration:'30 min'}}),90)
+  assert.equal(effectiveCardioDurationSeconds({quick_timer_elapsed_seconds:0,metcon:{duration:'30 min'}}),1800)
+  assert.equal(canFinishQuickCardio(0,'invalid 5'),false)
 })
