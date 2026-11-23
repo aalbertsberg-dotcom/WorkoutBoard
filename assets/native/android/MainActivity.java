@@ -2,6 +2,7 @@ package com.workset.mobile;
 
 import android.os.Build;
 import android.os.Bundle;
+import android.view.View;
 
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
@@ -22,7 +23,10 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(Bundle state) {
+        registerPlugin(WorkSetAutofillPlugin.class);
         super.onCreate(state);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && bridge != null && bridge.getWebView() != null)
+            bridge.getWebView().setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_YES);
         ViewCompat.setOnApplyWindowInsetsListener(getWindow().getDecorView(), (view, insets) -> {
             if (Build.VERSION.SDK_INT >= 35) {
                 Insets bars = insets.getInsets(WindowInsetsCompat.Type.navigationBars());

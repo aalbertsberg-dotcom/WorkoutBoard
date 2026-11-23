@@ -11,4 +11,9 @@ if(!existing.includes('extends BridgeActivity')||!existing.includes('package '+c
 if(!source.includes('package '+cfg.appId+';')||!source.includes('WindowInsetsCompat.Type.navigationBars()'))
   throw Error('Invalid WorkSet native MainActivity template')
 await writeFile(dest,source)
-console.log('WorkSet native Android safe-area activity applied')
+const pluginSource=await readFile('assets/native/android/WorkSetAutofillPlugin.java','utf8')
+if(!source.includes('registerPlugin(WorkSetAutofillPlugin.class)')||
+   !pluginSource.includes('@CapacitorPlugin(name = "WorkSetAutofill")'))
+  throw Error('WorkSet Android autofill registration is missing')
+await writeFile(path.join(path.dirname(dest),'WorkSetAutofillPlugin.java'),pluginSource)
+console.log('WorkSet native Android safe-area and autofill bridge applied')

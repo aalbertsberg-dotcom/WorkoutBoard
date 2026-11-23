@@ -20,6 +20,7 @@ import { App as NativeApp } from '@capacitor/app'
 import { androidBackAction } from './androidNavigation'
 import { navigationTransition } from './navigationHistory'
 import { emailRedirectUrl } from './nativeAuth'
+import { notifyNativePasswordLoginSuccess } from './nativeAutofill'
 import {validFriendEmail,friendInviteMailto} from './inviteLinks'
 import { getActiveWorkoutId,setActiveWorkoutId,clearActiveWorkoutId,cancelledWorkoutIds,getWorkoutCancellationBarrier,rememberWorkoutCancellation,isOpenWorkout,selectWorkoutToRestore,isOvernightCardioToResume } from './workoutLifecycle'
 import QRCode from 'qrcode'
@@ -1013,6 +1014,7 @@ function AuthScreen() {
         password
       })
       if (error) setMessage(error.message)
+      else void notifyNativePasswordLoginSuccess()
     }
 
     setBusy(false)
@@ -1056,19 +1058,26 @@ function AuthScreen() {
           <button className={mode === 'signup' ? 'active' : ''} onClick={() => {setMode('signup');setMessage('')}}>Create account</button>
         </div>
 
-        <form onSubmit={submit}>
-          <label>Email
+        <form onSubmit={submit} autoComplete="on">
+          <label htmlFor="workset-auth-username">Email
             <input
+              id="workset-auth-username"
+              name="username"
               type="email"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               value={email}
               onChange={e => setEmail(e.target.value)}
-              autoComplete="email"
+              autoComplete="username"
               required
             />
           </label>
 
-          <label>Password
+          <label htmlFor="workset-auth-password">Password
             <input
+              id="workset-auth-password"
+              name={mode === 'signin' ? 'password' : 'new-password'}
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
@@ -1127,7 +1136,7 @@ function RecoveryScreen({onDone}) {
         <h1>Set new password</h1>
         <p className="auth-sub">Choose a new password for this account.</p>
         <form onSubmit={save}>
-          <label>New password<input type="password" value={password} onChange={e => setPassword(e.target.value)} minLength="10" required /></label>
+          <label>New password<input type="password" name="new-password" autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} minLength="10" required /></label>
           <button className="primary" disabled={busy}>{busy ? 'Saving…' : 'Save new password'}</button>
         </form>
         {message && <div className="auth-message">{message}</div>}
