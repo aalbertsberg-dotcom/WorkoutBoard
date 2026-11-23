@@ -3,6 +3,10 @@ import { createRoot } from 'react-dom/client'
 import App from './App.jsx'
 import WorksetErrorBoundary from './WorksetErrorBoundary.jsx'
 import './styles.css'
+import { Capacitor } from '@capacitor/core'
+// Native-only safe area classes; browser/PWA layout stays unchanged.
+if(Capacitor.isNativePlatform())
+  document.documentElement.classList.add('workset-native','workset-native-'+Capacitor.getPlatform())
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

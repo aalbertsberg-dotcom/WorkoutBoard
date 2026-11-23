@@ -12,5 +12,8 @@
     "App": {
       "disableBackButtonHandler": true
     }
+  },
+  "ios": {
+    "contentInset": "never"
   }
 }

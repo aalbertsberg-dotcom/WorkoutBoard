@@ -511,3 +511,55 @@ test('a started Walk from yesterday resumes after refresh instead of vanishing a
   await expect(page.locator('.quick-cardio-timer-state')).toHaveText('TIMING NOW')
   expect(errors).toEqual([])
 })
+
+test('native Android bottom tabs stay above a simulated 38px system navigation region',async({page})=>{
+  await signedIn(page)
+  await expect(page.locator('.app-header h1')).toHaveText('Today',{timeout:15000})
+  await page.setViewportSize({width:390,height:844})
+  await page.evaluate(()=>{
+    const root=document.documentElement
+    root.classList.add('workset-native','workset-native-android')
+    root.style.setProperty('--workset-native-bottom-inset','38px')
+  })
+  const g=await page.locator('.app-level-mobile-nav').evaluate(el=>{
+    const r=el.getBoundingClientRect()
+    return {bottom:r.bottom,buttonBottom:el.querySelector('button')?.getBoundingClientRect().bottom,
+      h:r.height,vh:window.innerHeight,
+      appPadding:parseFloat(getComputedStyle(document.querySelector('.app')).paddingBottom)}
+  })
+  expect(g.vh-g.bottom).toBeGreaterThanOrEqual(37)
+  expect(g.buttonBottom).toBeLessThanOrEqual(g.vh-36)
+  expect(g.h).toBeGreaterThanOrEqual(84)
+  expect(g.appPadding).toBeGreaterThan(130)
+})
+test('iPhone Duo outer, inner, side-rail and Split View resize preserve usable insets',async({page})=>{
+  await signedIn(page)
+  await expect(page.locator('.app-header h1')).toHaveText('Today',{timeout:15000})
+  await page.evaluate(()=>document.documentElement.classList.add('workset-native','workset-native-ios'))
+  for(const p of [
+    {width:360,height:780,left:0,right:0,bottom:34},
+    {width:640,height:860,left:0,right:0,bottom:34},
+    {width:920,height:720,left:84,right:12,bottom:0},
+    {width:420,height:760,left:8,right:64,bottom:16}
+  ]){
+    await page.setViewportSize({width:p.width,height:p.height})
+    const g=await page.evaluate(p=>{
+      const r=document.documentElement
+      for(const [side,v] of Object.entries({left:p.left,right:p.right,bottom:p.bottom}))
+        r.style.setProperty('--workset-native-'+side+'-inset',v+'px')
+      const app=document.querySelector('.app').getBoundingClientRect()
+      const navEl=document.querySelector('.app-level-mobile-nav')
+      const nav=navEl.getBoundingClientRect()
+      return {appLeft:app.left,appRight:app.right,left:nav.left,right:nav.right,
+        bottom:nav.bottom,visible:getComputedStyle(navEl).display!=='none'}
+    },p)
+    expect(g.appLeft).toBeGreaterThanOrEqual(-1)
+    expect(g.appRight).toBeLessThanOrEqual(p.width+2)
+    if(p.width<=700){
+      expect(g.visible).toBe(true)
+      expect(g.left).toBeGreaterThanOrEqual(p.left-1)
+      expect(g.right).toBeLessThanOrEqual(p.width-p.right+1)
+      expect(g.bottom).toBeLessThanOrEqual(p.height-p.bottom+1)
+    }else expect(g.visible).toBe(false)
+  }
+})

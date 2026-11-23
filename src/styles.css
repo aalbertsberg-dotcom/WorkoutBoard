@@ -8889,3 +8889,44 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
     caret-color:#d9f99d;
   }
 }
+
+/* WorkSet native safe areas: one effective inset per edge for Android
+   navigation controls and the iPhone Duo foldable/side rail. */
+html.workset-native {
+  --workset-safe-bottom:max(var(--workset-native-bottom-inset,0px),env(safe-area-inset-bottom,0px));
+  --workset-safe-left:max(var(--workset-native-left-inset,0px),env(safe-area-inset-left,0px));
+  --workset-safe-right:max(var(--workset-native-right-inset,0px),env(safe-area-inset-right,0px));
+}
+/* Pre-startup fallback; Android native code supplies actual insets, even zero. */
+html.workset-native-android { --workset-native-bottom-inset:32px; }
+html.workset-native .app {
+  padding-left:calc(10px + var(--workset-safe-left)) !important;
+  padding-right:calc(10px + var(--workset-safe-right)) !important;
+}
+@media(max-width:700px){
+  html.workset-native .app-level-mobile-nav {
+    bottom:var(--workset-safe-bottom) !important;
+    left:var(--workset-safe-left) !important;
+    right:var(--workset-safe-right) !important;
+    width:auto !important;
+    height:88px !important;
+    min-height:88px !important;
+    padding:5px 6px !important;
+  }
+  html.workset-native .app {
+    padding-bottom:calc(104px + var(--workset-safe-bottom)) !important;
+  }
+  html.workset-native .floating-workout-timer {
+    bottom:calc(96px + var(--workset-safe-bottom)) !important;
+  }
+  html.workset-native .release-update-toast {
+    bottom:calc(96px + var(--workset-safe-bottom)) !important;
+  }
+}
+@media(max-width:380px){
+  html.workset-native-ios .app-level-mobile-nav {gap:2px !important;padding:5px 2px !important;}
+  html.workset-native-ios .app-level-mobile-nav button {min-width:0 !important;gap:3px !important;}
+}
+@media(min-width:701px){
+  html.workset-native-ios .app {max-width:860px;}
+}
