@@ -58,7 +58,7 @@ const queryUsda = async (term: string) => {
     url.searchParams.set("api_key", key);
     const body: Record<string, unknown> = {
       query,
-      pageSize: query === "egg whole raw" ? 35 : 60,
+      pageSize: query === "egg, whole, raw" ? 35 : 60,
       pageNumber: 1,
     };
     if (onlyCommon) body.dataType = ["Foundation","SR Legacy","Survey (FNDDS)"];
