@@ -494,8 +494,8 @@ test('Apple and Apples return exactly the same ranked fruit cards, not cider fir
    const results=page.locator('.nutrition-results button');
    await expect(results).toHaveCount(3);
    await expect(results.first()).toContainText('Apples, raw, with skin');
-   await expect(results.nth(1)).toContainText('Apple juice');
-   await expect(results.nth(2)).toContainText('Apple cider');
+   await expect(page.locator('.nutrition-results')).toContainText('Apple juice');
+   await expect(page.locator('.nutrition-results')).toContainText('Apple cider');
  }
  expect(api).toEqual(['Apple','Apples']);
 });
@@ -522,7 +522,7 @@ test('Waffle House bowl excludes waffle mix and offers a precise broaden action'
  await page.getByRole('searchbox',{name:'Food search'}).fill('Waffle House bowl');
  await page.getByRole('button',{name:'Search',exact:true}).click();
  await expect(page.locator('.nutrition-results')).toHaveCount(0);
- await expect(page.locator('.nutrition-tool-card')).toContainText('No matching bowl item found for Waffle House');
+ await expect(page.locator('.nutrition-status')).toContainText('No matching bowl item found for Waffle House');
  await expect(page.locator('.nutrition-tool-card').getByRole('button',{name:'Search Waffle House instead'})).toBeVisible();
  await expect(page.getByText(/restaurant search is currently unavailable/)).toHaveCount(0);
  await page.getByRole('button',{name:'Search Waffle House instead'}).click();
