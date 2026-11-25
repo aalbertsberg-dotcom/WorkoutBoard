@@ -327,17 +327,47 @@ export default function NutritionPage({session,onBack,initialView='log'}){
       if(ok){setWaterAmount('');setEditingWater(null)}
     }catch(error){setNotice(error.message)}finally{setBusy(false)}
   };
-  const savePreferences=async(next=goals)=>{
+  const savePreferences=async(next=goals,fromEditor=false)=>{
     const keys=['calorie_goal','protein_goal','carbs_goal','fat_goal','water_goal_oz'];
     const maximum={calorie_goal:20000,protein_goal:2000,carbs_goal:3000,fat_goal:2000,water_goal_oz:1000};
     if(!keys.every(key=>validNumber(next[key],maximum[key]))||
       Number(next.calorie_goal)<=0||Number(next.water_goal_oz)<=0){
       setNotice('Goals must be valid positive values (macro targets can be zero).');return;
     }
+    const hasHeight=fromEditor&&(heightEntry.feet!==''||heightEntry.inches!=='');
+    const height=fromEditor?(hasHeight?heightFeetInchesToCm(heightEntry.feet,heightEntry.inches):null)
+      :(next.height_cm??null);
+    const age=(next.age_years===null||next.age_years===undefined||next.age_years==='')?null:Number(next.age_years);
+    const weight=fromEditor?(weightForEstimate===''?null:Number(weightForEstimate))
+      :(next.estimate_weight_lb??null);
+    if((hasHeight&&height===null)||
+       (height!==null&&(!Number.isFinite(Number(height))||height<90||height>260))||
+       (age!==null&&(!Number.isInteger(age)||age<18||age>100))||
+       (weight!==null&&(!Number.isFinite(Number(weight))||Number(weight)<45||Number(weight)>800))){
+      setNotice('Check height, age and manual bodyweight values before saving.');return;
+    }
     const payload={user_id:userId,mode:next.mode==='macros'?'macros':'calories',
-      ...Object.fromEntries(keys.map(key=>[key,Number(next[key])]))};
+      ...Object.fromEntries(keys.map(key=>[key,Number(next[key])])),
+      height_cm:height,age_years:age,
+      sex_for_estimate:['male','female'].includes(next.sex_for_estimate)?next.sex_for_estimate:null,
+      activity_level:ACTIVITY_LABELS[next.activity_level]?next.activity_level:'light',
+      weight_goal:WEIGHT_GOALS[next.weight_goal]?next.weight_goal:'maintain',
+      estimate_weight_lb:weight,
+      goal_source:next.goal_source==='estimate'?'estimate':'manual'};
     const ok=await save('preferences',payload);
-    if(ok)setGoals(payload);
+    if(ok){setGoals(payload);setEstimatePreview(null)}
+  };
+  const previewEstimate=()=>{
+    setEstimateError('');setEstimatePreview(null);
+    const height=heightFeetInchesToCm(heightEntry.feet,heightEntry.inches);
+    try{
+      const preview=estimateNutritionTargets({
+        height_cm:height,age_years:goals.age_years,sex_for_estimate:goals.sex_for_estimate,
+        activity_level:goals.activity_level,weight_goal:goals.weight_goal,
+        weight_lb:weightForEstimate!==''?Number(weightForEstimate):trackedWeight?.value
+      });
+      setEstimatePreview(preview);
+    }catch(error){setEstimateError(error?.message||'Complete the optional profile to calculate targets.')}
   };
   const startAnother=()=>{
     ++foodDetailsRequest.current;setVerifyingFood(false);
