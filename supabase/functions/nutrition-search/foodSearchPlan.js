@@ -40,7 +40,7 @@ export function planFoodSearch(input){
     providerQuery:found?.restaurant?.name||(eggQuery?'eggs':original),
     // Two established USDA queries retrieve plain eggs that can be absent
     // from the first page of the broader food listing.
-    usdaQueries:eggQuery?['eggs','egg whole raw']:[found?.restaurant?.name||original],
+    usdaQueries:eggQuery?['eggs','egg, whole, raw']:[found?.restaurant?.name||original],
     // If a specific restaurant menu item isn't in the provider results, show
     // restaurant results separately and never pretend they match the full phrase.
     broadened:!!found?.remainder,
