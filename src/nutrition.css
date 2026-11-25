@@ -221,3 +221,5 @@
   .nutrition-secondary-actions>div{display:grid;grid-template-columns:1fr 1fr}
   .nutrition-secondary-actions button{font-size:11px;padding:8px}
 }
+
+.nutrition-checking{color:#9bc4dc;font-size:11px;font-weight:800}
