@@ -8901,3 +8901,7 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
     caret-color:#d9f99d;
   }
 }
+
+/* Required attribution for free FatSecret food-data references, unobtrusive on auth. */
+.auth-provider-attribution{margin:14px 0 0;text-align:center;font-size:10px}
+.auth-provider-attribution a{color:#8199b0;text-decoration:underline}
