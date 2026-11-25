@@ -53,7 +53,7 @@ export function planFoodSearch(input){
   const itemTerms=found?.remainder?canonicalFoodText(found.remainder).split(' ').filter(Boolean):[];
   const common=!found&&normalized.split(' ').length<=2;
   const providerQuery=found?.restaurant
-    ?found.restaurant+(found.remainder?' '+found.remainder:''):normalized;
+    ?found.restaurant+(itemTerms.length?' '+itemTerms.join(' '):''):normalized;
   // Two bounded, general-purpose queries for ingredients. "Apple"/"Apples",
   // "Egg"/"Eggs", "Berry"/"Berries" are planned identically.
   const usdaQueries=found
