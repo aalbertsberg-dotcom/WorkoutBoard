@@ -458,5 +458,74 @@ test('Egg and Eggs show the same ordinary eggs first without public provider war
    await expect(results.nth(1)).toContainText('Eggs, Grade A, large');
    await expect(page.locator('.nutrition-source-feedback')).toHaveCount(0);
  }
- expect(packaged).toEqual(['eggs','eggs']);
+ expect(packaged).toEqual(['egg','egg']);
+});
+
+
+test('Apple and Apples return exactly the same ranked fruit cards, not cider first',async({page})=>{
+ const foods=[
+ {name:'Apple cider, sweet',source:'usda',source_id:'A1',data_type:'Survey (FNDDS)',
+   can_log:true,serving_label:'100 g',calories:48,protein_g:0.1,carbs_g:12,fat_g:0.1},
+ {name:'Apples, raw, with skin',source:'usda',source_id:'A2',data_type:'Foundation',
+   can_log:true,serving_label:'100 g',calories:52,protein_g:0.3,carbs_g:14,fat_g:0.2},
+ {name:'Apple juice',source:'usda',source_id:'A3',data_type:'Survey (FNDDS)',
+   can_log:true,serving_label:'100 g',calories:46,protein_g:0.1,carbs_g:11,fat_g:0},
+ ];
+ const api=[];
+ await page.route('https://example.supabase.co/functions/v1/nutrition-search**',async route=>{
+   api.push(route.request().postDataJSON().query);
+   await route.fulfill({status:200,contentType:'application/json',
+    headers:{'access-control-allow-origin':'*'},
+    body:JSON.stringify({usda:foods,fatsecret:[],providers:{usda:'ok',fatsecret:'not_configured'}})});
+ });
+ await page.route('https://search.openfoodfacts.org/search**',async route=>
+  route.fulfill({status:200,contentType:'application/json',
+    headers:{'access-control-allow-origin':'*'},body:'{"hits":[]}'}));
+ for(const host of ['world','us'])await page.route('https://'+host+'.openfoodfacts.org/cgi/search.pl**',async route=>
+  route.fulfill({status:200,contentType:'application/json',
+    headers:{'access-control-allow-origin':'*'},body:'{"products":[]}'}));
+ await page.goto('/tests/fixtures/nutrition.html');
+ await page.getByRole('button',{name:'Add food',exact:true}).click();
+ const field=page.getByRole('searchbox',{name:'Food search'});
+ const search=page.getByRole('button',{name:'Search',exact:true});
+ for(const query of ['Apple','Apples']){
+   await field.fill(query);
+   await search.click();
+   const results=page.locator('.nutrition-results button');
+   await expect(results).toHaveCount(3);
+   await expect(results.first()).toContainText('Apples, raw, with skin');
+   await expect(results.nth(1)).toContainText('Apple juice');
+   await expect(results.nth(2)).toContainText('Apple cider');
+ }
+ expect(api).toEqual(['Apple','Apples']);
+});
+test('Waffle House bowl excludes waffle mix and offers a precise broaden action',async({page})=>{
+ const terms=[];
+ await page.route('https://example.supabase.co/functions/v1/nutrition-search**',async route=>{
+   terms.push(route.request().postDataJSON().query);
+   await route.fulfill({status:200,contentType:'application/json',
+     headers:{'access-control-allow-origin':'*'},
+     body:JSON.stringify({
+       usda:[{name:'Waffle House Original Sweet Cream Waffle Mix',brand:'Waffle House',
+         source:'usda',data_type:'Branded',can_log:true,serving_label:'100 g',calories:310}],
+       fatsecret:[],providers:{usda:'ok',fatsecret:'unavailable'}
+     })});
+ });
+ await page.route('https://search.openfoodfacts.org/search**',async route=>
+  route.fulfill({status:200,contentType:'application/json',
+    headers:{'access-control-allow-origin':'*'},body:'{"hits":[]}'}));
+ for(const host of ['world','us'])await page.route('https://'+host+'.openfoodfacts.org/cgi/search.pl**',async route=>
+  route.fulfill({status:200,contentType:'application/json',
+    headers:{'access-control-allow-origin':'*'},body:'{"products":[]}'}));
+ await page.goto('/tests/fixtures/nutrition.html');
+ await page.getByRole('button',{name:'Add food',exact:true}).click();
+ await page.getByRole('searchbox',{name:'Food search'}).fill('Waffle House bowl');
+ await page.getByRole('button',{name:'Search',exact:true}).click();
+ await expect(page.locator('.nutrition-results')).toHaveCount(0);
+ await expect(page.locator('.nutrition-tool-card')).toContainText('No matching bowl item found for Waffle House');
+ await expect(page.locator('.nutrition-tool-card').getByRole('button',{name:'Search Waffle House instead'})).toBeVisible();
+ await expect(page.getByText(/restaurant search is currently unavailable/)).toHaveCount(0);
+ await page.getByRole('button',{name:'Search Waffle House instead'}).click();
+ await expect(page.locator('.nutrition-results button')).toHaveCount(1);
+ expect(terms).toEqual(['Waffle House bowl','Waffle House']);
 });
