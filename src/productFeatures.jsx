@@ -1261,7 +1261,7 @@ function AndroidAppUpdateControls({refreshBlocked=false}){
       }
     }catch(error){setState(error?.message||'Android update could not be installed.')}
     finally{
-      await listener?.remove?.().catch(()=>{});
+      if(listener){try{await listener.remove()}catch{}}
       setInstalling(false);
     }
   };
