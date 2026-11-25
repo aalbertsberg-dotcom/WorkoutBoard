@@ -398,6 +398,8 @@ export default function NutritionPage({session,onBack}){
         <button type="button" key={(food.source_id||food.name)+i} onClick={()=>selectFood(food)} className={selectedFood===food?'selected':''}>
           <strong>{food.name}</strong><small>{foodSourceLabel(food)}{food.brand?' · '+food.brand:''}{food.can_log===false?' · Preview only':' · '+fmt(food.calories)+' kcal / '+food.serving_label}{food.incomplete?' · Check nutrition label':''}</small>
         </button>)}</div>}
+      {results.some(food=>food.source==='fatsecret')&&
+        <p className="nutrition-provider-attribution"><a href="https://platform.fatsecret.com">Powered by fatsecret Platform API</a></p>}
       <div className="nutrition-suggestions"><span>Recently logged</span><div>{recentFoods.map((food,i)=>
         <button type="button" key={i} onClick={()=>selectFood(food)}>{food.name}</button>)}</div></div>
       <div className="nutrition-suggestions"><span>Saved foods</span><div>{favoriteFoods.slice(0,12).map(food=>
