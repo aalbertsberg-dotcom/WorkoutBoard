@@ -31,6 +31,7 @@ function Fixture(){
     <MePage session={session} displayName={displayName} onSaveDisplayName={saveName}
       onOpenHistory={()=>setNavigation('History opened')}
       onOpenProgress={()=>setNavigation('Progress opened')}
+      onOpenNutrition={()=>setNavigation('Nutrition opened')}
       onOpenWeight={()=>setNavigation('Measurements opened')}
       onOpenPrograms={()=>setNavigation('Plan opened')}
       profile={{display_name:displayName}} setProfile={()=>{}}

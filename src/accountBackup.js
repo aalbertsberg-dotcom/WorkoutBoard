@@ -19,6 +19,11 @@ export const ACCOUNT_BACKUP_TABLES=[
   {name:'workout_logs',owner:'user_id'},
   {name:'training_sessions',owner:'user_id'},
   {name:'training_goals',owner:'user_id'},
+  // Restore user-specific foods before diary entries that refer to them.
+  {name:'nutrition_preferences',owner:'user_id'},
+  {name:'nutrition_foods',owner:'user_id'},
+  {name:'nutrition_entries',owner:'user_id'},
+  {name:'hydration_entries',owner:'user_id'},
   {name:'body_measurements',owner:'user_id'},
   {name:'whiteboard_notes',owner:'user_id'},
   {name:'whiteboard_drawings',owner:'user_id'},
@@ -43,7 +48,7 @@ export async function buildAccountBackup(client,{userId,email,pageSize=LIMIT}={}
   const result={
     format:'WorkoutBoard Backup',version:ACCOUNT_BACKUP_VERSION,
     exported_at:new Date().toISOString(),user_email:email||null,
-    scope:'Personal training data; excludes account login, social connections and photo files',
+    scope:'Personal training and nutrition data; excludes account login, social connections and photo files',
     tables:{}
   }
   for(const {name,owner} of ACCOUNT_BACKUP_TABLES){

@@ -8,7 +8,7 @@ import {useEffect,useState} from 'react'
 /** The Me landing page is navigation-first, with secondary tools closed by default.
  * Existing tools are mounted only when explicitly expanded. */
 export default function MePage({
-  session,displayName,onSaveDisplayName,onOpenHistory,onOpenProgress,
+  session,displayName,onSaveDisplayName,onOpenHistory,onOpenNutrition,onOpenProgress,
   onOpenWeight,onOpenPrograms,
   profile,setProfile,progress,lifts,formatWeight,programs,dbNameToProgram,
   oneRepMaxes,onSaveOneRm,oneRmWeight,setOneRmWeight,oneRmReps,setOneRmReps,
@@ -44,6 +44,11 @@ export default function MePage({
       <button type="button" onClick={onOpenHistory}>
         <span className="me-shortcut-icon" aria-hidden="true">▦</span>
         <span><strong>Workout History</strong><small>Calendar, saved activities and routes</small></span>
+        <b aria-hidden="true">›</b>
+      </button>
+      <button type="button" onClick={onOpenNutrition}>
+        <span className="me-shortcut-icon" aria-hidden="true">◈</span>
+        <span><strong>Nutrition &amp; Water</strong><small>Food diary, macros, hydration and goals</small></span>
         <b aria-hidden="true">›</b>
       </button>
       <button type="button" onClick={onOpenProgress}>

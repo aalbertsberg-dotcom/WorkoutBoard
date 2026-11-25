@@ -8,6 +8,7 @@ test('Me starts organized and collapsed, with profile and History/Progress short
   await expect(page.getByRole('heading',{name:'Test Athlete'})).toBeVisible()
   await expect(page.getByRole('button',{name:/Workout History/})).toBeVisible()
   await expect(page.getByRole('button',{name:/Progress & Analytics/})).toBeVisible()
+  await expect(page.getByRole('button',{name:/Nutrition & Water/})).toBeVisible()
   const sections=page.locator('.me-section-toggle')
   await expect(sections).toHaveCount(9)
   for(let i=0;i<await sections.count();i++)
