@@ -18,7 +18,7 @@ function tempAndroid(){
   '<manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="WorkSet"></application></manifest>');
  fs.writeFileSync(gradle,
   'android { defaultConfig { applicationId "com.workset.mobile"\n versionCode 1\n versionName "1.0" } }\n');
- fs.writeFileSync(path.join(root,'package.json'),'{"version":"2.11.1"}');
+ fs.writeFileSync(path.join(root,'package.json'),'{"version":"2.12.0"}');
  fs.copyFileSync(path.join(projectRoot,'native/android/WorksetUpdaterPlugin.java'),plugin);
  fs.mkdirSync(path.join(root,'public'),{recursive:true});
  fs.copyFileSync(path.join(projectRoot,'public/icon.svg'),path.join(root,'public/icon.svg'));
@@ -37,7 +37,7 @@ test('Native preparation registers APK update plugin and supplies Android system
    assert.match(manifest,/REQUEST_INSTALL_PACKAGES/);
    assert.match(manifest,/androidx\.core\.content\.FileProvider/);
    assert.match(manifest,/\$\{applicationId\}\.worksetupdates/);
-   assert.match(gradle,/versionName "2\.11\.1"/);
+   assert.match(gradle,/versionName "2\\.12\\.0"/);
    assert.match(gradle,/versionCode 1/);
    assert.ok(fs.existsSync(path.join(fixture.root,'android/app/src/main/res/xml/workset_update_paths.xml')));
    for(const density of ['mdpi','hdpi','xhdpi','xxhdpi','xxxhdpi']){
