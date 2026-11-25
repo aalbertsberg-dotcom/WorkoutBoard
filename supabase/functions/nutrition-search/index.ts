@@ -172,8 +172,8 @@ const queryFatSecret = async (term: string) => {
 const providerFailure = (error: unknown): "authentication_failed" | "access_denied" |
     "rate_limited" | "network_error" | "unavailable" => {
   const message = String(error instanceof Error ? error.message : error);
+  if (/403|scope|permission|authentication\/access 14/i.test(message)) return "access_denied";
   if (/401|auth|invalid token/i.test(message)) return "authentication_failed";
-  if (/403|scope|permission|access/i.test(message)) return "access_denied";
   if (/429|rate|limit/i.test(message)) return "rate_limited";
   if (/timeout|fetch|network|connect/i.test(message)) return "network_error";
   return "unavailable";
