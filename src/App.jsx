@@ -1168,6 +1168,7 @@ function App() {
     const params=new URLSearchParams(window.location.search)
     return params.has('join') ? 'together' : params.has('program') ? 'program' : 'today'
   })
+  const [nutritionStartView,setNutritionStartView]=useState('log')
   const [profile,setProfile] = useState(null)
   const [activeProgram,setActiveProgram] = useState('andy-hybrid-12')
   const [week,setWeek] = useState(1)
@@ -1352,6 +1353,10 @@ function App() {
     return()=>{closed=true;listener?.remove()}
   },[])
 
+  const openNutrition=(screen='log')=>{
+    setNutritionStartView(screen==='goals'?'goals':'log')
+    navigateTo('nutrition')
+  }
   const openProgress = (section='Overview') => navigateTo('progress',{progressSection:section})
   const openTrack = (section='strength') => {setTrackFocus(section);navigateTo('me')}
   const openHistory = (id=null) => {
@@ -3777,7 +3782,7 @@ function App() {
                   <button type="button" onClick={()=>startStandaloneWorkout('conditioning')}>
                     <span className="quick-start-icon">◇</span><strong>Other cardio</strong><small>Row, elliptical, sled, intervals</small>
                   </button>
-                  <button type="button" className="today-choice-nutrition" onClick={()=>navigateTo('nutrition')}>
+                  <button type="button" className="today-choice-nutrition" onClick={()=>openNutrition('log')}>
                     <span className="quick-start-icon" aria-hidden="true">◈</span>
                     <strong>Food &amp; Water</strong>
                     <small>Log meals, calories, macros &amp; hydration</small>
@@ -3904,7 +3909,7 @@ function App() {
                   <button type="button" onClick={()=>startStandaloneWorkout('conditioning')}>
                     <span className="quick-start-icon">◇</span><strong>Other cardio</strong><small>Row, elliptical, sled, intervals</small>
                   </button>
-                  <button type="button" className="today-choice-nutrition" onClick={()=>navigateTo('nutrition')}>
+                  <button type="button" className="today-choice-nutrition" onClick={()=>openNutrition('log')}>
                     <span className="quick-start-icon" aria-hidden="true">◈</span>
                     <strong>Food &amp; Water</strong>
                     <small>Log meals, calories, macros &amp; hydration</small>
@@ -4430,7 +4435,8 @@ function App() {
             onBack={openToday}
             onSaved={async id=>{await refreshPlannedToday();openHistory(id)}}/>
         ) : activeTab === 'nutrition' ? (
-          <NutritionPage key={session?.user?.id} session={session} onBack={()=>navigateTo('today')}/>
+          <NutritionPage key={(session?.user?.id||'')+':'+nutritionStartView}
+            session={session} initialView={nutritionStartView} onBack={()=>navigateTo('today')}/>
         ) : activeTab === 'history' ? (
           <WorkoutHistory session={session} initialWorkoutId={historyWorkoutId}
             legacyHistory={progress.completed}
@@ -4474,7 +4480,7 @@ function App() {
             session={session}
             displayName={displayName} onSaveDisplayName={saveDisplayName}
             onOpenHistory={()=>openHistory()}
-            onOpenNutrition={()=>navigateTo('nutrition')}
+            onOpenNutrition={openNutrition}
             onOpenProgress={()=>openProgress('Overview')}
             onOpenWeight={()=>openTrack('measurements')}
             onOpenPrograms={()=>navigateTo('program')}

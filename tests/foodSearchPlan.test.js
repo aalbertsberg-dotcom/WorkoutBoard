@@ -93,7 +93,7 @@ test('egg and eggs use the identical USDA lookup and equivalent source ranking',
  assert.equal(plural.normalized,'egg');
  assert.equal(single.providerQuery,'egg');
  assert.equal(plural.providerQuery,'egg');
- assert.deepEqual(single.usdaQueries,['egg','egg, raw']);
+ assert.deepEqual(single.usdaQueries,['egg','eggs','egg, raw']);
  assert.deepEqual(single.usdaQueries,plural.usdaQueries);
  const foods={
    usda:[

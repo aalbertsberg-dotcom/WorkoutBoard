@@ -1,4 +1,5 @@
 import {normalizeOpenFoodFacts} from './nutritionModel.js';
+import {canonicalFoodText,pluralFoodPhrase,rankFoodMatch} from '../supabase/functions/nutrition-search/foodSearchPlan.js';
 
 // User-triggered public product searches. Search-a-licious is Open Food Facts'
 // dedicated full-text service. The legacy keyword endpoint remains a fallback.
@@ -8,7 +9,8 @@ const ROOT='https://world.openfoodfacts.org';
 const US_ROOT='https://us.openfoodfacts.org';
 const SEARCH_ROOT='https://search.openfoodfacts.org';
 const MAX_RESULTS=24;
-const CACHE_KEY='workset-public-food-search-v1';
+// v2 invalidates older substring-ranked results that mixed apples with pineapple.
+const CACHE_KEY='workset-public-food-search-v2';
 const CACHE_TTL=7*24*60*60*1000;
 const CACHE_LIMIT=16;
 const memoryCache=new Map();
@@ -20,16 +22,7 @@ const keyFor=food=>String(food.barcode||'')||simplify(food.name+' '+food.brand+'
 const isOffline=()=>typeof navigator!=='undefined'&&navigator.onLine===false;
 
 export function scoreFoodMatch(food,query){
-  const q=simplify(query),name=simplify(food?.name),brand=simplify(food?.brand);
-  if(!q||!name)return -1;
-  const target=name+' '+brand;
-  const terms=words(query).filter(x=>x.length>1);
-  if(!terms.length||!terms.every(term=>target.includes(term)))return -1;
-  if(name===q)return 100;
-  if(name.startsWith(q+' '))return 90;
-  if(name.includes(q))return 80;
-  if(brand.includes(q))return 60;
-  return 40;
+  return rankFoodMatch({...food,source:'openfoodfacts'},query);
 }
 export function rankFoodProducts(products,query){
   const seen=new Set();
@@ -80,13 +73,13 @@ function loadCache(){
 }
 function cached(query){
   if(!memoryCache.size)loadCache();
-  const row=memoryCache.get(simplify(query));
+  const row=memoryCache.get(canonicalFoodText(query));
   if(!row||Date.now()-row.savedAt>=CACHE_TTL||!Array.isArray(row.foods)||!row.foods.length)return null;
   return row.foods.map(food=>({...food,cached:true}));
 }
 function remember(query,foods){
   if(!foods.length)return;
-  const key=simplify(query);
+  const key=canonicalFoodText(query);
   memoryCache.delete(key);
   memoryCache.set(key,{query:key,savedAt:Date.now(),foods});
   while(memoryCache.size>CACHE_LIMIT)memoryCache.delete(memoryCache.keys().next().value);
@@ -125,13 +118,14 @@ export async function searchFoodCatalog(terms){
   // public search limit and making repeated common searches reliable.
   if(previous)return previous;
   let lastError=null,receivedResponse=false;
+  const preferred=canonicalFoodText(value);
   const sources=[
-    {name:'dedicated',url:searchALiciousUrl(value),extract:searchALiciousProducts},
-    {name:'world',url:foodSearchUrl(value),extract:reply=>{
+    {name:'dedicated',url:searchALiciousUrl(preferred),extract:searchALiciousProducts},
+    {name:'world',url:foodSearchUrl(preferred),extract:reply=>{
       if(!Array.isArray(reply.products))throw new Error('Invalid food search response.');
       return reply.products;
     }},
-    {name:'us',url:foodSearchUrl(value,{base:US_ROOT}),extract:reply=>{
+    {name:'us',url:foodSearchUrl(preferred,{base:US_ROOT}),extract:reply=>{
       if(!Array.isArray(reply.products))throw new Error('Invalid food search response.');
       return reply.products;
     }}
@@ -148,6 +142,18 @@ export async function searchFoodCatalog(terms){
       // Never work around an explicit provider rate limit with more requests.
       if(/rate limit/i.test(String(lastError.message)))break;
     }
+  }
+  // A pluralized follow-up helps catalogs that index only the packaged
+  // label form ("eggs", "berries"). It runs only when every primary lookup
+  // returned zero valid matches, avoiding unnecessary requests/rate limits.
+  const alternate=pluralFoodPhrase(preferred);
+  if(alternate && alternate!==preferred && !/rate limit/i.test(String(lastError?.message||''))){
+    try{
+      const reply=await request(searchALiciousUrl(alternate));
+      receivedResponse=true;
+      const foods=rankFoodProducts(searchALiciousProducts(reply),value);
+      if(foods.length){remember(value,foods);return foods}
+    }catch(error){lastError=toSearchError(error)}
   }
   if(receivedResponse)return [];
   throw lastError||new Error('Food databases are currently unavailable. You can still add a custom food.');

@@ -1,6 +1,10 @@
 export const NUTRITION_DEFAULTS = Object.freeze({
   mode:'calories', calorie_goal:2000, protein_goal:150, carbs_goal:200,
-  fat_goal:65, water_goal_oz:64
+  fat_goal:65, water_goal_oz:64,
+  // Empty until the user opts into personalized estimates.
+  height_cm:null,age_years:null,sex_for_estimate:null,
+  activity_level:'light',weight_goal:'maintain',
+  estimate_weight_lb:null,goal_source:'manual'
 });
 export const MEALS = ['Breakfast','Lunch','Dinner','Snacks'];
 export const nutrientFields = ['calories','protein_g','carbs_g','fat_g'];

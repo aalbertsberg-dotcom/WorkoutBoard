@@ -7,6 +7,7 @@ import {NUTRITION_DEFAULTS,MEALS,dateKey,round1,nonnegative,multipliedNutrients,
 import {lookupFoodBarcode} from './nutritionCatalog';
 import {searchAllFoodCatalog,foodSourceLabel} from './nutritionMultiSearch';
 import {planFoodSearch} from '../supabase/functions/nutrition-search/foodSearchPlan.js';
+import {ACTIVITY_LABELS,WEIGHT_GOALS,cmToHeight,heightFeetInchesToCm,estimateNutritionTargets} from './nutritionCalculator.js';
 import './nutrition.css';
 
 const makeState=()=>({preferences:{...NUTRITION_DEFAULTS},foods:[],entries:[],water:[]});
@@ -76,16 +77,22 @@ async function readAll(table,userId,order){
   throw new Error('Food history is too large to load in one view. Contact support.');
 }
 
-export default function NutritionPage({session,onBack}){
+export default function NutritionPage({session,onBack,initialView='log'}){
   const userId=session?.user?.id||null;
   const activeUser=useRef(userId);activeUser.current=userId;
   const [data,setData]=useState(()=>cacheFor(userId));
-  const [goals,setGoals]=useState(()=>({...cacheFor(userId).preferences}));
+  const dataRef=useRef(data);dataRef.current=data;
+  const [goals,setGoals]=useState(()=>({...NUTRITION_DEFAULTS,...cacheFor(userId).preferences}));
+  const [heightEntry,setHeightEntry]=useState(()=>cmToHeight(cacheFor(userId).preferences?.height_cm));
+  const [weightForEstimate,setWeightForEstimate]=useState(()=>String(cacheFor(userId).preferences?.estimate_weight_lb||''));
+  const [trackedWeight,setTrackedWeight]=useState(null);
+  const [estimatePreview,setEstimatePreview]=useState(null);
+  const [estimateError,setEstimateError]=useState('');
   const [date,setDate]=useState(()=>dateKey());
   const [notice,setNotice]=useState('');
   const [busy,setBusy]=useState(false);
   const [loading,setLoading]=useState(false);
-  const [view,setView]=useState('log');
+  const [view,setView]=useState(initialView==='goals'?'goals':'log');
   const [search,setSearch]=useState('');
   const [results,setResults]=useState([]);
   const lastOfflineSave=useRef(false);
@@ -118,11 +125,18 @@ export default function NutritionPage({session,onBack}){
   const searchInputRef=useRef(null);
   const selectionRef=useRef(null);
   const diaryRef=useRef(null);
+  const goalsSectionRef=useRef(null);
   const [resultsQuery,setResultsQuery]=useState('');
   const [visibleResults,setVisibleResults]=useState(8);
 
   useEffect(()=>{
-    const cached=cacheFor(userId);setData(cached);setGoals({...cached.preferences});
+    const cached=cacheFor(userId);
+    dataRef.current=cached;
+    setData(cached);
+    setGoals({...NUTRITION_DEFAULTS,...cached.preferences});
+    setHeightEntry(cmToHeight(cached.preferences?.height_cm));
+    setWeightForEstimate(String(cached.preferences?.estimate_weight_lb||''));
+    setEstimatePreview(null);setEstimateError('');setTrackedWeight(null);
     ++searchRequest.current;
     try{const last=localStorage.getItem('workset:nutrition:meal:'+userId);
       setSelectedMeal(MEALS.includes(last)?last:'Breakfast')}catch{setSelectedMeal('Breakfast')}
@@ -156,7 +170,10 @@ export default function NutritionPage({session,onBack}){
         if(cancelled||sequence!==newest.current||activeUser.current!==userId)return;
         const merged={preferences:prefs.data||{...NUTRITION_DEFAULTS},
           foods,entries,water};
-        setData(merged);setGoals({...merged.preferences});
+        dataRef.current=merged;
+        setData(merged);setGoals({...NUTRITION_DEFAULTS,...merged.preferences});
+        setHeightEntry(cmToHeight(merged.preferences?.height_cm));
+        setWeightForEstimate(String(merged.preferences?.estimate_weight_lb||''));
         setNotice('');
       }catch(error){
         if(!cancelled&&activeUser.current===userId)
@@ -170,6 +187,32 @@ export default function NutritionPage({session,onBack}){
       window.removeEventListener('workset:offline-synced',sync)};
   },[userId]);
 
+  // Reuse the most recent WorkSet bodyweight measurement; never infer weight
+  // from strength sets or training history. The cached measurement works offline.
+  useEffect(()=>{
+    if(!userId)return;
+    let cancelled=false;
+    const fallback=readOfflineState(userId,'training-tools-data',null)?.measurements||[];
+    const recent=fallback.filter(x=>Number(x.bodyweight)>0)
+      .sort((a,b)=>String(b.measured_on).localeCompare(String(a.measured_on)))[0];
+    if(recent)setTrackedWeight({value:Number(recent.bodyweight),date:recent.measured_on});
+    if(isOnline()){
+      supabase.from('body_measurements').select('bodyweight,measured_on')
+        .eq('user_id',userId).not('bodyweight','is',null)
+        .order('measured_on',{ascending:false}).limit(1).maybeSingle()
+        .then(({data,error})=>{
+          if(!cancelled&&!error&&Number(data?.bodyweight)>0)
+            setTrackedWeight({value:Number(data.bodyweight),date:data.measured_on});
+        }).catch(()=>{});
+    }
+    return ()=>{cancelled=true};
+  },[userId]);
+  useEffect(()=>{
+    if(view!=='goals'||initialView!=='goals')return;
+    const id=requestAnimationFrame(()=>goalsSectionRef.current?.scrollIntoView({block:'start'}));
+    return ()=>cancelAnimationFrame(id);
+  },[view,initialView]);
+
   const save=async(bucket,row)=>{
     if(!userId)return false;
     const table=tables[bucket],id=bucket==='preferences'?'user_id':'id';
@@ -179,9 +222,16 @@ export default function NutritionPage({session,onBack}){
     if(response.error){setNotice('Not saved: '+response.error.message);return false}
     lastOfflineSave.current=Boolean(response.offline);
     if(activeUser.current!==userId)return false;
-    setData(previous=>({...previous,
+    // Persist the complete updated state synchronously before announcing
+    // success: users can switch screens/reload immediately after saving.
+    // This also protects all nutrition edits, not just profile settings.
+    const previous=dataRef.current;
+    const nextState={...previous,
       [bucket]:bucket==='preferences'?payload:updated(previous[bucket],payload)
-    }));
+    };
+    dataRef.current=nextState;
+    writeOfflineState(userId,CACHE_KEY,nextState);
+    setData(nextState);
     setNotice(response.offline?'✓ Saved on this device. It will sync when you reconnect.':'✓ Saved to your account.');
     return true;
   };
@@ -287,17 +337,47 @@ export default function NutritionPage({session,onBack}){
       if(ok){setWaterAmount('');setEditingWater(null)}
     }catch(error){setNotice(error.message)}finally{setBusy(false)}
   };
-  const savePreferences=async(next=goals)=>{
+  const savePreferences=async(next=goals,fromEditor=false)=>{
     const keys=['calorie_goal','protein_goal','carbs_goal','fat_goal','water_goal_oz'];
     const maximum={calorie_goal:20000,protein_goal:2000,carbs_goal:3000,fat_goal:2000,water_goal_oz:1000};
     if(!keys.every(key=>validNumber(next[key],maximum[key]))||
       Number(next.calorie_goal)<=0||Number(next.water_goal_oz)<=0){
       setNotice('Goals must be valid positive values (macro targets can be zero).');return;
     }
+    const hasHeight=fromEditor&&(heightEntry.feet!==''||heightEntry.inches!=='');
+    const height=fromEditor?(hasHeight?heightFeetInchesToCm(heightEntry.feet,heightEntry.inches):null)
+      :(next.height_cm??null);
+    const age=(next.age_years===null||next.age_years===undefined||next.age_years==='')?null:Number(next.age_years);
+    const weight=fromEditor?(weightForEstimate===''?null:Number(weightForEstimate))
+      :(next.estimate_weight_lb??null);
+    if((hasHeight&&height===null)||
+       (height!==null&&(!Number.isFinite(Number(height))||height<90||height>260))||
+       (age!==null&&(!Number.isInteger(age)||age<18||age>100))||
+       (weight!==null&&(!Number.isFinite(Number(weight))||Number(weight)<45||Number(weight)>800))){
+      setNotice('Check height, age and manual bodyweight values before saving.');return;
+    }
     const payload={user_id:userId,mode:next.mode==='macros'?'macros':'calories',
-      ...Object.fromEntries(keys.map(key=>[key,Number(next[key])]))};
+      ...Object.fromEntries(keys.map(key=>[key,Number(next[key])])),
+      height_cm:height,age_years:age,
+      sex_for_estimate:['male','female'].includes(next.sex_for_estimate)?next.sex_for_estimate:null,
+      activity_level:ACTIVITY_LABELS[next.activity_level]?next.activity_level:'light',
+      weight_goal:WEIGHT_GOALS[next.weight_goal]?next.weight_goal:'maintain',
+      estimate_weight_lb:weight,
+      goal_source:next.goal_source==='estimate'?'estimate':'manual'};
     const ok=await save('preferences',payload);
-    if(ok)setGoals(payload);
+    if(ok){setGoals(payload);setEstimatePreview(null)}
+  };
+  const previewEstimate=()=>{
+    setEstimateError('');setEstimatePreview(null);
+    const height=heightFeetInchesToCm(heightEntry.feet,heightEntry.inches);
+    try{
+      const preview=estimateNutritionTargets({
+        height_cm:height,age_years:goals.age_years,sex_for_estimate:goals.sex_for_estimate,
+        activity_level:goals.activity_level,weight_goal:goals.weight_goal,
+        weight_lb:weightForEstimate!==''?Number(weightForEstimate):trackedWeight?.value
+      });
+      setEstimatePreview(preview);
+    }catch(error){setEstimateError(error?.message||'Complete the optional profile to calculate targets.')}
   };
   const startAnother=()=>{
     ++foodDetailsRequest.current;setVerifyingFood(false);
@@ -667,14 +747,88 @@ export default function NutritionPage({session,onBack}){
       <p className="nutrition-help">Days without entries count as zero in these averages. Select a date to review or edit its logs.</p>
     </section>}
 
-    {view==='goals'&&<section className="nutrition-tool-card"><h3>Your daily goals</h3>
-      <p className="nutrition-help">These are editable starting values, not medical recommendations. Choose Calories or Macros above at any time.</p>
+    {view==='goals'&&<section ref={goalsSectionRef} className="nutrition-tool-card nutrition-goals-page">
+      <h3>Nutrition goals</h3>
+      <p className="nutrition-help">Your numbers are yours to change. The 2,000 kcal starting goal is only a placeholder, not a personal recommendation.</p>
+      <div className="nutrition-estimate-panel">
+        <div className="nutrition-estimate-heading">
+          <strong>Optional calorie & macro calculator</strong>
+          <small>Mifflin-St Jeor estimate for adults — no goals change automatically.</small>
+        </div>
+        <div className="nutrition-estimate-grid">
+          <label>Height — feet
+            <input aria-label="Height feet" type="number" min="3" max="8" inputMode="numeric"
+              value={heightEntry.feet} onChange={e=>{setHeightEntry(old=>({...old,feet:e.target.value}));setEstimatePreview(null)}}/>
+          </label>
+          <label>Height — inches
+            <input aria-label="Height inches" type="number" min="0" max="11.9" step="0.1" inputMode="decimal"
+              value={heightEntry.inches} onChange={e=>{setHeightEntry(old=>({...old,inches:e.target.value}));setEstimatePreview(null)}}/>
+          </label>
+          <label>Age (years)
+            <input aria-label="Age years" type="number" min="18" max="100" inputMode="numeric"
+              value={goals.age_years??''}
+              onChange={e=>{setGoals(old=>({...old,age_years:e.target.value}));setEstimatePreview(null)}}/>
+          </label>
+          <label>Equation option
+            <select aria-label="Equation option" value={goals.sex_for_estimate??''}
+              onChange={e=>{setGoals(old=>({...old,sex_for_estimate:e.target.value||null}));setEstimatePreview(null)}}>
+              <option value="">Choose</option>
+              <option value="male">Male equation (+5)</option>
+              <option value="female">Female equation (−161)</option>
+            </select>
+          </label>
+          <label>Weight for estimate (lb)
+            <input aria-label="Weight for estimate pounds" type="number" min="45" max="800" inputMode="decimal"
+              value={weightForEstimate} placeholder={trackedWeight?String(trackedWeight.value):'e.g. 180'}
+              onChange={e=>{setWeightForEstimate(e.target.value);setEstimatePreview(null)}}/>
+          </label>
+          <label>Activity level
+            <select aria-label="Activity level" value={goals.activity_level||'light'}
+              onChange={e=>{setGoals(old=>({...old,activity_level:e.target.value}));setEstimatePreview(null)}}>
+              {Object.entries(ACTIVITY_LABELS).map(([key,label])=><option key={key} value={key}>{label}</option>)}
+            </select>
+          </label>
+          <label>Weight goal
+            <select aria-label="Weight goal" value={goals.weight_goal||'maintain'}
+              onChange={e=>{setGoals(old=>({...old,weight_goal:e.target.value}));setEstimatePreview(null)}}>
+              {Object.entries(WEIGHT_GOALS).map(([key,label])=><option key={key} value={key}>{label}</option>)}
+            </select>
+          </label>
+        </div>
+        {trackedWeight&&<p className="nutrition-weight-source">
+          Most recent WorkSet bodyweight: <strong>{fmt(trackedWeight.value)} lb</strong>
+          {trackedWeight.date?' · '+trackedWeight.date:''}.
+          {weightForEstimate===''?' Used automatically for estimates.':' Manual weight overrides it.'}
+          {weightForEstimate!==''&&<button type="button" onClick={()=>{setWeightForEstimate('');setEstimatePreview(null)}}>Use tracked weight</button>}
+        </p>}
+        {!trackedWeight&&<p className="nutrition-weight-source">No tracked bodyweight found. Enter weight above or add it under Me → Measurements.</p>}
+        <button type="button" className="secondary-action" onClick={previewEstimate}>Calculate suggested goals</button>
+        {estimateError&&<p role="status" className="nutrition-estimate-error">{estimateError}</p>}
+        {estimatePreview&&<div className="nutrition-estimate-preview" aria-label="Suggested nutrition targets">
+          <strong>Suggested daily targets</strong>
+          <div className="nutrition-estimate-numbers">
+            <span><b>{fmt(estimatePreview.calorie_goal)}</b> kcal</span>
+            <span><b>{fmt(estimatePreview.protein_goal)} g</b> protein</span>
+            <span><b>{fmt(estimatePreview.carbs_goal)} g</b> carbs</span>
+            <span><b>{fmt(estimatePreview.fat_goal)} g</b> fat</span>
+          </div>
+          <small>Estimated resting needs: {fmt(estimatePreview.resting_kcal)} kcal · Maintenance: {fmt(estimatePreview.maintenance_kcal)} kcal/day. Actual needs vary.</small>
+          <button type="button" className="primary-action" onClick={()=>{
+            setGoals(old=>({...old,...Object.fromEntries(
+              ['calorie_goal','protein_goal','carbs_goal','fat_goal'].map(key=>[key,estimatePreview[key]])),
+              goal_source:'estimate'}));
+            setEstimateError('Suggested targets filled in below. Tap Save daily goals to keep them.');
+          }}>Use suggested targets</button>
+        </div>}
+        <p className="nutrition-help">Estimates depend on your chosen activity level and equation. For different physiology, pregnancy, medical needs or under age 18, use manual targets or professional guidance.</p>
+      </div>
+      <h4>Editable daily targets</h4>
       <div className="nutrition-goal-fields">{[['calorie_goal','Calories (kcal)'],['protein_goal','Protein (g)'],
         ['carbs_goal','Carbs (g)'],['fat_goal','Fat (g)'],['water_goal_oz','Water (oz)']].map(([key,label])=>
         <label key={key}>{label}<input type="number" inputMode="decimal" min="0" max="20000" step="0.1"
-          value={goals[key]??''} onChange={e=>setGoals(current=>({...current,[key]:e.target.value}))}/></label>)}</div>
-      <button type="button" className="primary-action" onClick={()=>savePreferences(goals)}>Save daily goals</button>
-      <p className="nutrition-help">Your nutrition and hydration records are private, included in your account backup, and synced when online.</p>
+          value={goals[key]??''} onChange={e=>setGoals(current=>({...current,[key]:e.target.value,goal_source:'manual'}))}/></label>)}</div>
+      <button type="button" className="primary-action" onClick={()=>savePreferences(goals,true)}>Save daily goals & profile</button>
+      <p className="nutrition-help">Profile details are optional and only visible in your account. Goals, food entries and hydration sync as before.</p>
     </section>}
   </section>;
 }

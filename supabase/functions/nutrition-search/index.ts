@@ -5,7 +5,7 @@
 // results returned here are live SEARCH PREVIEWS only and must not be saved to the diary.
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import { normalizeUsdaSearchFood } from "./usdaNutrition.js";
-import { planFoodSearch, restaurantItemMatches, fatSecretSearchUrl } from "./foodSearchPlan.js";
+import { planFoodSearch, rankFoodMatch, restaurantItemMatches, fatSecretSearchUrl } from "./foodSearchPlan.js";
 
 const allowedOrigins = new Set([
   "https://aalbertsberg-dotcom.github.io",
@@ -79,9 +79,16 @@ const queryUsda = async (term: string) => {
       if (seen.has(id)) continue;
       seen.add(id); result.push(food);
     }
-    return result.slice(0, 100);
+    return result
+      .map(food=>({food,rank:rankFoodMatch(food,plan)}))
+      .filter(item=>item.rank>=0)
+      .sort((a,b)=>b.rank-a.rank)
+      .slice(0,90)
+      .map(item=>item.food);
   };
-  // Search both a canonical ingredient phrase and its raw-food variation.
+  // Search both canonical and plural ingredient forms, plus raw-food
+  // variations. Rank before capping so exact ingredients are not crowded
+  // out by high-volume generic search results.
   // Also fetch branded USDA matches, regardless of whether generic matches
   // exist, so relevant packaged results are not silently hidden.
   const calls = plan.usdaQueries.map(query=>fetchUsda(query,plan.common));

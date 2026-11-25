@@ -97,3 +97,26 @@ test('barcode lookup continues using the direct product endpoint',async t=>{
   const food=await lookupFoodBarcode('12345678');
   assert.equal(food.name,'Test product');
 });
+
+
+test('Packaged food ranking uses complete words, plurals, and excludes misleading substrings',()=>{
+ const products=[
+   product('Pineapple rings','800001'),
+   product('Apple pie filling','800002'),
+   product('Apples raw','800003'),
+   product('Apple juice drink','800004'),
+   product('Grapefruit juice','800005'),
+   product('Red grapes','800006'),
+   product('Eggplant parmesan','800007'),
+   product('Eggs large','800008'),
+ ];
+ const apple=rankFoodProducts(products,'apple');
+ const apples=rankFoodProducts(products,'apples');
+ assert.deepEqual(apple,apples);
+ assert.equal(apple[0].name,'Apples raw');
+ assert.ok(apple.every(x=>!x.name.startsWith('Pineapple')));
+ assert.equal(rankFoodProducts(products,'grape')[0].name,'Red grapes');
+ assert.ok(rankFoodProducts(products,'grape').every(x=>!x.name.includes('Grapefruit')));
+ assert.equal(rankFoodProducts(products,'egg')[0].name,'Eggs large');
+ assert.ok(rankFoodProducts(products,'eggs').every(x=>!x.name.includes('Eggplant')));
+});
