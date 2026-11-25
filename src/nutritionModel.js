@@ -55,7 +55,8 @@ export function nutritionHistory(foodEntries=[],waterEntries=[],end=dateKey(),da
     return {date:key,...summarizeDay(foodEntries,waterEntries,key)};
   });
 }
-const safeNutrient=(value)=>Number.isFinite(Number(value))?nonnegative(value):null;
+const safeNutrient=(value)=>(value===null||value===undefined||value==='')?null:
+  (Number.isFinite(Number(value))?nonnegative(value):null);
 export function normalizeOpenFoodFacts(product){
   if(!product||typeof product!=='object')return null;
   const n=product.nutriments||{};

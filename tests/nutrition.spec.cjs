@@ -48,3 +48,52 @@ test('Custom food logs macros and supports confirmation before deleting',async({
   await page.getByRole('alertdialog').getByRole('button',{name:'Remove'}).click()
   await expect(page.locator('.nutrition-food-diary')).not.toContainText('Test oats')
 })
+
+
+test('Public food search matches query and empty calorie meter is not a green button',async({page})=>{
+  const calls=[];
+  await page.route('https://world.openfoodfacts.org/cgi/search.pl**',async route=>{
+    const url=new URL(route.request().url());
+    calls.push(url);
+    await route.fulfill({status:200,contentType:'application/json',
+      headers:{'access-control-allow-origin':'*'},
+      body:JSON.stringify({count:2,products:[
+        {product_name:'Pepper Jack Cheese',code:'1234567890123',brands:'Test Dairy',
+          serving_size:'30 g',serving_quantity:30,nutriments:{
+            'energy-kcal_100g':300,'proteins_100g':20,
+            'carbohydrates_100g':3,'fat_100g':25
+          }},
+        {product_name:'Fromage Blanc Nature',code:'8765432109876',
+          serving_size:'100 g',serving_quantity:100,nutriments:{'energy-kcal_100g':80}}
+      ]})});
+  });
+  await page.goto('/tests/fixtures/nutrition.html');
+  await expect(page.getByRole('heading',{name:'Nutrition & hydration'})).toBeVisible();
+  const meter=page.locator('.nutrition-summary .nutrient-meter.is-emphasized').first();
+  await expect(meter).toBeVisible();
+  await expect(meter).not.toHaveClass(/\bprimary\b/);
+  const initial=await meter.evaluate(node=>({
+    background:getComputedStyle(node).backgroundColor,
+    fillWidth:node.querySelector('.nutrient-meter-track>div').getBoundingClientRect().width
+  }));
+  expect(initial.background).toBe('rgba(0, 0, 0, 0)');
+  expect(initial.fillWidth).toBe(0);
+  await page.getByRole('button',{name:'Add food',exact:true}).click();
+  await page.getByRole('searchbox',{name:'Food search'}).fill('pepper jack');
+  await page.getByRole('button',{name:'Search',exact:true}).click();
+  await expect(page.locator('.nutrition-results button')).toHaveCount(1);
+  await expect(page.locator('.nutrition-results')).toContainText('Pepper Jack Cheese');
+  expect(calls).toHaveLength(1);
+  expect(calls[0].pathname).toBe('/cgi/search.pl');
+  expect(calls[0].searchParams.get('search_terms')).toBe('pepper jack');
+  await page.locator('.nutrition-results button').click();
+  await page.getByRole('button',{name:'Log food',exact:true}).click();
+  await expect(page.locator('.nutrition-food-diary')).toContainText('Pepper Jack Cheese');
+  const after=await meter.evaluate(node=>{
+    const track=node.querySelector('.nutrient-meter-track');
+    const fill=track.firstElementChild;
+    return {trackWidth:track.getBoundingClientRect().width,fillWidth:fill.getBoundingClientRect().width};
+  });
+  expect(after.fillWidth).toBeGreaterThan(0);
+  expect(after.fillWidth).toBeLessThan(after.trackWidth);
+});

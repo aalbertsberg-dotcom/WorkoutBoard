@@ -41,3 +41,15 @@ test('history uses local calendar days and keeps days with zero entries',()=>{
   assert.equal(data.length,7);assert.equal(data.at(-1).date,'2026-11-24');
   assert.equal(data[0].water_oz,0);
 });
+
+
+test('missing nutrition values are flagged instead of treated as measured zeroes',()=>{
+  const p={product_name:'Sample',code:'1234567890',serving_quantity:100,
+    nutriments:{'energy-kcal_100g':200}};
+  const food=normalizeOpenFoodFacts(p);
+  assert.equal(food.calories,200);
+  assert.equal(food.incomplete,true);
+  assert.equal(food.protein_g,0);
+  const complete={...p,nutriments:{...p.nutriments,'proteins_100g':0,'carbohydrates_100g':0,'fat_100g':0}};
+  assert.equal(normalizeOpenFoodFacts(complete).incomplete,false);
+});

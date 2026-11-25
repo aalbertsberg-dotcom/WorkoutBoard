@@ -44,7 +44,7 @@
 .nutrient-meter-label small{color:#8096b2;font-size:11px;font-weight:600}
 .nutrient-meter-track{height:7px;border-radius:99px;background:#25344b;overflow:hidden}
 .nutrient-meter-track>div{height:100%;background:#6887ae;border-radius:99px;transition:width .2s}
-.nutrient-meter.primary .nutrient-meter-track>div{background:#a3ff12}
+.nutrient-meter.is-emphasized .nutrient-meter-track>div{background:#a3ff12}
 .nutrition-water-card{display:grid;gap:12px}
 .nutrition-water-card .nutrient-meter-track>div{background:#38bdf8}
 .nutrition-card-heading{display:flex;align-items:center;justify-content:space-between;gap:9px}
