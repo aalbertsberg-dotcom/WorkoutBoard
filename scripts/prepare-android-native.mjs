@@ -2,6 +2,7 @@
 // Reapply native customizations to CI-generated Capacitor Android project.
 import fs from 'node:fs';
 import path from 'node:path';
+import sharp from 'sharp';
 
 const root=process.cwd();
 const android=path.join(root,'android','app');
@@ -61,6 +62,42 @@ fs.mkdirSync(path.dirname(xmlPath),{recursive:true});
 fs.writeFileSync(xmlPath,'<?xml version="1.0" encoding="utf-8"?>\n'+
  '<paths xmlns:android="http://schemas.android.com/apk/res/android">\n'+
  '  <external-files-path name="workset_updates" path="Download/" />\n</paths>\n');
+
+// Every generated Capacitor project must use the same official WorkSet icon,
+// never the default blue Capacitor/Android launcher. Adaptive foreground has
+// transparent padding to survive Samsung circular/squircle launcher masks.
+const iconSource=path.join(root,'public','icon.svg');
+if(!fs.existsSync(iconSource))throw Error('Missing the official WorkSet logo at public/icon.svg');
+const densities={mdpi:48,hdpi:72,xhdpi:96,xxhdpi:144,xxxhdpi:192};
+for(const [density,size] of Object.entries(densities)){
+  const dir=path.join(android,'src','main','res','mipmap-'+density);
+  fs.mkdirSync(dir,{recursive:true});
+  for(const asset of ['ic_launcher.png','ic_launcher_round.png']){
+    await sharp(iconSource,{density:256}).resize(size,size).png()
+      .toFile(path.join(dir,asset));
+  }
+  const foregroundSize=Math.round(size*0.78);
+  const logo=await sharp(iconSource,{density:256}).resize(foregroundSize,foregroundSize).png().toBuffer();
+  await sharp({create:{width:size,height:size,channels:4,
+      background:{r:0,g:0,b:0,alpha:0}}})
+    .composite([{input:logo,gravity:'centre'}]).png()
+    .toFile(path.join(dir,'ic_launcher_foreground.png'));
+}
+const values=path.join(android,'src','main','res','values');
+fs.mkdirSync(values,{recursive:true});
+const brandColors=path.join(values,'workset_launcher_colors.xml');
+fs.writeFileSync(brandColors,'<?xml version="1.0" encoding="utf-8"?>\n'+
+  '<resources><color name="workset_launcher_background">#09101D</color></resources>\n');
+const anyDpi=path.join(android,'src','main','res','mipmap-anydpi-v26');
+fs.mkdirSync(anyDpi,{recursive:true});
+const adaptive='<?xml version="1.0" encoding="utf-8"?>\n'+
+ '<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">\n'+
+ '  <background android:drawable="@color/workset_launcher_background" />\n'+
+ '  <foreground android:drawable="@mipmap/ic_launcher_foreground" />\n'+
+ '</adaptive-icon>\n';
+for(const file of ['ic_launcher.xml','ic_launcher_round.xml'])
+  fs.writeFileSync(path.join(anyDpi,file),adaptive);
+
 
 let gradle=fs.readFileSync(gradlePath,'utf8');
 if(!/versionCode\s+\d+/.test(gradle)||!/versionName\s+['"][^'"]+['"]/.test(gradle))
