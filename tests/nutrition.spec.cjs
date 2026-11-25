@@ -37,7 +37,7 @@ test('Custom food logs macros and supports confirmation before deleting',async({
   await expect(mealDialog).toBeVisible()
   await mealDialog.getByRole('button',{name:'Save'}).click()
   await page.getByRole('button',{name:'Saved',exact:true}).click()
-  await expect(page.locator('.nutrition-saved-row')).toContainText('Breakfast meal')
+  await expect(page.locator('.nutrition-saved-row').filter({hasText:'Breakfast meal'})).toHaveCount(1)
   await page.getByRole('button',{name:'Food diary',exact:true}).click()
   await page.locator('.nutrition-entry').filter({hasText:'Test oats'}).getByRole('button',{name:'Remove'}).click()
   const dialog=page.getByRole('alertdialog',{name:'Remove saved nutrition entry?'})
