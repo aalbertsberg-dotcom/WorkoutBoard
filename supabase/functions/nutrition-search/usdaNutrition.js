@@ -67,7 +67,7 @@ export function usdaPortions(food){
     if(!grams)continue;
     const raw=cap(p?.portionDescription||p?.modifier||
       [p?.amount,p?.measureUnit?.name].filter(Boolean).join(' '),100);
-    if(raw&&raw!=='undefined')add(raw+(/g\b/i.test(raw)?'':' ('+r1(grams)+' g)'),grams);
+    if(raw&&raw!=='undefined')add(raw+(/(?:^|\s)\d+(?:\.\d+)?\s*g\b/i.test(raw)?'':' ('+r1(grams)+' g)'),grams);
   }
   return found;
 }
