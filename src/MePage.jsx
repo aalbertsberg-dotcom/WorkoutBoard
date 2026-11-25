@@ -4,6 +4,7 @@ import {AccountSecurityPanel,BackupRestorePanel,WorkoutSettingsPanel} from './ad
 import {MeSection,MeDisplayNameEditor,MeOneRmEditor} from './MeSections'
 import {ProgressToolbox} from './trainingTools'
 import {useEffect,useState} from 'react'
+import {isNativeAndroid} from './androidUpdates.js'
 
 /** The Me landing page is navigation-first, with secondary tools closed by default.
  * Existing tools are mounted only when explicitly expanded. */
@@ -210,8 +211,10 @@ export default function MePage({
         description="Install, updates, exports, backup and restore" icon="▣">
         <div className="me-inner-card">
           <div className="me-inner-heading"><span className="card-label">APP</span><h4>Install WorkSet</h4></div>
-          <p>Add WorkSet to your home screen. Update checking and refresh are available at the top of Me.</p>
-          <InstallAppButton/>
+          {isNativeAndroid()
+            ?<p>Installed Android app. Check and install signed APK updates at the top of Me.</p>
+            :<><p>Add WorkSet to your home screen. Web update checking and refresh are available at the top of Me.</p>
+                <InstallAppButton/></>}
         </div>
         <div className="me-inner-card">
           <div className="me-inner-heading"><span className="card-label">EXPORT</span><h4>Training history CSV</h4></div>
