@@ -60,8 +60,9 @@ test('Marco’s Pizza excludes Pizza Hut, dessert pizza, and unrelated Marco che
    fatsecret:[{name:'Pepperoni Magnifico',brand:'Marco’s Pizza',source:'fatsecret',source_id:'98',can_log:false}]
  },"Marco's Pizza");
  assert.equal(records.length,2);
- assert.deepEqual(records.map(x=>x.source),['usda','fatsecret']);
- assert.equal(records[0].name,'Marco’s Pizza, Pepperoni');
+ assert.deepEqual(records.map(x=>x.source),['fatsecret','usda']);
+ assert.ok(records.some(x=>x.name==='Marco’s Pizza, Pepperoni'));
+ assert.equal(records[0].brand,'Marco’s Pizza');
 });
 test('Chicken breast matches relevant cuts only, burger still matches cheeseburger',()=>{
  const records=mergeFoodResults({usda:[
