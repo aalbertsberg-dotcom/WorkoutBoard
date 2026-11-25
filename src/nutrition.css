@@ -144,3 +144,5 @@
 .nutrition-provider-preview a {color:#a3d6ff;font-size:12px;font-weight:800;word-break:break-word}
 .nutrition-provider-preview>button {align-self:start;border:1px solid #37536b;color:#d5e6f8;background:#17273b;border-radius:10px;padding:10px 14px;font-weight:800}
 .nutrition-results button small {line-height:1.5}
+.nutrition-provider-attribution {margin:0;font-size:11px}
+.nutrition-provider-attribution a {color:#9db6ce}
