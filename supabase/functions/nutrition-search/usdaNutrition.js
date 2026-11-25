@@ -18,17 +18,26 @@ export function usdaNutrients(food){
   const nutrients=Array.isArray(food?.foodNutrients)?food.foodNutrients:[];
   // 1008: Energy kcal (legacy), 2047/2048: Atwater kcal.
   // 1062: Energy kJ. When the unit explicitly says kJ, convert.
-  const energy=nutrient(nutrients,[1008,2047,2048,1062]);
   const protein=nutrient(nutrients,[1003]);
   const carbs=nutrient(nutrients,[1005]);
   const fat=nutrient(nutrients,[1004]);
-  const unit=energy?.unit|| (energy?.id===1062?'kj':'kcal');
-  const calories=energy===null?null:unit.includes('kj')?energy.value/4.184:
-    (unit.includes('kcal')||unit==='')?energy.value:null;
   const macroCount=[protein,carbs,fat].filter(Boolean).length;
   const macroEstimate=4*(protein?.value??0)+4*(carbs?.value??0)+9*(fat?.value??0);
-  const inaccurate=calories!==null&&macroCount>=2&&macroEstimate>40&&
-    (calories>Math.max(80,macroEstimate*1.85)||calories<macroEstimate*.38);
+  // USDA may contain multiple energy methods. Prefer a documented kcal value
+  // consistent with recorded nutrients; do not accept a conflicting 1008 when
+  // the record also contains a sound alternative.
+  const energyValues=[1008,2047,2048,1062].map(id=>nutrient(nutrients,[id]))
+    .filter(Boolean).map(energy=>{
+      const unit=energy.unit||(energy.id===1062?'kj':'kcal');
+      const kcal=unit.includes('kj')?energy.value/4.184:
+        (unit.includes('kcal')||unit==='')?energy.value:null;
+      const mismatch=kcal!==null&&macroCount>=2&&macroEstimate>40&&
+        (kcal>Math.max(80,macroEstimate*1.85)||kcal<macroEstimate*.38);
+      return {kcal,mismatch};
+    }).filter(x=>x.kcal!==null);
+  const energy=energyValues.find(x=>!x.mismatch&&x.kcal<=1000)||energyValues[0]||null;
+  const calories=energy?.kcal??null;
+  const inaccurate=energy?.mismatch??false;
   const valid=calories!==null&&calories<=1000&&macroCount>=2&&!inaccurate;
   return {
     calories:calories===null?0:r1(calories),protein_g:r1(protein?.value??0),
