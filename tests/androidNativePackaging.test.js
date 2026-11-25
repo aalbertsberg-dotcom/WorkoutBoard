@@ -37,7 +37,7 @@ test('Native preparation registers APK update plugin and supplies Android system
    assert.match(manifest,/REQUEST_INSTALL_PACKAGES/);
    assert.match(manifest,/androidx\.core\.content\.FileProvider/);
    assert.match(manifest,/\$\{applicationId\}\.worksetupdates/);
-   assert.match(gradle,/versionName "2\\.12\\.0"/);
+   assert.match(gradle,/versionName "2\.12\.0"/);
    assert.match(gradle,/versionCode 1/);
    assert.ok(fs.existsSync(path.join(fixture.root,'android/app/src/main/res/xml/workset_update_paths.xml')));
    for(const density of ['mdpi','hdpi','xhdpi','xxhdpi','xxxhdpi']){
