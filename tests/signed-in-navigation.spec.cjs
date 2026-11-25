@@ -511,3 +511,24 @@ test('a started Walk from yesterday resumes after refresh instead of vanishing a
   await expect(page.locator('.quick-cardio-timer-state')).toHaveText('TIMING NOW')
   expect(errors).toEqual([])
 })
+
+
+test('Today keeps workouts first and offers Food & Water as the final activity choice',async({page})=>{
+  const errors=[]
+  page.on('pageerror',error=>errors.push(error.message))
+  await signedIn(page)
+  await expect(page.getByRole('heading',{name:'What are we doing today?'})).toBeVisible({timeout:15000})
+  await expect(page.locator('.nutrition-today-card')).toHaveCount(0)
+  const choices=page.locator('.today-choice-grid > button')
+  const nutrition=choices.last()
+  await expect(nutrition).toHaveClass(/today-choice-nutrition/)
+  await expect(nutrition).toContainText('Food & Water')
+  await expect(page.getByRole('button',{name:/Walk Time, distance or both/})).toBeVisible()
+  await nutrition.click()
+  await expect(page.locator('.app-header h1')).toHaveText('Nutrition')
+  await expect(page.getByRole('heading',{name:'Nutrition & hydration'})).toBeVisible()
+  await page.getByRole('button',{name:'← Back'}).last().click()
+  await expect(page.locator('.app-header h1')).toHaveText('Today')
+  await expect(page.getByRole('heading',{name:'What are we doing today?'})).toBeVisible()
+  expect(errors).toEqual([])
+})
