@@ -32,7 +32,7 @@ const validCustom=fields=>String(fields.name||'').trim()&&['calories','protein_g
 function ProgressMetric({label,value,goal,unit='',primary=false}){
   const limit=Math.max(0,Number(goal)||0);
   const pct=limit>0?Math.min(100,Math.round(nonnegative(value)/limit*100)):0;
-  return <div className={'nutrient-meter '+(primary?'primary':'')}>
+  return <div className={'nutrient-meter'+(primary?' is-emphasized':'')}>
     <div className="nutrient-meter-label"><span>{label}</span><strong>{fmt(value)} <small>/ {fmt(goal)}{unit?' '+unit:''}</small></strong></div>
     <div className="nutrient-meter-track" role="progressbar" aria-label={label} aria-valuemin="0" aria-valuemax={Math.max(1,limit)} aria-valuenow={Math.min(nonnegative(value),Math.max(1,limit))}>
       <div style={{width:pct+'%'}}/>
@@ -220,6 +220,7 @@ export default function NutritionPage({session,onBack}){
   };
   const lookup=async(mode='search')=>{
     if(searching)return;
+    setResults([]);setSelectedFood(null);setEditEntry(null);
     setSearching(true);setNotice('');
     try{
       if(mode==='barcode'){
@@ -227,9 +228,9 @@ export default function NutritionPage({session,onBack}){
         setResults([found]);selectFood(found);setView('search');
       }else{
         const found=await searchFoodCatalog(search);setResults(found);
-        if(!found.length)setNotice('No matching products with nutrition information. Try a shorter search or enter a custom food.');
+        if(!found.length)setNotice('No matching packaged foods found. Try a simpler name, scan a barcode, or enter a custom food. Restaurant meals may not be listed.');
       }
-    }catch(error){setNotice(error?.message||'Food search unavailable. Enter a custom food.')}
+    }catch(error){setResults([]);setNotice(error?.message||'Food search unavailable. Enter a custom food.')}
     finally{setSearching(false)}
   };
   const saveFavorite=async(food)=>{
