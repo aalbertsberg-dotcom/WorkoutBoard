@@ -65,6 +65,22 @@ const queryUsda = async (term: string) => {
   return { status: "ok", foods: data.foods.map(normalizeUsdaSearchFood).filter(Boolean).slice(0, 30) };
 };
 
+const queryUsdaDetails = async (fdcId: string) => {
+  const key = Deno.env.get("WORKSET_USDA_API_KEY");
+  if (!key) throw Error("USDA is not configured");
+  if (!/^[0-9]{1,12}$/.test(fdcId)) throw Error("Invalid USDA food identifier");
+  const url = new URL("https://api.nal.usda.gov/fdc/v1/food/" + fdcId);
+  url.searchParams.set("api_key", key);
+  const response = await fetch(url, {
+    headers: { "Accept": "application/json" },
+    signal: AbortSignal.timeout(8500),
+  });
+  if (!response.ok) throw Error("USDA details unavailable");
+  const food = normalizeUsdaSearchFood(await response.json());
+  if (!food) throw Error("No usable USDA food information");
+  return food;
+};
+
 const accessToken = async () => {
   if (tokenState.token && tokenState.expiresAt > Date.now() + 60000)
     return tokenState.token;
@@ -139,6 +155,12 @@ Deno.serve(async (req: Request) => {
     let payload: any;
     try { payload = await req.json(); }
     catch { return reply(req, 400, { error: "Invalid request" }); }
+    if (payload?.action === "details") {
+      const fdcId = String(payload?.fdcId || "");
+      if (!/^[0-9]{1,12}$/.test(fdcId)) return reply(req, 400, { error: "Invalid USDA food identifier" });
+      try { return reply(req, 200, { food: await queryUsdaDetails(fdcId) }); }
+      catch { return reply(req, 503, { error: "USDA serving details unavailable" }); }
+    }
     const query = String(payload?.query || "").trim();
     if (query.length < 2 || query.length > 80) return reply(req, 400, { error: "Food search must be 2–80 characters" });
     const [usda, fatsecret] = await Promise.allSettled([queryUsda(query), queryFatSecret(query)]);
