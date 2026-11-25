@@ -6,6 +6,7 @@ import {readOfflineState,writeOfflineState,upsertOfflineFirst,offlineUuid,syncOf
 import {NUTRITION_DEFAULTS,MEALS,dateKey,round1,nonnegative,multipliedNutrients,makeFoodEntry,makeWaterEntry,summarizeDay,nutrientSum,nutritionHistory,recipePerServing,foodForPortion,needsNutritionReview,broaderFoodSearch} from './nutritionModel';
 import {lookupFoodBarcode} from './nutritionCatalog';
 import {searchAllFoodCatalog,foodSourceLabel} from './nutritionMultiSearch';
+import {planFoodSearch} from '../supabase/functions/nutrition-search/foodSearchPlan.js';
 import './nutrition.css';
 
 const makeState=()=>({preferences:{...NUTRITION_DEFAULTS},foods:[],entries:[],water:[]});
@@ -224,6 +225,8 @@ export default function NutritionPage({session,onBack}){
   const selectedTotals=selectedForLog&&Number.isFinite(Number(servings))&&Number(servings)>0&&Number(servings)<=1000?
     multipliedNutrients(selectedForLog,servings):null;
   const broaderQuery=broaderFoodSearch(search);
+  const restaurantPlan=planFoodSearch(resultsQuery||search);
+  const searchRestaurantOnly=Boolean(resultsQuery&&!selectedFood&&!searching&&results.length===0&&restaurantPlan.restaurant&&restaurantPlan.itemTerms.length);
   const totalUsdaGrams=selectedForLog?.source==='usda'&&Number.isFinite(Number(servings))&&Number(servings)>0
     ?Number(selectedForLog.serving_grams||0)*Number(servings):0;
   const selectFood=(food)=>{
@@ -320,7 +323,12 @@ export default function NutritionPage({session,onBack}){
         if(token!==searchRequest.current)return; // ignore stale responses
         setResults(found);setResultsQuery(term);
         if(found.length&&found[0].cached)setNotice('Showing previously found foods saved on this device. Verify package labels before logging.');
-        else if(!found.length)setNotice('No closely matching foods found for "'+term+'". Try the restaurant name or food name separately, or enter a custom food.');
+        else if(!found.length){
+          const plan=planFoodSearch(term);
+          setNotice(plan.restaurant&&plan.itemTerms.length
+            ?'No matching '+plan.itemTerms.join(' ')+' item found for '+plan.restaurant+'. You can search the restaurant menu more broadly or enter a custom food.'
+            :'No closely matching foods found for "'+term+'". Try a simpler food name or enter a custom food.');
+        }
       }
     }catch(error){
       if(token===searchRequest.current){setResults([]);setResultsQuery('');setNotice(error?.message||'Food search unavailable. Enter a custom food.')}
@@ -571,6 +579,12 @@ export default function NutritionPage({session,onBack}){
         </button>
       </div>}
       
+            {searchRestaurantOnly&&<div className="nutrition-search-suggestion">
+        <span>The specific item wasn't found in the connected food databases.</span>
+        <button type="button" onClick={()=>lookup('search',restaurantPlan.restaurant)}>
+          Search {restaurantPlan.restaurant} instead
+        </button>
+      </div>}
             {results.length>0&&!selectedFood&&<div className="nutrition-results-block">
         <div className="nutrition-results-top"><strong>Results for "{resultsQuery||search}"</strong><small>{results.length} matches</small></div>
         <div className="nutrition-results" aria-label="Food results">
