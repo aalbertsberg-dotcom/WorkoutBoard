@@ -4,6 +4,7 @@
 // FatSecret's storable-data terms permit only food_id / serving_id retention. The
 // results returned here are live SEARCH PREVIEWS only and must not be saved to the diary.
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
+import { normalizeUsdaSearchFood } from "./usdaNutrition.js";
 
 const allowedOrigins = new Set([
   "https://aalbertsberg-dotcom.github.io",
@@ -47,52 +48,6 @@ const takeSlot = (id: string) => {
   if (requests.size > 500) requests.clear(); // per-isolate cap; not a global quota
   return true;
 };
-const select = (arr: any[], ids: number[]): number | null => {
-  for (const id of ids) {
-    const hit = arr.find((x: any) =>
-      Number(x?.nutrientId ?? x?.nutrient?.id) === id);
-    const value = numeric(hit?.value ?? hit?.amount);
-    if (value !== null) {
-      const unit = String(hit?.unitName ?? hit?.nutrient?.unitName ?? "").toLowerCase();
-      return id === 1008 || id === 2047 || id === 2048
-        ? unit.includes("kj") ? value / 4.184 : value
-        : value;
-    }
-  }
-  return null;
-};
-const normalizeUsda = (food: any) => {
-  const name = cap(food?.description).trim();
-  const n = Array.isArray(food?.foodNutrients) ? food.foodNutrients : [];
-  if (!name) return null;
-  const energy = select(n, [1008, 2047, 2048]);
-  const protein = select(n, [1003]);
-  const carbs = select(n, [1005]);
-  const fat = select(n, [1004]);
-  if (energy === null) return null; // no fake zero-calorie items
-  const amount = numeric(food?.servingSize);
-  const unit = String(food?.servingSizeUnit ?? "").trim().toLowerCase();
-  const portion = amount && amount > 0 && amount <= 1000 && unit === "g"
-    ? amount : 100;
-  const multiplier = portion / 100;
-  return {
-    name,
-    brand: cap(food?.brandName || food?.brandOwner || "", 120),
-    source: "usda",
-    source_id: cap(food?.fdcId, 100),
-    serving_label: portion !== 100 && food?.householdServingFullText
-      ? cap(food.householdServingFullText, 120)
-      : portion + " g",
-    serving_grams: portion,
-    calories: round(energy * multiplier),
-    protein_g: round((protein ?? 0) * multiplier),
-    carbs_g: round((carbs ?? 0) * multiplier),
-    fat_g: round((fat ?? 0) * multiplier),
-    incomplete: [protein, carbs, fat].some(v => v === null),
-    data_type: cap(food?.dataType, 40),
-    can_log: true,
-  };
-};
 const queryUsda = async (term: string) => {
   const key = Deno.env.get("WORKSET_USDA_API_KEY");
   if (!key) return { status: "not_configured", foods: [] };
@@ -107,7 +62,7 @@ const queryUsda = async (term: string) => {
   if (!response.ok) throw Error("USDA HTTP " + response.status);
   const data = await response.json();
   if (!Array.isArray(data?.foods)) throw Error("USDA response invalid");
-  return { status: "ok", foods: data.foods.map(normalizeUsda).filter(Boolean).slice(0, 30) };
+  return { status: "ok", foods: data.foods.map(normalizeUsdaSearchFood).filter(Boolean).slice(0, 30) };
 };
 
 const accessToken = async () => {
