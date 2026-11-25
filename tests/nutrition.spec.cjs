@@ -143,7 +143,7 @@ test('USDA nutrition is loggable while FatSecret restaurant data remains preview
           description:'Per 1 serving - Calories: 300kcal | Protein: 15g',can_log:false,
           source_url:'https://foods.fatsecret.com/calories-nutrition/example/cheeseburger'}],
         providers:{usda:'ok',fatsecret:'ok'}
-      })}
+      })
     });
   });
   await page.route('https://search.openfoodfacts.org/search**',async route=>{
