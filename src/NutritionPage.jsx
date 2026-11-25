@@ -111,6 +111,8 @@ export default function NutritionPage({session,onBack}){
   const videoRef=useRef(null);
   const newest=useRef(0);
   const searchRequest=useRef(0);
+  const foodDetailsRequest=useRef(0);
+  const [verifyingFood,setVerifyingFood]=useState(false);
   const searchInputRef=useRef(null);
   const selectionRef=useRef(null);
   const diaryRef=useRef(null);
@@ -220,12 +222,28 @@ export default function NutritionPage({session,onBack}){
     multipliedNutrients(selectedForLog,servings):null;
   const broaderQuery=broaderFoodSearch(search);
   const selectFood=(food)=>{
+    const token=++foodDetailsRequest.current;
     searchInputRef.current?.blur();
     setSelectedFood(food);setEditEntry(null);setServings('1');
     setPortionChoice('default');setCustomGrams('100');setNotice('');
+    const usdaId=String(food?.source_id||'');
+    if(food?.source==='usda'&&/^[0-9]{1,12}$/.test(usdaId)&&isOnline()){
+      setVerifyingFood(true);
+      supabase.functions.invoke('nutrition-search',{body:{action:'details',fdcId:usdaId}})
+        .then(({data,error})=>{
+          if(token!==foodDetailsRequest.current||activeUser.current!==userId)return;
+          if(!error&&data?.food?.source==='usda'&&String(data.food.source_id)===usdaId){
+            setSelectedFood(data.food);
+            setPortionChoice('default');
+          }else setNotice('Using available USDA search information. Verify the serving label before logging.');
+        })
+        .catch(()=>{if(token===foodDetailsRequest.current)setNotice('USDA serving details could not load. Use the listed gram amount.')})
+        .finally(()=>{if(token===foodDetailsRequest.current)setVerifyingFood(false)});
+    }else setVerifyingFood(false);
     requestAnimationFrame(()=>selectionRef.current?.scrollIntoView({block:'nearest',behavior:'smooth'}));
   };
   const changeSearch=value=>{
+    ++foodDetailsRequest.current;
     ++searchRequest.current; // invalidate any search that is still in flight
     setSearch(value);setResults([]);setResultsQuery('');setSelectedFood(null);
     setEditEntry(null);setVisibleResults(8);setSearching(false);setNotice('');
@@ -238,6 +256,7 @@ export default function NutritionPage({session,onBack}){
         meal:selectedMeal,servings,now:editEntry?.created_at||new Date().toISOString()});
       const result=await save('entries',row);
       if(result){
+        ++foodDetailsRequest.current;setVerifyingFood(false);
         setSelectedFood(null);setEditEntry(null);setServings('1');setView('log');
         setLastLoggedMeal(selectedMeal);
         requestAnimationFrame(()=>diaryRef.current?.scrollIntoView({block:'start',behavior:'smooth'}));
@@ -272,6 +291,7 @@ export default function NutritionPage({session,onBack}){
     if(ok)setGoals(payload);
   };
   const startAnother=()=>{
+    ++foodDetailsRequest.current;setVerifyingFood(false);
     setLastLoggedMeal('');setSelectedFood(null);setEditEntry(null);
     setSearch('');setResults([]);setResultsQuery('');setView('search');
   };
@@ -473,6 +493,7 @@ export default function NutritionPage({session,onBack}){
         <button type="button" onClick={()=>setScanning(s=>!s)}>{scanning?'Stop camera':'Scan camera'}</button></div></details>
       {scanning&&<div className="nutrition-camera"><video ref={videoRef} autoPlay playsInline muted/><small>Center a product barcode in the camera. No photos are saved.</small></div>}
       {selectedFood&&<div className="nutrition-selection-panel" ref={selectionRef}>
+        {verifyingFood&&<small className="nutrition-checking">Checking USDA serving details…</small>}
         <div className="nutrition-selection-top">
           <strong>Selected food</strong>
           <button type="button" onClick={()=>{setSelectedFood(null);setEditEntry(null)}}>← Back to results</button>
@@ -514,7 +535,7 @@ export default function NutritionPage({session,onBack}){
             </div>
           </label></div>
         <div className="nutrition-choice-actions nutrition-log-primary">
-          <button type="button" className="primary-action" disabled={busy||!selectedTotals} onClick={addFood}>{busy?'Saving…':editEntry?'Save changes':'Log food'}</button>
+          <button type="button" className="primary-action" disabled={busy||verifyingFood||!selectedTotals} onClick={addFood}>{busy?'Saving…':editEntry?'Save changes':'Log food'}</button>
         </div>
         <details className="nutrition-secondary-actions"><summary>More options</summary>
           <div>
