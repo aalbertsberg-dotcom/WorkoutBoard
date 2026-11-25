@@ -401,6 +401,12 @@ export default function NutritionPage({session,onBack}){
   return <section className="page-section nutrition-page" aria-label="Nutrition and hydration">
     <div className="nutrition-topline"><button type="button" className="secondary-action" onClick={onBack}>← Back</button>
       <span>{loading?'Syncing nutrition…':isOnline()?'Private to your account':'Offline logging available'}</span></div>
+    {view==='search'?
+      <div className="nutrition-search-intro">
+        <div><span className="card-label">QUICK FOOD LOG</span><strong>Adding to {selectedMeal}</strong></div>
+        <button type="button" onClick={()=>{setSelectedFood(null);setEditEntry(null);setView('log')}}>← Diary</button>
+      </div>
+    :<>
     <div className="nutrition-hero"><span className="card-label">FOOD & WATER</span><h2>Nutrition & hydration</h2>
       <p>Log meals and water your way. Calories and macros are always saved, even when you change modes.</p>
     </div>
@@ -444,6 +450,7 @@ export default function NutritionPage({session,onBack}){
           <button type="button" onClick={()=>{setEditingWater(row);setWaterAmount(String(row.amount_oz))}}>Edit</button>
           <button type="button" onClick={()=>remove('water',row)}>Remove</button></div>)}</details>}
     </section>
+    </>}
 
     <div className="nutrition-tabs" role="group" aria-label="Nutrition tools">
       {[['log','Food diary'],['search','Add food'],['saved','Saved'],['recipe','Recipes'],['history','History'],['goals','Goals']].map(([key,label])=>
