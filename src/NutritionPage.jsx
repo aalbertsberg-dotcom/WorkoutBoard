@@ -211,7 +211,7 @@ export default function NutritionPage({session,onBack}){
       setNotice('Goals must be valid positive values (macro targets can be zero).');return;
     }
     const payload={user_id:userId,mode:next.mode==='macros'?'macros':'calories',
-      ...Object.fromEntries(keys.map(key=>[key:Number(next[key])]))};
+      ...Object.fromEntries(keys.map(key=>[key,Number(next[key])]))};
     const ok=await save('preferences',payload);
     if(ok)setGoals(payload);
   };
