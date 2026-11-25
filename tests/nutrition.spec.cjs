@@ -569,7 +569,7 @@ test('Manual calorie and macro goals remain editable without calculator fields',
  await page.getByLabel('Protein (g)').fill('180');
  await page.getByRole('button',{name:'Save daily goals & profile'}).click();
  await page.reload();
- await expect(page.locator('.nutrition-calorie-hero')).toContainText('2250 goal');
+ await expect(page.locator('.nutrition-calorie-hero')).toContainText('2,250 goal');
  await page.getByRole('button',{name:'Goals',exact:true}).click();
  await expect(page.getByLabel('Calories (kcal)')).toHaveValue('2250');
  await expect(page.getByLabel('Protein (g)')).toHaveValue('180');
