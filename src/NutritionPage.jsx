@@ -6,6 +6,7 @@ import {readOfflineState,writeOfflineState,upsertOfflineFirst,offlineUuid,syncOf
 import {NUTRITION_DEFAULTS,MEALS,dateKey,round1,nonnegative,multipliedNutrients,makeFoodEntry,makeWaterEntry,summarizeDay,nutrientSum,nutritionHistory,recipePerServing,foodForPortion,needsNutritionReview,broaderFoodSearch} from './nutritionModel';
 import {lookupFoodBarcode} from './nutritionCatalog';
 import {searchAllFoodCatalog,foodSourceLabel} from './nutritionMultiSearch';
+import {planFoodSearch} from '../supabase/functions/nutrition-search/foodSearchPlan.js';
 import './nutrition.css';
 
 const makeState=()=>({preferences:{...NUTRITION_DEFAULTS},foods:[],entries:[],water:[]});
@@ -87,6 +88,8 @@ export default function NutritionPage({session,onBack}){
   const [view,setView]=useState('log');
   const [search,setSearch]=useState('');
   const [results,setResults]=useState([]);
+  const [searchHealth,setSearchHealth]=useState(null);
+  const lastOfflineSave=useRef(false);
   const [searching,setSearching]=useState(false);
   const [selectedFood,setSelectedFood]=useState(null);
   const [selectedMeal,setSelectedMeal]=useState(()=>{
@@ -125,7 +128,7 @@ export default function NutritionPage({session,onBack}){
     try{const last=localStorage.getItem('workset:nutrition:meal:'+userId);
       setSelectedMeal(MEALS.includes(last)?last:'Breakfast')}catch{setSelectedMeal('Breakfast')}
     setLastLoggedMeal('');
-    setNotice('');setSelectedFood(null);setEditEntry(null);setResults([]);setResultsQuery('');
+    setNotice('');setSelectedFood(null);setEditEntry(null);setResults([]);setResultsQuery('');setSearchHealth(null);
   },[userId]);
   useEffect(()=>{
     if(!userId)return;
@@ -175,6 +178,7 @@ export default function NutritionPage({session,onBack}){
     const response=await upsertOfflineFirst(supabase,{userId,table,payload,onConflict:id,
       dedupeKey:'nutrition:'+table+':'+(payload.id||userId)});
     if(response.error){setNotice('Not saved: '+response.error.message);return false}
+    lastOfflineSave.current=Boolean(response.offline);
     if(activeUser.current!==userId)return false;
     setData(previous=>({...previous,
       [bucket]:bucket==='preferences'?payload:updated(previous[bucket],payload)
@@ -222,6 +226,21 @@ export default function NutritionPage({session,onBack}){
   const selectedTotals=selectedForLog&&Number.isFinite(Number(servings))&&Number(servings)>0&&Number(servings)<=1000?
     multipliedNutrients(selectedForLog,servings):null;
   const broaderQuery=broaderFoodSearch(search);
+  const searchPlan=planFoodSearch(resultsQuery||search);
+  const fatStatus=searchHealth?.fatsecret;
+  const fatSecretNotice=searchPlan.restaurant ? (
+    fatStatus==='authentication_failed'?'FatSecret authentication failed. Verify its credentials and allowed server IPs.':
+    fatStatus==='access_denied'?'FatSecret search access was denied. Check the account tier, scope, and IP allowlist.':
+    fatStatus==='network_error'?'FatSecret could not be reached from the server. Check server IP allowlisting and connectivity.':
+    fatStatus==='rate_limited'?'FatSecret search is temporarily rate-limited. Try again later.':
+    fatStatus==='not_configured'?'FatSecret restaurant search is not configured.':
+    fatStatus==='unavailable'?'FatSecret restaurant search is currently unavailable.':
+    fatStatus==='ok'&&results.length===0?'FatSecret responded, but no matching restaurant menu entries were found.':
+    searchHealth?.broadened&&results.length>0?'Showing '+searchPlan.restaurant+' restaurant entries. The specific menu item was not confirmed.':
+    ''
+  ):'';
+  const totalUsdaGrams=selectedForLog?.source==='usda'&&Number.isFinite(Number(servings))&&Number(servings)>0
+    ?Number(selectedForLog.serving_grams||0)*Number(servings):0;
   const selectFood=(food)=>{
     const token=++foodDetailsRequest.current;
     searchInputRef.current?.blur();
@@ -246,7 +265,7 @@ export default function NutritionPage({session,onBack}){
   const changeSearch=value=>{
     ++foodDetailsRequest.current;
     ++searchRequest.current; // invalidate any search that is still in flight
-    setSearch(value);setResults([]);setResultsQuery('');setSelectedFood(null);
+    setSearch(value);setResults([]);setResultsQuery('');setSearchHealth(null);setSelectedFood(null);
     setEditEntry(null);setVisibleResults(8);setSearching(false);setNotice('');
   };
   const addFood=async()=>{
@@ -260,6 +279,7 @@ export default function NutritionPage({session,onBack}){
         ++foodDetailsRequest.current;setVerifyingFood(false);
         setSelectedFood(null);setEditEntry(null);setServings('1');setView('log');
         setLastLoggedMeal(selectedMeal);
+        if(!lastOfflineSave.current)setNotice('');
         requestAnimationFrame(()=>diaryRef.current?.scrollIntoView({block:'start',behavior:'smooth'}));
       }
     }catch(error){setNotice(error.message)}finally{setBusy(false)}
@@ -294,14 +314,14 @@ export default function NutritionPage({session,onBack}){
   const startAnother=()=>{
     ++foodDetailsRequest.current;setVerifyingFood(false);
     setLastLoggedMeal('');setSelectedFood(null);setEditEntry(null);
-    setSearch('');setResults([]);setResultsQuery('');setView('search');
+    setSearch('');setResults([]);setResultsQuery('');setSearchHealth(null);setNotice('');setView('search');
   };
   const lookup=async(mode='search',override='')=>{
     if(searching)return;
     const token=++searchRequest.current;
     const term=String(override||search).trim();
     if(override)setSearch(term);
-    setResults([]);setResultsQuery('');setSelectedFood(null);setEditEntry(null);
+    setResults([]);setResultsQuery('');setSearchHealth(null);setSelectedFood(null);setEditEntry(null);
     setVisibleResults(8);setSearching(true);setNotice('');
     searchInputRef.current?.blur();
     try{
@@ -311,14 +331,15 @@ export default function NutritionPage({session,onBack}){
         setResults([found]);setResultsQuery('Barcode lookup');
         selectFood(found);setView('search');
       }else{
-        const found=await searchAllFoodCatalog(term,{supabaseClient:supabase});
+        const found=await searchAllFoodCatalog(term,{supabaseClient:supabase,
+          onDiagnostics:health=>{if(token===searchRequest.current)setSearchHealth(health)}});
         if(token!==searchRequest.current)return; // ignore stale responses
         setResults(found);setResultsQuery(term);
         if(found.length&&found[0].cached)setNotice('Showing previously found foods saved on this device. Verify package labels before logging.');
         else if(!found.length)setNotice('No closely matching foods found for "'+term+'". Try the restaurant name or food name separately, or enter a custom food.');
       }
     }catch(error){
-      if(token===searchRequest.current){setResults([]);setResultsQuery('');setNotice(error?.message||'Food search unavailable. Enter a custom food.')}
+      if(token===searchRequest.current){setResults([]);setResultsQuery('');setSearchHealth(null);setNotice(error?.message||'Food search unavailable. Enter a custom food.')}
     }finally{if(token===searchRequest.current)setSearching(false)}
   };
   const saveFavorite=async(food)=>{
@@ -455,7 +476,7 @@ export default function NutritionPage({session,onBack}){
 
     <div className="nutrition-tabs" role="group" aria-label="Nutrition tools">
       {[['log','Food diary'],['search','Add food'],['saved','Saved'],['recipe','Recipes'],['history','History'],['goals','Goals']].map(([key,label])=>
-        <button type="button" key={key} className={view===key?'active':''} aria-pressed={view===key} onClick={()=>setView(key)}>{label}</button>)}
+        <button type="button" key={key} className={view===key?'active':''} aria-pressed={view===key} onClick={()=>{setNotice('');setView(key)}}>{label}</button>)}
     </div>
     {notice&&<p className="nutrition-status" role="status">{notice}</p>}
 
@@ -475,7 +496,7 @@ export default function NutritionPage({session,onBack}){
         const items=dayFood.filter(row=>row.meal===meal);
         return <div className="nutrition-meal" key={meal}><div className="nutrition-card-heading"><h3>{meal}</h3>
           <div className="nutrition-meal-actions">{items.length>0&&<button type="button" onClick={()=>saveMeal(meal)}>Save meal</button>}
-          <button type="button" onClick={()=>{setSelectedMeal(meal);setLastLoggedMeal('');setSelectedFood(null);setView('search')}}>+ Add</button></div></div>
+          <button type="button" onClick={()=>{setSelectedMeal(meal);setLastLoggedMeal('');setSelectedFood(null);setNotice('');setView('search')}}>+ Add</button></div></div>
           {items.length?items.map(row=><div className="nutrition-entry" key={row.id}>
             <div><strong>{row.name}</strong><small>{fmt(row.quantity)} × {row.serving_label} · P {fmt(row.protein_g)} / C {fmt(row.carbs_g)} / F {fmt(row.fat_g)} g</small>
             {needsNutritionReview(row)&&<small className="nutrition-review-tag">⚠ Verify USDA nutrition</small>}</div>
@@ -521,6 +542,11 @@ export default function NutritionPage({session,onBack}){
           fmt(selectedTotals.calories)+' kcal · P '+fmt(selectedTotals.protein_g)+' / C '+fmt(selectedTotals.carbs_g)+' / F '+fmt(selectedTotals.fat_g)+' g':
           'Enter a valid portion and amount to see nutrition.'}</p>
         {selectedFood.incomplete&&<p className="nutrition-caution">Some nutrients are missing from the public food record. Verify the package label.</p>}
+        {selectedFood.source==='usda'&&totalUsdaGrams>0&&<p className="nutrition-weight-note">
+          {fmt(servings)} × {selectedForLog?.serving_label||selectedFood.serving_label} = {fmt(totalUsdaGrams)} g total.
+          {(selectedForLog?.serving_label||'').trim().toLowerCase()==='100 g'&&
+            ' This is a weight-based amount, not a count of minis, slices, or pieces.'}
+        </p>}
         {selectedFood.source==='usda'&&<label className="nutrition-portion-label">Serving size
           <select aria-label="Serving size" value={portionChoice} onChange={e=>setPortionChoice(e.target.value)}>
             <option value="default">{selectedFood.serving_label}</option>
@@ -560,6 +586,7 @@ export default function NutritionPage({session,onBack}){
           Search “{broaderQuery}”
         </button>
       </div>}
+            {!selectedFood&&fatSecretNotice&&<p className="nutrition-source-feedback" role="status">{fatSecretNotice}</p>}
             {results.length>0&&!selectedFood&&<div className="nutrition-results-block">
         <div className="nutrition-results-top"><strong>Results for "{resultsQuery||search}"</strong><small>{results.length} matches</small></div>
         <div className="nutrition-results" aria-label="Food results">
@@ -567,7 +594,7 @@ export default function NutritionPage({session,onBack}){
             <button type="button" key={(food.source||'')+':'+(food.source_id||food.name)+i}
               onClick={()=>selectFood(food)}>
               <strong>{food.name}</strong>
-              <small>{foodSourceLabel(food)}{food.brand?' · '+food.brand:''}{food.can_log===false?' · Preview only':' · '+fmt(food.calories)+' kcal / '+food.serving_label}{food.incomplete?' · Check nutrition label':''}</small>
+              <small>{foodSourceLabel(food)}{food.brand?' · '+food.brand:''}{food.can_log===false?' · Preview only':' · '+fmt(food.calories)+' kcal / '+food.serving_label}{food.source==='usda'&&food.serving_label?.trim().toLowerCase()==='100 g'?' (weight)':''}{food.incomplete?' · Check nutrition label':''}</small>
             </button>)}
         </div>
         {results.length>visibleResults&&<button type="button" className="nutrition-more-results"
