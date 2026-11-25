@@ -137,3 +137,10 @@
 .nutrition-meal-actions{display:flex;align-items:center;flex-wrap:wrap;gap:6px;justify-content:flex-end}
 .nutrition-meal-actions button:first-child:not(:last-child){background:#192c3b;color:#b8d0eb;border-color:#334a64}
 @media(max-width:360px){.nutrition-meal-actions button{padding:7px 8px;font-size:11px}}
+
+
+/* External food database previews are intentionally read-only. */
+.nutrition-provider-preview {gap:10px}
+.nutrition-provider-preview a {color:#a3d6ff;font-size:12px;font-weight:800;word-break:break-word}
+.nutrition-provider-preview>button {align-self:start;border:1px solid #37536b;color:#d5e6f8;background:#17273b;border-radius:10px;padding:10px 14px;font-weight:800}
+.nutrition-results button small {line-height:1.5}
