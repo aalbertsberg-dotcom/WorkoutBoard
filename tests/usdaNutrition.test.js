@@ -64,3 +64,12 @@ test('Historic contradictory USDA entries are flagged without changing their val
  assert.equal(needsNutritionReview({source:'usda',calories:286,protein_g:26,carbs_g:2,fat_g:20}),false);
  assert.equal(needsNutritionReview({source:'manual',calories:1026,protein_g:26,carbs_g:2,fat_g:20}),false);
 });
+
+
+test('Alternative Atwater kcal nutrient overrides contradictory generic energy',()=>{
+ const p=egg(513,'KCAL');
+ p.foodNutrients.push({nutrientId:2047,unitName:'KCAL',value:143});
+ const normalized=normalizeUsdaSearchFood(p);
+ assert.equal(normalized.can_log,true);
+ assert.equal(normalized.calories,143);
+});
