@@ -1096,6 +1096,7 @@ function AuthScreen() {
         )}
 
         {message && <div className="auth-message">{message}</div>}
+        <p className="auth-provider-attribution"><a href="https://platform.fatsecret.com">Powered by fatsecret Platform API</a></p>
       </section>
     </main>
   )

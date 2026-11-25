@@ -4,7 +4,8 @@ import {supabase} from './supabase';
 import {confirmWorkset,promptWorkset} from './worksetDialogs';
 import {readOfflineState,writeOfflineState,upsertOfflineFirst,offlineUuid,syncOfflineQueue,getPendingOfflineCount,isOnline} from './offline';
 import {NUTRITION_DEFAULTS,MEALS,dateKey,round1,nonnegative,multipliedNutrients,makeFoodEntry,makeWaterEntry,summarizeDay,nutrientSum,nutritionHistory,recipePerServing} from './nutritionModel';
-import {searchFoodCatalog,lookupFoodBarcode} from './nutritionCatalog';
+import {lookupFoodBarcode} from './nutritionCatalog';
+import {searchAllFoodCatalog,foodSourceLabel} from './nutritionMultiSearch';
 import './nutrition.css';
 
 const makeState=()=>({preferences:{...NUTRITION_DEFAULTS},foods:[],entries:[],water:[]});
@@ -182,7 +183,7 @@ export default function NutritionPage({session,onBack}){
   const avg=rows=>rows.length?Math.round(rows.reduce((s,r)=>s+r.calories,0)/rows.length):0;
   const selectFood=(food)=>{setSelectedFood(food);setEditEntry(null);setServings('1');setNotice('');};
   const addFood=async()=>{
-    if(!selectedFood||busy)return;
+    if(!selectedFood||selectedFood.can_log===false||busy)return;
     setBusy(true);
     try{
       const row=makeFoodEntry(selectedFood,{id:editEntry?.id||offlineUuid(),userId,date,
@@ -227,15 +228,15 @@ export default function NutritionPage({session,onBack}){
         const found=await lookupFoodBarcode(barcode);
         setResults([found]);selectFood(found);setView('search');
       }else{
-        const found=await searchFoodCatalog(search);setResults(found);
+        const found=await searchAllFoodCatalog(search,{supabaseClient:supabase,onResults:setResults});setResults(found);
         if(found.length&&found[0].cached)setNotice('Showing previously found foods saved on this device. Verify package labels before logging.');
-        else if(!found.length)setNotice('No matching packaged foods found. Try a simpler name, scan a barcode, or enter a custom food. Restaurant meals may not be listed.');
+        else if(!found.length)setNotice('No matching foods found. Try a different name, a barcode, or create a custom food.');
       }
     }catch(error){setResults([]);setNotice(error?.message||'Food search unavailable. Enter a custom food.')}
     finally{setSearching(false)}
   };
   const saveFavorite=async(food)=>{
-    if(!food||!food.name)return;
+    if(!food||!food.name||food.can_log===false)return;
     const previous=data.foods.find(row=>!row.deleted_at&&row.name===food.name&&row.brand===(food.brand||'')&&
       row.source===String(food.source||'manual')&&row.source_id===String(food.source_id||''));
     if(previous){setNotice('This food is already in your favorites.');return}
@@ -383,7 +384,7 @@ export default function NutritionPage({session,onBack}){
     </section>}
 
     {view==='search'&&<section className="nutrition-tool-card">
-      <h3>Search food or scan a barcode</h3><p className="nutrition-help">Search packaged foods, choose servings, and log them. You can always enter a custom item.</p>
+      <h3>Find food or scan a barcode</h3><p className="nutrition-help">Search common foods, USDA branded items, packaged foods and restaurant references. USDA and Open Food Facts results can be logged; FatSecret results are previews only under its standard data-use terms.</p>
       <form className="nutrition-search" onSubmit={e=>{e.preventDefault();lookup()}}>
         <input type="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search food or brand" aria-label="Food search"/>
         <button type="submit" className="primary-action" disabled={searching}>{searching?'Searching…':'Search'}</button>
@@ -395,13 +396,21 @@ export default function NutritionPage({session,onBack}){
       {scanning&&<div className="nutrition-camera"><video ref={videoRef} autoPlay playsInline muted/><small>Center a product barcode in the camera. No photos are saved.</small></div>}
       {results.length>0&&<div className="nutrition-results" aria-label="Food results">{results.map((food,i)=>
         <button type="button" key={(food.source_id||food.name)+i} onClick={()=>selectFood(food)} className={selectedFood===food?'selected':''}>
-          <strong>{food.name}</strong><small>{food.brand||food.serving_label} · {fmt(food.calories)} kcal / {food.serving_label}{food.incomplete?' · Check nutrition label':''}</small>
+          <strong>{food.name}</strong><small>{foodSourceLabel(food)}{food.brand?' · '+food.brand:''}{food.can_log===false?' · Preview only':' · '+fmt(food.calories)+' kcal / '+food.serving_label}{food.incomplete?' · Check nutrition label':''}</small>
         </button>)}</div>}
+      {results.some(food=>food.source==='fatsecret')&&
+        <p className="nutrition-provider-attribution"><a href="https://platform.fatsecret.com">Powered by fatsecret Platform API</a></p>}
       <div className="nutrition-suggestions"><span>Recently logged</span><div>{recentFoods.map((food,i)=>
         <button type="button" key={i} onClick={()=>selectFood(food)}>{food.name}</button>)}</div></div>
       <div className="nutrition-suggestions"><span>Saved foods</span><div>{favoriteFoods.slice(0,12).map(food=>
         <button type="button" key={food.id} onClick={()=>selectFood(food)}>{food.name}</button>)}</div></div>
-      {selectedFood&&<div className="nutrition-selection">
+      {selectedFood?.can_log===false?<div className="nutrition-selection nutrition-provider-preview">
+        <h4>{selectedFood.name}{selectedFood.brand?' · '+selectedFood.brand:''}</h4>
+        <p>{selectedFood.description||'Nutrition reference from FatSecret.'}</p>
+        <p className="nutrition-caution">FatSecret does not allow indefinite storage of these nutrient values under its standard API terms. This preview is not added to your diary. You can search for a USDA equivalent or enter your own custom food.</p>
+        {selectedFood.source_url&&<a href={selectedFood.source_url} target="_blank" rel="noopener noreferrer">View on FatSecret</a>}
+        <button type="button" onClick={()=>setSelectedFood(null)}>Close preview</button>
+      </div>:selectedFood&&<div className="nutrition-selection">
         <h4>{editEntry?'Edit food entry':'Log '+selectedFood.name}</h4>
         <p>{selectedFood.serving_label} · {fmt(selectedFood.calories)} kcal · P {fmt(selectedFood.protein_g)} / C {fmt(selectedFood.carbs_g)} / F {fmt(selectedFood.fat_g)} g</p>
         {selectedFood.incomplete&&<p className="nutrition-caution">Some nutrients are missing from the public food record. Verify the package label.</p>}
