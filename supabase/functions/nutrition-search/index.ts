@@ -5,7 +5,7 @@
 // results returned here are live SEARCH PREVIEWS only and must not be saved to the diary.
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import { normalizeUsdaSearchFood } from "./usdaNutrition.js";
-import { planFoodSearch, restaurantMatches } from "./foodSearchPlan.js";
+import { planFoodSearch, restaurantMatches, restaurantItemMatches } from "./foodSearchPlan.js";
 
 const allowedOrigins = new Set([
   "https://aalbertsberg-dotcom.github.io",
@@ -53,15 +53,13 @@ const queryUsda = async (term: string) => {
   const key = Deno.env.get("WORKSET_USDA_API_KEY");
   if (!key) return { status: "not_configured", foods: [] };
   const plan = planFoodSearch(term);
-  const fetchUsda = async (query: string, onlyCommon: boolean) => {
+  const fetchUsda = async (query: string, commonOnly: boolean) => {
     const url = new URL("https://api.nal.usda.gov/fdc/v1/foods/search");
     url.searchParams.set("api_key", key);
     const body: Record<string, unknown> = {
-      query,
-      pageSize: query === "egg, whole, raw" ? 35 : 60,
-      pageNumber: 1,
+      query, pageSize: 60, pageNumber: 1,
     };
-    if (onlyCommon) body.dataType = ["Foundation","SR Legacy","Survey (FNDDS)"];
+    if (commonOnly) body.dataType = ["Foundation", "SR Legacy", "Survey (FNDDS)"];
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Accept": "application/json" },
@@ -73,38 +71,26 @@ const queryUsda = async (term: string) => {
     if (!Array.isArray(data?.foods)) throw Error("USDA response invalid");
     return data.foods.map(normalizeUsdaSearchFood).filter(Boolean);
   };
-  const queries = plan.usdaQueries;
   const merge = (batches: any[][]) => {
     const seen = new Set<string>();
-    const merged: any[] = [];
-    for (const batch of batches) {
-      for (const food of batch) {
-        const id = String(food.source_id || food.name + "|" + food.brand);
-        if (seen.has(id)) continue;
-        seen.add(id);
-        merged.push(food);
-      }
+    const result: any[] = [];
+    for (const batch of batches) for (const food of batch) {
+      const id = String(food.source_id || food.name + "|" + food.brand);
+      if (seen.has(id)) continue;
+      seen.add(id); result.push(food);
     }
-    return merged.slice(0, 75);
+    return result.slice(0, 100);
   };
-  // "egg" and "eggs" deliberately use the SAME pair of queries. USDA's
-  // first generic results can contain mostly burritos and omelets, while
-  // a targeted raw-whole-egg request finds plain egg entries.
-  const checked = await Promise.allSettled(queries.map(query => fetchUsda(query,plan.common)));
-  const batches = checked.filter((result): result is PromiseFulfilledResult<any[]> =>
-    result.status === "fulfilled").map(result => result.value);
-  let foods = merge(batches);
-  if (!foods.length && plan.common) {
-    // Some records are available only in Branded; preserve this fallback.
-    const fallback = await Promise.allSettled(queries.map(query => fetchUsda(query,false)));
-    const fallbackBatches = fallback.filter((result): result is PromiseFulfilledResult<any[]> =>
-      result.status === "fulfilled").map(result => result.value);
-    if (fallbackBatches.length) foods = merge(fallbackBatches);
-    else if (!batches.length) throw (fallback[0] as PromiseRejectedResult).reason;
-  } else if (!batches.length) {
-    throw (checked[0] as PromiseRejectedResult).reason;
-  }
-  return { status: "ok", foods };
+  // Search both a canonical ingredient phrase and its raw-food variation.
+  // Also fetch branded USDA matches, regardless of whether generic matches
+  // exist, so relevant packaged results are not silently hidden.
+  const calls = plan.usdaQueries.map(query=>fetchUsda(query,plan.common));
+  if (plan.common) calls.push(fetchUsda(plan.normalized,false));
+  const attempts = await Promise.allSettled(calls);
+  const batches = attempts.filter((x): x is PromiseFulfilledResult<any[]> =>
+    x.status === "fulfilled").map(x=>x.value);
+  if (!batches.length) throw (attempts[0] as PromiseRejectedResult).reason;
+  return { status: "ok", foods: merge(batches) };
 };
 
 const queryUsdaDetails = async (fdcId: string) => {
@@ -151,51 +137,50 @@ const queryFatSecret = async (term: string) => {
   if (!token) return { status: "not_configured", foods: [] };
   const plan = planFoodSearch(term);
   const request = async (query: string) => {
-    // Basic OAuth supports foods.search; newer food search versions
-    // require premier scope not guaranteed by a Basic account.
-    const body = new URLSearchParams({
-      method: "foods.search",
-      search_expression: query,
-      max_results: "40",
-      format: "json",
+    // Official basic-tier v1 GET endpoint; higher search versions require Premier.
+    const url = new URL("https://platform.fatsecret.com/rest/foods/search/v1");
+    url.searchParams.set("search_expression",query);
+    url.searchParams.set("max_results","50");
+    url.searchParams.set("format","json");
+    const response = await fetch(url,{
+      method:"GET",
+      headers: { "Authorization": "Bearer " + token, "Accept": "application/json" },
+      signal:AbortSignal.timeout(8500),
     });
-    const response = await fetch("https://platform.fatsecret.com/rest/server.api", {
-      method: "POST",
-      headers: {
-        "Authorization": "Bearer " + token,
-        "Accept": "application/json",
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: body.toString(),
-      signal: AbortSignal.timeout(8500),
-    });
-    if (!response.ok) throw Error("FatSecret HTTP " + response.status);
-    const data = await response.json();
-    if (data?.error) {
-      const code = Number(data.error?.code || 0);
-      if (code === 13 || code === 14) throw Error("FatSecret authentication/access " + code);
-      throw Error("FatSecret API error");
+    if(!response.ok)throw Error("FatSecret HTTP "+response.status);
+    const data=await response.json();
+    if(data?.error){
+      const code=Number(data.error?.code||0);
+      if(code===13||code===14)throw Error("FatSecret authentication/access "+code);
+      throw Error("FatSecret API unavailable");
     }
-    let items = data?.foods?.food ?? [];
-    if (!Array.isArray(items)) items = [items];
-    return items.filter((f: any) => f?.food_id).map((f: any) => ({
-      name: cap(f.food_name), brand: cap(f.brand_name,120),
-      source: "fatsecret", source_id: cap(f.food_id,100),
-      serving_label: "", description: cap(f.food_description,250),
-      source_url: String(f.food_url??"").startsWith("https://foods.fatsecret.com/")
-        ?cap(f.food_url,400):"",
-      can_log: false,
+    let items=data?.foods?.food||[];
+    if(!Array.isArray(items))items=[items];
+    return items.filter((food: any)=>food?.food_id).map((food: any)=>({
+      name:cap(food.food_name),brand:cap(food.brand_name,120),
+      source:"fatsecret",source_id:cap(food.food_id,100),
+      serving_label:"",description:cap(food.food_description,250),
+      source_url:String(food.food_url||"").startsWith("https://foods.fatsecret.com/")
+        ?cap(food.food_url,400):"",
+      can_log:false,
     }));
   };
-  const broad = plan.restaurant || term;
-  const detailed = plan.restaurant && plan.itemTerms.length
-    ? plan.restaurant + " " + plan.itemTerms.join(" ") : broad;
-  let foods = await request(detailed);
-  if (plan.restaurant) foods = foods.filter((food: any) => restaurantMatches(food,plan));
-  if (plan.restaurant && plan.itemTerms.length && !foods.length) {
-    foods = (await request(broad)).filter((food: any) => restaurantMatches(food,plan));
+  // First try the requested menu item. Fall back to a restaurant-wide query
+  // only to find actual matching items; never return unrelated restaurant food.
+  const queries=plan.restaurant&&plan.itemTerms.length
+    ?[plan.providerQuery,plan.restaurant]:[plan.providerQuery];
+  const seen=new Set<string>();
+  const matches=[];
+  for(const query of queries){
+    const products=await request(query);
+    for(const food of products){
+      if(plan.restaurant&&!restaurantItemMatches(food,plan))continue;
+      if(seen.has(food.source_id))continue;
+      seen.add(food.source_id);matches.push(food);
+    }
+    if(matches.length)break;
   }
-  return { status: "ok", foods };
+  return {status:"ok",foods:matches};
 };
 const providerFailure = (error: unknown): "authentication_failed" | "access_denied" |
     "rate_limited" | "network_error" | "unavailable" => {
