@@ -24,7 +24,7 @@ test('multi-source search returns USDA entries when packaged lookup errors',asyn
  assert.deepEqual(replies.at(-1),['usda','fatsecret']);
 });
 test('USDA function not configured still falls back to Open Food Facts',async()=>{
- const foods=await searchAllFoodCatalog('oats',{
+ const foods=await searchAllFoodCatalog('chicken',{
   supabaseClient:{functions:{invoke:async()=>({data:{usda:[],fatsecret:[],
     providers:{usda:'not_configured',fatsecret:'not_configured'}},error:null})}},
   searchPackaged:async()=>[open]
@@ -32,7 +32,7 @@ test('USDA function not configured still falls back to Open Food Facts',async()=
  assert.deepEqual(foods,[open]);
 });
 test('FatSecret previews can never masquerade as loggable foods from backend',async()=>{
- const foods=await searchAllFoodCatalog('taco',{
+ const foods=await searchAllFoodCatalog('chicken',{
   supabaseClient:{functions:{invoke:async()=>({data:{usda:[],fatsecret:[
     {...fat,can_log:true},
     {...fat,source_id:'790',can_log:false}
@@ -47,4 +47,40 @@ test('network failures across all providers result in error and preserve saved f
   supabaseClient:{functions:{invoke:async()=>{throw Error('Offline')}}},
   searchPackaged:async()=>{throw Error('No connection')}
  }),/Offline|No connection/);
+});
+
+test('Marco’s Pizza excludes Pizza Hut, dessert pizza, and unrelated Marco cheese',()=>{
+ const records=mergeFoodResults({
+   usda:[
+     {name:'PIZZA HUT 12-inch Pepperoni Pizza',brand:'',source:'usda'},
+     {name:'Dessert pizza',brand:'',source:'usda'},
+     {name:'Marco’s Pizza, Pepperoni',brand:'',source:'usda'}
+   ],
+   openfoodfacts:[{name:'Marco Polo Handmade Cheese',brand:'',source:'openfoodfacts'}],
+   fatsecret:[{name:'Pepperoni Magnifico',brand:'Marco’s Pizza',source:'fatsecret',source_id:'98',can_log:false}]
+ },"Marco's Pizza");
+ assert.equal(records.length,2);
+ assert.deepEqual(records.map(x=>x.source),['fatsecret','usda']);
+ assert.ok(records.some(x=>x.name==='Marco’s Pizza, Pepperoni'));
+ assert.equal(records[0].brand,'Marco’s Pizza');
+});
+test('Chicken breast matches relevant cuts only, burger still matches cheeseburger',()=>{
+ const records=mergeFoodResults({usda:[
+   {name:'Chicken breast',source:'usda'},
+   {name:'Chicken sausage',source:'usda'},
+   {name:'Breaded chicken breast',source:'usda'}
+ ]},'chicken breast');
+ assert.equal(records.length,2);
+ assert.equal(mergeFoodResults({fatsecret:[{...fat,name:'Cheeseburger'}]},'burger').length,1);
+});
+test('Two providers publish once after both finish, avoiding reordered cards',async()=>{
+ const notifications=[];
+ const foods=await searchAllFoodCatalog('chicken',{
+   supabaseClient:{functions:{invoke:async()=>({data:{usda:[usda],fatsecret:[],
+     providers:{usda:'ok',fatsecret:'not_configured'}},error:null})}},
+   searchPackaged:async()=>[open],
+   onResults:value=>notifications.push(value)
+ });
+ assert.equal(notifications.length,1);
+ assert.deepEqual(notifications[0],foods);
 });
