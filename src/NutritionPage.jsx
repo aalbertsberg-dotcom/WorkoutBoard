@@ -737,14 +737,88 @@ export default function NutritionPage({session,onBack,initialView='log'}){
       <p className="nutrition-help">Days without entries count as zero in these averages. Select a date to review or edit its logs.</p>
     </section>}
 
-    {view==='goals'&&<section className="nutrition-tool-card"><h3>Your daily goals</h3>
-      <p className="nutrition-help">These are editable starting values, not medical recommendations. Choose Calories or Macros above at any time.</p>
+    {view==='goals'&&<section ref={goalsSectionRef} className="nutrition-tool-card nutrition-goals-page">
+      <h3>Nutrition goals</h3>
+      <p className="nutrition-help">Your numbers are yours to change. The 2,000 kcal starting goal is only a placeholder, not a personal recommendation.</p>
+      <div className="nutrition-estimate-panel">
+        <div className="nutrition-estimate-heading">
+          <strong>Optional calorie & macro calculator</strong>
+          <small>Mifflin-St Jeor estimate for adults — no goals change automatically.</small>
+        </div>
+        <div className="nutrition-estimate-grid">
+          <label>Height — feet
+            <input aria-label="Height feet" type="number" min="3" max="8" inputMode="numeric"
+              value={heightEntry.feet} onChange={e=>{setHeightEntry(old=>({...old,feet:e.target.value}));setEstimatePreview(null)}}/>
+          </label>
+          <label>Height — inches
+            <input aria-label="Height inches" type="number" min="0" max="11.9" step="0.1" inputMode="decimal"
+              value={heightEntry.inches} onChange={e=>{setHeightEntry(old=>({...old,inches:e.target.value}));setEstimatePreview(null)}}/>
+          </label>
+          <label>Age (years)
+            <input aria-label="Age years" type="number" min="18" max="100" inputMode="numeric"
+              value={goals.age_years??''}
+              onChange={e=>{setGoals(old=>({...old,age_years:e.target.value}));setEstimatePreview(null)}}/>
+          </label>
+          <label>Equation option
+            <select aria-label="Equation option" value={goals.sex_for_estimate??''}
+              onChange={e=>{setGoals(old=>({...old,sex_for_estimate:e.target.value||null}));setEstimatePreview(null)}}>
+              <option value="">Choose</option>
+              <option value="male">Male equation (+5)</option>
+              <option value="female">Female equation (−161)</option>
+            </select>
+          </label>
+          <label>Weight for estimate (lb)
+            <input aria-label="Weight for estimate pounds" type="number" min="45" max="800" inputMode="decimal"
+              value={weightForEstimate} placeholder={trackedWeight?String(trackedWeight.value):'e.g. 180'}
+              onChange={e=>{setWeightForEstimate(e.target.value);setEstimatePreview(null)}}/>
+          </label>
+          <label>Activity level
+            <select aria-label="Activity level" value={goals.activity_level||'light'}
+              onChange={e=>{setGoals(old=>({...old,activity_level:e.target.value}));setEstimatePreview(null)}}>
+              {Object.entries(ACTIVITY_LABELS).map(([key,label])=><option key={key} value={key}>{label}</option>)}
+            </select>
+          </label>
+          <label>Weight goal
+            <select aria-label="Weight goal" value={goals.weight_goal||'maintain'}
+              onChange={e=>{setGoals(old=>({...old,weight_goal:e.target.value}));setEstimatePreview(null)}}>
+              {Object.entries(WEIGHT_GOALS).map(([key,label])=><option key={key} value={key}>{label}</option>)}
+            </select>
+          </label>
+        </div>
+        {trackedWeight&&<p className="nutrition-weight-source">
+          Most recent WorkSet bodyweight: <strong>{fmt(trackedWeight.value)} lb</strong>
+          {trackedWeight.date?' · '+trackedWeight.date:''}.
+          {weightForEstimate===''?' Used automatically for estimates.':' Manual weight overrides it.'}
+          {weightForEstimate!==''&&<button type="button" onClick={()=>{setWeightForEstimate('');setEstimatePreview(null)}}>Use tracked weight</button>}
+        </p>}
+        {!trackedWeight&&<p className="nutrition-weight-source">No tracked bodyweight found. Enter weight above or add it under Me → Measurements.</p>}
+        <button type="button" className="secondary-action" onClick={previewEstimate}>Calculate suggested goals</button>
+        {estimateError&&<p role="status" className="nutrition-estimate-error">{estimateError}</p>}
+        {estimatePreview&&<div className="nutrition-estimate-preview" aria-label="Suggested nutrition targets">
+          <strong>Suggested daily targets</strong>
+          <div className="nutrition-estimate-numbers">
+            <span><b>{fmt(estimatePreview.calorie_goal)}</b> kcal</span>
+            <span><b>{fmt(estimatePreview.protein_goal)} g</b> protein</span>
+            <span><b>{fmt(estimatePreview.carbs_goal)} g</b> carbs</span>
+            <span><b>{fmt(estimatePreview.fat_goal)} g</b> fat</span>
+          </div>
+          <small>Estimated resting needs: {fmt(estimatePreview.resting_kcal)} kcal · Maintenance: {fmt(estimatePreview.maintenance_kcal)} kcal/day. Actual needs vary.</small>
+          <button type="button" className="primary-action" onClick={()=>{
+            setGoals(old=>({...old,...Object.fromEntries(
+              ['calorie_goal','protein_goal','carbs_goal','fat_goal'].map(key=>[key,estimatePreview[key]])),
+              goal_source:'estimate'}));
+            setEstimateError('Suggested targets filled in below. Tap Save daily goals to keep them.');
+          }}>Use suggested targets</button>
+        </div>}
+        <p className="nutrition-help">Estimates depend on your chosen activity level and equation. For different physiology, pregnancy, medical needs or under age 18, use manual targets or professional guidance.</p>
+      </div>
+      <h4>Editable daily targets</h4>
       <div className="nutrition-goal-fields">{[['calorie_goal','Calories (kcal)'],['protein_goal','Protein (g)'],
         ['carbs_goal','Carbs (g)'],['fat_goal','Fat (g)'],['water_goal_oz','Water (oz)']].map(([key,label])=>
         <label key={key}>{label}<input type="number" inputMode="decimal" min="0" max="20000" step="0.1"
-          value={goals[key]??''} onChange={e=>setGoals(current=>({...current,[key]:e.target.value}))}/></label>)}</div>
-      <button type="button" className="primary-action" onClick={()=>savePreferences(goals)}>Save daily goals</button>
-      <p className="nutrition-help">Your nutrition and hydration records are private, included in your account backup, and synced when online.</p>
+          value={goals[key]??''} onChange={e=>setGoals(current=>({...current,[key]:e.target.value,goal_source:'manual'}))}/></label>)}</div>
+      <button type="button" className="primary-action" onClick={()=>savePreferences(goals,true)}>Save daily goals & profile</button>
+      <p className="nutrition-help">Profile details are optional and only visible in your account. Goals, food entries and hydration sync as before.</p>
     </section>}
   </section>;
 }
