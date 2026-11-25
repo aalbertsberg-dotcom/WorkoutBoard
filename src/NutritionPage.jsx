@@ -1,0 +1,464 @@
+import {useEffect,useMemo,useRef,useState} from 'react';
+import {BarcodeDetector as BarcodeDetectorPonyfill} from 'barcode-detector/ponyfill';
+import {supabase} from './supabase';
+import {readOfflineState,writeOfflineState,upsertOfflineFirst,offlineUuid,syncOfflineQueue,getPendingOfflineCount,isOnline} from './offline';
+import {NUTRITION_DEFAULTS,MEALS,dateKey,round1,nonnegative,multipliedNutrients,makeFoodEntry,makeWaterEntry,summarizeDay,nutritionHistory,recipePerServing} from './nutritionModel';
+import {searchFoodCatalog,lookupFoodBarcode} from './nutritionCatalog';
+import './nutrition.css';
+
+const makeState=()=>({preferences:{...NUTRITION_DEFAULTS},foods:[],entries:[],water:[]});
+const CACHE_KEY='nutrition-hydration-v1';
+const buckets={preferences:'preferences',foods:'foods',entries:'entries',water:'water'};
+const tables={preferences:'nutrition_preferences',foods:'nutrition_foods',entries:'nutrition_entries',water:'hydration_entries'};
+const fmt=value=>round1(value).toLocaleString(undefined,{maximumFractionDigits:1});
+const validNumber=(value,max=100000)=>Number.isFinite(Number(value))&&Number(value)>=0&&Number(value)<=max;
+const dayShift=(date,days)=>{const d=new Date(date+'T12:00:00');d.setDate(d.getDate()+days);return dateKey(d)};
+const cacheFor=id=>id?{...makeState(),...(readOfflineState(id,CACHE_KEY)||{})}:makeState();
+const updated=(rows,row)=>[row,...(rows||[]).filter(item=>item.id!==row.id)];
+const emptyFields=()=>({name:'',brand:'',serving_label:'1 serving',calories:'',protein_g:'',carbs_g:'',fat_g:''});
+const cleanFood=(food,userId,id=offlineUuid())=>({
+  id,user_id:userId,name:String(food.name||'').trim().slice(0,180),brand:String(food.brand||'').slice(0,120),
+  serving_label:String(food.serving_label||'1 serving').slice(0,120),serving_grams:food.serving_grams||null,
+  barcode:String(food.barcode||''),source:String(food.source||'manual').slice(0,36),
+  source_id:String(food.source_id||'').slice(0,100),
+  calories:round1(food.calories),protein_g:round1(food.protein_g),carbs_g:round1(food.carbs_g),fat_g:round1(food.fat_g),
+  is_recipe:Boolean(food.is_recipe),is_favorite:true,ingredients:food.ingredients||[],
+  deleted_at:null,created_at:new Date().toISOString(),updated_at:new Date().toISOString()
+});
+const asFood=row=>({...row,...Object.fromEntries(['calories','protein_g','carbs_g','fat_g'].map(field=>[field,round1(nonnegative(row[field])/Math.max(0.001,Number(row.quantity)||1))]))});
+const validCustom=fields=>String(fields.name||'').trim()&&['calories','protein_g','carbs_g','fat_g'].every(key=>validNumber(fields[key],50000));
+
+function ProgressMetric({label,value,goal,unit='',primary=false}){
+  const limit=Math.max(0,Number(goal)||0);
+  const pct=limit>0?Math.min(100,Math.round(nonnegative(value)/limit*100)):0;
+  return <div className={'nutrient-meter '+(primary?'primary':'')}>
+    <div className="nutrient-meter-label"><span>{label}</span><strong>{fmt(value)} <small>/ {fmt(goal)}{unit?' '+unit:''}</small></strong></div>
+    <div className="nutrient-meter-track" role="progressbar" aria-label={label} aria-valuemin="0" aria-valuemax={Math.max(1,limit)} aria-valuenow={Math.min(nonnegative(value),Math.max(1,limit))}>
+      <div style={{width:pct+'%'}}/>
+    </div>
+  </div>;
+}
+export function NutritionTodayCard({session,onOpen}){
+  const userId=session?.user?.id;
+  const [today,setToday]=useState(()=>summarizeDay(cacheFor(userId).entries,cacheFor(userId).water));
+  const [prefs,setPrefs]=useState(()=>cacheFor(userId).preferences);
+  useEffect(()=>{
+    const refresh=()=>{
+      const data=cacheFor(userId);
+      setToday(summarizeDay(data.entries,data.water));
+      setPrefs(data.preferences||NUTRITION_DEFAULTS);
+    };
+    refresh();
+    window.addEventListener('workset:nutrition-change',refresh);
+    return ()=>window.removeEventListener('workset:nutrition-change',refresh);
+  },[userId]);
+  if(!userId)return null;
+  const mode=prefs.mode||'calories';
+  return <button type="button" className="nutrition-today-card" onClick={onOpen}>
+    <span className="nutrition-today-copy"><small>NUTRITION & HYDRATION</small><strong>Food & water</strong>
+      <span>{mode==='macros'?'Protein '+fmt(today.protein_g)+' g · Carbs '+fmt(today.carbs_g)+' g · Fat '+fmt(today.fat_g)+' g'
+        :fmt(today.calories)+' / '+fmt(prefs.calorie_goal)+' kcal'}<br/>Water {fmt(today.water_oz)} / {fmt(prefs.water_goal_oz)} oz</span>
+    </span><span className="nutrition-card-chevron" aria-hidden="true">›</span>
+  </button>;
+}
+async function readAll(table,userId,order){
+  const rows=[];
+  for(let offset=0;offset<10000;offset+=500){
+    const reply=await supabase.from(table).select('*').eq('user_id',userId)
+      .order(order,{ascending:false}).range(offset,offset+499);
+    if(reply.error)throw reply.error;
+    rows.push(...(reply.data||[]));
+    if((reply.data||[]).length<500)return rows;
+  }
+  throw new Error('Food history is too large to load in one view. Contact support.');
+}
+
+export default function NutritionPage({session,onBack}){
+  const userId=session?.user?.id||null;
+  const activeUser=useRef(userId);activeUser.current=userId;
+  const [data,setData]=useState(()=>cacheFor(userId));
+  const [goals,setGoals]=useState(()=>({...cacheFor(userId).preferences}));
+  const [date,setDate]=useState(()=>dateKey());
+  const [notice,setNotice]=useState('');
+  const [busy,setBusy]=useState(false);
+  const [loading,setLoading]=useState(false);
+  const [view,setView]=useState('log');
+  const [search,setSearch]=useState('');
+  const [results,setResults]=useState([]);
+  const [searching,setSearching]=useState(false);
+  const [selectedFood,setSelectedFood]=useState(null);
+  const [selectedMeal,setSelectedMeal]=useState('Breakfast');
+  const [servings,setServings]=useState('1');
+  const [editEntry,setEditEntry]=useState(null);
+  const [waterAmount,setWaterAmount]=useState('');
+  const [editingWater,setEditingWater]=useState(null);
+  const [barcode,setBarcode]=useState('');
+  const [scanning,setScanning]=useState(false);
+  const [custom,setCustom]=useState(emptyFields);
+  const [recipeName,setRecipeName]=useState('');
+  const [recipeServings,setRecipeServings]=useState('1');
+  const [recipeIngredients,setRecipeIngredients]=useState([]);
+  const [ingredient,setIngredient]=useState(emptyFields);
+  const [ingredientQty,setIngredientQty]=useState('1');
+  const videoRef=useRef(null);
+  const newest=useRef(0);
+
+  useEffect(()=>{
+    const cached=cacheFor(userId);setData(cached);setGoals({...cached.preferences});
+    setNotice('');setSelectedFood(null);setEditEntry(null);setResults([]);
+  },[userId]);
+  useEffect(()=>{
+    if(!userId)return;
+    writeOfflineState(userId,CACHE_KEY,data);
+    try{window.dispatchEvent(new Event('workset:nutrition-change'))}catch{}
+  },[data,userId]);
+  useEffect(()=>{
+    if(!userId)return;
+    let cancelled=false;
+    const sync=async()=>{
+      if(!isOnline()||activeUser.current!==userId)return;
+      const sequence=++newest.current;
+      setLoading(true);
+      try{
+        if(getPendingOfflineCount(userId)>0){
+          const flushed=await syncOfflineQueue(supabase,userId);
+          if(flushed.pending>0)throw new Error('Some offline entries are still waiting to sync.');
+        }
+        const [prefs,foods,entries,water]=await Promise.all([
+          supabase.from(tables.preferences).select('*').eq('user_id',userId).maybeSingle(),
+          readAll(tables.foods,userId,'updated_at'),
+          readAll(tables.entries,userId,'entry_date'),
+          readAll(tables.water,userId,'entry_date')
+        ]);
+        if(prefs.error)throw prefs.error;
+        if(cancelled||sequence!==newest.current||activeUser.current!==userId)return;
+        const merged={preferences:prefs.data||{...NUTRITION_DEFAULTS},
+          foods,entries,water};
+        setData(merged);setGoals({...merged.preferences});
+        setNotice('');
+      }catch(error){
+        if(!cancelled&&activeUser.current===userId)
+          setNotice('Saved records remain on this device. '+(error?.message||'Could not refresh right now.'));
+      }finally{if(!cancelled&&activeUser.current===userId)setLoading(false)}
+    };
+    sync();
+    window.addEventListener('online',sync);
+    window.addEventListener('workset:offline-synced',sync);
+    return ()=>{cancelled=true;window.removeEventListener('online',sync);
+      window.removeEventListener('workset:offline-synced',sync)};
+  },[userId]);
+
+  const save=async(bucket,row)=>{
+    if(!userId)return false;
+    const table=tables[bucket],id=bucket==='preferences'?'user_id':'id';
+    const payload={...row,user_id:userId,updated_at:new Date().toISOString()};
+    const response=await upsertOfflineFirst(supabase,{userId,table,payload,onConflict:id,
+      dedupeKey:'nutrition:'+table+':'+(payload.id||userId)});
+    if(response.error){setNotice('Not saved: '+response.error.message);return false}
+    if(activeUser.current!==userId)return false;
+    setData(previous=>({...previous,
+      [bucket]:bucket==='preferences'?payload:updated(previous[bucket],payload)
+    }));
+    setNotice(response.offline?'✓ Saved on this device. It will sync when you reconnect.':'✓ Saved to your account.');
+    return true;
+  };
+  const prefs={...NUTRITION_DEFAULTS,...data.preferences};
+  const today=useMemo(()=>summarizeDay(data.entries,data.water,date),[data.entries,data.water,date]);
+  const dayFood=useMemo(()=>data.entries.filter(row=>row.entry_date===date&&!row.deleted_at)
+    .sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at))),[data.entries,date]);
+  const dayWater=useMemo(()=>data.water.filter(row=>row.entry_date===date&&!row.deleted_at)
+    .sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at))),[data.water,date]);
+  const favoriteFoods=useMemo(()=>data.foods.filter(row=>!row.deleted_at&&row.is_favorite)
+    .sort((a,b)=>String(b.updated_at).localeCompare(String(a.updated_at))),[data.foods]);
+  const recentFoods=useMemo(()=>{
+    const seen=new Set();
+    return [...data.entries].filter(row=>!row.deleted_at).sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)))
+      .filter(row=>{const key=row.name+'|'+row.brand;if(seen.has(key))return false;seen.add(key);return true})
+      .slice(0,12).map(asFood);
+  },[data.entries]);
+  const history=useMemo(()=>nutritionHistory(data.entries,data.water,date,30),[data.entries,data.water,date]);
+  const history7=history.slice(-7),last30=history;
+  const avg=rows=>rows.length?Math.round(rows.reduce((s,r)=>s+r.calories,0)/rows.length):0;
+  const selectFood=(food)=>{setSelectedFood(food);setEditEntry(null);setServings('1');setNotice('');};
+  const addFood=async()=>{
+    if(!selectedFood||busy)return;
+    setBusy(true);
+    try{
+      const row=makeFoodEntry(selectedFood,{id:editEntry?.id||offlineUuid(),userId,date,
+        meal:selectedMeal,servings,now:editEntry?.created_at||new Date().toISOString()});
+      const result=await save('entries',row);
+      if(result){setSelectedFood(null);setEditEntry(null);setServings('1');setView('log');}
+    }catch(error){setNotice(error.message)}finally{setBusy(false)}
+  };
+  const remove=async(bucket,row)=>{
+    if(!window.confirm('Remove this '+(bucket==='water'?'water entry':bucket==='foods'?'saved food':'food entry')+'?'))return;
+    await save(bucket,{...row,deleted_at:new Date().toISOString()});
+  };
+  const saveWater=async(oz=waterAmount)=>{
+    if(busy)return;
+    setBusy(true);
+    try{
+      const row=makeWaterEntry({id:editingWater?.id||offlineUuid(),userId,date,oz,
+        now:editingWater?.created_at||new Date().toISOString()});
+      const ok=await save('water',row);
+      if(ok){setWaterAmount('');setEditingWater(null)}
+    }catch(error){setNotice(error.message)}finally{setBusy(false)}
+  };
+  const savePreferences=async(next=goals)=>{
+    const keys=['calorie_goal','protein_goal','carbs_goal','fat_goal','water_goal_oz'];
+    if(!keys.every(key=>validNumber(next[key],key==='water_goal_oz'?1000:20000))||
+      Number(next.calorie_goal)<=0||Number(next.water_goal_oz)<=0){
+      setNotice('Goals must be valid positive values (macro targets can be zero).');return;
+    }
+    const payload={user_id:userId,mode:next.mode==='macros'?'macros':'calories',
+      ...Object.fromEntries(keys.map(key=>[key:Number(next[key])]))};
+    const ok=await save('preferences',payload);
+    if(ok)setGoals(payload);
+  };
+  const lookup=async(mode='search')=>{
+    if(searching)return;
+    setSearching(true);setNotice('');
+    try{
+      if(mode==='barcode'){
+        const found=await lookupFoodBarcode(barcode);
+        setResults([found]);selectFood(found);setView('search');
+      }else{
+        const found=await searchFoodCatalog(search);setResults(found);
+        if(!found.length)setNotice('No matching products with nutrition information. Try a shorter search or enter a custom food.');
+      }
+    }catch(error){setNotice(error?.message||'Food search unavailable. Enter a custom food.')}
+    finally{setSearching(false)}
+  };
+  const saveFavorite=async(food)=>{
+    if(!food||!food.name)return;
+    await save('foods',cleanFood(food,userId));
+  };
+  const saveCustom=async()=>{
+    if(!validCustom(custom)){setNotice('Enter a food name and valid calories/macros.');return}
+    const food=cleanFood({...custom,source:'manual'},userId);
+    if(await save('foods',food)){setCustom(emptyFields());selectFood(food);setView('search')}
+  };
+  const addIngredient=(food,qty)=>{
+    try{
+      const nutrition=multipliedNutrients(food,qty);
+      setRecipeIngredients(items=>[...items,{id:offlineUuid(),name:food.name,quantity:Number(qty),...nutrition}]);
+      setNotice('Ingredient added to recipe.');
+    }catch(error){setNotice(error.message)}
+  };
+  const saveRecipe=async()=>{
+    if(!String(recipeName).trim()){setNotice('Name the recipe.');return}
+    try{
+      const nutrition=recipePerServing(recipeIngredients,recipeServings);
+      const food=cleanFood({name:recipeName,serving_label:'1 recipe serving',source:'recipe',
+        is_recipe:true,ingredients:recipeIngredients,...nutrition},userId);
+      if(await save('foods',food)){setRecipeName('');setRecipeIngredients([]);setRecipeServings('1');
+        selectFood(food);setView('search')}
+    }catch(error){setNotice(error.message)}
+  };
+  useEffect(()=>{
+    if(!scanning)return;
+    let cancelled=false,stream=null,timer=null;
+    const start=async()=>{
+      try{
+        if(!navigator.mediaDevices?.getUserMedia)throw new Error('Camera scanning is not available here. Enter the barcode instead.');
+        stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
+        if(cancelled){stream.getTracks().forEach(track=>track.stop());return}
+        const video=videoRef.current;
+        if(!video)throw new Error('Camera preview is unavailable.');
+        video.srcObject=stream;await video.play();
+        const Detector=globalThis.BarcodeDetector||BarcodeDetectorPonyfill;
+        const detector=new Detector({formats:['ean_13','ean_8','upc_a','upc_e']});
+        const scan=async()=>{
+          if(cancelled)return;
+          try{
+            const codes=await detector.detect(video);
+            const value=codes?.find(code=>/^[0-9]{8,14}$/.test(code.rawValue||''))?.rawValue;
+            if(value){
+              setBarcode(value);setScanning(false);setSearching(true);
+              try{const food=await lookupFoodBarcode(value);setResults([food]);selectFood(food);setView('search')}
+              catch(error){setNotice(error.message)}finally{setSearching(false)}
+              return;
+            }
+          }catch(error){if(error?.name==='NotSupportedError'){setNotice('Camera barcode detection is unavailable. Enter the code below.');setScanning(false);return}}
+          timer=setTimeout(scan,220);
+        };
+        scan();
+      }catch(error){setNotice(error?.message||'Camera could not open.');setScanning(false)}
+    };
+    start();
+    return ()=>{cancelled=true;clearTimeout(timer);
+      if(stream)stream.getTracks().forEach(track=>track.stop());
+      if(videoRef.current)videoRef.current.srcObject=null};
+  },[scanning]);
+
+  if(!userId)return <section className="page-section">Sign in to track nutrition.</section>;
+  return <section className="page-section nutrition-page" aria-label="Nutrition and hydration">
+    <div className="nutrition-topline"><button type="button" className="secondary-action" onClick={onBack}>← Back</button>
+      <span>{loading?'Syncing nutrition…':isOnline()?'Private to your account':'Offline logging available'}</span></div>
+    <div className="nutrition-hero"><span className="card-label">FOOD & WATER</span><h2>Nutrition & hydration</h2>
+      <p>Log meals and water your way. Calories and macros are always saved, even when you change modes.</p>
+    </div>
+    <div className="nutrition-date-picker"><button type="button" onClick={()=>setDate(dayShift(date,-1))} aria-label="Previous day">‹</button>
+      <label>Tracking date<input type="date" value={date} onChange={e=>setDate(e.target.value||dateKey())}/></label>
+      <button type="button" onClick={()=>setDate(dayShift(date,1))} aria-label="Next day">›</button>
+      <button type="button" className="nutrition-today-jump" onClick={()=>setDate(dateKey())}>Today</button>
+    </div>
+    <div className="nutrition-mode" aria-label="Tracking mode">
+      <button type="button" className={prefs.mode==='calories'?'active':''} aria-pressed={prefs.mode==='calories'}
+        onClick={()=>savePreferences({...prefs,mode:'calories'})}>Calories</button>
+      <button type="button" className={prefs.mode==='macros'?'active':''} aria-pressed={prefs.mode==='macros'}
+        onClick={()=>savePreferences({...prefs,mode:'macros'})}>Macros</button>
+    </div>
+    <div className="nutrition-summary">
+      {prefs.mode==='calories'?<>
+        <div className="nutrition-calorie-hero"><div><small>CALORIES LEFT</small><strong>{fmt(Math.max(0,prefs.calorie_goal-today.calories))}</strong>
+          <span>{fmt(today.calories)} eaten · {fmt(prefs.calorie_goal)} goal</span></div>
+          <span className="nutrition-energy-unit">kcal</span></div>
+        <ProgressMetric label="Calories" value={today.calories} goal={prefs.calorie_goal} unit="kcal" primary/>
+      </>:<div className="nutrition-calorie-compact">Calories from logged foods <strong>{fmt(today.calories)} kcal</strong></div>}
+      <div className="nutrition-macros">
+        <ProgressMetric label="Protein" value={today.protein_g} goal={prefs.protein_goal} unit="g" primary={prefs.mode==='macros'}/>
+        <ProgressMetric label="Carbs" value={today.carbs_g} goal={prefs.carbs_goal} unit="g" primary={prefs.mode==='macros'}/>
+        <ProgressMetric label="Fat" value={today.fat_g} goal={prefs.fat_goal} unit="g" primary={prefs.mode==='macros'}/>
+      </div>
+    </div>
+    <section className="nutrition-water-card"><div className="nutrition-card-heading"><div><span className="card-label">HYDRATION</span>
+      <h3>Water <small>{fmt(today.water_oz)} / {fmt(prefs.water_goal_oz)} oz</small></h3></div></div>
+      <ProgressMetric label="Daily water" value={today.water_oz} goal={prefs.water_goal_oz} unit="oz"/>
+      <div className="nutrition-water-actions">{[8,12,16,24].map(oz=><button type="button" key={oz} disabled={busy}
+        onClick={()=>saveWater(oz)}>+ {oz} oz</button>)}</div>
+      <form className="nutrition-inline-form" onSubmit={e=>{e.preventDefault();saveWater()}}>
+        <label>{editingWater?'Edit water amount':'Custom amount (oz)'}<input type="number" inputMode="decimal" step="0.1" min="0.1" max="256"
+          value={waterAmount} onChange={e=>setWaterAmount(e.target.value)} placeholder="Amount in oz"/></label>
+        <button type="submit" className="primary-action" disabled={busy}>{editingWater?'Save edit':'Add water'}</button>
+        {editingWater&&<button type="button" onClick={()=>{setEditingWater(null);setWaterAmount('')}}>Cancel</button>}
+      </form>
+      {dayWater.length>0&&<details className="nutrition-water-entries"><summary>Water entries ({dayWater.length})</summary>
+        {dayWater.map(row=><div key={row.id}><span>{fmt(row.amount_oz)} oz</span>
+          <button type="button" onClick={()=>{setEditingWater(row);setWaterAmount(String(row.amount_oz))}}>Edit</button>
+          <button type="button" onClick={()=>remove('water',row)}>Remove</button></div>)}</details>}
+    </section>
+
+    <div className="nutrition-tabs" role="group" aria-label="Nutrition tools">
+      {[['log','Food diary'],['search','Add food'],['saved','Saved'],['recipe','Recipes'],['history','History'],['goals','Goals']].map(([key,label])=>
+        <button type="button" key={key} className={view===key?'active':''} aria-pressed={view===key} onClick={()=>setView(key)}>{label}</button>)}
+    </div>
+    {notice&&<p className="nutrition-status" role="status">{notice}</p>}
+
+    {view==='log'&&<section className="nutrition-food-diary">
+      {MEALS.map(meal=>{
+        const items=dayFood.filter(row=>row.meal===meal);
+        return <div className="nutrition-meal" key={meal}><div className="nutrition-card-heading"><h3>{meal}</h3>
+          <button type="button" onClick={()=>{setSelectedMeal(meal);setView('search')}}>+ Add</button></div>
+          {items.length?items.map(row=><div className="nutrition-entry" key={row.id}>
+            <div><strong>{row.name}</strong><small>{fmt(row.quantity)} × {row.serving_label} · P {fmt(row.protein_g)} / C {fmt(row.carbs_g)} / F {fmt(row.fat_g)} g</small></div>
+            <div><b>{fmt(row.calories)} kcal</b><span><button type="button" onClick={()=>{
+              setSelectedMeal(row.meal);setSelectedFood(asFood({...row,id:row.food_id}));
+              setEditEntry(row);setServings(String(row.quantity));setView('search');
+            }}>Edit</button><button type="button" onClick={()=>remove('entries',row)}>Remove</button></span></div>
+          </div>):<p className="nutrition-empty">No food added yet.</p>}
+        </div>
+      })}
+    </section>}
+
+    {view==='search'&&<section className="nutrition-tool-card">
+      <h3>Search food or scan a barcode</h3><p className="nutrition-help">Search packaged foods, choose servings, and log them. You can always enter a custom item.</p>
+      <form className="nutrition-search" onSubmit={e=>{e.preventDefault();lookup()}}>
+        <input type="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search food or brand" aria-label="Food search"/>
+        <button type="submit" className="primary-action" disabled={searching}>{searching?'Searching…':'Search'}</button>
+      </form>
+      <div className="nutrition-barcode"><input inputMode="numeric" value={barcode} onChange={e=>setBarcode(e.target.value)}
+        placeholder="8–14 digit barcode" aria-label="Product barcode"/>
+        <button type="button" disabled={searching} onClick={()=>lookup('barcode')}>Look up</button>
+        <button type="button" onClick={()=>setScanning(s=>!s)}>{scanning?'Stop camera':'Scan camera'}</button></div>
+      {scanning&&<div className="nutrition-camera"><video ref={videoRef} autoPlay playsInline muted/><small>Center a product barcode in the camera. No photos are saved.</small></div>}
+      {results.length>0&&<div className="nutrition-results" aria-label="Food results">{results.map((food,i)=>
+        <button type="button" key={(food.source_id||food.name)+i} onClick={()=>selectFood(food)} className={selectedFood===food?'selected':''}>
+          <strong>{food.name}</strong><small>{food.brand||food.serving_label} · {fmt(food.calories)} kcal / {food.serving_label}{food.incomplete?' · Check nutrition label':''}</small>
+        </button>)}</div>}
+      <div className="nutrition-suggestions"><span>Recently logged</span><div>{recentFoods.map((food,i)=>
+        <button type="button" key={i} onClick={()=>selectFood(food)}>{food.name}</button>)}</div></div>
+      <div className="nutrition-suggestions"><span>Saved foods</span><div>{favoriteFoods.slice(0,12).map(food=>
+        <button type="button" key={food.id} onClick={()=>selectFood(food)}>{food.name}</button>)}</div></div>
+      {selectedFood&&<div className="nutrition-selection">
+        <h4>{editEntry?'Edit food entry':'Log '+selectedFood.name}</h4>
+        <p>{selectedFood.serving_label} · {fmt(selectedFood.calories)} kcal · P {fmt(selectedFood.protein_g)} / C {fmt(selectedFood.carbs_g)} / F {fmt(selectedFood.fat_g)} g</p>
+        {selectedFood.incomplete&&<p className="nutrition-caution">Some nutrients are missing from the public food record. Verify the package label.</p>}
+        <div className="nutrition-serving-fields"><label>Meal<select value={selectedMeal} onChange={e=>setSelectedMeal(e.target.value)}>
+          {MEALS.map(meal=><option key={meal}>{meal}</option>)}</select></label>
+          <label>Servings<input type="number" inputMode="decimal" min="0.01" max="1000" step="0.01"
+            value={servings} onChange={e=>setServings(e.target.value)}/></label></div>
+        <div className="nutrition-choice-actions">
+          <button type="button" className="primary-action" disabled={busy} onClick={addFood}>{busy?'Saving…':editEntry?'Save changes':'Log food'}</button>
+          <button type="button" onClick={()=>saveFavorite(selectedFood)}>☆ Save favorite</button>
+          <button type="button" onClick={()=>{addIngredient(selectedFood,servings);setView('recipe')}}>+ Recipe ingredient</button>
+          <button type="button" onClick={()=>{setSelectedFood(null);setEditEntry(null)}}>Cancel</button>
+        </div>
+      </div>}
+      <details className="nutrition-custom" open={false}><summary>+ Create custom food</summary>
+        <div className="nutrition-custom-fields">
+          {Object.keys(custom).map(key=><label key={key}>{({name:'Food name',brand:'Brand (optional)',serving_label:'Serving description',
+            calories:'Calories',protein_g:'Protein (g)',carbs_g:'Carbs (g)',fat_g:'Fat (g)'})[key]}
+            <input type={['name','brand','serving_label'].includes(key)?'text':'number'} min="0" step="0.1" inputMode="decimal"
+              value={custom[key]} onChange={e=>setCustom(old=>({...old,[key]:e.target.value}))}/></label>)}
+          <button type="button" className="primary-action" onClick={saveCustom}>Save custom food</button>
+        </div>
+      </details>
+    </section>}
+
+    {view==='saved'&&<section className="nutrition-tool-card"><h3>Favorite foods & meals</h3>
+      <p className="nutrition-help">Your saved foods and recipes work without an internet connection.</p>
+      {favoriteFoods.length===0?<p className="nutrition-empty">No favorites yet. Add foods from the Search tab.</p>:
+        favoriteFoods.map(food=><div className="nutrition-saved-row" key={food.id}>
+          <div><strong>{food.name}</strong><small>{food.is_recipe?'Recipe · ':''}{fmt(food.calories)} kcal · {food.serving_label}</small></div>
+          <div><button type="button" onClick={()=>{selectFood(food);setView('search')}}>Log</button>
+            <button type="button" onClick={()=>remove('foods',food)}>Remove</button></div></div>)}
+    </section>}
+
+    {view==='recipe'&&<section className="nutrition-tool-card"><h3>Recipe builder</h3>
+      <p className="nutrition-help">Add ingredients with their nutrition values. Save the recipe once and log it by servings.</p>
+      <div className="nutrition-serving-fields"><label>Recipe name<input value={recipeName} onChange={e=>setRecipeName(e.target.value)}
+        placeholder="Homemade chili"/></label><label>Number of servings<input type="number" inputMode="numeric" min="1" max="100" step="1"
+        value={recipeServings} onChange={e=>setRecipeServings(e.target.value)}/></label></div>
+      <div className="nutrition-recipe-ingredients">
+        {recipeIngredients.map(row=><div key={row.id}><div><strong>{row.name}</strong><small>{fmt(row.calories)} kcal · P {fmt(row.protein_g)} / C {fmt(row.carbs_g)} / F {fmt(row.fat_g)}</small></div>
+          <button type="button" onClick={()=>setRecipeIngredients(old=>old.filter(item=>item.id!==row.id))}>Remove</button></div>)}
+      </div>
+      <div className="nutrition-custom-fields">
+        <h4>Add ingredient manually</h4>
+        {Object.keys(ingredient).filter(key=>key!=='brand'&&key!=='serving_label').map(key=><label key={key}>
+          {({name:'Ingredient name',calories:'Calories',protein_g:'Protein (g)',carbs_g:'Carbs (g)',fat_g:'Fat (g)'})[key]}
+          <input type={key==='name'?'text':'number'} min="0" step="0.1" value={ingredient[key]}
+            onChange={e=>setIngredient(old=>({...old,[key]:e.target.value}))}/></label>)}
+        <label>Amount multiplier<input type="number" inputMode="decimal" min="0.01" step="0.01" value={ingredientQty}
+          onChange={e=>setIngredientQty(e.target.value)}/></label>
+        <button type="button" onClick={()=>{if(!validCustom(ingredient)){setNotice('Enter a name and valid nutrition values.');return}
+          addIngredient(ingredient,ingredientQty);setIngredient(emptyFields());setIngredientQty('1')}}>+ Add ingredient</button>
+      </div>
+      {recipeIngredients.length>0&&<p className="nutrition-recipe-total">
+        Total recipe: {fmt(recipeIngredients.reduce((sum,row)=>sum+row.calories,0))} kcal / {recipeServings||'1'} servings
+      </p>}
+      <button type="button" className="primary-action" disabled={!recipeName.trim()||!recipeIngredients.length} onClick={saveRecipe}>Save recipe to favorites</button>
+    </section>}
+
+    {view==='history'&&<section className="nutrition-tool-card"><h3>Nutrition history</h3>
+      <div className="nutrition-history-summary"><div><small>7-day average</small><strong>{avg(history7)} kcal/day</strong></div>
+        <div><small>30-day average</small><strong>{avg(last30)} kcal/day</strong></div></div>
+      <div className="nutrition-history-list">{history.slice().reverse().map(row=><button type="button" key={row.date}
+        onClick={()=>{setDate(row.date);setView('log')}}>
+        <strong>{row.date}</strong><span>{fmt(row.calories)} kcal · P {fmt(row.protein_g)} g · Water {fmt(row.water_oz)} oz</span>
+      </button>)}</div>
+      <p className="nutrition-help">Days without entries count as zero in these averages. Select a date to review or edit its logs.</p>
+    </section>}
+
+    {view==='goals'&&<section className="nutrition-tool-card"><h3>Your daily goals</h3>
+      <p className="nutrition-help">These are editable starting values, not medical recommendations. Choose Calories or Macros above at any time.</p>
+      <div className="nutrition-goal-fields">{[['calorie_goal','Calories (kcal)'],['protein_goal','Protein (g)'],
+        ['carbs_goal','Carbs (g)'],['fat_goal','Fat (g)'],['water_goal_oz','Water (oz)']].map(([key,label])=>
+        <label key={key}>{label}<input type="number" inputMode="decimal" min="0" max="20000" step="0.1"
+          value={goals[key]??''} onChange={e=>setGoals(current=>({...current,[key]:e.target.value}))}/></label>)}</div>
+      <button type="button" className="primary-action" onClick={()=>savePreferences(goals)}>Save daily goals</button>
+      <p className="nutrition-help">Your nutrition and hydration records are private, included in your account backup, and synced when online.</p>
+    </section>}
+  </section>;
+}
