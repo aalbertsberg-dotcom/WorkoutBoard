@@ -321,3 +321,16 @@ test('Search suggestions shorten restaurant breakfast queries and barcode tools 
  await page.getByText('Scan barcode or enter a code').click()
  await expect(page.getByRole('button',{name:'Look up'})).toBeVisible()
 })
+
+
+test('Quick Add food hides full dashboard while keeping diary navigation',async({page})=>{
+ await page.goto('/tests/fixtures/nutrition.html')
+ await expect(page.locator('.nutrition-summary')).toBeVisible()
+ await page.getByRole('button',{name:'Add food',exact:true}).click()
+ await expect(page.locator('.nutrition-summary')).toHaveCount(0)
+ await expect(page.locator('.nutrition-water-card')).toHaveCount(0)
+ await expect(page.locator('.nutrition-search-intro')).toContainText('Adding to Breakfast')
+ await expect(page.getByRole('searchbox',{name:'Food search'})).toBeFocused()
+ await page.locator('.nutrition-search-intro').getByRole('button',{name:'Diary'}).click()
+ await expect(page.locator('.nutrition-summary')).toBeVisible()
+});
