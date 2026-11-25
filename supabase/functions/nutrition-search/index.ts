@@ -101,7 +101,7 @@ const queryUsda = async (term: string) => {
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Accept": "application/json" },
-    body: JSON.stringify({ query: term, pageSize: 35, pageNumber: 1, sortBy: "dataType.keyword", sortOrder: "asc" }),
+    body: JSON.stringify({ query: term, pageSize: 35, pageNumber: 1 }),
     signal: AbortSignal.timeout(8500),
   });
   if (!response.ok) throw Error("USDA HTTP " + response.status);
