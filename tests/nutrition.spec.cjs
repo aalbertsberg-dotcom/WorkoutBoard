@@ -170,3 +170,84 @@ test('USDA nutrition is loggable while FatSecret restaurant data remains preview
   await page.getByRole('button',{name:'Log food',exact:true}).click();
   await expect(page.locator('.nutrition-food-diary')).toContainText('Beef burger patty');
 });
+
+
+test('Mobile results have one scroller, non-overlapping cards, and compact log selection',async({page})=>{
+  const foods=Array.from({length:14},(_,i)=>({
+    name:'Chicken breast '+(i+1),brand:'',source:'usda',source_id:'food-'+i,
+    calories:165+i,protein_g:31,carbs_g:0,fat_g:4,serving_label:'100 g',can_log:true
+  }));
+  await page.route('https://example.supabase.co/functions/v1/nutrition-search**',async route=>{
+    await route.fulfill({status:200,contentType:'application/json',
+      headers:{'access-control-allow-origin':'*'},
+      body:JSON.stringify({usda:foods,fatsecret:[],providers:{usda:'ok',fatsecret:'not_configured'}})});
+  });
+  for(const domain of ['search.openfoodfacts.org/search','world.openfoodfacts.org/cgi/search.pl','us.openfoodfacts.org/cgi/search.pl']){
+    await page.route('https://'+domain+'**',async route=>route.fulfill({status:200,contentType:'application/json',
+      headers:{'access-control-allow-origin':'*'},
+      body:JSON.stringify(domain.includes('openfoodfacts.org/search')?{hits:[]}:{products:[]})}));
+  }
+  await page.goto('/tests/fixtures/nutrition.html');
+  await page.getByRole('button',{name:'Add food',exact:true}).click();
+  await page.getByRole('searchbox',{name:'Food search'}).fill('Chicken breast');
+  await page.getByRole('button',{name:'Search',exact:true}).click();
+  await expect(page.locator('.nutrition-results button')).toHaveCount(8);
+  await expect(page.getByRole('button',{name:/Show more/})).toBeVisible();
+  const layout=await page.locator('.nutrition-results').evaluate(el=>{
+    const children=[...el.querySelectorAll('button')];
+    const rects=children.map(node=>node.getBoundingClientRect());
+    return {overflow:getComputedStyle(el).overflowY,
+      collisions:rects.some((r,i)=>i>0&&r.top<rects[i-1].bottom-0.5),
+      width:el.getBoundingClientRect().width,
+      outside:rects.some(r=>r.right>el.getBoundingClientRect().right+1)};
+  });
+  expect(layout.overflow).toBe('visible');
+  expect(layout.collisions).toBe(false);
+  expect(layout.outside).toBe(false);
+  await page.getByRole('button',{name:/Show more/}).click();
+  await expect(page.locator('.nutrition-results button')).toHaveCount(14);
+  await page.locator('.nutrition-results button').first().click();
+  await expect(page.locator('.nutrition-results')).toHaveCount(0);
+  await expect(page.locator('.nutrition-selection-panel')).toBeVisible();
+  await expect(page.getByRole('button',{name:'Log food',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Log food',exact:true}).click();
+  await expect(page.locator('.nutrition-food-diary')).toContainText('Chicken breast 1');
+});
+test('Marco’s Pizza only shows matching places and clears old results when query edited',async({page})=>{
+  await page.route('https://example.supabase.co/functions/v1/nutrition-search**',async route=>{
+    const query=route.request().postDataJSON()?.query||'';
+    if(query==="Marco's Pizza")await new Promise(resolve=>setTimeout(resolve,700));
+    const foods=query==="Marco's Pizza"?[
+      {name:'PIZZA HUT Cheese Pizza',brand:'',source:'usda',calories:280,serving_label:'100 g',can_log:true},
+      {name:"Marco's Pizza Pepperoni",brand:'',source:'usda',calories:300,serving_label:'100 g',can_log:true}
+    ]:[{name:'Chicken breast',source:'usda',calories:165,serving_label:'100 g',can_log:true}];
+    await route.fulfill({status:200,contentType:'application/json',
+      headers:{'access-control-allow-origin':'*'},
+      body:JSON.stringify({usda:foods,fatsecret:[],providers:{usda:'ok',fatsecret:'not_configured'}})});
+  });
+  await page.route('https://search.openfoodfacts.org/search**',async route=>
+    route.fulfill({status:200,contentType:'application/json',
+      headers:{'access-control-allow-origin':'*'},body:'{"hits":[]}'}));
+  for(const host of ['world','us']){
+    await page.route('https://'+host+'.openfoodfacts.org/cgi/search.pl**',async route=>
+      route.fulfill({status:200,contentType:'application/json',
+        headers:{'access-control-allow-origin':'*'},body:'{"products":[]}'}));
+  }
+  await page.goto('/tests/fixtures/nutrition.html');
+  await page.getByRole('button',{name:'Add food',exact:true}).click();
+  const field=page.getByRole('searchbox',{name:'Food search'});
+  await field.fill("Marco's Pizza");
+  await page.getByRole('button',{name:'Search',exact:true}).click();
+  await field.fill('Chicken breast');
+  await page.getByRole('button',{name:'Search',exact:true}).click();
+  await expect(page.locator('.nutrition-results')).toContainText('Chicken breast');
+  await page.waitForTimeout(850); // earlier slower request must never overwrite
+  await expect(page.locator('.nutrition-results')).not.toContainText('Marco');
+  await expect(page.locator('.nutrition-results-top')).toContainText('"Chicken breast"');
+  await field.fill("Marco's Pizza");
+  await expect(page.locator('.nutrition-results')).toHaveCount(0);
+  await page.getByRole('button',{name:'Search',exact:true}).click();
+  await expect(page.locator('.nutrition-results button')).toHaveCount(1);
+  await expect(page.locator('.nutrition-results')).toContainText("Marco's Pizza Pepperoni");
+  await expect(page.locator('.nutrition-results')).not.toContainText('PIZZA HUT');
+});
