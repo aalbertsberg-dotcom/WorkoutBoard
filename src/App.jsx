@@ -1,6 +1,6 @@
 import { DialogPortal,OverlayPortal,confirmWorkset } from './worksetDialogs'
 import MePage from './MePage'
-import NutritionPage, {NutritionTodayCard} from './NutritionPage'
+import NutritionPage from './NutritionPage'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase'
 import { PlatformProgress, PlanPage, AdminPanel, FeedbackPanel } from './platform'
@@ -3592,8 +3592,6 @@ function App() {
 
         {/* Remain mounted across tabs so active AMRAP, EMOM and Metcon timers keep running. */}
         <TrainingTimer showPanel={activeTab==='today'} onReveal={()=>navigateTo('today')} />
-        {!dataLoading&&activeTab==='today'&&!plannedToday&&!showRegularToday&&
-          <NutritionTodayCard session={session} onOpen={()=>navigateTo('nutrition')}/>}
 
         {dataLoading ? (
           <div className="loading-card">Loading your workouts…</div>
@@ -3778,6 +3776,11 @@ function App() {
                   <button type="button" onClick={()=>startStandaloneWorkout('conditioning')}>
                     <span className="quick-start-icon">◇</span><strong>Other cardio</strong><small>Row, elliptical, sled, intervals</small>
                   </button>
+                  <button type="button" className="today-choice-nutrition" onClick={()=>navigateTo('nutrition')}>
+                    <span className="quick-start-icon" aria-hidden="true">◈</span>
+                    <strong>Food &amp; Water</strong>
+                    <small>Log meals, calories, macros &amp; hydration</small>
+                  </button>
                 </div>
 
                 <div className="today-choice-utility">
@@ -3899,6 +3902,11 @@ function App() {
                   </button>
                   <button type="button" onClick={()=>startStandaloneWorkout('conditioning')}>
                     <span className="quick-start-icon">◇</span><strong>Other cardio</strong><small>Row, elliptical, sled, intervals</small>
+                  </button>
+                  <button type="button" className="today-choice-nutrition" onClick={()=>navigateTo('nutrition')}>
+                    <span className="quick-start-icon" aria-hidden="true">◈</span>
+                    <strong>Food &amp; Water</strong>
+                    <small>Log meals, calories, macros &amp; hydration</small>
                   </button>
                 </div>
                 <div className="today-choice-utility">
