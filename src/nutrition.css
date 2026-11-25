@@ -133,3 +133,7 @@
   .nutrition-water-actions button{font-size:11px}
 }
 @media(prefers-reduced-motion:reduce){.nutrition-page *{transition:none!important}}
+
+.nutrition-meal-actions{display:flex;align-items:center;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+.nutrition-meal-actions button:first-child:not(:last-child){background:#192c3b;color:#b8d0eb;border-color:#334a64}
+@media(max-width:360px){.nutrition-meal-actions button{padding:7px 8px;font-size:11px}}
