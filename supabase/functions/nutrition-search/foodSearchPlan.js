@@ -71,10 +71,9 @@ const tokenMatches=(word,term)=>{
   if(word===term)return true;
   // "burger" should also find "cheeseburger", but "egg" must not
   // match "eggplant". Broad partials are only allowed for longer terms.
-  if(term.length>=5 && word.length>term.length){
-    if(word.startsWith(term))return true;
-    if(term==='burger' && word.endsWith('burger'))return true;
-  }
+  // Compound suffixes (burger -> cheeseburger) are related, but a prefix
+  // match would incorrectly treat grapefruit as a grape.
+  if(term.length>=5&&word.length>term.length&&word.endsWith(term))return true;
   return false;
 };
 const allTermsMatch=(words,terms)=>terms.every(term=>words.some(w=>tokenMatches(w,term)));
