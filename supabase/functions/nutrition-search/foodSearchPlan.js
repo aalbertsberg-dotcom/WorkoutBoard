@@ -94,5 +94,6 @@ export function rankFoodMatch(food,query){
     else if(food.data_type==='Survey (FNDDS)')score+=10;
   }
   if(food.can_log===false)score-=5;
-  return score;
+  // Relevant branded foods stay discoverable, but never outrank ordinary eggs.
+  return Math.max(1,score);
 }
