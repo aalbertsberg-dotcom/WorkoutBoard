@@ -295,10 +295,11 @@ export default function NutritionPage({session,onBack}){
     setLastLoggedMeal('');setSelectedFood(null);setEditEntry(null);
     setSearch('');setResults([]);setResultsQuery('');setView('search');
   };
-  const lookup=async(mode='search')=>{
+  const lookup=async(mode='search',override='')=>{
     if(searching)return;
     const token=++searchRequest.current;
-    const term=search.trim();
+    const term=String(override||search).trim();
+    if(override)setSearch(term);
     setResults([]);setResultsQuery('');setSelectedFood(null);setEditEntry(null);
     setVisibleResults(8);setSearching(true);setNotice('');
     searchInputRef.current?.blur();
@@ -547,10 +548,8 @@ export default function NutritionPage({session,onBack}){
       </div>}
       {!selectedFood&&broaderQuery&&<div className="nutrition-search-suggestion">
         <span>Looking for a restaurant or menu item?</span>
-        <button type="button" onClick={()=>{changeSearch(broaderQuery);setSearch(broaderQuery);
-          setResults([]);setNotice('Search the restaurant name to explore matching entries.');
-          searchInputRef.current?.focus();}}>
-          Try “{broaderQuery}”
+        <button type="button" onClick={()=>lookup('search',broaderQuery)}>
+          Search “{broaderQuery}”
         </button>
       </div>}
             {results.length>0&&!selectedFood&&<div className="nutrition-results-block">
@@ -570,9 +569,14 @@ export default function NutritionPage({session,onBack}){
         {results.some(food=>food.source==='fatsecret')&&
           <p className="nutrition-provider-attribution"><a href="https://platform.fatsecret.com">Powered by fatsecret Platform API</a></p>}
       </div>}
-      {!selectedFood&&<div className="nutrition-suggestions"><span>Recently logged</span><div>{recentFoods.map((food,i)=>
+      {!selectedFood&&!search.trim()&&!results.length&&<div className="nutrition-suggestions nutrition-common-foods">
+        <span>Common searches</span>
+        <div>{['Egg','Chicken breast','Rice','Banana'].map(term=>
+          <button type="button" key={term} onClick={()=>lookup('search',term)}>{term}</button>)}</div>
+      </div>}
+            {!selectedFood&&results.length===0&&recentFoods.length>0&&<div className="nutrition-suggestions"><span>Recently logged</span><div>{recentFoods.map((food,i)=>
         <button type="button" key={i} onClick={()=>selectFood(food)}>{food.name}</button>)}</div></div>}
-      {!selectedFood&&<div className="nutrition-suggestions"><span>Saved foods</span><div>{favoriteFoods.slice(0,12).map(food=>
+      {!selectedFood&&results.length===0&&favoriteFoods.length>0&&<div className="nutrition-suggestions"><span>Saved foods</span><div>{favoriteFoods.slice(0,12).map(food=>
         <button type="button" key={food.id} onClick={()=>selectFood(food)}>{food.name}</button>)}</div></div>}
       <details className="nutrition-custom" open={false}><summary>+ Create custom food</summary>
         <div className="nutrition-custom-fields">
