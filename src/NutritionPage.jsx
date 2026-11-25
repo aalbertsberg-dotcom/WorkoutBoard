@@ -1,6 +1,7 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {BarcodeDetector as BarcodeDetectorPonyfill} from 'barcode-detector/ponyfill';
 import {supabase} from './supabase';
+import {confirmWorkset} from './worksetDialogs';
 import {readOfflineState,writeOfflineState,upsertOfflineFirst,offlineUuid,syncOfflineQueue,getPendingOfflineCount,isOnline} from './offline';
 import {NUTRITION_DEFAULTS,MEALS,dateKey,round1,nonnegative,multipliedNutrients,makeFoodEntry,makeWaterEntry,summarizeDay,nutritionHistory,recipePerServing} from './nutritionModel';
 import {searchFoodCatalog,lookupFoodBarcode} from './nutritionCatalog';
@@ -191,7 +192,8 @@ export default function NutritionPage({session,onBack}){
     }catch(error){setNotice(error.message)}finally{setBusy(false)}
   };
   const remove=async(bucket,row)=>{
-    if(!window.confirm('Remove this '+(bucket==='water'?'water entry':bucket==='foods'?'saved food':'food entry')+'?'))return;
+    if(!await confirmWorkset('Remove this '+(bucket==='water'?'water entry':bucket==='foods'?'saved food':'food entry')+'?',
+      {title:'Remove saved nutrition entry?',confirmLabel:'Remove',cancelLabel:'Keep'}))return;
     await save(bucket,{...row,deleted_at:new Date().toISOString()});
   };
   const saveWater=async(oz=waterAmount)=>{
@@ -206,7 +208,8 @@ export default function NutritionPage({session,onBack}){
   };
   const savePreferences=async(next=goals)=>{
     const keys=['calorie_goal','protein_goal','carbs_goal','fat_goal','water_goal_oz'];
-    if(!keys.every(key=>validNumber(next[key],key==='water_goal_oz'?1000:20000))||
+    const maximum={calorie_goal:20000,protein_goal:2000,carbs_goal:3000,fat_goal:2000,water_goal_oz:1000};
+    if(!keys.every(key=>validNumber(next[key],maximum[key]))||
       Number(next.calorie_goal)<=0||Number(next.water_goal_oz)<=0){
       setNotice('Goals must be valid positive values (macro targets can be zero).');return;
     }
@@ -231,6 +234,9 @@ export default function NutritionPage({session,onBack}){
   };
   const saveFavorite=async(food)=>{
     if(!food||!food.name)return;
+    const previous=data.foods.find(row=>!row.deleted_at&&row.name===food.name&&row.brand===(food.brand||'')&&
+      row.source===String(food.source||'manual')&&row.source_id===String(food.source_id||''));
+    if(previous){setNotice('This food is already in your favorites.');return}
     await save('foods',cleanFood(food,userId));
   };
   const saveCustom=async()=>{
