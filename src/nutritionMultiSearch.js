@@ -56,7 +56,7 @@ export async function searchAllFoodCatalog(query,{
     if(states.usda==='ok'||states.fatsecret==='ok')successes++;
   };
   const packaged=async()=>{
-    groups.openfoodfacts=await searchPackaged(value);
+    groups.openfoodfacts=await searchPackaged(planFoodSearch(value).providerQuery);
     if(!Array.isArray(groups.openfoodfacts))groups.openfoodfacts=[];
     states.packaged='ok';
     successes++;

@@ -370,7 +370,7 @@ test('Egg results rank ordinary USDA eggs first and explain 100 g versus two egg
  await page.getByRole('button',{name:'Add another'}).click();
  await expect(page.locator('.nutrition-status')).toHaveCount(0);
 });
-test('FatSecret provider failure is shown for restaurant search without fake matches',async({page})=>{
+test('FatSecret provider failures are invisible to end users while zero results remain honest',async({page})=>{
  await page.route('https://example.supabase.co/functions/v1/nutrition-search**',async route=>
    route.fulfill({status:200,contentType:'application/json',
      headers:{'access-control-allow-origin':'*'},
@@ -386,7 +386,9 @@ test('FatSecret provider failure is shown for restaurant search without fake mat
  await page.getByRole('button',{name:'Add food',exact:true}).click();
  await page.getByRole('searchbox',{name:'Food search'}).fill('Waffle House bowl');
  await page.getByRole('button',{name:'Search',exact:true}).click();
- await expect(page.locator('.nutrition-source-feedback')).toContainText('FatSecret authentication failed');
+ await expect(page.locator('.nutrition-source-feedback')).toHaveCount(0);
+ await expect(page.getByText(/FatSecret restaurant search is currently unavailable|FatSecret authentication failed/)).toHaveCount(0);
+ await expect(page.locator('.nutrition-status')).toContainText('No closely matching foods found');
  await expect(page.locator('.nutrition-results')).toHaveCount(0);
 });
 test('Marcos is restaurant-specific, not San Marcos',async({page})=>{
@@ -413,4 +415,48 @@ test('Marcos is restaurant-specific, not San Marcos',async({page})=>{
  await expect(page.locator('.nutrition-results button')).toHaveCount(1);
  await expect(page.locator('.nutrition-results')).toContainText("Marco's Pizza");
  await expect(page.locator('.nutrition-results')).not.toContainText('San Marcos');
+});
+
+
+test('Egg and Eggs show the same ordinary eggs first without public provider warnings',async({page})=>{
+ const backend=[
+   {name:'Egg burrito',source:'usda',source_id:'8001',data_type:'Survey (FNDDS)',
+     can_log:true,serving_label:'100 g',serving_grams:100,calories:250,protein_g:10,carbs_g:25,fat_g:12},
+   {name:'Egg omelet with butter',source:'usda',source_id:'8002',data_type:'Survey (FNDDS)',
+     can_log:true,serving_label:'100 g',serving_grams:100,calories:182,protein_g:11,carbs_g:3,fat_g:14},
+   {name:'Egg, whole, raw, fresh',source:'usda',source_id:'8003',data_type:'SR Legacy',
+     can_log:true,serving_label:'100 g',serving_grams:100,calories:143,protein_g:12.6,carbs_g:.7,fat_g:9.5},
+   {name:'Eggs, Grade A, large',source:'usda',source_id:'8004',data_type:'Foundation',
+     can_log:true,serving_label:'100 g',serving_grams:100,calories:143,protein_g:12.6,carbs_g:.7,fat_g:9.5}
+ ];
+ const packaged=[];
+ await page.route('https://example.supabase.co/functions/v1/nutrition-search**',async route=>
+   route.fulfill({status:200,contentType:'application/json',
+     headers:{'access-control-allow-origin':'*'},
+     body:JSON.stringify({usda:backend,fatsecret:[],providers:{usda:'ok',fatsecret:'network_error'}})}));
+ await page.route('https://search.openfoodfacts.org/search**',async route=>{
+   const url=new URL(route.request().url());
+   packaged.push(url.searchParams.get('q'));
+   await route.fulfill({status:200,contentType:'application/json',
+     headers:{'access-control-allow-origin':'*'},body:'{"hits":[]}'});
+ });
+ for(const host of ['world','us']){
+   await page.route('https://'+host+'.openfoodfacts.org/cgi/search.pl**',async route=>route.fulfill({
+     status:200,contentType:'application/json',headers:{'access-control-allow-origin':'*'},
+     body:'{"products":[]}' }));
+ }
+ await page.goto('/tests/fixtures/nutrition.html');
+ await page.getByRole('button',{name:'Add food',exact:true}).click();
+ const field=page.getByRole('searchbox',{name:'Food search'});
+ const searchButton=page.getByRole('button',{name:'Search',exact:true});
+ for(const query of ['egg','eggs']){
+   await field.fill(query);
+   await searchButton.click();
+   const results=page.locator('.nutrition-results button');
+   await expect(results).toHaveCount(4);
+   await expect(results.first()).toContainText('Egg, whole, raw, fresh');
+   await expect(results.nth(1)).toContainText('Eggs, Grade A, large');
+   await expect(page.locator('.nutrition-source-feedback')).toHaveCount(0);
+ }
+ expect(packaged).toEqual(['eggs','eggs']);
 });

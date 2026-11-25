@@ -6,7 +6,6 @@ import {readOfflineState,writeOfflineState,upsertOfflineFirst,offlineUuid,syncOf
 import {NUTRITION_DEFAULTS,MEALS,dateKey,round1,nonnegative,multipliedNutrients,makeFoodEntry,makeWaterEntry,summarizeDay,nutrientSum,nutritionHistory,recipePerServing,foodForPortion,needsNutritionReview,broaderFoodSearch} from './nutritionModel';
 import {lookupFoodBarcode} from './nutritionCatalog';
 import {searchAllFoodCatalog,foodSourceLabel} from './nutritionMultiSearch';
-import {planFoodSearch} from '../supabase/functions/nutrition-search/foodSearchPlan.js';
 import './nutrition.css';
 
 const makeState=()=>({preferences:{...NUTRITION_DEFAULTS},foods:[],entries:[],water:[]});
@@ -88,7 +87,6 @@ export default function NutritionPage({session,onBack}){
   const [view,setView]=useState('log');
   const [search,setSearch]=useState('');
   const [results,setResults]=useState([]);
-  const [searchHealth,setSearchHealth]=useState(null);
   const lastOfflineSave=useRef(false);
   const [searching,setSearching]=useState(false);
   const [selectedFood,setSelectedFood]=useState(null);
@@ -128,7 +126,7 @@ export default function NutritionPage({session,onBack}){
     try{const last=localStorage.getItem('workset:nutrition:meal:'+userId);
       setSelectedMeal(MEALS.includes(last)?last:'Breakfast')}catch{setSelectedMeal('Breakfast')}
     setLastLoggedMeal('');
-    setNotice('');setSelectedFood(null);setEditEntry(null);setResults([]);setResultsQuery('');setSearchHealth(null);
+    setNotice('');setSelectedFood(null);setEditEntry(null);setResults([]);setResultsQuery('');
   },[userId]);
   useEffect(()=>{
     if(!userId)return;
@@ -226,19 +224,6 @@ export default function NutritionPage({session,onBack}){
   const selectedTotals=selectedForLog&&Number.isFinite(Number(servings))&&Number(servings)>0&&Number(servings)<=1000?
     multipliedNutrients(selectedForLog,servings):null;
   const broaderQuery=broaderFoodSearch(search);
-  const searchPlan=planFoodSearch(resultsQuery||search);
-  const fatStatus=searchHealth?.fatsecret;
-  const fatSecretNotice=searchPlan.restaurant ? (
-    fatStatus==='authentication_failed'?'FatSecret authentication failed. Verify its credentials and allowed server IPs.':
-    fatStatus==='access_denied'?'FatSecret search access was denied. Check the account tier, scope, and IP allowlist.':
-    fatStatus==='network_error'?'FatSecret could not be reached from the server. Check server IP allowlisting and connectivity.':
-    fatStatus==='rate_limited'?'FatSecret search is temporarily rate-limited. Try again later.':
-    fatStatus==='not_configured'?'FatSecret restaurant search is not configured.':
-    fatStatus==='unavailable'?'FatSecret restaurant search is currently unavailable.':
-    fatStatus==='ok'&&results.length===0?'FatSecret responded, but no matching restaurant menu entries were found.':
-    searchHealth?.broadened&&results.length>0?'Showing '+searchPlan.restaurant+' restaurant entries. The specific menu item was not confirmed.':
-    ''
-  ):'';
   const totalUsdaGrams=selectedForLog?.source==='usda'&&Number.isFinite(Number(servings))&&Number(servings)>0
     ?Number(selectedForLog.serving_grams||0)*Number(servings):0;
   const selectFood=(food)=>{
@@ -265,7 +250,7 @@ export default function NutritionPage({session,onBack}){
   const changeSearch=value=>{
     ++foodDetailsRequest.current;
     ++searchRequest.current; // invalidate any search that is still in flight
-    setSearch(value);setResults([]);setResultsQuery('');setSearchHealth(null);setSelectedFood(null);
+    setSearch(value);setResults([]);setResultsQuery('');setSelectedFood(null);
     setEditEntry(null);setVisibleResults(8);setSearching(false);setNotice('');
   };
   const addFood=async()=>{
@@ -314,14 +299,14 @@ export default function NutritionPage({session,onBack}){
   const startAnother=()=>{
     ++foodDetailsRequest.current;setVerifyingFood(false);
     setLastLoggedMeal('');setSelectedFood(null);setEditEntry(null);
-    setSearch('');setResults([]);setResultsQuery('');setSearchHealth(null);setNotice('');setView('search');
+    setSearch('');setResults([]);setResultsQuery('');setNotice('');setView('search');
   };
   const lookup=async(mode='search',override='')=>{
     if(searching)return;
     const token=++searchRequest.current;
     const term=String(override||search).trim();
     if(override)setSearch(term);
-    setResults([]);setResultsQuery('');setSearchHealth(null);setSelectedFood(null);setEditEntry(null);
+    setResults([]);setResultsQuery('');setSelectedFood(null);setEditEntry(null);
     setVisibleResults(8);setSearching(true);setNotice('');
     searchInputRef.current?.blur();
     try{
@@ -331,15 +316,14 @@ export default function NutritionPage({session,onBack}){
         setResults([found]);setResultsQuery('Barcode lookup');
         selectFood(found);setView('search');
       }else{
-        const found=await searchAllFoodCatalog(term,{supabaseClient:supabase,
-          onDiagnostics:health=>{if(token===searchRequest.current)setSearchHealth(health)}});
+        const found=await searchAllFoodCatalog(term,{supabaseClient:supabase});
         if(token!==searchRequest.current)return; // ignore stale responses
         setResults(found);setResultsQuery(term);
         if(found.length&&found[0].cached)setNotice('Showing previously found foods saved on this device. Verify package labels before logging.');
         else if(!found.length)setNotice('No closely matching foods found for "'+term+'". Try the restaurant name or food name separately, or enter a custom food.');
       }
     }catch(error){
-      if(token===searchRequest.current){setResults([]);setResultsQuery('');setSearchHealth(null);setNotice(error?.message||'Food search unavailable. Enter a custom food.')}
+      if(token===searchRequest.current){setResults([]);setResultsQuery('');setNotice(error?.message||'Food search unavailable. Enter a custom food.')}
     }finally{if(token===searchRequest.current)setSearching(false)}
   };
   const saveFavorite=async(food)=>{
@@ -586,7 +570,7 @@ export default function NutritionPage({session,onBack}){
           Search “{broaderQuery}”
         </button>
       </div>}
-            {!selectedFood&&fatSecretNotice&&<p className="nutrition-source-feedback" role="status">{fatSecretNotice}</p>}
+      
             {results.length>0&&!selectedFood&&<div className="nutrition-results-block">
         <div className="nutrition-results-top"><strong>Results for "{resultsQuery||search}"</strong><small>{results.length} matches</small></div>
         <div className="nutrition-results" aria-label="Food results">

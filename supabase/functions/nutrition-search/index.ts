@@ -53,15 +53,14 @@ const queryUsda = async (term: string) => {
   const key = Deno.env.get("WORKSET_USDA_API_KEY");
   if (!key) return { status: "not_configured", foods: [] };
   const plan = planFoodSearch(term);
-  const fetchUsda = async (onlyCommon: boolean) => {
+  const fetchUsda = async (query: string, onlyCommon: boolean) => {
     const url = new URL("https://api.nal.usda.gov/fdc/v1/foods/search");
     url.searchParams.set("api_key", key);
     const body: Record<string, unknown> = {
-      query: plan.restaurant ? plan.restaurant : term,
-      pageSize: 35, pageNumber: 1,
+      query,
+      pageSize: query === "egg, whole, raw" ? 35 : 60,
+      pageNumber: 1,
     };
-    // For ordinary eggs, rice or meats, prefer actual common-food records
-    // rather than letting hundreds of branded sweets crowd out the results.
     if (onlyCommon) body.dataType = ["Foundation","SR Legacy","Survey (FNDDS)"];
     const response = await fetch(url, {
       method: "POST",
@@ -72,10 +71,39 @@ const queryUsda = async (term: string) => {
     if (!response.ok) throw Error("USDA HTTP " + response.status);
     const data = await response.json();
     if (!Array.isArray(data?.foods)) throw Error("USDA response invalid");
-    return data.foods.map(normalizeUsdaSearchFood).filter(Boolean).slice(0,30);
+    return data.foods.map(normalizeUsdaSearchFood).filter(Boolean);
   };
-  let foods = await fetchUsda(plan.common);
-  if (!foods.length && plan.common) foods = await fetchUsda(false);
+  const queries = plan.usdaQueries;
+  const merge = (batches: any[][]) => {
+    const seen = new Set<string>();
+    const merged: any[] = [];
+    for (const batch of batches) {
+      for (const food of batch) {
+        const id = String(food.source_id || food.name + "|" + food.brand);
+        if (seen.has(id)) continue;
+        seen.add(id);
+        merged.push(food);
+      }
+    }
+    return merged.slice(0, 75);
+  };
+  // "egg" and "eggs" deliberately use the SAME pair of queries. USDA's
+  // first generic results can contain mostly burritos and omelets, while
+  // a targeted raw-whole-egg request finds plain egg entries.
+  const checked = await Promise.allSettled(queries.map(query => fetchUsda(query,plan.common)));
+  const batches = checked.filter((result): result is PromiseFulfilledResult<any[]> =>
+    result.status === "fulfilled").map(result => result.value);
+  let foods = merge(batches);
+  if (!foods.length && plan.common) {
+    // Some records are available only in Branded; preserve this fallback.
+    const fallback = await Promise.allSettled(queries.map(query => fetchUsda(query,false)));
+    const fallbackBatches = fallback.filter((result): result is PromiseFulfilledResult<any[]> =>
+      result.status === "fulfilled").map(result => result.value);
+    if (fallbackBatches.length) foods = merge(fallbackBatches);
+    else if (!batches.length) throw (fallback[0] as PromiseRejectedResult).reason;
+  } else if (!batches.length) {
+    throw (checked[0] as PromiseRejectedResult).reason;
+  }
   return { status: "ok", foods };
 };
 
@@ -210,6 +238,13 @@ Deno.serve(async (req: Request) => {
     const [usda, fatsecret] = await Promise.allSettled([queryUsda(query), queryFatSecret(query)]);
     const usdaResult = usda.status === "fulfilled" ? usda.value : { status: providerFailure(usda.reason), foods: [] };
     const fatsecretResult = fatsecret.status === "fulfilled" ? fatsecret.value : { status: providerFailure(fatsecret.reason), foods: [] };
+    // Only sanitized provider status codes are recorded; never log
+    // queries, authentication tokens, user IDs or provider credentials.
+    if (usdaResult.status !== "ok" || fatsecretResult.status !== "ok") {
+      console.warn("workset-nutrition-provider", JSON.stringify({
+        usda: usdaResult.status, fatsecret: fatsecretResult.status,
+      }));
+    }
     return reply(req, 200, {
       usda: usdaResult.foods,
       fatsecret: fatsecretResult.foods,
