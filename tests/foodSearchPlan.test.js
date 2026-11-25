@@ -193,6 +193,7 @@ test('restaurant searches never fabricate a matching menu entry from a broadly r
 
 test('word boundaries prevent grape/grapefruit and egg/eggplant false positives',()=>{
  assert.equal(rankFoodMatch({name:'Grapefruit',source:'usda',data_type:'Foundation'},'grape'),-1);
+ assert.equal(rankFoodMatch({name:'Pineapple, raw',source:'usda',data_type:'Foundation'},'apple'),-1);
  assert.equal(rankFoodMatch({name:'Eggplant',source:'usda',data_type:'Foundation'},'eggs'),-1);
  assert.ok(rankFoodMatch({name:'Grapes, red, raw',source:'usda',data_type:'Foundation'},'grape')>0);
  assert.ok(rankFoodMatch({name:'Blueberry',source:'usda',data_type:'Foundation'},'blueberries')>0);
