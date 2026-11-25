@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   dateKey,makeFoodEntry,makeWaterEntry,summarizeDay,multipliedNutrients,
-  normalizeOpenFoodFacts,recipePerServing,nutritionHistory
+  normalizeOpenFoodFacts,recipePerServing,nutritionHistory,foodForPortion,needsNutritionReview,broaderFoodSearch
 } from '../src/nutritionModel.js';
 
 const userId='11111111-1111-4111-8111-111111111111', id='22222222-2222-4222-8222-222222222222';
@@ -52,4 +52,22 @@ test('missing nutrition values are flagged instead of treated as measured zeroes
   assert.equal(food.protein_g,0);
   const complete={...p,nutriments:{...p.nutriments,'proteins_100g':0,'carbohydrates_100g':0,'fat_100g':0}};
   assert.equal(normalizeOpenFoodFacts(complete).incomplete,false);
+});
+
+test('Selected verified USDA gram portion scales all four nutrients, no label-only changes',()=>{
+ const source={name:'Egg',source:'usda',serving_label:'100 g',serving_grams:100,
+   calories:143,protein_g:12.6,carbs_g:0.7,fat_g:9.5};
+ const portion=foodForPortion(source,{label:'1 large egg (50 g)',grams:50});
+ assert.deepEqual([portion.calories,portion.protein_g,portion.carbs_g,portion.fat_g],[71.5,6.3,0.4,4.8]);
+ assert.equal(portion.serving_label,'1 large egg (50 g)');
+ assert.equal(source.calories,143);
+ assert.throws(()=>foodForPortion(source,{label:'Bad',grams:0}),/valid portion/);
+});
+test('Past USDA anomalies are flagged for review without overwriting history',()=>{
+ assert.equal(needsNutritionReview({source:'usda',calories:1026,protein_g:26,carbs_g:1.4,fat_g:19}),true);
+ assert.equal(needsNutritionReview({source:'usda',calories:286,protein_g:26,carbs_g:1.4,fat_g:19}),false);
+});
+test('Restaurant breakfast query offers shorter, clearer search',()=>{
+ assert.equal(broaderFoodSearch('Chick-fil-A breakfast'),'Chick-fil-A');
+ assert.equal(broaderFoodSearch("Marco's Pizza"),'');
 });
