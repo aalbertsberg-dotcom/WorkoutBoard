@@ -154,7 +154,7 @@ test('apple and apples retrieve identical records, with whole raw fruit ahead of
    {name:'Apple puree',source:'usda',source_id:'puree',data_type:'SR Legacy',can_log:true}
  ];
  const calls=[];
- const backend={functions:{invoke:async({body})=>{
+ const backend={functions:{invoke:async(_name,{body})=>{
    calls.push(body.query);
    return {data:{usda:foods,fatsecret:[],providers:{usda:'ok',fatsecret:'not_configured'}},error:null};
  }}};
