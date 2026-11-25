@@ -209,7 +209,8 @@ export default function NutritionPage({session,onBack}){
   const history7=history.slice(-7),last30=history;
   const avg=rows=>rows.length?Math.round(rows.reduce((s,r)=>s+r.calories,0)/rows.length):0;
   const selectedOptions=selectedFood?.source==='usda'&&Array.isArray(selectedFood.serving_options)
-    ?selectedFood.serving_options:[];
+    ?selectedFood.serving_options.filter(item=>
+      item.label!==selectedFood.serving_label||Number(item.grams)!==Number(selectedFood.serving_grams)):[];
   const currentPortion=portionChoice==='custom'?{label:customGrams+' g',grams:Number(customGrams)}:
     portionChoice==='default'?{label:selectedFood?.serving_label,grams:selectedFood?.serving_grams}:
     selectedOptions.find((item,index)=>String(index)===portionChoice);
@@ -520,7 +521,7 @@ export default function NutritionPage({session,onBack}){
           fmt(selectedTotals.calories)+' kcal · P '+fmt(selectedTotals.protein_g)+' / C '+fmt(selectedTotals.carbs_g)+' / F '+fmt(selectedTotals.fat_g)+' g':
           'Enter a valid portion and amount to see nutrition.'}</p>
         {selectedFood.incomplete&&<p className="nutrition-caution">Some nutrients are missing from the public food record. Verify the package label.</p>}
-        {selectedOptions.length>0&&<label className="nutrition-portion-label">Serving size
+        {selectedFood.source==='usda'&&<label className="nutrition-portion-label">Serving size
           <select aria-label="Serving size" value={portionChoice} onChange={e=>setPortionChoice(e.target.value)}>
             <option value="default">{selectedFood.serving_label}</option>
             {selectedOptions.map((item,index)=>
