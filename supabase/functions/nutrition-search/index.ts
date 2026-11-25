@@ -5,7 +5,7 @@
 // results returned here are live SEARCH PREVIEWS only and must not be saved to the diary.
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import { normalizeUsdaSearchFood } from "./usdaNutrition.js";
-import { planFoodSearch, restaurantMatches, restaurantItemMatches } from "./foodSearchPlan.js";
+import { planFoodSearch, restaurantItemMatches, fatSecretSearchUrl } from "./foodSearchPlan.js";
 
 const allowedOrigins = new Set([
   "https://aalbertsberg-dotcom.github.io",
@@ -136,12 +136,10 @@ const queryFatSecret = async (term: string) => {
   const token = await accessToken();
   if (!token) return { status: "not_configured", foods: [] };
   const plan = planFoodSearch(term);
-  const request = async (query: string) => {
-    // Official basic-tier v1 GET endpoint; higher search versions require Premier.
-    const url = new URL("https://platform.fatsecret.com/rest/foods/search/v1");
-    url.searchParams.set("search_expression",query);
-    url.searchParams.set("max_results","50");
-    url.searchParams.set("format","json");
+  const request = async (query: string,page=0) => {
+    // Official Basic-tier v1 GET endpoint; optional page search supports
+    // restaurant items buried behind unrelated first-page provider results.
+    const url = fatSecretSearchUrl(query,page);
     const response = await fetch(url,{
       method:"GET",
       headers: { "Authorization": "Bearer " + token, "Accept": "application/json" },
@@ -156,14 +154,17 @@ const queryFatSecret = async (term: string) => {
     }
     let items=data?.foods?.food||[];
     if(!Array.isArray(items))items=[items];
-    return items.filter((food: any)=>food?.food_id).map((food: any)=>({
-      name:cap(food.food_name),brand:cap(food.brand_name,120),
-      source:"fatsecret",source_id:cap(food.food_id,100),
-      serving_label:"",description:cap(food.food_description,250),
-      source_url:String(food.food_url||"").startsWith("https://foods.fatsecret.com/")
-        ?cap(food.food_url,400):"",
-      can_log:false,
-    }));
+    return {
+      total:Math.max(0,Number(data?.foods?.total_results)||0),
+      foods:items.filter((food: any)=>food?.food_id).map((food: any)=>({
+        name:cap(food.food_name),brand:cap(food.brand_name,120),
+        source:"fatsecret",source_id:cap(food.food_id,100),
+        serving_label:"",description:cap(food.food_description,250),
+        source_url:String(food.food_url||"").startsWith("https://foods.fatsecret.com/")
+          ?cap(food.food_url,400):"",
+        can_log:false,
+      })),
+    };
   };
   // First try the requested menu item. Fall back to a restaurant-wide query
   // only to find actual matching items; never return unrelated restaurant food.
@@ -172,8 +173,18 @@ const queryFatSecret = async (term: string) => {
   const seen=new Set<string>();
   const matches=[];
   for(const query of queries){
-    const products=await request(query);
-    for(const food of products){
+    const first=await request(query);
+    const pages=[first.foods];
+    if(plan.restaurant&&plan.itemTerms.length&&first.total>50&&
+      !first.foods.some((food: any)=>restaurantItemMatches(food,plan))){
+      try{
+        const second=await request(query,1);
+        pages.push(second.foods);
+      }catch{
+        // Page 1 results remain valid if the additional provider page fails.
+      }
+    }
+    for(const products of pages)for(const food of products){
       if(plan.restaurant&&!restaurantItemMatches(food,plan))continue;
       if(seen.has(food.source_id))continue;
       seen.add(food.source_id);matches.push(food);
