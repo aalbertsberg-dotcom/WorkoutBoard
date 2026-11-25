@@ -104,10 +104,17 @@ export default function NutritionPage({session,onBack}){
   const [ingredientQty,setIngredientQty]=useState('1');
   const videoRef=useRef(null);
   const newest=useRef(0);
+  const searchRequest=useRef(0);
+  const searchInputRef=useRef(null);
+  const selectionRef=useRef(null);
+  const diaryRef=useRef(null);
+  const [resultsQuery,setResultsQuery]=useState('');
+  const [visibleResults,setVisibleResults]=useState(8);
 
   useEffect(()=>{
     const cached=cacheFor(userId);setData(cached);setGoals({...cached.preferences});
-    setNotice('');setSelectedFood(null);setEditEntry(null);setResults([]);
+    ++searchRequest.current;
+    setNotice('');setSelectedFood(null);setEditEntry(null);setResults([]);setResultsQuery('');
   },[userId]);
   useEffect(()=>{
     if(!userId)return;
@@ -181,7 +188,16 @@ export default function NutritionPage({session,onBack}){
   const history=useMemo(()=>nutritionHistory(data.entries,data.water,date,30),[data.entries,data.water,date]);
   const history7=history.slice(-7),last30=history;
   const avg=rows=>rows.length?Math.round(rows.reduce((s,r)=>s+r.calories,0)/rows.length):0;
-  const selectFood=(food)=>{setSelectedFood(food);setEditEntry(null);setServings('1');setNotice('');};
+  const selectFood=(food)=>{
+    searchInputRef.current?.blur();
+    setSelectedFood(food);setEditEntry(null);setServings('1');setNotice('');
+    requestAnimationFrame(()=>selectionRef.current?.scrollIntoView({block:'nearest',behavior:'smooth'}));
+  };
+  const changeSearch=value=>{
+    ++searchRequest.current; // invalidate any search that is still in flight
+    setSearch(value);setResults([]);setResultsQuery('');setSelectedFood(null);
+    setEditEntry(null);setVisibleResults(8);setSearching(false);setNotice('');
+  };
   const addFood=async()=>{
     if(!selectedFood||selectedFood.can_log===false||busy)return;
     setBusy(true);
@@ -189,7 +205,10 @@ export default function NutritionPage({session,onBack}){
       const row=makeFoodEntry(selectedFood,{id:editEntry?.id||offlineUuid(),userId,date,
         meal:selectedMeal,servings,now:editEntry?.created_at||new Date().toISOString()});
       const result=await save('entries',row);
-      if(result){setSelectedFood(null);setEditEntry(null);setServings('1');setView('log');}
+      if(result){
+        setSelectedFood(null);setEditEntry(null);setServings('1');setView('log');
+        requestAnimationFrame(()=>diaryRef.current?.scrollIntoView({block:'start',behavior:'smooth'}));
+      }
     }catch(error){setNotice(error.message)}finally{setBusy(false)}
   };
   const remove=async(bucket,row)=>{
@@ -221,19 +240,27 @@ export default function NutritionPage({session,onBack}){
   };
   const lookup=async(mode='search')=>{
     if(searching)return;
-    setResults([]);setSelectedFood(null);setEditEntry(null);
-    setSearching(true);setNotice('');
+    const token=++searchRequest.current;
+    const term=search.trim();
+    setResults([]);setResultsQuery('');setSelectedFood(null);setEditEntry(null);
+    setVisibleResults(8);setSearching(true);setNotice('');
+    searchInputRef.current?.blur();
     try{
       if(mode==='barcode'){
         const found=await lookupFoodBarcode(barcode);
-        setResults([found]);selectFood(found);setView('search');
+        if(token!==searchRequest.current)return;
+        setResults([found]);setResultsQuery('Barcode lookup');
+        selectFood(found);setView('search');
       }else{
-        const found=await searchAllFoodCatalog(search,{supabaseClient:supabase,onResults:setResults});setResults(found);
+        const found=await searchAllFoodCatalog(term,{supabaseClient:supabase});
+        if(token!==searchRequest.current)return; // ignore stale responses
+        setResults(found);setResultsQuery(term);
         if(found.length&&found[0].cached)setNotice('Showing previously found foods saved on this device. Verify package labels before logging.');
-        else if(!found.length)setNotice('No matching foods found. Try a different name, a barcode, or create a custom food.');
+        else if(!found.length)setNotice('No closely matching foods found for "'+term+'". Try the restaurant name or food name separately, or enter a custom food.');
       }
-    }catch(error){setResults([]);setNotice(error?.message||'Food search unavailable. Enter a custom food.')}
-    finally{setSearching(false)}
+    }catch(error){
+      if(token===searchRequest.current){setResults([]);setResultsQuery('');setNotice(error?.message||'Food search unavailable. Enter a custom food.')}
+    }finally{if(token===searchRequest.current)setSearching(false)}
   };
   const saveFavorite=async(food)=>{
     if(!food||!food.name||food.can_log===false)return;
@@ -366,7 +393,7 @@ export default function NutritionPage({session,onBack}){
     </div>
     {notice&&<p className="nutrition-status" role="status">{notice}</p>}
 
-    {view==='log'&&<section className="nutrition-food-diary">
+    {view==='log'&&<section ref={diaryRef} className="nutrition-food-diary">
       {MEALS.map(meal=>{
         const items=dayFood.filter(row=>row.meal===meal);
         return <div className="nutrition-meal" key={meal}><div className="nutrition-card-heading"><h3>{meal}</h3>
@@ -386,7 +413,7 @@ export default function NutritionPage({session,onBack}){
     {view==='search'&&<section className="nutrition-tool-card">
       <h3>Find food or scan a barcode</h3><p className="nutrition-help">Search common foods, USDA branded items, packaged foods and restaurant references. USDA and Open Food Facts results can be logged; FatSecret results are previews only under its standard data-use terms.</p>
       <form className="nutrition-search" onSubmit={e=>{e.preventDefault();lookup()}}>
-        <input type="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search food or brand" aria-label="Food search"/>
+        <input ref={searchInputRef} type="search" value={search} onChange={e=>changeSearch(e.target.value)} placeholder="Search food or restaurant" aria-label="Food search" autoComplete="off" spellCheck={false}/>
         <button type="submit" className="primary-action" disabled={searching}>{searching?'Searching…':'Search'}</button>
       </form>
       <div className="nutrition-barcode"><input inputMode="numeric" value={barcode} onChange={e=>setBarcode(e.target.value)}
@@ -394,17 +421,12 @@ export default function NutritionPage({session,onBack}){
         <button type="button" disabled={searching} onClick={()=>lookup('barcode')}>Look up</button>
         <button type="button" onClick={()=>setScanning(s=>!s)}>{scanning?'Stop camera':'Scan camera'}</button></div>
       {scanning&&<div className="nutrition-camera"><video ref={videoRef} autoPlay playsInline muted/><small>Center a product barcode in the camera. No photos are saved.</small></div>}
-      {results.length>0&&<div className="nutrition-results" aria-label="Food results">{results.map((food,i)=>
-        <button type="button" key={(food.source_id||food.name)+i} onClick={()=>selectFood(food)} className={selectedFood===food?'selected':''}>
-          <strong>{food.name}</strong><small>{foodSourceLabel(food)}{food.brand?' · '+food.brand:''}{food.can_log===false?' · Preview only':' · '+fmt(food.calories)+' kcal / '+food.serving_label}{food.incomplete?' · Check nutrition label':''}</small>
-        </button>)}</div>}
-      {results.some(food=>food.source==='fatsecret')&&
-        <p className="nutrition-provider-attribution"><a href="https://platform.fatsecret.com">Powered by fatsecret Platform API</a></p>}
-      <div className="nutrition-suggestions"><span>Recently logged</span><div>{recentFoods.map((food,i)=>
-        <button type="button" key={i} onClick={()=>selectFood(food)}>{food.name}</button>)}</div></div>
-      <div className="nutrition-suggestions"><span>Saved foods</span><div>{favoriteFoods.slice(0,12).map(food=>
-        <button type="button" key={food.id} onClick={()=>selectFood(food)}>{food.name}</button>)}</div></div>
-      {selectedFood?.can_log===false?<div className="nutrition-selection nutrition-provider-preview">
+      {selectedFood&&<div className="nutrition-selection-panel" ref={selectionRef}>
+        <div className="nutrition-selection-top">
+          <strong>Selected food</strong>
+          <button type="button" onClick={()=>{setSelectedFood(null);setEditEntry(null)}}>← Back to results</button>
+        </div>
+        {selectedFood?.can_log===false?<div className="nutrition-selection nutrition-provider-preview">
         <h4>{selectedFood.name}{selectedFood.brand?' · '+selectedFood.brand:''}</h4>
         <p>{selectedFood.description||'Nutrition reference from FatSecret.'}</p>
         <p className="nutrition-caution">FatSecret does not allow indefinite storage of these nutrient values under its standard API terms. This preview is not added to your diary. You can search for a USDA equivalent or enter your own custom food.</p>
@@ -425,6 +447,28 @@ export default function NutritionPage({session,onBack}){
           <button type="button" onClick={()=>{setSelectedFood(null);setEditEntry(null)}}>Cancel</button>
         </div>
       </div>}
+      </div>}
+      {results.length>0&&!selectedFood&&<div className="nutrition-results-block">
+        <div className="nutrition-results-top"><strong>Results for "{resultsQuery||search}"</strong><small>{results.length} matches</small></div>
+        <div className="nutrition-results" aria-label="Food results">
+          {results.slice(0,visibleResults).map((food,i)=>
+            <button type="button" key={(food.source||'')+':'+(food.source_id||food.name)+i}
+              onClick={()=>selectFood(food)}>
+              <strong>{food.name}</strong>
+              <small>{foodSourceLabel(food)}{food.brand?' · '+food.brand:''}{food.can_log===false?' · Preview only':' · '+fmt(food.calories)+' kcal / '+food.serving_label}{food.incomplete?' · Check nutrition label':''}</small>
+            </button>)}
+        </div>
+        {results.length>visibleResults&&<button type="button" className="nutrition-more-results"
+          onClick={()=>setVisibleResults(value=>Math.min(value+8,results.length))}>
+          Show more ({results.length-visibleResults} remaining)
+        </button>}
+        {results.some(food=>food.source==='fatsecret')&&
+          <p className="nutrition-provider-attribution"><a href="https://platform.fatsecret.com">Powered by fatsecret Platform API</a></p>}
+      </div>}
+      {!selectedFood&&<div className="nutrition-suggestions"><span>Recently logged</span><div>{recentFoods.map((food,i)=>
+        <button type="button" key={i} onClick={()=>selectFood(food)}>{food.name}</button>)}</div></div>}
+      {!selectedFood&&<div className="nutrition-suggestions"><span>Saved foods</span><div>{favoriteFoods.slice(0,12).map(food=>
+        <button type="button" key={food.id} onClick={()=>selectFood(food)}>{food.name}</button>)}</div></div>}
       <details className="nutrition-custom" open={false}><summary>+ Create custom food</summary>
         <div className="nutrition-custom-fields">
           {Object.keys(custom).map(key=><label key={key}>{({name:'Food name',brand:'Brand (optional)',serving_label:'Serving description',
