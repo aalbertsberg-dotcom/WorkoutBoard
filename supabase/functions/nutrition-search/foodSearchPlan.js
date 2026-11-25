@@ -30,13 +30,17 @@ const trimAlias=query=>{
 export function planFoodSearch(input){
   const original=String(input||'').trim().slice(0,80);
   const norm=normalizeFoodText(original);
+  const eggQuery=norm==='egg'||norm==='eggs';
   const found=trimAlias(norm);
   return {
-    original,normalized:norm,
+    original,normalized:eggQuery?'egg':norm,
     restaurant:found?.restaurant?.name||'',
     restaurantAliases:found?.restaurant?.aliases||[],
     itemTerms:found?.remainder?found.remainder.split(' ').filter(Boolean):[],
-    providerQuery:found?.restaurant?.name||original,
+    providerQuery:found?.restaurant?.name||(eggQuery?'eggs':original),
+    // Two established USDA queries retrieve plain eggs that can be absent
+    // from the first page of the broader food listing.
+    usdaQueries:eggQuery?['eggs','egg whole raw']:[found?.restaurant?.name||original],
     // If a specific restaurant menu item isn't in the provider results, show
     // restaurant results separately and never pretend they match the full phrase.
     broadened:!!found?.remainder,
@@ -81,6 +85,14 @@ export function rankFoodMatch(food,query){
   else if(brand===plan.normalized)score+=55;
   else if(name.includes(plan.normalized))score+=35;
   if(plan.common){
+    // A search for plain "egg" or "eggs" should lead with whole/raw eggs,
+    // not egg burritos or prepared omelets. Do not invent food records:
+    // only rank returned, source-attributed products.
+    if(plan.normalized==='egg'){
+      if(/^eggs?\s+(whole|raw|fresh|grade|large|medium|small|in shell)\b/.test(name))score+=155;
+      else if(/^eggs?\s+(boiled|hard boiled|soft boiled|poached)\b/.test(name))score+=95;
+      else if(/^eggs?\s+(omelet|omelette|burrito|sandwich|wrap|scrambled)\b/.test(name))score-=55;
+    }
     const type=String(food.data_type||'');
     if(food.source==='usda'&&type!=='Branded')score+=120;
     else if(food.source==='usda'&&type==='Branded')score-=45;
