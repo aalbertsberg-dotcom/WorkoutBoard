@@ -1,5 +1,6 @@
 import { DialogPortal,OverlayPortal,confirmWorkset } from './worksetDialogs'
 import MePage from './MePage'
+import NutritionPage, {NutritionTodayCard} from './NutritionPage'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase'
 import { PlatformProgress, PlanPage, AdminPanel, FeedbackPanel } from './platform'
@@ -3573,7 +3574,7 @@ function App() {
         <header className="app-header">
           <div>
             <div className="brand-lockup"><img src={import.meta.env.BASE_URL+'icon.svg'} alt="" /><span>Work<b>set</b></span></div>
-            <h1>{activeTab === 'today' ? 'Today' : activeTab === 'together' ? 'Together' : activeTab === 'program' ? 'Plan' : activeTab === 'whiteboard' ? 'Whiteboard' : activeTab === 'progress' ? 'Progress' : activeTab === 'history' ? 'History' : activeTab === 'mobility' ? 'Warm-up & Cool-down' : activeTab === 'admin' ? 'Admin' : 'Me'}</h1>
+            <h1>{activeTab === 'today' ? 'Today' : activeTab === 'together' ? 'Together' : activeTab === 'program' ? 'Plan' : activeTab === 'whiteboard' ? 'Whiteboard' : activeTab === 'progress' ? 'Progress' : activeTab === 'history' ? 'History' : activeTab === 'nutrition' ? 'Nutrition' : activeTab === 'mobility' ? 'Warm-up & Cool-down' : activeTab === 'admin' ? 'Admin' : 'Me'}</h1>
             {appNavDepth>0&&<button type="button" className="app-history-back" onClick={navigateBack}>← Back</button>}
           </div>
           <button className={'account-chip ' + (isAdmin ? 'admin' : '')} onClick={openMe}>
@@ -3591,6 +3592,8 @@ function App() {
 
         {/* Remain mounted across tabs so active AMRAP, EMOM and Metcon timers keep running. */}
         <TrainingTimer showPanel={activeTab==='today'} onReveal={()=>navigateTo('today')} />
+        {!dataLoading&&activeTab==='today'&&!plannedToday&&!showRegularToday&&
+          <NutritionTodayCard session={session} onOpen={()=>navigateTo('nutrition')}/>}
 
         {dataLoading ? (
           <div className="loading-card">Loading your workouts…</div>
@@ -4417,6 +4420,8 @@ function App() {
           <MobilitySession session={session} initialMode={mobilityMode}
             onBack={openToday}
             onSaved={async id=>{await refreshPlannedToday();openHistory(id)}}/>
+        ) : activeTab === 'nutrition' ? (
+          <NutritionPage key={session?.user?.id} session={session} onBack={()=>navigateTo('today')}/>
         ) : activeTab === 'history' ? (
           <WorkoutHistory session={session} initialWorkoutId={historyWorkoutId}
             legacyHistory={progress.completed}
@@ -4460,6 +4465,7 @@ function App() {
             session={session}
             displayName={displayName} onSaveDisplayName={saveDisplayName}
             onOpenHistory={()=>openHistory()}
+            onOpenNutrition={()=>navigateTo('nutrition')}
             onOpenProgress={()=>openProgress('Overview')}
             onOpenWeight={()=>openTrack('measurements')}
             onOpenPrograms={()=>navigateTo('program')}
