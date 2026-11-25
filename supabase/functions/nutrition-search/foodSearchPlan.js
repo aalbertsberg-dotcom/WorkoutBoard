@@ -130,3 +130,15 @@ export function rankFoodMatch(food,query){
   if(food.can_log===false)score-=6;
   return Math.max(1,score);
 }
+
+
+// FatSecret's documented Basic OAuth search v1 contract; centralized so API
+// URL construction is verified independently of live credentials.
+export function fatSecretSearchUrl(query,page=0){
+  const url=new URL('https://platform.fatsecret.com/rest/foods/search/v1');
+  url.searchParams.set('search_expression',String(query||'').trim());
+  url.searchParams.set('max_results','50');
+  url.searchParams.set('page_number',String(Math.max(0,Math.min(2,Math.floor(Number(page)||0)))));
+  url.searchParams.set('format','json');
+  return url.toString();
+}
