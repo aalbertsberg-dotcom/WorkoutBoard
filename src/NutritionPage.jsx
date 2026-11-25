@@ -216,7 +216,7 @@ export default function NutritionPage({session,onBack}){
     if(!currentPortion?.grams||selectedFood.source!=='usda')return selectedFood;
     try{return foodForPortion(selectedFood,currentPortion)}catch{return null}
   },[selectedFood,portionChoice,customGrams]);
-  const selectedTotals=selectedForLog&&Number(servings)>0?
+  const selectedTotals=selectedForLog&&Number.isFinite(Number(servings))&&Number(servings)>0&&Number(servings)<=1000?
     multipliedNutrients(selectedForLog,servings):null;
   const broaderQuery=broaderFoodSearch(search);
   const selectFood=(food)=>{
@@ -431,13 +431,25 @@ export default function NutritionPage({session,onBack}){
     {notice&&<p className="nutrition-status" role="status">{notice}</p>}
 
     {view==='log'&&<section ref={diaryRef} className="nutrition-food-diary">
+      {lastLoggedMeal&&<div className="nutrition-added">
+        <strong>✓ Added to {lastLoggedMeal}</strong>
+        <div>
+          <button type="button" onClick={startAnother}>Add another</button>
+          <button type="button" onClick={()=>setLastLoggedMeal('')}>Done</button>
+        </div>
+      </div>}
+      {dayFood.some(needsNutritionReview)&&<p className="nutrition-review-alert" role="status">
+        Some earlier USDA entries have calorie totals that conflict with their macros.
+        Review them against a trusted source; WorkSet has not changed your recorded history.
+      </p>}
       {MEALS.map(meal=>{
         const items=dayFood.filter(row=>row.meal===meal);
         return <div className="nutrition-meal" key={meal}><div className="nutrition-card-heading"><h3>{meal}</h3>
           <div className="nutrition-meal-actions">{items.length>0&&<button type="button" onClick={()=>saveMeal(meal)}>Save meal</button>}
-          <button type="button" onClick={()=>{setSelectedMeal(meal);setView('search')}}>+ Add</button></div></div>
+          <button type="button" onClick={()=>{setSelectedMeal(meal);setLastLoggedMeal('');setSelectedFood(null);setView('search')}}>+ Add</button></div></div>
           {items.length?items.map(row=><div className="nutrition-entry" key={row.id}>
-            <div><strong>{row.name}</strong><small>{fmt(row.quantity)} × {row.serving_label} · P {fmt(row.protein_g)} / C {fmt(row.carbs_g)} / F {fmt(row.fat_g)} g</small></div>
+            <div><strong>{row.name}</strong><small>{fmt(row.quantity)} × {row.serving_label} · P {fmt(row.protein_g)} / C {fmt(row.carbs_g)} / F {fmt(row.fat_g)} g</small>
+            {needsNutritionReview(row)&&<small className="nutrition-review-tag">⚠ Verify USDA nutrition</small>}</div>
             <div><b>{fmt(row.calories)} kcal</b><span><button type="button" onClick={()=>{
               setSelectedMeal(row.meal);setSelectedFood(asFood({...row,id:row.food_id}));
               setEditEntry(row);setServings(String(row.quantity));setView('search');
@@ -493,8 +505,14 @@ export default function NutritionPage({session,onBack}){
         </label>}
         <div className="nutrition-serving-fields"><label>Meal<select value={selectedMeal} onChange={e=>setSelectedMeal(e.target.value)}>
           {MEALS.map(meal=><option key={meal}>{meal}</option>)}</select></label>
-          <label>Servings<input type="number" inputMode="decimal" min="0.01" max="1000" step="0.01"
-            value={servings} onChange={e=>setServings(e.target.value)}/></label></div>
+          <label>Amount
+            <div className="nutrition-quantity">
+              <button type="button" aria-label="Decrease servings" onClick={()=>setServings(old=>String(Math.max(.25,Number((Number(old)-.25).toFixed(2))||.25)))}>−</button>
+              <input type="number" inputMode="decimal" min="0.01" max="1000" step="0.25" aria-label="Servings"
+                value={servings} onChange={e=>setServings(e.target.value)}/>
+              <button type="button" aria-label="Increase servings" onClick={()=>setServings(old=>String(Math.min(1000,Number((Number(old)+.25).toFixed(2))||1)))}>+</button>
+            </div>
+          </label></div>
         <div className="nutrition-choice-actions nutrition-log-primary">
           <button type="button" className="primary-action" disabled={busy||!selectedTotals} onClick={addFood}>{busy?'Saving…':editEntry?'Save changes':'Log food'}</button>
         </div>
@@ -506,7 +524,15 @@ export default function NutritionPage({session,onBack}){
         </details>
       </div>}
       </div>}
-      {results.length>0&&!selectedFood&&<div className="nutrition-results-block">
+      {!selectedFood&&broaderQuery&&<div className="nutrition-search-suggestion">
+        <span>Looking for a restaurant or menu item?</span>
+        <button type="button" onClick={()=>{changeSearch(broaderQuery);setSearch(broaderQuery);
+          setResults([]);setNotice('Search the restaurant name to explore matching entries.');
+          searchInputRef.current?.focus();}}>
+          Try “{broaderQuery}”
+        </button>
+      </div>}
+            {results.length>0&&!selectedFood&&<div className="nutrition-results-block">
         <div className="nutrition-results-top"><strong>Results for "{resultsQuery||search}"</strong><small>{results.length} matches</small></div>
         <div className="nutrition-results" aria-label="Food results">
           {results.slice(0,visibleResults).map((food,i)=>
