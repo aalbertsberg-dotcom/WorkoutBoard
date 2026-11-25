@@ -1,4 +1,5 @@
 import {OverlayPortal} from './worksetDialogs'
+import {isNativeAndroid, WorksetUpdater, checkAndroidUpdate} from './androidUpdates.js'
 import {recoverWorkoutDraft,persistWorkoutDraft,clearWorkoutDraft} from './durableStore.js'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase'
@@ -1171,6 +1172,11 @@ export function ExerciseHistoryStrip({history,lift,formatWeight}) {
 
 /** Always-visible version check. Never clears caches or unregisters workers. */
 export function AppUpdateControls({onRefresh,refreshBlocked=false}){
+  if(isNativeAndroid())return <AndroidAppUpdateControls refreshBlocked={refreshBlocked}/>;
+  return <WebAppUpdateControls onRefresh={onRefresh} refreshBlocked={refreshBlocked}/>;
+}
+
+function WebAppUpdateControls({onRefresh,refreshBlocked=false}){
   const [updateState,setUpdateState]=useState('')
   const [availableBuild,setAvailableBuild]=useState(null)
   const [checking,setChecking]=useState(false)
@@ -1208,6 +1214,77 @@ export function AppUpdateControls({onRefresh,refreshBlocked=false}){
     {refreshBlocked&&<small role="status" className="me-update-note">Finish any active workout and sync saved changes before refreshing.</small>}
     {updateState&&<small role="status" className="me-update-note">{updateState}</small>}
   </section>
+}
+
+
+function AndroidAppUpdateControls({refreshBlocked=false}){
+  const [checking,setChecking]=useState(false);
+  const [installing,setInstalling]=useState(false);
+  const [progress,setProgress]=useState(null);
+  const [state,setState]=useState('');
+  const [release,setRelease]=useState(null);
+  const check=async()=>{
+    if(checking||installing)return;
+    setChecking(true);setState('Checking published Android releases…');setRelease(null);
+    try{
+      const result=await checkAndroidUpdate();
+      if(result.state==='available'){
+        setRelease(result.release);
+        setState('A signed Android update is available.');
+      }else if(result.state==='missing-digest'){
+        setState('The Android release has no verifiable checksum. Update is unavailable.');
+      }else if(result.state==='no-release'){
+        setState('No signed Android release has been published yet.');
+      }else setState('Your installed Android APK is current.');
+    }catch(error){setState(error?.message||'Could not check Android releases.')}
+    finally{setChecking(false)}
+  };
+  const install=async()=>{
+    if(!release||installing||refreshBlocked)return;
+    setInstalling(true);setProgress(null);
+    setState('Downloading and verifying WorkSet.apk…');
+    let listener=null;
+    try{
+      listener=await WorksetUpdater.addListener('downloadProgress',data=>{
+        const value=Number(data?.percent);
+        if(Number.isFinite(value))setProgress(Math.max(0,Math.min(99,value)));
+      });
+      const result=await WorksetUpdater.downloadAndInstall({
+        url:release.url,sha256:release.sha256,versionCode:release.versionCode
+      });
+      if(result?.status==='permission-required'){
+        setState('Allow WorkSet to install updates in Android settings, then tap Download & install again.');
+      }else if(result?.status==='installer-opened'){
+        setState('Android installer opened. Approve the WorkSet update to finish.');
+      }else{
+        setState('The installation process did not start. Please try again.');
+      }
+    }catch(error){setState(error?.message||'Android update could not be installed.')}
+    finally{
+      await listener?.remove?.().catch(()=>{});
+      setInstalling(false);
+    }
+  };
+  return <section className="me-update-card" aria-label="Android app updates">
+    <div className="me-update-heading">
+      <div><strong>WorkSet Android v{__WORKSET_APP_VERSION__}</strong>
+        <small>Native APK updates · WorkSet.apk</small></div>
+      <span className="me-update-build">APK build</span>
+    </div>
+    <div className="me-update-actions">
+      <button type="button" className="secondary-action" onClick={check} disabled={checking||installing}>
+        {checking?'Checking…':'Check APK updates'}
+      </button>
+      {release&&<button type="button" className="secondary-action" onClick={install}
+        disabled={installing||refreshBlocked}>
+        {installing?'Preparing installer…':'Download & install'}
+      </button>}
+    </div>
+    {progress!==null&&installing&&<progress aria-label="APK download" max="100" value={progress}/>}
+    {refreshBlocked&&<small className="me-update-note">Finish your workout and sync pending changes before installing an APK.</small>}
+    {state&&<small role="status" className="me-update-note">{state}</small>}
+    <small className="me-update-note">Android will ask you to approve the installation. APK updates do not happen silently.</small>
+  </section>;
 }
 
 export function InstallAppButton(){
