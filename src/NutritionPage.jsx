@@ -1,9 +1,9 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {BarcodeDetector as BarcodeDetectorPonyfill} from 'barcode-detector/ponyfill';
 import {supabase} from './supabase';
-import {confirmWorkset} from './worksetDialogs';
+import {confirmWorkset,promptWorkset} from './worksetDialogs';
 import {readOfflineState,writeOfflineState,upsertOfflineFirst,offlineUuid,syncOfflineQueue,getPendingOfflineCount,isOnline} from './offline';
-import {NUTRITION_DEFAULTS,MEALS,dateKey,round1,nonnegative,multipliedNutrients,makeFoodEntry,makeWaterEntry,summarizeDay,nutritionHistory,recipePerServing} from './nutritionModel';
+import {NUTRITION_DEFAULTS,MEALS,dateKey,round1,nonnegative,multipliedNutrients,makeFoodEntry,makeWaterEntry,summarizeDay,nutrientSum,nutritionHistory,recipePerServing} from './nutritionModel';
 import {searchFoodCatalog,lookupFoodBarcode} from './nutritionCatalog';
 import './nutrition.css';
 
@@ -251,6 +251,18 @@ export default function NutritionPage({session,onBack}){
       setNotice('Ingredient added to recipe.');
     }catch(error){setNotice(error.message)}
   };
+  const saveMeal=async(meal)=>{
+    const items=dayFood.filter(row=>row.meal===meal);
+    if(!items.length)return;
+    const name=await promptWorkset('Name this reusable meal',meal+' meal');
+    if(!String(name||'').trim())return;
+    const food=cleanFood({...nutrientSum(items),name:String(name).trim(),serving_label:'1 meal',
+      source:'meal',is_recipe:true,ingredients:items.map(row=>({
+        name:row.name,quantity:row.quantity,calories:row.calories,
+        protein_g:row.protein_g,carbs_g:row.carbs_g,fat_g:row.fat_g
+      }))},userId);
+    await save('foods',food);
+  };
   const saveRecipe=async()=>{
     if(!String(recipeName).trim()){setNotice('Name the recipe.');return}
     try{
@@ -355,7 +367,8 @@ export default function NutritionPage({session,onBack}){
       {MEALS.map(meal=>{
         const items=dayFood.filter(row=>row.meal===meal);
         return <div className="nutrition-meal" key={meal}><div className="nutrition-card-heading"><h3>{meal}</h3>
-          <button type="button" onClick={()=>{setSelectedMeal(meal);setView('search')}}>+ Add</button></div>
+          <div className="nutrition-meal-actions">{items.length>0&&<button type="button" onClick={()=>saveMeal(meal)}>Save meal</button>}
+          <button type="button" onClick={()=>{setSelectedMeal(meal);setView('search')}}>+ Add</button></div></div>
           {items.length?items.map(row=><div className="nutrition-entry" key={row.id}>
             <div><strong>{row.name}</strong><small>{fmt(row.quantity)} × {row.serving_label} · P {fmt(row.protein_g)} / C {fmt(row.carbs_g)} / F {fmt(row.fat_g)} g</small></div>
             <div><b>{fmt(row.calories)} kcal</b><span><button type="button" onClick={()=>{
