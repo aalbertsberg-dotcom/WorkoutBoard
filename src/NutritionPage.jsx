@@ -3,7 +3,7 @@ import {BarcodeDetector as BarcodeDetectorPonyfill} from 'barcode-detector/ponyf
 import {supabase} from './supabase';
 import {confirmWorkset,promptWorkset} from './worksetDialogs';
 import {readOfflineState,writeOfflineState,upsertOfflineFirst,offlineUuid,syncOfflineQueue,getPendingOfflineCount,isOnline} from './offline';
-import {NUTRITION_DEFAULTS,MEALS,dateKey,round1,nonnegative,multipliedNutrients,makeFoodEntry,makeWaterEntry,summarizeDay,nutrientSum,nutritionHistory,recipePerServing} from './nutritionModel';
+import {NUTRITION_DEFAULTS,MEALS,dateKey,round1,nonnegative,multipliedNutrients,makeFoodEntry,makeWaterEntry,summarizeDay,nutrientSum,nutritionHistory,recipePerServing,foodForPortion,needsNutritionReview,broaderFoodSearch} from './nutritionModel';
 import {lookupFoodBarcode} from './nutritionCatalog';
 import {searchAllFoodCatalog,foodSourceLabel} from './nutritionMultiSearch';
 import './nutrition.css';
@@ -27,7 +27,7 @@ const cleanFood=(food,userId,id=offlineUuid())=>({
   is_recipe:Boolean(food.is_recipe),is_favorite:true,ingredients:food.ingredients||[],
   deleted_at:null,created_at:new Date().toISOString(),updated_at:new Date().toISOString()
 });
-const asFood=row=>({...row,...Object.fromEntries(['calories','protein_g','carbs_g','fat_g'].map(field=>[field,round1(nonnegative(row[field])/Math.max(0.001,Number(row.quantity)||1))]))});
+const asFood=row=>({...row,can_log:!needsNutritionReview(row),validation_warning:needsNutritionReview(row)?'Previously logged USDA calories are inconsistent; verify against a reliable source.':'',...Object.fromEntries(['calories','protein_g','carbs_g','fat_g'].map(field=>[field,round1(nonnegative(row[field])/Math.max(0.001,Number(row.quantity)||1))]))});
 const validCustom=fields=>String(fields.name||'').trim()&&['calories','protein_g','carbs_g','fat_g'].every(key=>validNumber(fields[key],50000));
 
 function ProgressMetric({label,value,goal,unit='',primary=false}){
@@ -89,7 +89,13 @@ export default function NutritionPage({session,onBack}){
   const [results,setResults]=useState([]);
   const [searching,setSearching]=useState(false);
   const [selectedFood,setSelectedFood]=useState(null);
-  const [selectedMeal,setSelectedMeal]=useState('Breakfast');
+  const [selectedMeal,setSelectedMeal]=useState(()=>{
+    try{const remembered=localStorage.getItem('workset:nutrition:meal:'+userId);
+      return MEALS.includes(remembered)?remembered:'Breakfast';}catch{return 'Breakfast'}
+  });
+  const [lastLoggedMeal,setLastLoggedMeal]=useState('');
+  const [portionChoice,setPortionChoice]=useState('default');
+  const [customGrams,setCustomGrams]=useState('100');
   const [servings,setServings]=useState('1');
   const [editEntry,setEditEntry]=useState(null);
   const [waterAmount,setWaterAmount]=useState('');
@@ -105,6 +111,8 @@ export default function NutritionPage({session,onBack}){
   const videoRef=useRef(null);
   const newest=useRef(0);
   const searchRequest=useRef(0);
+  const foodDetailsRequest=useRef(0);
+  const [verifyingFood,setVerifyingFood]=useState(false);
   const searchInputRef=useRef(null);
   const selectionRef=useRef(null);
   const diaryRef=useRef(null);
@@ -114,6 +122,9 @@ export default function NutritionPage({session,onBack}){
   useEffect(()=>{
     const cached=cacheFor(userId);setData(cached);setGoals({...cached.preferences});
     ++searchRequest.current;
+    try{const last=localStorage.getItem('workset:nutrition:meal:'+userId);
+      setSelectedMeal(MEALS.includes(last)?last:'Breakfast')}catch{setSelectedMeal('Breakfast')}
+    setLastLoggedMeal('');
     setNotice('');setSelectedFood(null);setEditEntry(null);setResults([]);setResultsQuery('');
   },[userId]);
   useEffect(()=>{
@@ -171,6 +182,15 @@ export default function NutritionPage({session,onBack}){
     setNotice(response.offline?'✓ Saved on this device. It will sync when you reconnect.':'✓ Saved to your account.');
     return true;
   };
+  useEffect(()=>{
+    if(!userId||!MEALS.includes(selectedMeal))return;
+    try{localStorage.setItem('workset:nutrition:meal:'+userId,selectedMeal)}catch{}
+  },[selectedMeal,userId]);
+  useEffect(()=>{
+    if(view!=='search'||selectedFood)return;
+    const frame=requestAnimationFrame(()=>searchInputRef.current?.focus({preventScroll:true}));
+    return ()=>cancelAnimationFrame(frame);
+  },[view]);
   const prefs={...NUTRITION_DEFAULTS,...data.preferences};
   const today=useMemo(()=>summarizeDay(data.entries,data.water,date),[data.entries,data.water,date]);
   const dayFood=useMemo(()=>data.entries.filter(row=>row.entry_date===date&&!row.deleted_at)
@@ -188,25 +208,58 @@ export default function NutritionPage({session,onBack}){
   const history=useMemo(()=>nutritionHistory(data.entries,data.water,date,30),[data.entries,data.water,date]);
   const history7=history.slice(-7),last30=history;
   const avg=rows=>rows.length?Math.round(rows.reduce((s,r)=>s+r.calories,0)/rows.length):0;
+  const selectedOptions=selectedFood?.source==='usda'&&Array.isArray(selectedFood.serving_options)
+    ?selectedFood.serving_options.filter(item=>
+      item.label!==selectedFood.serving_label||Number(item.grams)!==Number(selectedFood.serving_grams)):[];
+  const currentPortion=portionChoice==='custom'?{label:customGrams+' g',grams:Number(customGrams)}:
+    portionChoice==='default'?{label:selectedFood?.serving_label,grams:selectedFood?.serving_grams}:
+    selectedOptions.find((item,index)=>String(index)===portionChoice);
+  const selectedForLog=useMemo(()=>{
+    if(!selectedFood)return null;
+    if(!currentPortion?.grams||selectedFood.source!=='usda')return selectedFood;
+    try{return foodForPortion(selectedFood,currentPortion)}catch{return null}
+  },[selectedFood,portionChoice,customGrams]);
+  const selectedTotals=selectedForLog&&Number.isFinite(Number(servings))&&Number(servings)>0&&Number(servings)<=1000?
+    multipliedNutrients(selectedForLog,servings):null;
+  const broaderQuery=broaderFoodSearch(search);
   const selectFood=(food)=>{
+    const token=++foodDetailsRequest.current;
     searchInputRef.current?.blur();
-    setSelectedFood(food);setEditEntry(null);setServings('1');setNotice('');
+    setSelectedFood(food);setEditEntry(null);setServings('1');
+    setPortionChoice('default');setCustomGrams('100');setNotice('');
+    const usdaId=String(food?.source_id||'');
+    if(food?.source==='usda'&&/^[0-9]{1,12}$/.test(usdaId)&&isOnline()){
+      setVerifyingFood(true);
+      supabase.functions.invoke('nutrition-search',{body:{action:'details',fdcId:usdaId}})
+        .then(({data,error})=>{
+          if(token!==foodDetailsRequest.current||activeUser.current!==userId)return;
+          if(!error&&data?.food?.source==='usda'&&String(data.food.source_id)===usdaId){
+            setSelectedFood(data.food);
+            setPortionChoice('default');
+          }else setNotice('Using available USDA search information. Verify the serving label before logging.');
+        })
+        .catch(()=>{if(token===foodDetailsRequest.current)setNotice('USDA serving details could not load. Use the listed gram amount.')})
+        .finally(()=>{if(token===foodDetailsRequest.current)setVerifyingFood(false)});
+    }else setVerifyingFood(false);
     requestAnimationFrame(()=>selectionRef.current?.scrollIntoView({block:'nearest',behavior:'smooth'}));
   };
   const changeSearch=value=>{
+    ++foodDetailsRequest.current;
     ++searchRequest.current; // invalidate any search that is still in flight
     setSearch(value);setResults([]);setResultsQuery('');setSelectedFood(null);
     setEditEntry(null);setVisibleResults(8);setSearching(false);setNotice('');
   };
   const addFood=async()=>{
-    if(!selectedFood||selectedFood.can_log===false||busy)return;
+    if(!selectedForLog||selectedForLog.can_log===false||busy)return;
     setBusy(true);
     try{
-      const row=makeFoodEntry(selectedFood,{id:editEntry?.id||offlineUuid(),userId,date,
+      const row=makeFoodEntry(selectedForLog,{id:editEntry?.id||offlineUuid(),userId,date,
         meal:selectedMeal,servings,now:editEntry?.created_at||new Date().toISOString()});
       const result=await save('entries',row);
       if(result){
+        ++foodDetailsRequest.current;setVerifyingFood(false);
         setSelectedFood(null);setEditEntry(null);setServings('1');setView('log');
+        setLastLoggedMeal(selectedMeal);
         requestAnimationFrame(()=>diaryRef.current?.scrollIntoView({block:'start',behavior:'smooth'}));
       }
     }catch(error){setNotice(error.message)}finally{setBusy(false)}
@@ -238,10 +291,16 @@ export default function NutritionPage({session,onBack}){
     const ok=await save('preferences',payload);
     if(ok)setGoals(payload);
   };
-  const lookup=async(mode='search')=>{
+  const startAnother=()=>{
+    ++foodDetailsRequest.current;setVerifyingFood(false);
+    setLastLoggedMeal('');setSelectedFood(null);setEditEntry(null);
+    setSearch('');setResults([]);setResultsQuery('');setView('search');
+  };
+  const lookup=async(mode='search',override='')=>{
     if(searching)return;
     const token=++searchRequest.current;
-    const term=search.trim();
+    const term=String(override||search).trim();
+    if(override)setSearch(term);
     setResults([]);setResultsQuery('');setSelectedFood(null);setEditEntry(null);
     setVisibleResults(8);setSearching(true);setNotice('');
     searchInputRef.current?.blur();
@@ -343,6 +402,12 @@ export default function NutritionPage({session,onBack}){
   return <section className="page-section nutrition-page" aria-label="Nutrition and hydration">
     <div className="nutrition-topline"><button type="button" className="secondary-action" onClick={onBack}>← Back</button>
       <span>{loading?'Syncing nutrition…':isOnline()?'Private to your account':'Offline logging available'}</span></div>
+    {view==='search'?
+      <div className="nutrition-search-intro">
+        <div><span className="card-label">QUICK FOOD LOG</span><strong>Adding to {selectedMeal}</strong></div>
+        <button type="button" onClick={()=>{setSelectedFood(null);setEditEntry(null);setView('log')}}>← Diary</button>
+      </div>
+    :<>
     <div className="nutrition-hero"><span className="card-label">FOOD & WATER</span><h2>Nutrition & hydration</h2>
       <p>Log meals and water your way. Calories and macros are always saved, even when you change modes.</p>
     </div>
@@ -386,6 +451,7 @@ export default function NutritionPage({session,onBack}){
           <button type="button" onClick={()=>{setEditingWater(row);setWaterAmount(String(row.amount_oz))}}>Edit</button>
           <button type="button" onClick={()=>remove('water',row)}>Remove</button></div>)}</details>}
     </section>
+    </>}
 
     <div className="nutrition-tabs" role="group" aria-label="Nutrition tools">
       {[['log','Food diary'],['search','Add food'],['saved','Saved'],['recipe','Recipes'],['history','History'],['goals','Goals']].map(([key,label])=>
@@ -394,13 +460,25 @@ export default function NutritionPage({session,onBack}){
     {notice&&<p className="nutrition-status" role="status">{notice}</p>}
 
     {view==='log'&&<section ref={diaryRef} className="nutrition-food-diary">
+      {lastLoggedMeal&&<div className="nutrition-added">
+        <strong>✓ Added to {lastLoggedMeal}</strong>
+        <div>
+          <button type="button" onClick={startAnother}>Add another</button>
+          <button type="button" onClick={()=>setLastLoggedMeal('')}>Done</button>
+        </div>
+      </div>}
+      {dayFood.some(needsNutritionReview)&&<p className="nutrition-review-alert" role="status">
+        Some earlier USDA entries have calorie totals that conflict with their macros.
+        Review them against a trusted source; WorkSet has not changed your recorded history.
+      </p>}
       {MEALS.map(meal=>{
         const items=dayFood.filter(row=>row.meal===meal);
         return <div className="nutrition-meal" key={meal}><div className="nutrition-card-heading"><h3>{meal}</h3>
           <div className="nutrition-meal-actions">{items.length>0&&<button type="button" onClick={()=>saveMeal(meal)}>Save meal</button>}
-          <button type="button" onClick={()=>{setSelectedMeal(meal);setView('search')}}>+ Add</button></div></div>
+          <button type="button" onClick={()=>{setSelectedMeal(meal);setLastLoggedMeal('');setSelectedFood(null);setView('search')}}>+ Add</button></div></div>
           {items.length?items.map(row=><div className="nutrition-entry" key={row.id}>
-            <div><strong>{row.name}</strong><small>{fmt(row.quantity)} × {row.serving_label} · P {fmt(row.protein_g)} / C {fmt(row.carbs_g)} / F {fmt(row.fat_g)} g</small></div>
+            <div><strong>{row.name}</strong><small>{fmt(row.quantity)} × {row.serving_label} · P {fmt(row.protein_g)} / C {fmt(row.carbs_g)} / F {fmt(row.fat_g)} g</small>
+            {needsNutritionReview(row)&&<small className="nutrition-review-tag">⚠ Verify USDA nutrition</small>}</div>
             <div><b>{fmt(row.calories)} kcal</b><span><button type="button" onClick={()=>{
               setSelectedMeal(row.meal);setSelectedFood(asFood({...row,id:row.food_id}));
               setEditEntry(row);setServings(String(row.quantity));setView('search');
@@ -411,44 +489,78 @@ export default function NutritionPage({session,onBack}){
     </section>}
 
     {view==='search'&&<section className="nutrition-tool-card">
-      <h3>Find food or scan a barcode</h3><p className="nutrition-help">Search common foods, USDA branded items, packaged foods and restaurant references. USDA and Open Food Facts results can be logged; FatSecret results are previews only under its standard data-use terms.</p>
+      <h3>Find a food</h3>
+      <p className="nutrition-help nutrition-search-help">Common foods, restaurants and packaged products in one place.</p>
       <form className="nutrition-search" onSubmit={e=>{e.preventDefault();lookup()}}>
         <input ref={searchInputRef} type="search" value={search} onChange={e=>changeSearch(e.target.value)} placeholder="Search food or restaurant" aria-label="Food search" autoComplete="off" spellCheck={false}/>
         <button type="submit" className="primary-action" disabled={searching}>{searching?'Searching…':'Search'}</button>
       </form>
+      <details className="nutrition-barcode-details"><summary>Scan barcode or enter a code</summary>
       <div className="nutrition-barcode"><input inputMode="numeric" value={barcode} onChange={e=>setBarcode(e.target.value)}
         placeholder="8–14 digit barcode" aria-label="Product barcode"/>
         <button type="button" disabled={searching} onClick={()=>lookup('barcode')}>Look up</button>
-        <button type="button" onClick={()=>setScanning(s=>!s)}>{scanning?'Stop camera':'Scan camera'}</button></div>
+        <button type="button" onClick={()=>setScanning(s=>!s)}>{scanning?'Stop camera':'Scan camera'}</button></div></details>
       {scanning&&<div className="nutrition-camera"><video ref={videoRef} autoPlay playsInline muted/><small>Center a product barcode in the camera. No photos are saved.</small></div>}
       {selectedFood&&<div className="nutrition-selection-panel" ref={selectionRef}>
+        {verifyingFood&&<small className="nutrition-checking">Checking USDA serving details…</small>}
         <div className="nutrition-selection-top">
           <strong>Selected food</strong>
           <button type="button" onClick={()=>{setSelectedFood(null);setEditEntry(null)}}>← Back to results</button>
         </div>
         {selectedFood?.can_log===false?<div className="nutrition-selection nutrition-provider-preview">
         <h4>{selectedFood.name}{selectedFood.brand?' · '+selectedFood.brand:''}</h4>
-        <p>{selectedFood.description||'Nutrition reference from FatSecret.'}</p>
-        <p className="nutrition-caution">FatSecret does not allow indefinite storage of these nutrient values under its standard API terms. This preview is not added to your diary. You can search for a USDA equivalent or enter your own custom food.</p>
+        <p>{selectedFood.description||selectedFood.validation_warning||'This entry cannot be logged without verified nutrition details.'}</p>
+        <p className="nutrition-caution">{selectedFood.source==='fatsecret'
+          ?'FatSecret entries are previews only under its storage license. Use a USDA match or add your own food.'
+          :'USDA nutrition values need verification. Try a different result or enter a custom food using the package label.'}</p>
         {selectedFood.source_url&&<a href={selectedFood.source_url} target="_blank" rel="noopener noreferrer">View on FatSecret</a>}
         <button type="button" onClick={()=>setSelectedFood(null)}>Close preview</button>
       </div>:selectedFood&&<div className="nutrition-selection">
         <h4>{editEntry?'Edit food entry':'Log '+selectedFood.name}</h4>
-        <p>{selectedFood.serving_label} · {fmt(selectedFood.calories)} kcal · P {fmt(selectedFood.protein_g)} / C {fmt(selectedFood.carbs_g)} / F {fmt(selectedFood.fat_g)} g</p>
+        <p className="nutrition-live-totals">{selectedTotals?
+          fmt(selectedTotals.calories)+' kcal · P '+fmt(selectedTotals.protein_g)+' / C '+fmt(selectedTotals.carbs_g)+' / F '+fmt(selectedTotals.fat_g)+' g':
+          'Enter a valid portion and amount to see nutrition.'}</p>
         {selectedFood.incomplete&&<p className="nutrition-caution">Some nutrients are missing from the public food record. Verify the package label.</p>}
+        {selectedFood.source==='usda'&&<label className="nutrition-portion-label">Serving size
+          <select aria-label="Serving size" value={portionChoice} onChange={e=>setPortionChoice(e.target.value)}>
+            <option value="default">{selectedFood.serving_label}</option>
+            {selectedOptions.map((item,index)=>
+              <option key={index} value={String(index)}>{item.label}</option>)}
+            <option value="custom">Custom grams</option>
+          </select>
+        </label>}
+        {portionChoice==='custom'&&<label>Grams
+          <input type="number" inputMode="decimal" min="1" max="1500" step="1"
+            value={customGrams} onChange={e=>setCustomGrams(e.target.value)}/>
+        </label>}
         <div className="nutrition-serving-fields"><label>Meal<select value={selectedMeal} onChange={e=>setSelectedMeal(e.target.value)}>
           {MEALS.map(meal=><option key={meal}>{meal}</option>)}</select></label>
-          <label>Servings<input type="number" inputMode="decimal" min="0.01" max="1000" step="0.01"
-            value={servings} onChange={e=>setServings(e.target.value)}/></label></div>
-        <div className="nutrition-choice-actions">
-          <button type="button" className="primary-action" disabled={busy} onClick={addFood}>{busy?'Saving…':editEntry?'Save changes':'Log food'}</button>
-          <button type="button" onClick={()=>saveFavorite(selectedFood)}>☆ Save favorite</button>
-          <button type="button" onClick={()=>{addIngredient(selectedFood,servings);setView('recipe')}}>+ Recipe ingredient</button>
-          <button type="button" onClick={()=>{setSelectedFood(null);setEditEntry(null)}}>Cancel</button>
+          <label>Amount
+            <div className="nutrition-quantity">
+              <button type="button" aria-label="Decrease servings" onClick={()=>setServings(old=>String(Math.max(.25,Number((Number(old)-.25).toFixed(2))||.25)))}>−</button>
+              <input type="number" inputMode="decimal" min="0.01" max="1000" step="0.25" aria-label="Servings"
+                value={servings} onChange={e=>setServings(e.target.value)}/>
+              <button type="button" aria-label="Increase servings" onClick={()=>setServings(old=>String(Math.min(1000,Number((Number(old)+.25).toFixed(2))||1)))}>+</button>
+            </div>
+          </label></div>
+        <div className="nutrition-choice-actions nutrition-log-primary">
+          <button type="button" className="primary-action" disabled={busy||verifyingFood||!selectedTotals} onClick={addFood}>{busy?'Saving…':editEntry?'Save changes':'Log food'}</button>
         </div>
+        <details className="nutrition-secondary-actions"><summary>More options</summary>
+          <div>
+            <button type="button" onClick={()=>saveFavorite(selectedFood)}>☆ Save favorite</button>
+            <button type="button" onClick={()=>{addIngredient(selectedForLog||selectedFood,servings);setView('recipe')}}>+ Recipe ingredient</button>
+          </div>
+        </details>
       </div>}
       </div>}
-      {results.length>0&&!selectedFood&&<div className="nutrition-results-block">
+      {!selectedFood&&broaderQuery&&<div className="nutrition-search-suggestion">
+        <span>Looking for a restaurant or menu item?</span>
+        <button type="button" onClick={()=>lookup('search',broaderQuery)}>
+          Search “{broaderQuery}”
+        </button>
+      </div>}
+            {results.length>0&&!selectedFood&&<div className="nutrition-results-block">
         <div className="nutrition-results-top"><strong>Results for "{resultsQuery||search}"</strong><small>{results.length} matches</small></div>
         <div className="nutrition-results" aria-label="Food results">
           {results.slice(0,visibleResults).map((food,i)=>
@@ -465,9 +577,14 @@ export default function NutritionPage({session,onBack}){
         {results.some(food=>food.source==='fatsecret')&&
           <p className="nutrition-provider-attribution"><a href="https://platform.fatsecret.com">Powered by fatsecret Platform API</a></p>}
       </div>}
-      {!selectedFood&&<div className="nutrition-suggestions"><span>Recently logged</span><div>{recentFoods.map((food,i)=>
+      {!selectedFood&&!search.trim()&&!results.length&&<div className="nutrition-suggestions nutrition-common-foods">
+        <span>Common searches</span>
+        <div>{['Egg','Chicken breast','Rice','Banana'].map(term=>
+          <button type="button" key={term} onClick={()=>lookup('search',term)}>{term}</button>)}</div>
+      </div>}
+            {!selectedFood&&results.length===0&&recentFoods.length>0&&<div className="nutrition-suggestions"><span>Recently logged</span><div>{recentFoods.map((food,i)=>
         <button type="button" key={i} onClick={()=>selectFood(food)}>{food.name}</button>)}</div></div>}
-      {!selectedFood&&<div className="nutrition-suggestions"><span>Saved foods</span><div>{favoriteFoods.slice(0,12).map(food=>
+      {!selectedFood&&results.length===0&&favoriteFoods.length>0&&<div className="nutrition-suggestions"><span>Saved foods</span><div>{favoriteFoods.slice(0,12).map(food=>
         <button type="button" key={food.id} onClick={()=>selectFood(food)}>{food.name}</button>)}</div></div>}
       <details className="nutrition-custom" open={false}><summary>+ Create custom food</summary>
         <div className="nutrition-custom-fields">

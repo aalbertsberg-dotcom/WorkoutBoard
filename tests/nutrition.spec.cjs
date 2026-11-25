@@ -162,7 +162,7 @@ test('USDA nutrition is loggable while FatSecret restaurant data remains preview
   await expect(page.locator('.nutrition-results')).toContainText('Beef burger patty');
   await expect(page.locator('.nutrition-results')).toContainText('Example Restaurant');
   await page.locator('.nutrition-results button').filter({hasText:'FatSecret'}).click();
-  await expect(page.locator('.nutrition-provider-preview')).toContainText('does not allow indefinite storage');
+  await expect(page.locator('.nutrition-provider-preview')).toContainText('previews only');
   await expect(page.getByRole('button',{name:'Log food',exact:true})).toHaveCount(0);
   await page.locator('.nutrition-provider-preview').getByRole('button',{name:'Close preview'}).click();
   await page.locator('.nutrition-results button').filter({hasText:'USDA'}).click();
@@ -250,4 +250,87 @@ test('Marco’s Pizza only shows matching places and clears old results when que
   await expect(page.locator('.nutrition-results button')).toHaveCount(1);
   await expect(page.locator('.nutrition-results')).toContainText("Marco's Pizza Pepperoni");
   await expect(page.locator('.nutrition-results')).not.toContainText('PIZZA HUT');
+});
+
+test('Food diary keeps meal selection and offers Add another or Done after logging',async({page})=>{
+ await page.goto('/tests/fixtures/nutrition.html')
+ await page.getByRole('button',{name:'Add food',exact:true}).click()
+ await page.locator('.nutrition-custom summary').click()
+ const fields=page.locator('.nutrition-custom-fields input')
+ await fields.nth(0).fill('Test snack')
+ await fields.nth(3).fill('140')
+ await fields.nth(4).fill('4')
+ await fields.nth(5).fill('24')
+ await fields.nth(6).fill('3')
+ await page.getByRole('button',{name:'Save custom food'}).click()
+ await page.locator('.nutrition-selection select').first().selectOption('Snacks')
+ await page.getByRole('button',{name:'Log food',exact:true}).click()
+ await expect(page.locator('.nutrition-added')).toContainText('Added to Snacks')
+ await page.getByRole('button',{name:'Add another'}).click()
+ await expect(page.getByRole('searchbox',{name:'Food search'})).toBeFocused()
+ await page.getByRole('button',{name:'Food diary',exact:true}).click()
+ await page.getByRole('button',{name:'Add food',exact:true}).click()
+ await expect(page.locator('.nutrition-selection select').first()).toHaveCount(0)
+ await page.reload()
+ await page.getByRole('button',{name:'Add food',exact:true}).click()
+ await page.locator('.nutrition-suggestions button').filter({hasText:'Test snack'}).first().click()
+ await expect(page.locator('.nutrition-selection select').first()).toHaveValue('Snacks')
+})
+test('USDA verified serving sizes scale live calories and protect bad records',async({page})=>{
+ const foods=[
+  {name:'Egg, whole',source:'usda',source_id:'111',serving_label:'100 g',serving_grams:100,
+   serving_options:[{label:'100 g',grams:100},{label:'1 large egg (50 g)',grams:50}],
+   calories:143,protein_g:12.6,carbs_g:.7,fat_g:9.5,can_log:true},
+  {name:'Egg, suspicious calories',source:'usda',source_id:'112',serving_label:'100 g',serving_grams:100,
+   calories:513,protein_g:12.6,carbs_g:.7,fat_g:9.5,can_log:false,
+   validation_warning:'Calories conflict with other nutrients'}
+ ];
+ await page.route('https://example.supabase.co/functions/v1/nutrition-search**',async route=>
+   route.fulfill({status:200,contentType:'application/json',headers:{'access-control-allow-origin':'*'},
+   body:JSON.stringify({usda:foods,fatsecret:[],providers:{usda:'ok',fatsecret:'not_configured'}})}))
+ await page.route('https://search.openfoodfacts.org/search**',async route=>
+   route.fulfill({status:200,contentType:'application/json',headers:{'access-control-allow-origin':'*'},body:'{"hits":[]}'}))
+ for(const prefix of ['world','us']){
+   await page.route('https://'+prefix+'.openfoodfacts.org/cgi/search.pl**',async route=>
+     route.fulfill({status:200,contentType:'application/json',headers:{'access-control-allow-origin':'*'},body:'{"products":[]}'}))
+ }
+ await page.goto('/tests/fixtures/nutrition.html')
+ await page.getByRole('button',{name:'Add food',exact:true}).click()
+ await page.getByRole('searchbox',{name:'Food search'}).fill('egg')
+ await page.getByRole('button',{name:'Search',exact:true}).click()
+ await page.locator('.nutrition-results button').filter({hasText:'Egg, whole'}).click()
+ await expect(page.getByRole('button',{name:'Log food',exact:true})).toBeVisible()
+ await page.getByRole('combobox',{name:'Serving size'}).selectOption({label:'1 large egg (50 g)'})
+ await expect(page.locator('.nutrition-live-totals')).toContainText('71.5 kcal')
+ await page.getByRole('button',{name:'Log food',exact:true}).click()
+ await expect(page.locator('.nutrition-food-diary')).toContainText('71.5 kcal')
+ await page.getByRole('button',{name:'Add food',exact:true}).click()
+ await page.getByRole('searchbox',{name:'Food search'}).fill('egg')
+ await page.getByRole('button',{name:'Search',exact:true}).click()
+ await page.locator('.nutrition-results button').filter({hasText:'suspicious calories'}).click()
+ await expect(page.locator('.nutrition-provider-preview')).toContainText('need verification')
+ await expect(page.getByRole('button',{name:'Log food',exact:true})).toHaveCount(0)
+})
+test('Search suggestions shorten restaurant breakfast queries and barcode tools stay collapsed',async({page})=>{
+ await page.goto('/tests/fixtures/nutrition.html')
+ await page.getByRole('button',{name:'Add food',exact:true}).click()
+ await expect(page.getByRole('searchbox',{name:'Food search'})).toBeFocused()
+ await page.getByRole('searchbox',{name:'Food search'}).fill('Chick-fil-A breakfast')
+ await expect(page.locator('.nutrition-search-suggestion')).toContainText('Chick-fil-A')
+ await expect(page.getByRole('button',{name:'Look up'})).not.toBeVisible()
+ await page.getByText('Scan barcode or enter a code').click()
+ await expect(page.getByRole('button',{name:'Look up'})).toBeVisible()
+})
+
+
+test('Quick Add food hides full dashboard while keeping diary navigation',async({page})=>{
+ await page.goto('/tests/fixtures/nutrition.html')
+ await expect(page.locator('.nutrition-summary')).toBeVisible()
+ await page.getByRole('button',{name:'Add food',exact:true}).click()
+ await expect(page.locator('.nutrition-summary')).toHaveCount(0)
+ await expect(page.locator('.nutrition-water-card')).toHaveCount(0)
+ await expect(page.locator('.nutrition-search-intro')).toContainText('Adding to Breakfast')
+ await expect(page.getByRole('searchbox',{name:'Food search'})).toBeFocused()
+ await page.locator('.nutrition-search-intro').getByRole('button',{name:'Diary'}).click()
+ await expect(page.locator('.nutrition-summary')).toBeVisible()
 });

@@ -11,7 +11,7 @@ const queryKey=food=>food?.source==='fatsecret'
 const sourceRank={usda:0,openfoodfacts:1,fatsecret:2};
 export const foodSourceLabel=food=>{
   switch(food?.source){
-    case 'usda':return food.data_type==='Branded'?'USDA · Branded food':'USDA · Common food';
+    case 'usda':return food.can_log===false?'USDA · Needs verification':food.data_type==='Branded'?'USDA · Branded food':'USDA · Common food';
     case 'fatsecret':return 'FatSecret · Restaurant/brand preview';
     case 'openfoodfacts':return 'Open Food Facts · Packaged food';
     default:return food?.source||'Custom food';
@@ -64,7 +64,7 @@ export async function searchAllFoodCatalog(query,{supabaseClient,searchPackaged=
     const {data,error}=await supabaseClient.functions.invoke('nutrition-search',{body:{query:value}});
     if(error)throw error;
     if(!data||typeof data!=='object'||!data.providers)throw Error('Nutrition search service response invalid.');
-    groups.usda=Array.isArray(data.usda)?data.usda.filter(food=>food.can_log===true):[];
+    groups.usda=Array.isArray(data.usda)?data.usda.filter(food=>food?.source==='usda'&&typeof food.can_log==='boolean'):[];
     // Provider previews have no loggable macro values under the standard terms.
     groups.fatsecret=Array.isArray(data.fatsecret)
       ?data.fatsecret.filter(food=>food.source==='fatsecret'&&food.can_log===false):[];
