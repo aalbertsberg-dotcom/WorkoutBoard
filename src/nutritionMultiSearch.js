@@ -25,7 +25,7 @@ export function foodRelevance(food,query){
   const target=name+' '+brand;
   const tokens=phrase.split(' ').filter(Boolean).map(stem);
   const words=target.split(' ').filter(Boolean).map(stem);
-  if(!tokens.every(q=>words.some(w=>w.startsWith(q)||q.startsWith(w)&&w.length>=3)))return -1;
+  if(!tokens.every(q=>words.some(w=>w.includes(q)||(q.includes(w)&&w.length>=3))))return -1;
   let score=10+tokens.length*4;
   if(name===phrase||brand===phrase)score+=120;
   else if(name.startsWith(phrase)||brand.startsWith(phrase))score+=75;
