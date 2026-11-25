@@ -42,16 +42,16 @@ test('Chick-fil-A breakfast and Waffle House bowl fall back without claiming an 
   assert.equal(chick.restaurant,'Chick-fil-A');
   assert.deepEqual(chick.itemTerms,['breakfast']);
   assert.equal(chick.broadened,true);
-  assert.equal(waffle.providerQuery,'Waffle House');
+  assert.equal(waffle.providerQuery,'Waffle House bowl');
   const records=mergeFoodResults({
     fatsecret:[
-      {name:'Chicken Biscuit',brand:'Chick-fil-A',source:'fatsecret',source_id:'1',can_log:false},
+      {name:'Breakfast Biscuit',brand:'Chick-fil-A',source:'fatsecret',source_id:'1',can_log:false},
       {name:'Chocolate Waffle',brand:'Waffle House',source:'fatsecret',source_id:'2',can_log:false},
       {name:'Breakfast Burrito',brand:'Other Cafe',source:'fatsecret',source_id:'3',can_log:false}
     ]
   },'Chick-fil-A breakfast');
   assert.equal(records.length,1);
-  assert.equal(records[0].name,'Chicken Biscuit');
+  assert.equal(records[0].name,'Breakfast Biscuit');
   assert.ok(rankFoodMatch({name:'Breakfast Bowl',brand:'Waffle House',source:'fatsecret'},waffle)>
     rankFoodMatch({name:'Waffle',brand:'Waffle House',source:'fatsecret'},waffle));
 });
@@ -91,9 +91,9 @@ test('egg and eggs use the identical USDA lookup and equivalent source ranking',
  const single=planFoodSearch('Egg'),plural=planFoodSearch('eggs');
  assert.equal(single.normalized,'egg');
  assert.equal(plural.normalized,'egg');
- assert.equal(single.providerQuery,'eggs');
- assert.equal(plural.providerQuery,'eggs');
- assert.deepEqual(single.usdaQueries,['eggs','egg, whole, raw']);
+ assert.equal(single.providerQuery,'egg');
+ assert.equal(plural.providerQuery,'egg');
+ assert.deepEqual(single.usdaQueries,['egg','egg, raw']);
  assert.deepEqual(single.usdaQueries,plural.usdaQueries);
  const foods={
    usda:[
@@ -125,5 +125,67 @@ test('egg and eggs normalize packaged lookup equally without changing chicken se
  const egg=await searchAllFoodCatalog('egg',{supabaseClient:backend,searchPackaged:source});
  const eggs=await searchAllFoodCatalog('eggs',{supabaseClient:backend,searchPackaged:source});
  assert.deepEqual(egg,eggs);
- assert.deepEqual(calls,['eggs','eggs']);
+ assert.deepEqual(calls,['egg','egg']);
+});
+
+
+test('a general singular/plural strategy applies beyond the tested examples',()=>{
+ const pairs=[
+   ['apple','apples'],['egg','eggs'],['grape','grapes'],
+   ['berry','berries'],['strawberry','strawberries'],
+   ['sandwich','sandwiches'],['tomato','tomatoes'],
+   ['potato','potatoes'],['cookie','cookies'],
+   ['chicken breast','chicken breasts'],
+   ['waffle house bowl','waffle house bowls']
+ ];
+ for(const [singular,plural] of pairs){
+   const a=planFoodSearch(singular),b=planFoodSearch(plural);
+   assert.equal(a.normalized,b.normalized,plural);
+   assert.equal(a.providerQuery,b.providerQuery,plural);
+   assert.deepEqual(a.usdaQueries,b.usdaQueries,plural);
+ }
+});
+test('apple and apples retrieve identical records, with whole raw fruit ahead of cider',async()=>{
+ const foods=[
+   {name:'Apple cider',source:'usda',source_id:'cider',data_type:'Survey (FNDDS)',can_log:true},
+   {name:'Apples, raw, with skin',source:'usda',source_id:'raw',data_type:'Foundation',can_log:true},
+   {name:'Apple juice concentrate',source:'usda',source_id:'juice',data_type:'Survey (FNDDS)',can_log:true},
+   {name:'Apple pie',source:'usda',source_id:'pie',data_type:'Survey (FNDDS)',can_log:true},
+   {name:'Apple puree',source:'usda',source_id:'puree',data_type:'SR Legacy',can_log:true}
+ ];
+ const calls=[];
+ const backend={functions:{invoke:async({body})=>{
+   calls.push(body.query);
+   return {data:{usda:foods,fatsecret:[],providers:{usda:'ok',fatsecret:'not_configured'}},error:null};
+ }}};
+ const packaged=async query=>{calls.push('packaged:'+query);return [];};
+ const apple=await searchAllFoodCatalog('apple',{supabaseClient:backend,searchPackaged:packaged});
+ const apples=await searchAllFoodCatalog('apples',{supabaseClient:backend,searchPackaged:packaged});
+ assert.deepEqual(apple,apples);
+ assert.equal(apple[0].source_id,'raw');
+ assert.ok(apple.findIndex(x=>x.source_id==='cider')>0);
+ assert.deepEqual(calls,['apple','packaged:apple','apples','packaged:apple']);
+});
+test('restaurant dish intent requires the dish term, not just a matching restaurant name',()=>{
+ const raw=[
+   {name:'Original Sweet Cream Waffle Mix',brand:'Waffle House',source:'usda',data_type:'Branded',can_log:true},
+   {name:'Waffle House Original Sweet Cream Waffle Mix',source:'usda',data_type:'Branded',can_log:true},
+   {name:'Hashbrown Bowl',brand:'Waffle House',source:'fatsecret',source_id:'334',can_log:false},
+   {name:'Breakfast Waffle',brand:'Waffle House',source:'fatsecret',source_id:'335',can_log:false}
+ ];
+ const onlyBowl=mergeFoodResults({usda:raw.slice(0,2),fatsecret:raw.slice(2)},'Waffle House bowl');
+ assert.equal(onlyBowl.length,1);
+ assert.equal(onlyBowl[0].name,'Hashbrown Bowl');
+ assert.deepEqual(mergeFoodResults({usda:raw.slice(0,2),fatsecret:[raw[3]]},'Waffle House bowl'),[]);
+});
+test('restaurant searches never fabricate a matching menu entry from a broadly returned provider item',async()=>{
+ const result=await searchAllFoodCatalog('Waffle House bowl',{
+  supabaseClient:{functions:{invoke:async()=>({data:{
+   usda:[{name:'Waffle House Waffle Mix',source:'usda',data_type:'Branded',can_log:true}],
+   fatsecret:[{name:'Waffles',brand:'Waffle House',source:'fatsecret',source_id:'foo',can_log:false}],
+   providers:{usda:'ok',fatsecret:'ok'}
+  },error:null})}},
+  searchPackaged:async()=>[]
+ });
+ assert.equal(result.length,0);
 });
