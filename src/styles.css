@@ -6742,6 +6742,18 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   border-color:#526b3d;
   background:#111d18;
 }
+/* Nutrition stays a secondary activity at the bottom of the Today chooser. */
+.today-choice-grid > .today-choice-nutrition {
+  grid-column:1 / -1;
+  min-height:68px;
+  border-color:#33465b;
+  background:#101a2a;
+}
+.today-choice-nutrition .quick-start-icon {
+  background:#17273b;
+  color:#9ab9ce;
+}
+
 .today-choice-grid strong {
   font-size:13px;
   line-height:1.15;
