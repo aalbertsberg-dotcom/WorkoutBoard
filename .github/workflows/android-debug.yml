@@ -40,7 +40,7 @@ jobs:
       - name: Android SDK location
         run: test -d "${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
       - name: Install packages
-        run: npm ci
+        run: npm install
       - name: Test
         run: npm test
       - name: Build native web assets
