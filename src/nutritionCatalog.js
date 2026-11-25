@@ -72,13 +72,14 @@ export async function searchFoodCatalog(terms){
   const value=String(terms||'').trim();
   if(value.length<2)throw new Error('Enter at least two characters.');
   if(offline())throw new Error('Food search needs a connection. Saved and custom foods work offline.');
-  let error=null;
+  let error=null,gotResponse=false;
   // World catalog first for broad coverage, then US server if unavailable
   // or if no matching nutrition records are found.
   for(const base of [ROOT,US_ROOT]){
     try{
       const reply=await request(foodSearchUrl(value,{base}));
       if(!Array.isArray(reply.products))throw new Error('Food catalog returned no usable search results.');
+      gotResponse=true;
       const matches=rankFoodProducts(reply.products,value);
       if(matches.length)return matches;
     }catch(e){
@@ -86,7 +87,7 @@ export async function searchFoodCatalog(terms){
       if(/rate-limited/.test(error.message))throw error;
     }
   }
-  if(error)throw error;
+  if(error&&!gotResponse)throw error;
   return [];
 }
 export async function lookupFoodBarcode(barcode){
