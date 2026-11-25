@@ -228,7 +228,8 @@ export default function NutritionPage({session,onBack}){
         setResults([found]);selectFood(found);setView('search');
       }else{
         const found=await searchFoodCatalog(search);setResults(found);
-        if(!found.length)setNotice('No matching packaged foods found. Try a simpler name, scan a barcode, or enter a custom food. Restaurant meals may not be listed.');
+        if(found.length&&found[0].cached)setNotice('Showing previously found foods saved on this device. Verify package labels before logging.');
+        else if(!found.length)setNotice('No matching packaged foods found. Try a simpler name, scan a barcode, or enter a custom food. Restaurant meals may not be listed.');
       }
     }catch(error){setResults([]);setNotice(error?.message||'Food search unavailable. Enter a custom food.')}
     finally{setSearching(false)}

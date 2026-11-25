@@ -52,12 +52,12 @@ test('Custom food logs macros and supports confirmation before deleting',async({
 
 test('Public food search matches query and empty calorie meter is not a green button',async({page})=>{
   const calls=[];
-  await page.route('https://world.openfoodfacts.org/cgi/search.pl**',async route=>{
+  await page.route('https://search.openfoodfacts.org/search**',async route=>{
     const url=new URL(route.request().url());
     calls.push(url);
     await route.fulfill({status:200,contentType:'application/json',
       headers:{'access-control-allow-origin':'*'},
-      body:JSON.stringify({count:2,products:[
+      body:JSON.stringify({count:2,hits:[
         {product_name:'Pepper Jack Cheese',code:'1234567890123',brands:'Test Dairy',
           serving_size:'30 g',serving_quantity:30,nutriments:{
             'energy-kcal_100g':300,'proteins_100g':20,
@@ -84,8 +84,8 @@ test('Public food search matches query and empty calorie meter is not a green bu
   await expect(page.locator('.nutrition-results button')).toHaveCount(1);
   await expect(page.locator('.nutrition-results')).toContainText('Pepper Jack Cheese');
   expect(calls).toHaveLength(1);
-  expect(calls[0].pathname).toBe('/cgi/search.pl');
-  expect(calls[0].searchParams.get('search_terms')).toBe('pepper jack');
+  expect(calls[0].pathname).toBe('/search');
+  expect(calls[0].searchParams.get('q')).toBe('pepper jack');
   await page.locator('.nutrition-results button').click();
   await page.getByRole('button',{name:'Log food',exact:true}).click();
   await expect(page.locator('.nutrition-food-diary')).toContainText('Pepper Jack Cheese');
@@ -96,4 +96,37 @@ test('Public food search matches query and empty calorie meter is not a green bu
   });
   expect(after.fillWidth).toBeGreaterThan(0);
   expect(after.fillWidth).toBeLessThan(after.trackWidth);
+});
+
+
+test('Egg search falls back to product catalog and cached results remain available offline',async({page})=>{
+  const requested=[];
+  await page.route('https://search.openfoodfacts.org/search**',async route=>{
+    requested.push('dedicated');
+    await route.fulfill({status:503,contentType:'application/json',body:'{"error":"offline"}',
+      headers:{'access-control-allow-origin':'*'}});
+  });
+  await page.route('https://world.openfoodfacts.org/cgi/search.pl**',async route=>{
+    requested.push('legacy');
+    await route.fulfill({status:200,contentType:'application/json',
+      headers:{'access-control-allow-origin':'*'},
+      body:JSON.stringify({products:[{product_name:'Eggs large',code:'5599000011111',
+        serving_size:'1 egg',serving_quantity:50,
+        nutriments:{'energy-kcal_100g':140,'proteins_100g':13,
+          'carbohydrates_100g':1,'fat_100g':9}}]})});
+  });
+  await page.goto('/tests/fixtures/nutrition.html');
+  await page.getByRole('button',{name:'Add food',exact:true}).click();
+  const field=page.getByRole('searchbox',{name:'Food search'});
+  await field.fill('Eggs');
+  await page.getByRole('button',{name:'Search',exact:true}).click();
+  await expect(page.locator('.nutrition-results')).toContainText('Eggs large');
+  expect(requested).toEqual(['dedicated','legacy']);
+  await page.reload();
+  await page.getByRole('button',{name:'Add food',exact:true}).click();
+  await field.fill('Eggs');
+  await page.getByRole('button',{name:'Search',exact:true}).click();
+  await expect(page.locator('.nutrition-results')).toContainText('Eggs large');
+  await expect(page.getByRole('status')).toContainText('previously found foods');
+  expect(requested).toEqual(['dedicated','legacy']);
 });
