@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {planFoodSearch,normalizeFoodText,rankFoodMatch,restaurantMatches} from '../supabase/functions/nutrition-search/foodSearchPlan.js';
+import {planFoodSearch,normalizeFoodText,rankFoodMatch,restaurantMatches,fatSecretSearchUrl} from '../supabase/functions/nutrition-search/foodSearchPlan.js';
 import {mergeFoodResults,searchAllFoodCatalog} from '../src/nutritionMultiSearch.js';
 
 test('ordinary egg search ranks USDA common eggs above Snickers chocolate eggs',()=>{
@@ -197,4 +197,14 @@ test('word boundaries prevent grape/grapefruit and egg/eggplant false positives'
  assert.equal(rankFoodMatch({name:'Eggplant',source:'usda',data_type:'Foundation'},'eggs'),-1);
  assert.ok(rankFoodMatch({name:'Grapes, red, raw',source:'usda',data_type:'Foundation'},'grape')>0);
  assert.ok(rankFoodMatch({name:'Blueberry',source:'usda',data_type:'Foundation'},'blueberries')>0);
+});
+
+test('FatSecret uses documented Basic v1 URL, with valid paging and expression',()=>{
+ const url=new URL(fatSecretSearchUrl('Waffle House bowl',1));
+ assert.equal(url.origin,'https://platform.fatsecret.com');
+ assert.equal(url.pathname,'/rest/foods/search/v1');
+ assert.equal(url.searchParams.get('search_expression'),'Waffle House bowl');
+ assert.equal(url.searchParams.get('max_results'),'50');
+ assert.equal(url.searchParams.get('page_number'),'1');
+ assert.equal(url.searchParams.get('format'),'json');
 });
