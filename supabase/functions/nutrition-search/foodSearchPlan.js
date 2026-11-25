@@ -92,7 +92,7 @@ export function restaurantItemMatches(food,plan){
   // evidence that a waffle mix is a hashbrown bowl.
   const name=normalizeFoodText(food?.name);
   const suffix=plan.restaurantAliases.reduce((rest,alias)=>
-    rest===name||rest.startsWith(alias+' ')?rest.slice(alias.length).trim():rest,name);
+    rest===alias||rest.startsWith(alias+' ')?rest.slice(alias.length).trim():rest,name);
   return allTermsMatch(tokens(suffix),plan.itemTerms);
 }
 export function rankFoodMatch(food,query){
