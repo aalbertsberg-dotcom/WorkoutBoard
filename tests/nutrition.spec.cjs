@@ -529,3 +529,48 @@ test('Waffle House bowl excludes waffle mix and offers a precise broaden action'
  await expect(page.locator('.nutrition-results button')).toHaveCount(1);
  expect(terms).toEqual(['Waffle House bowl','Waffle House']);
 });
+
+
+
+test('Calculator does not replace manual goals until suggestion is applied and saved',async({page})=>{
+ await visitOffline(page);
+ await page.getByRole('button',{name:'Goals',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Nutrition goals'})).toBeVisible();
+ await expect(page.getByLabel('Calories (kcal)')).toHaveValue('2000');
+ await page.getByRole('button',{name:'Calculate suggested goals'}).click();
+ await expect(page.locator('.nutrition-estimate-error')).toContainText('valid height');
+ await expect(page.getByLabel('Calories (kcal)')).toHaveValue('2000');
+ await page.getByLabel('Height feet').fill('5');
+ await page.getByLabel('Height inches').fill('10');
+ await page.getByLabel('Age years').fill('35');
+ await page.getByLabel('Equation option').selectOption('male');
+ await page.getByLabel('Weight for estimate pounds').fill('190');
+ await page.getByLabel('Activity level').selectOption('moderate');
+ await page.getByLabel('Weight goal').selectOption('maintain');
+ await page.getByRole('button',{name:'Calculate suggested goals'}).click();
+ await expect(page.locator('.nutrition-estimate-preview')).toContainText('Suggested daily targets');
+ await expect(page.getByLabel('Calories (kcal)')).toHaveValue('2000');
+ await page.getByRole('button',{name:'Use suggested targets'}).click();
+ await expect(page.getByLabel('Calories (kcal)')).not.toHaveValue('2000');
+ const suggested=await page.getByLabel('Calories (kcal)').inputValue();
+ await page.getByRole('button',{name:'Save daily goals & profile'}).click();
+ await page.reload();
+ await page.getByRole('button',{name:'Goals',exact:true}).click();
+ await expect(page.getByLabel('Calories (kcal)')).toHaveValue(suggested);
+ await expect(page.getByLabel('Height feet')).toHaveValue('5');
+ await expect(page.getByLabel('Height inches')).toHaveValue('10');
+ await expect(page.getByLabel('Age years')).toHaveValue('35');
+ await expect(page.getByLabel('Equation option')).toHaveValue('male');
+});
+test('Manual calorie and macro goals remain editable without calculator fields',async({page})=>{
+ await visitOffline(page);
+ await page.getByRole('button',{name:'Goals',exact:true}).click();
+ await page.getByLabel('Calories (kcal)').fill('2250');
+ await page.getByLabel('Protein (g)').fill('180');
+ await page.getByRole('button',{name:'Save daily goals & profile'}).click();
+ await page.reload();
+ await expect(page.locator('.nutrition-calorie-hero')).toContainText('2250 goal');
+ await page.getByRole('button',{name:'Goals',exact:true}).click();
+ await expect(page.getByLabel('Calories (kcal)')).toHaveValue('2250');
+ await expect(page.getByLabel('Protein (g)')).toHaveValue('180');
+});
