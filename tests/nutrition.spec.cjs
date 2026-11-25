@@ -130,3 +130,43 @@ test('Egg search falls back to product catalog and cached results remain availab
   await expect(page.getByRole('status')).toContainText('previously found foods');
   expect(requested).toEqual(['dedicated','legacy']);
 });
+
+
+test('USDA nutrition is loggable while FatSecret restaurant data remains preview-only',async({page})=>{
+  await page.route('https://example.supabase.co/functions/v1/nutrition-search**',async route=>{
+    await route.fulfill({status:200,contentType:'application/json',
+      headers:{'access-control-allow-origin':'*','access-control-allow-headers':'authorization, apikey, content-type'},
+      body:JSON.stringify({
+        usda:[{name:'Beef burger patty',brand:'',source:'usda',source_id:'1099881',
+          calories:250,protein_g:26,carbs_g:0,fat_g:18,serving_label:'100 g',can_log:true}],
+        fatsecret:[{name:'Cheeseburger',brand:'Example Restaurant',source:'fatsecret',source_id:'120009',
+          description:'Per 1 serving - Calories: 300kcal | Protein: 15g',can_log:false,
+          source_url:'https://foods.fatsecret.com/calories-nutrition/example/cheeseburger'}],
+        providers:{usda:'ok',fatsecret:'ok'}
+      })}
+    });
+  });
+  await page.route('https://search.openfoodfacts.org/search**',async route=>{
+    await route.fulfill({status:200,contentType:'application/json',
+      headers:{'access-control-allow-origin':'*'},body:'{"hits":[]}'});});
+  await page.route('https://world.openfoodfacts.org/cgi/search.pl**',async route=>{
+    await route.fulfill({status:200,contentType:'application/json',
+      headers:{'access-control-allow-origin':'*'},body:'{"products":[]}'});});
+  await page.route('https://us.openfoodfacts.org/cgi/search.pl**',async route=>{
+    await route.fulfill({status:200,contentType:'application/json',
+      headers:{'access-control-allow-origin':'*'},body:'{"products":[]}'});});
+  await page.goto('/tests/fixtures/nutrition.html');
+  await page.getByRole('button',{name:'Add food',exact:true}).click();
+  await page.getByRole('searchbox',{name:'Food search'}).fill('burger');
+  await page.getByRole('button',{name:'Search',exact:true}).click();
+  await expect(page.locator('.nutrition-results')).toContainText('Beef burger patty');
+  await expect(page.locator('.nutrition-results')).toContainText('Example Restaurant');
+  await page.locator('.nutrition-results button').filter({hasText:'FatSecret'}).click();
+  await expect(page.locator('.nutrition-provider-preview')).toContainText('does not allow indefinite storage');
+  await expect(page.getByRole('button',{name:'Log food',exact:true})).toHaveCount(0);
+  await page.locator('.nutrition-provider-preview').getByRole('button',{name:'Close preview'}).click();
+  await page.locator('.nutrition-results button').filter({hasText:'USDA'}).click();
+  await expect(page.getByRole('button',{name:'Log food',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Log food',exact:true}).click();
+  await expect(page.locator('.nutrition-food-diary')).toContainText('Beef burger patty');
+});
