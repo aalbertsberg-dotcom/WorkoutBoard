@@ -37,7 +37,7 @@ jobs:
           done
       - name: Install and test
         run: |
-          npm ci
+          npm install
           npm test
       - name: Build native assets
         env:
