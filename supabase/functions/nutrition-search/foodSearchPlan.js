@@ -22,6 +22,22 @@ export function singularFoodWord(value){
 }
 export const canonicalFoodText=value=>normalizeFoodText(value)
   .split(' ').filter(Boolean).map(singularFoodWord).join(' ');
+export const pluralFoodWord=value=>{
+  const word=singularFoodWord(value);
+  if(!word||word.length<2)return word;
+  if(word.endsWith('y')&&!/[aeiou]y$/.test(word))return word.slice(0,-1)+'ies';
+  if(/(?:ch|sh|ss|x|z)$/.test(word))return word+'es';
+  if(word.endsWith('o')&&!/(?:radio|piano|photo)$/.test(word))return word+'es';
+  if(word.endsWith('s'))return word;
+  return word+'s';
+};
+export const pluralFoodPhrase=value=>{
+  const words=canonicalFoodText(value).split(' ').filter(Boolean);
+  if(!words.length)return '';
+  const last=words.pop();
+  return [...words,pluralFoodWord(last)].join(' ');
+};
+
 const CHAINS=[
   {name:"Marco's Pizza",aliases:["marcos pizza","marcos","marco pizza"]},
   {name:"Chick-fil-A",aliases:["chick fil a","chickfila","chick fil a restaurant"]},
@@ -56,9 +72,12 @@ export function planFoodSearch(input){
     ?found.restaurant+(itemTerms.length?' '+itemTerms.join(' '):''):normalized;
   // Two bounded, general-purpose queries for ingredients. "Apple"/"Apples",
   // "Egg"/"Eggs", "Berry"/"Berries" are planned identically.
+  // Search common foods in singular, plural and raw variants so upstream
+  // sources indexing "apples" or "eggs" aren't invisible to "apple"/"egg".
+  // Same variants for either input form; no one-off ingredient patches.
   const usdaQueries=found
     ?[providerQuery,found.restaurant]
-    :common?[normalized,normalized+', raw']:[normalized];
+    :common?[normalized,pluralFoodPhrase(normalized),normalized+', raw']:[normalized];
   return {
     original,normalized,restaurant:found?.restaurant||'',
     restaurantAliases:found?.aliases||[],itemTerms,
@@ -124,6 +143,13 @@ export function rankFoodMatch(food,query){
     else if(food.source==='openfoodfacts')score-=25;
     if(!brand)score+=18;
     if(nameWords.includes('raw')||nameWords.includes('whole')||nameWords.includes('fresh'))score+=35;
+    // Prioritize an ingredient over a recipe or flavor containing that
+    // ingredient. These are general categories, not query-specific hacks.
+    const prepared=new Set(['candy','sweet','pie','cake','cookie','muffin','juice',
+      'drink','sauce','dessert','mix','bar','cereal','burrito','sandwich',
+      'omelet','omelette','wrap','pizza','flavor','flavored','filling']);
+    if(!queryWords.some(x=>prepared.has(x))&&nameWords.some(x=>prepared.has(x)))
+      score-=90;
     score-=Math.min(65,Math.max(0,nameWords.length-queryWords.length)*6);
   }
   if(!inName&&brand)score-=30;
