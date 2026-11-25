@@ -81,6 +81,7 @@ export default function NutritionPage({session,onBack,initialView='log'}){
   const userId=session?.user?.id||null;
   const activeUser=useRef(userId);activeUser.current=userId;
   const [data,setData]=useState(()=>cacheFor(userId));
+  const dataRef=useRef(data);dataRef.current=data;
   const [goals,setGoals]=useState(()=>({...NUTRITION_DEFAULTS,...cacheFor(userId).preferences}));
   const [heightEntry,setHeightEntry]=useState(()=>cmToHeight(cacheFor(userId).preferences?.height_cm));
   const [weightForEstimate,setWeightForEstimate]=useState(()=>String(cacheFor(userId).preferences?.estimate_weight_lb||''));
@@ -130,6 +131,7 @@ export default function NutritionPage({session,onBack,initialView='log'}){
 
   useEffect(()=>{
     const cached=cacheFor(userId);
+    dataRef.current=cached;
     setData(cached);
     setGoals({...NUTRITION_DEFAULTS,...cached.preferences});
     setHeightEntry(cmToHeight(cached.preferences?.height_cm));
@@ -168,6 +170,7 @@ export default function NutritionPage({session,onBack,initialView='log'}){
         if(cancelled||sequence!==newest.current||activeUser.current!==userId)return;
         const merged={preferences:prefs.data||{...NUTRITION_DEFAULTS},
           foods,entries,water};
+        dataRef.current=merged;
         setData(merged);setGoals({...NUTRITION_DEFAULTS,...merged.preferences});
         setHeightEntry(cmToHeight(merged.preferences?.height_cm));
         setWeightForEstimate(String(merged.preferences?.estimate_weight_lb||''));
@@ -219,9 +222,16 @@ export default function NutritionPage({session,onBack,initialView='log'}){
     if(response.error){setNotice('Not saved: '+response.error.message);return false}
     lastOfflineSave.current=Boolean(response.offline);
     if(activeUser.current!==userId)return false;
-    setData(previous=>({...previous,
+    // Persist the complete updated state synchronously before announcing
+    // success: users can switch screens/reload immediately after saving.
+    // This also protects all nutrition edits, not just profile settings.
+    const previous=dataRef.current;
+    const nextState={...previous,
       [bucket]:bucket==='preferences'?payload:updated(previous[bucket],payload)
-    }));
+    };
+    dataRef.current=nextState;
+    writeOfflineState(userId,CACHE_KEY,nextState);
+    setData(nextState);
     setNotice(response.offline?'✓ Saved on this device. It will sync when you reconnect.':'✓ Saved to your account.');
     return true;
   };
