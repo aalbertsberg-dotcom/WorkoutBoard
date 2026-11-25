@@ -388,7 +388,7 @@ test('FatSecret provider failures are invisible to end users while zero results 
  await page.getByRole('button',{name:'Search',exact:true}).click();
  await expect(page.locator('.nutrition-source-feedback')).toHaveCount(0);
  await expect(page.getByText(/FatSecret restaurant search is currently unavailable|FatSecret authentication failed/)).toHaveCount(0);
- await expect(page.locator('.nutrition-status')).toContainText('No closely matching foods found');
+ await expect(page.locator('.nutrition-status')).toContainText('No matching bowl item found for Waffle House');
  await expect(page.locator('.nutrition-results')).toHaveCount(0);
 });
 test('Marcos is restaurant-specific, not San Marcos',async({page})=>{
