@@ -232,3 +232,10 @@
 .nutrition-search-intro strong{font-size:17px;color:#eef6f1}
 .nutrition-search-intro button{flex:0 0 auto;border:1px solid #3c5366;color:#d6e9f8;background:#152639;
   border-radius:9px;min-height:42px;padding:8px 12px;font-weight:800;font-size:12px}
+
+
+/* Search health and weight-based portions are explicit without cluttering the log flow. */
+.nutrition-source-feedback{margin:0;padding:10px 12px;font-size:12px;line-height:1.5;
+  background:#1b2b3b;border:1px solid #38556c;border-radius:10px;color:#bdd7eb}
+.nutrition-weight-note{font-size:12px!important;color:#bad8de!important;line-height:1.5;
+  background:#142b35;border:1px solid #355866;border-radius:10px;padding:9px 11px;margin:0}

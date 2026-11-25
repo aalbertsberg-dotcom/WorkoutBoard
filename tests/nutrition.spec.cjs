@@ -334,3 +334,83 @@ test('Quick Add food hides full dashboard while keeping diary navigation',async(
  await page.locator('.nutrition-search-intro').getByRole('button',{name:'Diary'}).click()
  await expect(page.locator('.nutrition-summary')).toBeVisible()
 });
+
+
+test('Egg results rank ordinary USDA eggs first and explain 100 g versus two eggs',async({page})=>{
+ const backend=[
+  {name:'Snickers Easter Chocolate Egg',brand:'Snickers',source:'usda',source_id:'snickers',
+    data_type:'Branded',serving_label:'100 g',serving_grams:100,calories:500,protein_g:5,
+    carbs_g:65,fat_g:25,can_log:true},
+  {name:'Egg, whole, raw',brand:'',source:'usda',source_id:'egg-raw',data_type:'Foundation',
+    serving_label:'100 g',serving_grams:100,calories:143,protein_g:12.6,carbs_g:.7,
+    fat_g:9.5,can_log:true},
+ ];
+ await page.route('https://example.supabase.co/functions/v1/nutrition-search**',async route=>
+   route.fulfill({status:200,contentType:'application/json',
+     headers:{'access-control-allow-origin':'*'},
+     body:JSON.stringify({usda:backend,fatsecret:[],providers:{usda:'ok',fatsecret:'ok'}})}));
+ await page.route('https://search.openfoodfacts.org/search**',async route=>route.fulfill({
+   status:200,contentType:'application/json',headers:{'access-control-allow-origin':'*'},body:'{"hits":[]}' }));
+ for(const host of ['world','us']){
+   await page.route('https://'+host+'.openfoodfacts.org/cgi/search.pl**',async route=>route.fulfill({
+     status:200,contentType:'application/json',headers:{'access-control-allow-origin':'*'},body:'{"products":[]}' }));
+ }
+ await page.goto('/tests/fixtures/nutrition.html');
+ await page.getByRole('button',{name:'Add food',exact:true}).click();
+ await page.getByRole('searchbox',{name:'Food search'}).fill('Egg');
+ await page.getByRole('button',{name:'Search',exact:true}).click();
+ const results=page.locator('.nutrition-results button');
+ await expect(results).toHaveCount(2);
+ await expect(results.first()).toContainText('Egg, whole, raw');
+ await results.first().click();
+ await page.getByRole('spinbutton',{name:'Servings'}).fill('2');
+ await expect(page.locator('.nutrition-weight-note')).toContainText('200 g total');
+ await expect(page.locator('.nutrition-weight-note')).toContainText('not a count of minis, slices, or pieces');
+ await page.getByRole('button',{name:'Log food',exact:true}).click();
+ await page.getByRole('button',{name:'Add another'}).click();
+ await expect(page.locator('.nutrition-status')).toHaveCount(0);
+});
+test('FatSecret provider failure is shown for restaurant search without fake matches',async({page})=>{
+ await page.route('https://example.supabase.co/functions/v1/nutrition-search**',async route=>
+   route.fulfill({status:200,contentType:'application/json',
+     headers:{'access-control-allow-origin':'*'},
+     body:JSON.stringify({usda:[],fatsecret:[],providers:{
+       usda:'ok',fatsecret:'authentication_failed'}})}));
+ await page.route('https://search.openfoodfacts.org/search**',async route=>route.fulfill({
+   status:200,contentType:'application/json',headers:{'access-control-allow-origin':'*'},body:'{"hits":[]}' }));
+ for(const host of ['world','us']){
+   await page.route('https://'+host+'.openfoodfacts.org/cgi/search.pl**',async route=>route.fulfill({
+     status:200,contentType:'application/json',headers:{'access-control-allow-origin':'*'},body:'{"products":[]}' }));
+ }
+ await page.goto('/tests/fixtures/nutrition.html');
+ await page.getByRole('button',{name:'Add food',exact:true}).click();
+ await page.getByRole('searchbox',{name:'Food search'}).fill('Waffle House bowl');
+ await page.getByRole('button',{name:'Search',exact:true}).click();
+ await expect(page.locator('.nutrition-source-feedback')).toContainText('FatSecret authentication failed');
+ await expect(page.locator('.nutrition-results')).toHaveCount(0);
+});
+test('Marcos is restaurant-specific, not San Marcos',async({page})=>{
+ await page.route('https://example.supabase.co/functions/v1/nutrition-search**',async route=>
+   route.fulfill({status:200,contentType:'application/json',
+     headers:{'access-control-allow-origin':'*'},
+     body:JSON.stringify({
+       usda:[{name:'San Marcos Bean Salad',brand:'San Marcos',source:'usda',
+         data_type:'Branded',can_log:true,calories:120,serving_label:'100 g'}],
+       fatsecret:[{name:'Pepperoni Pizza',brand:"Marco's Pizza",source:'fatsecret',
+         source_id:'995',can_log:false}],
+       providers:{usda:'ok',fatsecret:'ok'}
+     })}));
+ await page.route('https://search.openfoodfacts.org/search**',async route=>route.fulfill({
+   status:200,contentType:'application/json',headers:{'access-control-allow-origin':'*'},body:'{"hits":[]}' }));
+ for(const host of ['world','us']){
+   await page.route('https://'+host+'.openfoodfacts.org/cgi/search.pl**',async route=>route.fulfill({
+     status:200,contentType:'application/json',headers:{'access-control-allow-origin':'*'},body:'{"products":[]}' }));
+ }
+ await page.goto('/tests/fixtures/nutrition.html');
+ await page.getByRole('button',{name:'Add food',exact:true}).click();
+ await page.getByRole('searchbox',{name:'Food search'}).fill('Marcos');
+ await page.getByRole('button',{name:'Search',exact:true}).click();
+ await expect(page.locator('.nutrition-results button')).toHaveCount(1);
+ await expect(page.locator('.nutrition-results')).toContainText("Marco's Pizza");
+ await expect(page.locator('.nutrition-results')).not.toContainText('San Marcos');
+});

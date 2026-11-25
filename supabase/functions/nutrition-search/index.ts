@@ -5,6 +5,7 @@
 // results returned here are live SEARCH PREVIEWS only and must not be saved to the diary.
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import { normalizeUsdaSearchFood } from "./usdaNutrition.js";
+import { planFoodSearch, restaurantMatches } from "./foodSearchPlan.js";
 
 const allowedOrigins = new Set([
   "https://aalbertsberg-dotcom.github.io",
@@ -51,18 +52,31 @@ const takeSlot = (id: string) => {
 const queryUsda = async (term: string) => {
   const key = Deno.env.get("WORKSET_USDA_API_KEY");
   if (!key) return { status: "not_configured", foods: [] };
-  const url = new URL("https://api.nal.usda.gov/fdc/v1/foods/search");
-  url.searchParams.set("api_key", key);
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Accept": "application/json" },
-    body: JSON.stringify({ query: term, pageSize: 35, pageNumber: 1 }),
-    signal: AbortSignal.timeout(8500),
-  });
-  if (!response.ok) throw Error("USDA HTTP " + response.status);
-  const data = await response.json();
-  if (!Array.isArray(data?.foods)) throw Error("USDA response invalid");
-  return { status: "ok", foods: data.foods.map(normalizeUsdaSearchFood).filter(Boolean).slice(0, 30) };
+  const plan = planFoodSearch(term);
+  const fetchUsda = async (onlyCommon: boolean) => {
+    const url = new URL("https://api.nal.usda.gov/fdc/v1/foods/search");
+    url.searchParams.set("api_key", key);
+    const body: Record<string, unknown> = {
+      query: plan.restaurant ? plan.restaurant : term,
+      pageSize: 35, pageNumber: 1,
+    };
+    // For ordinary eggs, rice or meats, prefer actual common-food records
+    // rather than letting hundreds of branded sweets crowd out the results.
+    if (onlyCommon) body.dataType = ["Foundation","SR Legacy","Survey (FNDDS)"];
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8500),
+    });
+    if (!response.ok) throw Error("USDA HTTP " + response.status);
+    const data = await response.json();
+    if (!Array.isArray(data?.foods)) throw Error("USDA response invalid");
+    return data.foods.map(normalizeUsdaSearchFood).filter(Boolean).slice(0,30);
+  };
+  let foods = await fetchUsda(plan.common);
+  if (!foods.length && plan.common) foods = await fetchUsda(false);
+  return { status: "ok", foods };
 };
 
 const queryUsdaDetails = async (fdcId: string) => {
@@ -107,32 +121,62 @@ const accessToken = async () => {
 const queryFatSecret = async (term: string) => {
   const token = await accessToken();
   if (!token) return { status: "not_configured", foods: [] };
-  const url = new URL("https://platform.fatsecret.com/rest/server.api");
-  url.searchParams.set("method", "foods.search");
-  url.searchParams.set("search_expression", term);
-  url.searchParams.set("max_results", "25");
-  url.searchParams.set("format", "json");
-  const response = await fetch(url, {
-    headers: { "Authorization": "Bearer " + token, "Accept": "application/json" },
-    signal: AbortSignal.timeout(8500),
-  });
-  if (!response.ok) throw Error("FatSecret search unavailable (" + response.status + ")");
-  const data = await response.json();
-  if (data?.error) throw Error("FatSecret plan or search permission unavailable");
-  let items = data?.foods?.food || [];
-  if (!Array.isArray(items)) items = [items];
-  const foods = items.filter((f: any) => f?.food_id).map((f: any) => ({
-    name: cap(f.food_name),
-    brand: cap(f.brand_name, 120),
-    source: "fatsecret",
-    source_id: cap(f.food_id, 100), // the only retained information permitted
-    serving_label: "",
-    description: cap(f.food_description, 250),
-    source_url: String(f.food_url ?? "").startsWith("https://foods.fatsecret.com/")
-      ? cap(f.food_url, 400) : "",
-    can_log: false, // no diary storage under default FatSecret API license
-  }));
+  const plan = planFoodSearch(term);
+  const request = async (query: string) => {
+    // Basic OAuth supports foods.search; newer food search versions
+    // require premier scope not guaranteed by a Basic account.
+    const body = new URLSearchParams({
+      method: "foods.search",
+      search_expression: query,
+      max_results: "40",
+      format: "json",
+    });
+    const response = await fetch("https://platform.fatsecret.com/rest/server.api", {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer " + token,
+        "Accept": "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: body.toString(),
+      signal: AbortSignal.timeout(8500),
+    });
+    if (!response.ok) throw Error("FatSecret HTTP " + response.status);
+    const data = await response.json();
+    if (data?.error) {
+      const code = Number(data.error?.code || 0);
+      if (code === 13 || code === 14) throw Error("FatSecret authentication/access " + code);
+      throw Error("FatSecret API error");
+    }
+    let items = data?.foods?.food ?? [];
+    if (!Array.isArray(items)) items = [items];
+    return items.filter((f: any) => f?.food_id).map((f: any) => ({
+      name: cap(f.food_name), brand: cap(f.brand_name,120),
+      source: "fatsecret", source_id: cap(f.food_id,100),
+      serving_label: "", description: cap(f.food_description,250),
+      source_url: String(f.food_url??"").startsWith("https://foods.fatsecret.com/")
+        ?cap(f.food_url,400):"",
+      can_log: false,
+    }));
+  };
+  const broad = plan.restaurant || term;
+  const detailed = plan.restaurant && plan.itemTerms.length
+    ? plan.restaurant + " " + plan.itemTerms.join(" ") : broad;
+  let foods = await request(detailed);
+  if (plan.restaurant) foods = foods.filter((food: any) => restaurantMatches(food,plan));
+  if (plan.restaurant && plan.itemTerms.length && !foods.length) {
+    foods = (await request(broad)).filter((food: any) => restaurantMatches(food,plan));
+  }
   return { status: "ok", foods };
+};
+const providerFailure = (error: unknown): "authentication_failed" | "access_denied" |
+    "rate_limited" | "network_error" | "unavailable" => {
+  const message = String(error instanceof Error ? error.message : error);
+  if (/403|scope|permission|authentication\/access 14/i.test(message)) return "access_denied";
+  if (/401|auth|invalid token/i.test(message)) return "authentication_failed";
+  if (/429|rate|limit/i.test(message)) return "rate_limited";
+  if (/timeout|fetch|network|connect/i.test(message)) return "network_error";
+  return "unavailable";
 };
 
 Deno.serve(async (req: Request) => {
@@ -164,8 +208,8 @@ Deno.serve(async (req: Request) => {
     const query = String(payload?.query || "").trim();
     if (query.length < 2 || query.length > 80) return reply(req, 400, { error: "Food search must be 2–80 characters" });
     const [usda, fatsecret] = await Promise.allSettled([queryUsda(query), queryFatSecret(query)]);
-    const usdaResult = usda.status === "fulfilled" ? usda.value : { status: "unavailable", foods: [] };
-    const fatsecretResult = fatsecret.status === "fulfilled" ? fatsecret.value : { status: "unavailable", foods: [] };
+    const usdaResult = usda.status === "fulfilled" ? usda.value : { status: providerFailure(usda.reason), foods: [] };
+    const fatsecretResult = fatsecret.status === "fulfilled" ? fatsecret.value : { status: providerFailure(fatsecret.reason), foods: [] };
     return reply(req, 200, {
       usda: usdaResult.foods,
       fatsecret: fatsecretResult.foods,
