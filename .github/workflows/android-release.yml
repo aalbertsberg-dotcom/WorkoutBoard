@@ -1,0 +1,94 @@
+name: Publish WorkSet Android (signed release)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: workset-signed-android-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Verify Android signing secrets
+        env:
+          KEYSTORE_B64: ${{ secrets.WORKSET_ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.WORKSET_ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.WORKSET_ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.WORKSET_ANDROID_KEY_PASSWORD }}
+        run: |
+          for item in KEYSTORE_B64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [ -z "${!item}" ]; then
+              echo "::error::Missing Android release signing secret: $item"
+              exit 1
+            fi
+          done
+      - name: Install and test
+        run: |
+          npm install
+          npm test
+      - name: Build native assets
+        env:
+          WORKSET_NATIVE_BUILD: 'true'
+          VITE_SUPABASE_URL: https://lplybuzlgowxeszkvtqe.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_PUBLIC_APP_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+        run: npm run build:android
+      - name: Create Android wrapper
+        run: |
+          npx cap add android
+          npx cap sync android
+      - name: Stage signing key and Android build number
+        env:
+          KEYSTORE_B64: ${{ secrets.WORKSET_ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          echo "WORKSET_ANDROID_VERSION_CODE=$((100000 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
+          echo "WORKSET_ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/WorkSet-release.jks" >> "$GITHUB_ENV"
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/WorkSet-release.jks"
+          chmod 600 "$RUNNER_TEMP/WorkSet-release.jks"
+      - name: Prepare native source and signing
+        env:
+          WORKSET_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.WORKSET_ANDROID_KEYSTORE_PASSWORD }}
+          WORKSET_ANDROID_KEY_ALIAS: ${{ secrets.WORKSET_ANDROID_KEY_ALIAS }}
+          WORKSET_ANDROID_KEY_PASSWORD: ${{ secrets.WORKSET_ANDROID_KEY_PASSWORD }}
+        run: node scripts/prepare-android-native.mjs --release
+      - name: Build signed release APK
+        working-directory: android
+        env:
+          WORKSET_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.WORKSET_ANDROID_KEYSTORE_PASSWORD }}
+          WORKSET_ANDROID_KEY_ALIAS: ${{ secrets.WORKSET_ANDROID_KEY_ALIAS }}
+          WORKSET_ANDROID_KEY_PASSWORD: ${{ secrets.WORKSET_ANDROID_KEY_PASSWORD }}
+        run: bash ./gradlew --no-daemon assembleRelease
+      - name: Verify signed WorkSet.apk
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk WorkSet.apk
+          test -s WorkSet.apk
+          "${ANDROID_HOME:-$ANDROID_SDK_ROOT}/build-tools/$(ls "${ANDROID_HOME:-$ANDROID_SDK_ROOT}/build-tools" | sort -V | tail -1)/apksigner" verify --verbose --print-certs WorkSet.apk
+          sha256sum WorkSet.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WorkSet-Android-Signed
+          path: WorkSet.apk
+          if-no-files-found: error
+          retention-days: 14
+      - name: Publish signed APK for in-app updater
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION_NAME=$(node -p "require('./package.json').version")
+          TAG="android-v${WORKSET_ANDROID_VERSION_CODE}"
+          gh release create "$TAG" WorkSet.apk --latest \
+            --title "WorkSet Android v${VERSION_NAME}" \
+            --notes "Signed WorkSet.apk (Android build ${WORKSET_ANDROID_VERSION_CODE}). Existing signing key required for in-place upgrades. Android asks for installation approval."

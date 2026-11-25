@@ -1,8 +1,24 @@
 name: Build WorkSet Android (testing)
 
-# Native packages remain on hold. Run explicitly from Actions when testing resumes.
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'native/android/**'
+      - 'scripts/**'
+      - 'capacitor.config.json'
+      - 'package.json'
+      - '.github/workflows/android-debug.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'native/android/**'
+      - 'scripts/**'
+      - 'capacitor.config.json'
+      - 'package.json'
+      - '.github/workflows/android-debug.yml'
 
 permissions:
   contents: read
@@ -15,18 +31,14 @@ jobs:
       - name: Node 22
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: '22'
       - name: JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
-      # GitHub ubuntu-latest already has Android SDK cmdline-tools.
-      # setup-android@v3 requests the retired "tools" package and fails.
       - name: Android SDK location
-        run: |
-          echo "Using Android SDK: ${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
-          test -d "${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+        run: test -d "${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
       - name: Install packages
         run: npm install
       - name: Test
@@ -38,16 +50,20 @@ jobs:
           VITE_SUPABASE_URL: https://lplybuzlgowxeszkvtqe.supabase.co
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
           VITE_PUBLIC_APP_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
-      - name: Generate Android wrapper and sync plugins
+      - name: Generate and prepare Android wrapper
         run: |
           npx cap add android
           npx cap sync android
-      - name: Assemble debug APK
+          node scripts/prepare-android-native.mjs
+      - name: Assemble Android test APK
         working-directory: android
-        run: bash gradlew --no-daemon assembleDebug
-      - name: Upload test APK
+        run: bash ./gradlew --no-daemon assembleDebug
+      - name: Keep one APK filename
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk WorkSet.apk
+      - name: Upload WorkSet APK test package
         uses: actions/upload-artifact@v4
         with:
-          name: WorkSet-Android-Debug
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: WorkSet-Android-Test
+          path: WorkSet.apk
           if-no-files-found: error
+          retention-days: 14

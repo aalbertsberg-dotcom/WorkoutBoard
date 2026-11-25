@@ -8905,3 +8905,40 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
 /* Required attribution for free FatSecret food-data references, unobtrusive on auth. */
 .auth-provider-attribution{margin:14px 0 0;text-align:center;font-size:10px}
 .auth-provider-attribution a{color:#8199b0;text-decoration:underline}
+
+
+/* Native Android only: keep WorkSet tabs and all scrollable screens above the
+   system navigation area; PWA/iPhone layouts retain their existing behavior.
+   The value comes from Android window insets and is 0 when WebView already fits. */
+@media (max-width:700px) {
+  html.workset-native-android {
+    --workset-native-nav-inset:0px;
+  }
+  html.workset-native-android .app-level-mobile-nav {
+    bottom:var(--workset-native-nav-inset) !important;
+    height:94px !important;
+    min-height:94px !important;
+    padding:7px !important;
+    overflow:hidden !important;
+    background:#09101d !important;
+  }
+  html.workset-native-android .app-level-mobile-nav button {
+    height:76px !important;
+    min-height:76px !important;
+  }
+  html.workset-native-android .app {
+    padding-bottom:calc(114px + var(--workset-native-nav-inset)) !important;
+  }
+  html.workset-native-android .bottom-space {
+    min-height:calc(110px + var(--workset-native-nav-inset));
+  }
+  html.workset-native-android body::after {
+    content:"";
+    position:fixed;
+    left:0;right:0;bottom:0;
+    height:var(--workset-native-nav-inset);
+    background:#09101d;
+    pointer-events:none;
+    z-index:4999;
+  }
+}
