@@ -89,3 +89,35 @@ export function recipePerServing(ingredients=[],servings=1){
   const totals=nutrientSum(ingredients);
   return Object.fromEntries(nutrientFields.map(field=>[field,round1(totals[field]/count)]));
 }
+
+
+/** Gram-weight changes affect nutrient values per original serving, never labels alone. */
+export function foodForPortion(food,portion){
+  if(!food||!portion)return food;
+  const original=Number(food.serving_grams);
+  const grams=Number(portion.grams);
+  if(!Number.isFinite(original)||original<=0||!Number.isFinite(grams)||grams<=0||grams>1500)
+    throw new Error('Choose a valid portion weight.');
+  return {...food,serving_label:String(portion.label||grams+' g'),
+    serving_grams:grams,...Object.fromEntries(nutrientFields.map(key=>
+      [key,round1(nonnegative(food[key])*grams/original)]))};
+}
+/** Flags *existing* USDA diary entries with contradictory calorie/macronutrient totals. */
+export function needsNutritionReview(entry){
+  if(entry?.source!=='usda')return false;
+  const kcal=Number(entry?.calories),p=Number(entry?.protein_g),
+    c=Number(entry?.carbs_g),f=Number(entry?.fat_g);
+  if(![kcal,p,c,f].every(Number.isFinite)||[kcal,p,c,f].some(n=>n<0))return false;
+  const expected=4*p+4*c+9*f;
+  return expected>40&&(kcal>Math.max(80,expected*1.85)||kcal<expected*.38);
+}
+/** Optional broader search, with no assumptions about the user's preferred food. */
+export function broaderFoodSearch(query){
+  const raw=String(query||'').trim();
+  if(!raw)return '';
+  const words=raw.split(/\s+/);
+  const last=words[words.length-1]?.toLowerCase();
+  if(words.length>1&&['breakfast','lunch','dinner','menu','food','foods','items'].includes(last))
+    return words.slice(0,-1).join(' ');
+  return '';
+}
