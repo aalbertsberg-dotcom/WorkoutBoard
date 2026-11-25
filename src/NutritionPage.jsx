@@ -7,6 +7,7 @@ import {NUTRITION_DEFAULTS,MEALS,dateKey,round1,nonnegative,multipliedNutrients,
 import {lookupFoodBarcode} from './nutritionCatalog';
 import {searchAllFoodCatalog,foodSourceLabel} from './nutritionMultiSearch';
 import {planFoodSearch} from '../supabase/functions/nutrition-search/foodSearchPlan.js';
+import {ACTIVITY_LABELS,WEIGHT_GOALS,cmToHeight,heightFeetInchesToCm,estimateNutritionTargets} from './nutritionCalculator.js';
 import './nutrition.css';
 
 const makeState=()=>({preferences:{...NUTRITION_DEFAULTS},foods:[],entries:[],water:[]});
@@ -76,16 +77,21 @@ async function readAll(table,userId,order){
   throw new Error('Food history is too large to load in one view. Contact support.');
 }
 
-export default function NutritionPage({session,onBack}){
+export default function NutritionPage({session,onBack,initialView='log'}){
   const userId=session?.user?.id||null;
   const activeUser=useRef(userId);activeUser.current=userId;
   const [data,setData]=useState(()=>cacheFor(userId));
-  const [goals,setGoals]=useState(()=>({...cacheFor(userId).preferences}));
+  const [goals,setGoals]=useState(()=>({...NUTRITION_DEFAULTS,...cacheFor(userId).preferences}));
+  const [heightEntry,setHeightEntry]=useState(()=>cmToHeight(cacheFor(userId).preferences?.height_cm));
+  const [weightForEstimate,setWeightForEstimate]=useState(()=>String(cacheFor(userId).preferences?.estimate_weight_lb||''));
+  const [trackedWeight,setTrackedWeight]=useState(null);
+  const [estimatePreview,setEstimatePreview]=useState(null);
+  const [estimateError,setEstimateError]=useState('');
   const [date,setDate]=useState(()=>dateKey());
   const [notice,setNotice]=useState('');
   const [busy,setBusy]=useState(false);
   const [loading,setLoading]=useState(false);
-  const [view,setView]=useState('log');
+  const [view,setView]=useState(initialView==='goals'?'goals':'log');
   const [search,setSearch]=useState('');
   const [results,setResults]=useState([]);
   const lastOfflineSave=useRef(false);
@@ -118,11 +124,17 @@ export default function NutritionPage({session,onBack}){
   const searchInputRef=useRef(null);
   const selectionRef=useRef(null);
   const diaryRef=useRef(null);
+  const goalsSectionRef=useRef(null);
   const [resultsQuery,setResultsQuery]=useState('');
   const [visibleResults,setVisibleResults]=useState(8);
 
   useEffect(()=>{
-    const cached=cacheFor(userId);setData(cached);setGoals({...cached.preferences});
+    const cached=cacheFor(userId);
+    setData(cached);
+    setGoals({...NUTRITION_DEFAULTS,...cached.preferences});
+    setHeightEntry(cmToHeight(cached.preferences?.height_cm));
+    setWeightForEstimate(String(cached.preferences?.estimate_weight_lb||''));
+    setEstimatePreview(null);setEstimateError('');setTrackedWeight(null);
     ++searchRequest.current;
     try{const last=localStorage.getItem('workset:nutrition:meal:'+userId);
       setSelectedMeal(MEALS.includes(last)?last:'Breakfast')}catch{setSelectedMeal('Breakfast')}
@@ -156,7 +168,9 @@ export default function NutritionPage({session,onBack}){
         if(cancelled||sequence!==newest.current||activeUser.current!==userId)return;
         const merged={preferences:prefs.data||{...NUTRITION_DEFAULTS},
           foods,entries,water};
-        setData(merged);setGoals({...merged.preferences});
+        setData(merged);setGoals({...NUTRITION_DEFAULTS,...merged.preferences});
+        setHeightEntry(cmToHeight(merged.preferences?.height_cm));
+        setWeightForEstimate(String(merged.preferences?.estimate_weight_lb||''));
         setNotice('');
       }catch(error){
         if(!cancelled&&activeUser.current===userId)
@@ -169,6 +183,32 @@ export default function NutritionPage({session,onBack}){
     return ()=>{cancelled=true;window.removeEventListener('online',sync);
       window.removeEventListener('workset:offline-synced',sync)};
   },[userId]);
+
+  // Reuse the most recent WorkSet bodyweight measurement; never infer weight
+  // from strength sets or training history. The cached measurement works offline.
+  useEffect(()=>{
+    if(!userId)return;
+    let cancelled=false;
+    const fallback=readOfflineState(userId,'training-tools-data',null)?.measurements||[];
+    const recent=fallback.filter(x=>Number(x.bodyweight)>0)
+      .sort((a,b)=>String(b.measured_on).localeCompare(String(a.measured_on)))[0];
+    if(recent)setTrackedWeight({value:Number(recent.bodyweight),date:recent.measured_on});
+    if(isOnline()){
+      supabase.from('body_measurements').select('bodyweight,measured_on')
+        .eq('user_id',userId).not('bodyweight','is',null)
+        .order('measured_on',{ascending:false}).limit(1).maybeSingle()
+        .then(({data,error})=>{
+          if(!cancelled&&!error&&Number(data?.bodyweight)>0)
+            setTrackedWeight({value:Number(data.bodyweight),date:data.measured_on});
+        }).catch(()=>{});
+    }
+    return ()=>{cancelled=true};
+  },[userId]);
+  useEffect(()=>{
+    if(view!=='goals'||initialView!=='goals')return;
+    const id=requestAnimationFrame(()=>goalsSectionRef.current?.scrollIntoView({block:'start'}));
+    return ()=>cancelAnimationFrame(id);
+  },[view,initialView]);
 
   const save=async(bucket,row)=>{
     if(!userId)return false;
