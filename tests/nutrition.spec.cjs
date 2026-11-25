@@ -458,7 +458,7 @@ test('Egg and Eggs show the same ordinary eggs first without public provider war
    await expect(results.nth(1)).toContainText('Eggs, Grade A, large');
    await expect(page.locator('.nutrition-source-feedback')).toHaveCount(0);
  }
- expect(packaged).toEqual(['egg','egg']);
+ expect(packaged).toEqual(['egg','eggs','egg','eggs']);
 });
 
 
@@ -538,7 +538,7 @@ test('Calculator does not replace manual goals until suggestion is applied and s
  await expect(page.getByRole('heading',{name:'Nutrition goals'})).toBeVisible();
  await expect(page.getByLabel('Calories (kcal)')).toHaveValue('2000');
  await page.getByRole('button',{name:'Calculate suggested goals'}).click();
- await expect(page.locator('.nutrition-estimate-error')).toContainText('valid height');
+ await expect(page.locator('.nutrition-estimate-error')).toContainText('Enter an age');
  await expect(page.getByLabel('Calories (kcal)')).toHaveValue('2000');
  await page.getByLabel('Height feet').fill('5');
  await page.getByLabel('Height inches').fill('10');
@@ -554,6 +554,7 @@ test('Calculator does not replace manual goals until suggestion is applied and s
  await expect(page.getByLabel('Calories (kcal)')).not.toHaveValue('2000');
  const suggested=await page.getByLabel('Calories (kcal)').inputValue();
  await page.getByRole('button',{name:'Save daily goals & profile'}).click();
+ await expect(page.locator('.nutrition-status')).toContainText('Saved on this device');
  await page.reload();
  await page.getByRole('button',{name:'Goals',exact:true}).click();
  await expect(page.getByLabel('Calories (kcal)')).toHaveValue(suggested);
@@ -568,6 +569,7 @@ test('Manual calorie and macro goals remain editable without calculator fields',
  await page.getByLabel('Calories (kcal)').fill('2250');
  await page.getByLabel('Protein (g)').fill('180');
  await page.getByRole('button',{name:'Save daily goals & profile'}).click();
+ await expect(page.locator('.nutrition-status')).toContainText('Saved on this device');
  await page.reload();
  await expect(page.locator('.nutrition-calorie-hero')).toContainText('2,250 goal');
  await page.getByRole('button',{name:'Goals',exact:true}).click();
