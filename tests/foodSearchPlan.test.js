@@ -85,3 +85,45 @@ test('normalization keeps restaurant apostrophes and hyphenated names equivalent
   assert.equal(normalizeFoodText("Marco’s Pizza"),'marcos pizza');
   assert.equal(normalizeFoodText("Chick-fil-A"),'chick fil a');
 });
+
+
+test('egg and eggs use the identical USDA lookup and equivalent source ranking',()=>{
+ const single=planFoodSearch('Egg'),plural=planFoodSearch('eggs');
+ assert.equal(single.normalized,'egg');
+ assert.equal(plural.normalized,'egg');
+ assert.equal(single.providerQuery,'eggs');
+ assert.equal(plural.providerQuery,'eggs');
+ assert.deepEqual(single.usdaQueries,['eggs','egg whole raw']);
+ assert.deepEqual(single.usdaQueries,plural.usdaQueries);
+ const foods={
+   usda:[
+     {name:'Egg burrito',source:'usda',data_type:'Survey (FNDDS)',source_id:'1001',can_log:true},
+     {name:'Egg omelet or scrambled egg',source:'usda',data_type:'Survey (FNDDS)',source_id:'1002',can_log:true},
+     {name:'Egg, whole, raw, fresh',source:'usda',data_type:'SR Legacy',source_id:'1003',can_log:true},
+     {name:'Eggs, Grade A, large',source:'usda',data_type:'Foundation',source_id:'1004',can_log:true},
+     {name:'Chocolate Egg',source:'openfoodfacts',brand:'Cadbury'}
+   ]
+ };
+ const once=mergeFoodResults(foods,'egg');
+ const twice=mergeFoodResults(foods,'eggs');
+ assert.deepEqual(once,twice);
+ assert.ok(/whole|grade/i.test(once[0].name));
+ assert.ok(/whole|grade/i.test(once[1].name));
+ assert.ok(once.findIndex(x=>x.name==='Egg burrito')>1);
+ assert.equal(once.length,5);
+});
+test('egg and eggs normalize packaged lookup equally without changing chicken searches',async()=>{
+ const calls=[];
+ const source=async term=>{
+   calls.push(term);
+   return [{name:'Egg, whole, raw',source:'openfoodfacts',brand:'',serving_label:'100 g'}];
+ };
+ const backend={functions:{invoke:async()=>({data:{
+   usda:[{name:'Eggs, Grade A, large',source:'usda',data_type:'Foundation',can_log:true}],
+   fatsecret:[],providers:{usda:'ok',fatsecret:'not_configured'}
+ },error:null})}};
+ const egg=await searchAllFoodCatalog('egg',{supabaseClient:backend,searchPackaged:source});
+ const eggs=await searchAllFoodCatalog('eggs',{supabaseClient:backend,searchPackaged:source});
+ assert.deepEqual(egg,eggs);
+ assert.deepEqual(calls,['eggs','eggs']);
+});
