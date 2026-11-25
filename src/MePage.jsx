@@ -52,6 +52,12 @@ export default function MePage({
         <span><strong>Nutrition &amp; Water</strong><small>Food diary, macros, hydration and goals</small></span>
         <b aria-hidden="true">›</b>
       </button>
+      <button type="button" onClick={()=>onOpenNutrition('goals')}>
+        <span className="me-shortcut-icon" aria-hidden="true">◎</span>
+        <span><strong>Calorie &amp; Macro Setup</strong>
+          <small>Set height once, use tracked weight, edit targets</small></span>
+        <b aria-hidden="true">›</b>
+      </button>
       <button type="button" onClick={onOpenProgress}>
         <span className="me-shortcut-icon" aria-hidden="true">⌁</span>
         <span><strong>View Progress & Analytics</strong><small>Read-only charts, records and history</small></span>
