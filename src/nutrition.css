@@ -223,3 +223,12 @@
 }
 
 .nutrition-checking{color:#9bc4dc;font-size:11px;font-weight:800}
+
+
+.nutrition-search-intro{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  border:1px solid #284d40;background:linear-gradient(105deg,#152c27,#111d2d);
+  border-radius:13px;padding:12px}
+.nutrition-search-intro>div{display:grid;gap:3px;min-width:0}
+.nutrition-search-intro strong{font-size:17px;color:#eef6f1}
+.nutrition-search-intro button{flex:0 0 auto;border:1px solid #3c5366;color:#d6e9f8;background:#152639;
+  border-radius:9px;min-height:42px;padding:8px 12px;font-weight:800;font-size:12px}
