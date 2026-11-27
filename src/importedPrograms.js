@@ -77,8 +77,8 @@ const xmlError=doc=>{
 const xml=(source)=>xmlError(new DOMParser().parseFromString(source,'application/xml'))
 const byName=(parent,localName)=>Array.from(parent?.getElementsByTagName('*')||[])
   .filter(el=>el.localName===localName)
-const children=(parent,localName)=>Array.from(parent?.children||[])
-  .filter(el=>el.localName===localName)
+const children=(parent,localName)=>Array.from(parent?.childNodes||[])
+  .filter(el=>el.nodeType===1&&el.localName===localName)
 const attr=(el,name)=>el?.getAttribute(name)||''
 const sheetPath=(target)=>{
   const cleanTarget=String(target||'').replace(/^\/+/,'')
