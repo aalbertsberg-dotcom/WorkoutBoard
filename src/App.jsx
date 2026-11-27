@@ -4434,6 +4434,7 @@ function App() {
             onProgramCompleted={track=>setProgramCompletionPrompt({name:track?.program_name||'Program'})}
             onStartStrengthBaseline={startStrengthBaseline}
             onScheduleClassicWorkout={scheduleClassicWorkoutFromPlan}
+            onOpenCommunity={()=>{setTogetherView('community');navigateTo('together')}}
             oneRepMaxes={oneRepMaxes}
           />
         ) : activeTab === 'whiteboard' ? (
