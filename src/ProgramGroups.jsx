@@ -185,7 +185,9 @@ export default function ProgramGroups({session,profile,programOptions=[]}){
               <div className="program-group-progress"><span>{finishers.length} of {sharingCount} sharing members finished</span><div><i style={{width:((sharingCount?finishers.length/sharingCount:0)*100)+'%'}}/></div></div>
               <div className="program-group-finishers">{finishers
                 .sort((a,b)=>String(a.completed_at).localeCompare(String(b.completed_at)))
-                .map(row=><div key={row.user_id}><span>✓ {row.display_name}</span><small>{Number(row.total_volume||0).toLocaleString()} lb volume · {new Date(row.completed_at).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</small></div>)}
+                .map(row=><div key={row.user_id}><span>✓ {row.display_name}</span><small>{Number(row.total_volume||0).toLocaleString()} lb volume{Number(row.estimated_1rm)>0?' · e1RM '+Math.round(Number(row.estimated_1rm))+' lb':''} · {new Date(row.completed_at).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</small></div>)}
+                {members.filter(member=>member.share_workouts&&!finishers.some(row=>row.user_id===member.user_id))
+                  .map(member=><div key={member.user_id}><span>○ {member.display_name}</span><small>Not finished yet</small></div>)}
               </div>
             </article>
           })}
