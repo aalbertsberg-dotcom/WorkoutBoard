@@ -44,5 +44,6 @@ test('in-workout form persists values through per-account 1RM saver and updates 
   assert.match(runner,/missingWorkoutOneRms\(workout,workoutOneRms\)/)
   assert.match(runner,/onSaveOneRm\(lift,Number\(oneRmDraft\[lift\]\)\)/)
   assert.match(runner,/programmedTarget>0&&activeSet\?\.weight_lift&&!activeSet\?\.weight_edited/)
-  assert.match(runner,/const tileWeight=set.done\|\|set.weight_edited\?recordedWeight:\(suggestedWeight\|\|recordedWeight\)/)
+  assert.match(runner,/const tileWeight=cyclePending&&/)
+  assert.match(runner,/set.done\|\|set.weight_edited\?recordedWeight:\(suggestedWeight\|\|recordedWeight\)/)
 })
