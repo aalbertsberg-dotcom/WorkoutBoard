@@ -4,6 +4,7 @@ import {completedMainLiftSets,strengthTrendFromCompletedSets} from './personalRe
 import { supabase } from './supabase'
 import { DialogPortal,OverlayPortal,confirmWorkset } from './worksetDialogs'
 import { allArchivePrograms, archiveProgramById, makePlannedFromArchive } from './archivePrograms'
+import {ORIGINAL_CHALLENGE_ID,originalChallengeStartingMaxes} from './originalChallengeCycle.js'
 import ProgramCommunity from './ProgramCommunity.jsx'
 import { ProgressToolbox, WorkoutTemplates } from './trainingTools'
 import { AdvancedProgressCenter, PlannedWorkoutTools, ShareImportPanel, AdminDashboardSummary } from './advancedFeatures'
@@ -1192,7 +1193,7 @@ export function PlanPage({
       program_key:p.key,
       version_number:version,
       title:p.name,
-      snapshot:snapshotProgram(p)
+      snapshot:{...snapshotProgram(p),...(p.id===ORIGINAL_CHALLENGE_ID?{starting_one_rms:originalChallengeStartingMaxes(oneRepMaxes)}:{})}
     }).select('id').single()
     if(error)return null
     return data?.id||null
@@ -1397,9 +1398,20 @@ export function PlanPage({
 
     let payload
     if(preview.kind==='archive'){
-      payload=makePlannedFromArchive(preview,previewWeek,previewDay,scheduleDate,oneRepMaxes||{})
       const activeTrack=tracking.find(track=>track.program_key===preview.key&&track.status==='tracking')
-      payload.workout={...payload.workout,tracking_program_key:preview.key,tracking_started_at:activeTrack?.started_at||null}
+      let initialMaxes=oneRepMaxes||{}
+      if(preview.id===ORIGINAL_CHALLENGE_ID&&activeTrack?.program_version_id){
+        const {data:version,error:versionError}=await supabase.from('program_versions')
+          .select('snapshot').eq('user_id',session.user.id)
+          .eq('id',activeTrack.program_version_id).maybeSingle()
+        if(versionError){setMessage('Could not load this program’s original 1RM baseline: '+versionError.message);return}
+        const stored=version?.snapshot?.starting_one_rms
+        if(stored&&Object.keys(stored).length)initialMaxes=stored
+      }
+      payload=makePlannedFromArchive(preview,previewWeek,previewDay,scheduleDate,initialMaxes)
+      payload.workout={...payload.workout,tracking_program_key:preview.key,
+        ...(preview.id===ORIGINAL_CHALLENGE_ID?{challenge_starting_one_rms:originalChallengeStartingMaxes(initialMaxes)}:{}),
+        tracking_started_at:activeTrack?.started_at||null}
     } else {
       payload={
         scheduled_date:scheduleDate,
