@@ -84,6 +84,18 @@ test('imported formula-driven cells fail closed rather than using cached results
   assert.equal(result.formulaCount,1)
   assert.match(result.issues[0].text,/Formula-driven/)
 })
+test('rejects complex formula-driven worksheets rather than silently omitting a cycle',()=>{
+  const good={name:'Week 1',rows:[
+    row('Exercise','Sets','Reps'),row('Squat','3','5')
+  ]}
+  const complex={name:'Anchor Cycle 2',rows:[
+    [{value:'New training max',formula:false},{value:'310',formula:true}]
+  ]}
+  const p=convertSpreadsheetSheets([good,complex])
+  assert.equal(p.canSave,false)
+  assert.ok(p.issues.some(i=>i.level==='error'&&i.text.includes('Formula-based')))
+})
+
 test('ambiguous percent basis blocks save until the athlete confirms TM or 1RM',()=>{
   const sheets=sheet(
     ['Exercise','Sets','Reps','Percent'].map(x=>x),
