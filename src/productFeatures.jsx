@@ -1034,7 +1034,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       {cyclePending?<p className="helper-text">Loading the completed Week 6 test reps before calculating today's weights…</p>:<>
         {Object.keys(cycleMaxes).length>0&&<p className="helper-text">The new 1RM estimates from Week 6 are applied to this program only. This week's target weights use 85% of those estimates{Number(planned.source_week)>=10?', plus the programmed 5/10 lb increase':''}.</p>}
         {ORIGINAL_CHALLENGE_LIFTS.filter(lift=>cycleMaxes[lift]).map(lift=><div className="helper-text" key={lift}>
-          {lift}: {challengeCycle.results?.[lift]?.weight} lb × {challengeCycle.results?.[lift]?.reps} reps → estimated 1RM {cycleMaxes[lift]} lb
+          {lift}: {challengeCycle.results?.[lift]?.weight} lb × {challengeCycle.results?.[lift]?.reps} reps → estimated 1RM {Number(cycleMaxes[lift]).toFixed(2)} lb
         </div>)}
         {ORIGINAL_CHALLENGE_LIFTS.filter(lift=>!cycleMaxes[lift]).length>0&&
           <p className="helper-text" role="status">Missing Week 6 test results for {ORIGINAL_CHALLENGE_LIFTS.filter(lift=>!cycleMaxes[lift]).join(', ')}. No calculated weight is shown for those lifts until a valid completed Week 6 test exists. You may still log a manual weight.</p>}
