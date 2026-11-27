@@ -1398,7 +1398,8 @@ export function PlanPage({
     let payload
     if(preview.kind==='archive'){
       payload=makePlannedFromArchive(preview,previewWeek,previewDay,scheduleDate,oneRepMaxes||{})
-      payload.workout={...payload.workout,tracking_program_key:preview.key}
+      const activeTrack=tracking.find(track=>track.program_key===preview.key&&track.status==='tracking')
+      payload.workout={...payload.workout,tracking_program_key:preview.key,tracking_started_at:activeTrack?.started_at||null}
     } else {
       payload={
         scheduled_date:scheduleDate,

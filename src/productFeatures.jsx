@@ -11,6 +11,7 @@ import GpsStatusBadge from './GpsStatusBadge.jsx'
 import BeatTimer from './BeatTimer.jsx'
 import { effectiveSteps } from './stepTracking'
 import {partnerSetTarget,missingWorkoutOneRms} from './programSetTargets.js'
+import {ORIGINAL_CHALLENGE_KEY,ORIGINAL_CHALLENGE_NAME,ORIGINAL_CHALLENGE_ID,ORIGINAL_CHALLENGE_LIFTS,isOriginalChallengeMaxTest,isOriginalChallengeTestSet,originalChallengeWeek6Estimates} from './originalChallengeCycle.js'
 import { validWeightDraft,validRepsDraft,displayedSetWeight,recordedWeightValue,canFinishQuickCardio,withoutUnreliableRoute,outdoorDistancePresentation,workoutDistancePresentation,effectiveCardioDurationSeconds,autosaveDelayMs } from './trackingRules'
 
 function parseVolume(value) {
@@ -178,7 +179,12 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
   const [oneRmDraft,setOneRmDraft]=useState({})
   const [oneRmSaving,setOneRmSaving]=useState(false)
   const [oneRmSaveMessage,setOneRmSaveMessage]=useState('')
-  const missingOneRms=missingWorkoutOneRms(workout,oneRepMaxes)
+  const needsChallengeCycle=workout?.archive_program_id===ORIGINAL_CHALLENGE_ID && Number(planned?.source_week)>=7
+  const [challengeCycle,setChallengeCycle]=useState({workoutId:null,loading:false,maxes:{},results:{},message:''})
+  const cyclePending=needsChallengeCycle&&(challengeCycle.workoutId!==planned?.id||challengeCycle.loading)
+  const cycleMaxes=needsChallengeCycle&&challengeCycle.workoutId===planned?.id?challengeCycle.maxes||{}:{}
+  const workoutOneRms={...oneRepMaxes,...cycleMaxes}
+  const missingOneRms=missingWorkoutOneRms(workout,workoutOneRms)
   const readyOneRmDrafts=missingOneRms.filter(lift=>Number(oneRmDraft[lift])>0)
   const saveWorkoutOneRms=async event=>{
     event.preventDefault()
@@ -201,6 +207,60 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       setOneRmSaving(false)
     }
   }
+
+  // For Weeks 7-12 the source-of-truth is this run's completed Week 6
+  // 100%-TM tests, NOT the user's global/saved 1RMs.
+  useEffect(()=>{
+    if(!needsChallengeCycle||!planned?.id||!planned?.user_id)return
+    let cancelled=false
+    const update=value=>{if(!cancelled)setChallengeCycle({workoutId:planned.id,...value})}
+    update({loading:true,maxes:{},results:{},message:''})
+    const load=async()=>{
+      let runStartedAt=planned.workout?.tracking_started_at||null
+      if(!runStartedAt&&navigator.onLine!==false){
+        const {data:track}=await supabase.from('user_program_tracking')
+          .select('started_at')
+          .eq('user_id',planned.user_id)
+          .eq('program_key',ORIGINAL_CHALLENGE_KEY)
+          .eq('status','tracking')
+          .order('started_at',{ascending:false}).limit(1).maybeSingle()
+        runStartedAt=track?.started_at||null
+      }
+      if(cancelled)return
+      if(!runStartedAt){
+        update({loading:false,maxes:{},results:{},
+          message:'Week 6 test results cannot be matched to a program run. Track this program to link the test automatically.'})
+        return
+      }
+      const cacheKey='original-challenge-week6:'+runStartedAt
+      const cached=readOfflineState(planned.user_id,cacheKey,null)
+      if(navigator.onLine===false){
+        update({loading:false,maxes:cached?.maxes||{},results:cached?.results||{},
+          message:cached?'Using the last synced Week 6 test results (offline).':
+            'Offline: Week 6 results have not been synced on this device. Connect before relying on post-test weights.'})
+        return
+      }
+      try{
+        const {data:rows,error}=await supabase.from('training_sessions')
+          .select('id,program,week,completed_at,workout')
+          .eq('user_id',planned.user_id)
+          .eq('program',ORIGINAL_CHALLENGE_NAME)
+          .eq('week',6)
+          .gte('completed_at',runStartedAt)
+          .not('completed_at','is',null)
+          .order('completed_at',{ascending:false}).limit(50)
+        if(error)throw error
+        const calculated=originalChallengeWeek6Estimates(rows||[],runStartedAt)
+        writeOfflineState(planned.user_id,cacheKey,calculated)
+        update({loading:false,maxes:calculated.maxes,results:calculated.results,message:''})
+      }catch(error){
+        update({loading:false,maxes:cached?.maxes||{},results:cached?.results||{},
+          message:'Week 6 results could not be refreshed: '+(error?.message||'Connection unavailable')})
+      }
+    }
+    load()
+    return()=>{cancelled=true}
+  },[needsChallengeCycle,planned?.id,planned?.user_id,planned?.source_week,planned?.workout?.tracking_started_at])
 
   const lastCancelRequestRef=useRef(cancelRequestToken)
   useEffect(()=>{
@@ -580,6 +640,18 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
 
   const finish=async()=>{
     if (!planned?.id || finishing || (quickCardio&&!canFinishCardio)) return
+    if(cyclePending){setSaveState('Waiting for Week 6 test results before finishing.');return}
+    if(isOriginalChallengeMaxTest(planned)){
+      const testSets=(workout.exercises||[]).flatMap(item=>
+        (item.setProgress||[]).filter(isOriginalChallengeTestSet))
+      if(testSets.length===0||testSets.some(set=>
+        !set.done||!(Number(set.weight)>0)||
+        !Number.isInteger(Number(set.actual_reps))||!(Number(set.actual_reps)>0)||
+        Number(set.actual_reps)>30||set.actual_reps==null||set.actual_reps==='')){
+        setSaveState('Complete the 100% TM test set and enter the actual weight and reps to calculate the next cycle.')
+        return
+      }
+    }
     setFinishing(true)
     await inFlightSaveRef.current.catch(()=>{})
     const now=new Date().toISOString()
@@ -950,6 +1022,19 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       </div>
     </div>
 
+    {needsChallengeCycle&&<section className="simple-card" aria-label="531 Original Challenge Week 6 auto-calculation">
+      <div className="section-heading"><div><span className="card-label">POST-TEST TRAINING MAX</span><h3>Calculated from Week 6 results</h3></div></div>
+      {cyclePending?<p className="helper-text">Loading the completed Week 6 test reps before calculating today's weights…</p>:<>
+        {Object.keys(cycleMaxes).length>0&&<p className="helper-text">The new 1RM estimates from Week 6 are applied to this program only. This week's target weights use 85% of those estimates{Number(planned.source_week)>=10?', plus the programmed 5/10 lb increase':''}.</p>}
+        {ORIGINAL_CHALLENGE_LIFTS.filter(lift=>cycleMaxes[lift]).map(lift=><div className="helper-text" key={lift}>
+          {lift}: {challengeCycle.results?.[lift]?.weight} lb × {challengeCycle.results?.[lift]?.reps} reps → estimated 1RM {cycleMaxes[lift]} lb
+        </div>)}
+        {ORIGINAL_CHALLENGE_LIFTS.filter(lift=>!cycleMaxes[lift]).length>0&&
+          <p className="helper-text">Week 6 tests not recorded for {ORIGINAL_CHALLENGE_LIFTS.filter(lift=>!cycleMaxes[lift]).join(', ')}. Until recorded, those lifts use saved 1RMs, not invented test results.</p>}
+        {challengeCycle.message&&<p className="helper-text" role="status">{challengeCycle.message}</p>}
+      </>}
+    </section>}
+
     {missingOneRms.length>0&&onSaveOneRm&&<form className="simple-card workout-missing-one-rm" onSubmit={saveWorkoutOneRms}>
       <div className="section-heading"><div><span className="card-label">WORKOUT WEIGHT TARGETS</span><h3>Enter your 1RMs to calculate weights</h3></div></div>
       <p className="helper-text">Missing {missingOneRms.join(' and ')} 1RM{missingOneRms.length>1?'s':''}. Enter your one-rep maximum in pounds. WorkSet uses 85% as the training max, then applies this program's set percentages.</p>
@@ -1032,14 +1117,16 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
           const selectedSet=Number.isInteger(selectedSetIndex)&&item.setProgress[selectedSetIndex]&&!item.setProgress[selectedSetIndex].done ? selectedSetIndex : -1
           const activeIndex=selectedSet>=0 ? selectedSet : item.setProgress.findIndex(set=>!set.done)
           const activeSet=activeIndex>=0?item.setProgress[activeIndex]:null
-          const programmedTargetText=activeSet ? partnerSetTarget(oneRepMaxes,activeSet) : ''
+          const programmedTargetText=activeSet&&!cyclePending ? partnerSetTarget(workoutOneRms,activeSet) : ''
           const programmedTarget=Number(String(programmedTargetText||'').match(/^\d+/)?.[0]||0)
           const previousWeight=activeIndex>0 ? Number(item.setProgress[activeIndex-1]?.weight||0) : 0
           const lastTimeWeight=activeIndex>=0 ? Number(hist?.lastWeights?.[Math.min(activeIndex,(hist?.lastWeights?.length||1)-1)]||0) : 0
           const legacyWeight=item.load!==undefined&&item.load!=='' ? Number(item.load)||0 : 0
-          const shownWeight=programmedTarget>0&&activeSet?.weight_lift&&!activeSet?.weight_edited
-            ? String(programmedTarget)
-            : displayedSetWeight(activeSet,[programmedTarget,previousWeight,lastTimeWeight,legacyWeight])
+          const shownWeight=cyclePending&&activeSet?.weight_lift&&!activeSet?.done&&!activeSet?.weight_edited
+            ? ''
+            : programmedTarget>0&&activeSet?.weight_lift&&!activeSet?.weight_edited&&!activeSet?.done
+              ? String(programmedTarget)
+              : displayedSetWeight(activeSet,[programmedTarget,previousWeight,lastTimeWeight,legacyWeight])
           return <>
             {activeSet&&i===focusedExerciseIndex&&<section className="current-set-panel">
               <div className="current-set-panel-head">
@@ -1083,9 +1170,15 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
                   </div>
                 </label>}
               </div>
-              {activeSet&&!isDistanceExercise(item.name)&&<small className="rep-default-hint">Leave blank = programmed reps. Enter only if different.</small>}
+              {activeSet&&!isDistanceExercise(item.name)&&<small className="rep-default-hint">{isOriginalChallengeMaxTest(planned)&&isOriginalChallengeTestSet(activeSet)?'Test set: enter your ACTUAL completed reps. This calculates the next cycle.':'Leave blank = programmed reps. Enter only if different.'}</small>}
               <div className="current-set-actions">
               <button type="button" className="primary-action complete-current-set" onClick={()=>{
+                if(isOriginalChallengeMaxTest(planned)&&isOriginalChallengeTestSet(activeSet)&&
+                  (!(Number(shownWeight)>0)||!(Number(activeSet.actual_reps)>0)||
+                    !Number.isInteger(Number(activeSet.actual_reps))||Number(activeSet.actual_reps)>30)){
+                  setSaveState('Enter the actual weight and reps for the 100% TM max test before completing this set.')
+                  return
+                }
                 const nextSetIndex=item.setProgress.findIndex((sp,k)=>k!==activeIndex&&!sp.done)
                 changeExercise(i,{load:shownWeight,setProgress:item.setProgress.map((sp,k)=>k===activeIndex?{...sp,done:true,weight:loadField?shownWeight:sp.weight}:sp)})
                 if(nextSetIndex>=0){
@@ -1096,15 +1189,15 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
                   requestAnimationFrame(()=>goToNextExercise(i))
                 }
                 window.dispatchEvent(new CustomEvent('workoutboard:rest-timer',{detail:{seconds:rest}}))
-              }}>Complete Set {activeIndex+1}</button>
+              }} disabled={cyclePending}>Complete Set {activeIndex+1}</button>
               <button type="button" className="secondary-action next-exercise-button" onClick={()=>goToNextExercise(i)}>Next</button>
               </div>
             </section>}
             <div className="set-progress-grid compact flexible-set-progress">
               {item.setProgress.map((set,j)=>{
                 const recordedWeight=set.weight!==undefined&&set.weight!=='' ? Number(set.weight)||0 : 0
-                const suggestedWeight=Number(String(partnerSetTarget(oneRepMaxes,set)).match(/^\d+/)?.[0]||0)
-                const tileWeight=set.done||set.weight_edited?recordedWeight:(suggestedWeight||recordedWeight)
+                const suggestedWeight=cyclePending?0:Number(String(partnerSetTarget(workoutOneRms,set)).match(/^\d+/)?.[0]||0)
+                const tileWeight=cyclePending&&!set.done&&!set.weight_edited?0:(set.done||set.weight_edited?recordedWeight:(suggestedWeight||recordedWeight))
                 return <div className={'set-progress-wrap '+(set.extra?'extra-set':'')} key={j}>
                   <button
                     type="button"
