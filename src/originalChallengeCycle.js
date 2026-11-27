@@ -6,6 +6,19 @@ export const ORIGINAL_CHALLENGE_KEY='archive:531-original-challenge'
 export const ORIGINAL_CHALLENGE_ID='531-original-challenge'
 export const ORIGINAL_CHALLENGE_LIFTS=['Squat','Bench','Deadlift','Press']
 
+
+export function originalChallengeStartingMaxes(maxes={}){
+  return Object.fromEntries(ORIGINAL_CHALLENGE_LIFTS
+    .filter(lift=>Number.isFinite(Number(maxes?.[lift]))&&Number(maxes[lift])>0)
+    .map(lift=>[lift,Number(maxes[lift])]))
+}
+
+export function originalChallengeProgramMaxes(week,startingMaxes={},testMaxes={}){
+  return Number(week)>=7
+    ? originalChallengeStartingMaxes(testMaxes)
+    : originalChallengeStartingMaxes(startingMaxes)
+}
+
 export function isOriginalChallengeMaxTest(planned){
   return planned?.workout?.archive_program_id===ORIGINAL_CHALLENGE_ID &&
     [6,12].includes(Number(planned?.source_week))
