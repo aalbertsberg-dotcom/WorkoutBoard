@@ -2066,7 +2066,22 @@ function App() {
           .eq('user_id',session.user.id).maybeSingle()
         if(versionError){setWorkoutStartError('Could not load original program maxes: '+versionError.message);return}
         const stored=version?.snapshot?.starting_one_rms
-        if(stored&&Object.keys(stored).length)baselineOneRms=stored
+        if(stored&&Object.keys(stored).length===4){
+          baselineOneRms=stored
+        }else{
+          // Runs started before source baselines were introduced must be
+          // locked once, rather than rereading changed global 1RMs every week.
+          const recovered=originalChallengeStartingMaxes(oneRepMaxes)
+          if(Object.keys(recovered).length!==4){
+            setWorkoutStartError('Set all four 1RMs to restore this older Original Challenge program run.')
+            return
+          }
+          const {error:saveError}=await supabase.from('program_versions')
+            .update({snapshot:{...(version?.snapshot||{}),starting_one_rms:recovered}})
+            .eq('id',track.program_version_id).eq('user_id',session.user.id)
+          if(saveError){setWorkoutStartError('Could not lock the original 1RM baseline: '+saveError.message);return}
+          baselineOneRms=recovered
+        }
       }
     }
     const plannedPayload=makePlannedFromArchive(program,next.week,next.dayIndex,today,baselineOneRms)
