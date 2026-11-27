@@ -5,6 +5,8 @@ import { supabase } from './supabase'
 import { DialogPortal,OverlayPortal,confirmWorkset } from './worksetDialogs'
 import { allArchivePrograms, archiveProgramById, makePlannedFromArchive } from './archivePrograms'
 import {ORIGINAL_CHALLENGE_ID,originalChallengeStartingMaxes} from './originalChallengeCycle.js'
+import ProgramUpload from './ProgramUpload.jsx'
+import {importedProgramFromLibrary,importedProgramKey,makePlannedFromImported,validateReviewedProgram,normalizeReviewedProgram} from './importedPrograms.js'
 import {programWeightNotes} from './programWeightNotes.js'
 import ProgramCommunity from './ProgramCommunity.jsx'
 import { ProgressToolbox, WorkoutTemplates } from './trainingTools'
@@ -938,7 +940,12 @@ export function PlanPage({
     transcriptionStatus:p.getWeek?'full':(p.transcriptionStatus||'source'),
   })),[])
 
-  const allPrograms = useMemo(() => [...classicCatalog,...archiveCatalog],[classicCatalog,archiveCatalog])
+  const importedCatalog = useMemo(() => library
+    .filter(row=>row.owner_user_id===session?.user?.id)
+    .map(importedProgramFromLibrary).filter(Boolean),
+    [library,session?.user?.id])
+  const allPrograms = useMemo(() => [...classicCatalog,...archiveCatalog,...importedCatalog],
+    [classicCatalog,archiveCatalog,importedCatalog])
   const programByKey = useMemo(() => Object.fromEntries(allPrograms.map(p=>[p.key,p])),[allPrograms])
   const preview = sharedPreview || programByKey[previewKey] || allPrograms[0]
   const previewRunnable = Boolean(preview?.getWeek)
@@ -1023,6 +1030,8 @@ export function PlanPage({
         difficulty:snap.difficulty||'',
         weeksCount:Number(snap.weeksCount||snap.weeks?.length||1),
         daysPerWeek:Number(snap.daysPerWeek||snap.weeks?.[0]?.days?.length||0),
+        reviewed:Boolean(snap.kind==='custom'&&snap.reviewed===true),
+        sourceWeeks:snap.weeks||[],
         durationLabel:snap.durationLabel||null,
         getWeek:(targetWeek)=>snap.weeks?.find(w=>Number(w.week)===Number(targetWeek))?.days||[],
       }
@@ -1054,7 +1063,7 @@ export function PlanPage({
   const expectedSessions = track => {
     const p=programByKey[track.program_key]
     if(!p)return 0
-    if(p.kind==='archive'&&p.getWeek&&p.weeksCount){
+    if((p.kind==='archive'||p.kind==='custom')&&p.getWeek&&p.weeksCount){
       // Archive sources may have mixed 3- and 4-day weeks.
       return Array.from({length:Number(p.weeksCount)},(_,i)=>
         (p.getWeek(i+1)||[]).length).reduce((total,days)=>total+days,0)
@@ -1179,6 +1188,7 @@ export function PlanPage({
     difficulty:p.difficulty,
     weeksCount:p.weeksCount,
     daysPerWeek:p.daysPerWeek,
+    reviewed:Boolean(p.kind==='custom'&&p.reviewed===true),
     weeks:Array.from({length:Number(p.weeksCount||0)},(_,i)=>{
       const n=i+1
       return {week:n,days:p.getWeek?p.getWeek(n):[]}
@@ -1248,6 +1258,34 @@ export function PlanPage({
     }
   }
 
+  const saveSharedImportedProgram=async()=>{
+    if(!session?.user?.id||!sharedPreview?.reviewed||!sharedPreview.sourceWeeks?.length)return
+    const candidate={name:sharedPreview.name,weeks:sharedPreview.sourceWeeks}
+    const problems=validateReviewedProgram(candidate)
+    if(problems.length){
+      setMessage('Shared program needs corrections before saving: '+problems[0])
+      return
+    }
+    const normalized=normalizeReviewedProgram(candidate)
+    const {data,error}=await supabase.from('program_library').insert({
+      owner_user_id:session.user.id,name:sharedPreview.name,
+      description:'Reviewed copy of shared '+sharedPreview.name,
+      source_type:'manual',visibility:'private',status:'active',
+      weeks_count:normalized.weekCount,
+      plan:{schema_version:1,reviewed:true,import_source:'shared',
+        source_file:sharedPreview.source||'Shared WorkSet program',
+        source_format:'shared',weeks:normalized.weeks},
+    }).select('id').single()
+    if(error){setMessage('Could not save shared program: '+error.message);return}
+    await load()
+    await onTrackingChanged?.()
+    setSharedPreview(null)
+    setPreviewKey(importedProgramKey(data.id))
+    setPreviewWeek(1);setPreviewDay(0)
+    setSearch('');setCategory('All')
+    setMessage('Shared program saved privately. You can track it now.')
+  }
+
   const nativeShareProgram = async () => {
     if(!shareLink||!navigator.share)return
     try{await navigator.share({title:preview?.name||'Workset program',text:'Workset program',url:shareLink})}catch{}
@@ -1272,8 +1310,8 @@ export function PlanPage({
       }
     }
     const versionId=await createProgramVersion(p)
-    if(p.id===ORIGINAL_CHALLENGE_ID&&!versionId){
-      setMessage('Could not save the starting 1RMs for this program run. Tracking was not started.')
+    if((p.id===ORIGINAL_CHALLENGE_ID||p.kind==='custom')&&!versionId){
+      setMessage('Could not save this program version. Tracking was not started.')
       return
     }
     const {data,error}=await supabase.rpc('start_program_tracking',{
@@ -1411,7 +1449,7 @@ export function PlanPage({
     }
 
     let payload
-    if(preview.kind==='archive'){
+    if(preview.kind==='archive'||preview.kind==='custom'){
       const activeTrack=tracking.find(track=>track.program_key===preview.key&&track.status==='tracking')
       if(preview.id===ORIGINAL_CHALLENGE_ID&&previewWeek>=7&&!activeTrack){
         setMessage('Track 531 Original Challenge first. Week 7 onward requires Week 6 test results from that program run.')
@@ -1441,7 +1479,11 @@ export function PlanPage({
           initialMaxes=recovered
         }
       }
-      payload=makePlannedFromArchive(preview,previewWeek,previewDay,scheduleDate,initialMaxes)
+      try{
+        payload=preview.kind==='custom'
+          ?makePlannedFromImported(preview,previewWeek,previewDay,scheduleDate,initialMaxes)
+          :makePlannedFromArchive(preview,previewWeek,previewDay,scheduleDate,initialMaxes)
+      }catch(error){setMessage(error.message||'Could not build imported workout.');return}
       payload.workout={...payload.workout,tracking_program_key:preview.key,
         ...(preview.id===ORIGINAL_CHALLENGE_ID?{challenge_starting_one_rms:originalChallengeStartingMaxes(initialMaxes)}:{}),
         tracking_started_at:activeTrack?.started_at||null}
@@ -1562,20 +1604,38 @@ export function PlanPage({
       </section>}
 
       <section className="library-toolbar simple-card program-picker-toolbar">
-        <div className="section-heading"><div><span className="card-label">PROGRAM LIBRARY</span><h3>Find your next program</h3></div><button className="mini-action" onClick={()=>setShowSubmit(v=>!v)}>Add your own</button></div>
+        <div className="section-heading"><div><span className="card-label">PROGRAM LIBRARY</span><h3>Find your next program</h3></div><button className="mini-action" onClick={()=>{setSubmitMode('upload');setShowSubmit(v=>!v)}}>{showSubmit?'Close importer':'+ Upload / Add'}</button></div>
         <input className="text-input program-search" value={search} onChange={e=>setSearch(e.target.value)} enterKeyHint="search" onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();e.currentTarget.blur()}}} placeholder="Search 5/3/1, Squatober, powerbuilding…"/>
         <div className="category-chips">{categories.map(c=><button key={c} className={category===c?'active':''} onClick={()=>setCategory(c)}>{c}</button>)}</div>
         {recentProgramKeys.length>0&&<div className="recent-programs-row"><span>Recent</span>{recentProgramKeys.slice(0,4).map(key=>{const p=programByKey[key];return p?<button key={key} onClick={()=>openPreview(key)}>{p.name}</button>:null})}</div>}
       </section>
 
-      {showSubmit&&<form className="builder-card" onSubmit={submitPlan}>
-        <div className="segmented"><button type="button" className={submitMode==='build'?'active':''} onClick={()=>setSubmitMode('build')}>Build</button><button type="button" className={submitMode==='link'?'active':''} onClick={()=>setSubmitMode('link')}>Link</button></div>
-        <label>Program name<input value={submission.name} onChange={e=>setSubmission(v=>({...v,name:e.target.value}))}/></label>
-        {submitMode==='link'&&<label>Source URL<input type="url" required value={submission.source_url} onChange={e=>setSubmission(v=>({...v,source_url:e.target.value}))}/></label>}
-        <label>{submitMode==='build'?'Program outline':'Notes'}<textarea value={submission.description} onChange={e=>setSubmission(v=>({...v,description:e.target.value}))}/></label>
-        <label>Visibility<select value={submission.visibility} onChange={e=>setSubmission(v=>({...v,visibility:e.target.value}))}><option value="private">Private</option><option value="community">Community</option></select></label>
-        <button className="primary-action">Save draft</button>
-      </form>}
+      {showSubmit&&<>
+        <div className="segmented program-import-tabs" aria-label="Add a program">
+          <button type="button" className={submitMode==='upload'?'active':''} onClick={()=>setSubmitMode('upload')}>Upload</button>
+          <button type="button" className={submitMode==='build'?'active':''} onClick={()=>setSubmitMode('build')}>Build</button>
+          <button type="button" className={submitMode==='link'?'active':''} onClick={()=>setSubmitMode('link')}>Link</button>
+        </div>
+        {submitMode==='upload'?<ProgramUpload
+          session={session}
+          onClose={()=>setShowSubmit(false)}
+          onSaved={async row=>{
+            await load()
+            await onTrackingChanged?.()
+            setPreviewKey(importedProgramKey(row.id))
+            setPreviewWeek(1);setPreviewDay(0)
+            setShowSubmit(false);setSearch('');setCategory('All')
+            setMessage(row.name+' saved to My Programs. Preview, track or share it below.')
+            setTimeout(()=>document.getElementById('program-preview')?.scrollIntoView({behavior:'smooth',block:'nearest'}),100)
+          }}
+        />:<form className="builder-card" onSubmit={submitPlan}>
+          <label>Program name<input value={submission.name} onChange={e=>setSubmission(v=>({...v,name:e.target.value}))}/></label>
+          {submitMode==='link'&&<label>Source URL<input type="url" required value={submission.source_url} onChange={e=>setSubmission(v=>({...v,source_url:e.target.value}))}/></label>}
+          <label>{submitMode==='build'?'Program outline':'Notes'}<textarea value={submission.description} onChange={e=>setSubmission(v=>({...v,description:e.target.value}))}/></label>
+          <label>Visibility<select value={submission.visibility} onChange={e=>setSubmission(v=>({...v,visibility:e.target.value}))}><option value="private">Private</option><option value="community">Community</option></select></label>
+          <button className="primary-action">Save draft</button>
+        </form>}
+      </>}
 
       <div className="archive-grid">
         {baselineSearchMatch&&<article className="archive-card simplified-program-card strength-baseline-card">
@@ -1617,6 +1677,7 @@ export function PlanPage({
         <div className="sample-workout"><h3>{previewDays[previewDay]?.title}</h3>{previewDays[previewDay]?.exercises?.map((x,i)=><div className="sample-exercise" key={i}><strong>{x.name}</strong><span>{x.prescription}</span>{x.note&&<small>{x.note}</small>}</div>)}</div>
         <div className="program-preview-actions">
           <div className="schedule-row"><input type="date" value={scheduleDate} onChange={e=>setScheduleDate(e.target.value)}/><button className="primary-action" onClick={scheduleProgramWorkout}>Add workout</button></div>
+          {sharedPreview?.reviewed&&<button type="button" className="primary-action" onClick={saveSharedImportedProgram}>Save shared copy to My Programs</button>}
           <button className="wide-button" onClick={()=>shareProgram(preview)}>Share program</button>
           {shareLink&&<div className="share-link-inline">
             <span>{shareLink}</span>
