@@ -1048,7 +1048,13 @@ export function PlanPage({
 
   const expectedSessions = track => {
     const p=programByKey[track.program_key]
-    return p ? Number(p.weeksCount||0)*Number(p.daysPerWeek||0) : 0
+    if(!p)return 0
+    if(p.kind==='archive'&&p.getWeek&&p.weeksCount){
+      // Archive sources may have mixed 3- and 4-day weeks.
+      return Array.from({length:Number(p.weeksCount)},(_,i)=>
+        (p.getWeek(i+1)||[]).length).reduce((total,days)=>total+days,0)
+    }
+    return Number(p.weeksCount||0)*Number(p.daysPerWeek||0)
   }
 
   useEffect(() => {
@@ -1431,7 +1437,7 @@ export function PlanPage({
 
   const ProgramCard=({p})=>{
     const length=p.durationLabel || (p.weeksCount?(`${p.weeksCount} weeks`):'Program')
-    const frequency=p.daysPerWeek?(`${p.daysPerWeek} day${p.daysPerWeek===1?'':'s'}/wk`):''
+    const frequency=p.frequencyLabel||(p.daysPerWeek?(`${p.daysPerWeek} day${p.daysPerWeek===1?'':'s'}/wk`):'')
     return <article className={'archive-card simplified-program-card '+(previewKey===p.key?'selected':'')}>
       <div className="archive-card-head">
         <span className="program-length">{length}{frequency?' · '+frequency:''}</span>
@@ -1548,7 +1554,7 @@ export function PlanPage({
           <div><span>Category</span><strong>{preview.category}</strong></div>
           <div><span>Difficulty</span><strong>{preview.difficulty}</strong></div>
           <div><span>Length</span><strong>{preview.durationLabel || preview.weeksCount+' weeks'}</strong></div>
-          <div><span>Frequency</span><strong>{preview.daysPerWeek+' days/week'}</strong></div>
+          <div><span>Frequency</span><strong>{preview.frequencyLabel||preview.daysPerWeek+' days/week'}</strong></div>
         </div>
         <div className="source-pill">Source: {preview.source}</div>
         <div className="builder-two preview-controls">
