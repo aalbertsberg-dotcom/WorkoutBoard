@@ -165,4 +165,7 @@ test('UI exposes upload, review, private save, and tracked program integration',
   assert.match(app,/importedProgramsRef\.current/)
   assert.match(app,/\^\(archive\|classic\|custom\):/)
   assert.match(plan,/Track this program/)
+  assert.match(plan,/Save shared copy to My Programs/)
+  assert.match(plan,/saveSharedImportedProgram/)
+  assert.match(plan,/reviewed:Boolean\(p.kind==='custom'&&p.reviewed===true\)/)
 })
