@@ -54,7 +54,9 @@ test('manual +5/+10 adds to the selected set weight, not the training max',()=>{
 
 test('program previews distinguish formula basis and accurately identify automatic increments',()=>{
   const original=programWeightNotes({id:'531-original-challenge',kind:'archive'})
-  assert.match(original.summary,/\+5\/\+10 lb increases are applied automatically/)
+  assert.match(original.summary,/\+5\/\+10 lb increases go to the TRAINING MAX, never to the 1RM/)
+  assert.match(original.detail,/The saved 1RM is NOT increased/)
+  assert.match(original.detail,/These required increases are already applied/)
   assert.match(original.detail,/No need to tap an increase button/)
   assert.match(programWeightNotes({id:'classic1',kind:'classic',weightBasis:'tm'}).summary,/85%/)
   assert.match(programWeightNotes({id:'classic2',kind:'classic',weightBasis:'e1rm'}).summary,/not an 85%/)
