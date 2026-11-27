@@ -17,7 +17,7 @@ function partnerSetTarget(maxes,set) {
   const pct=set?.pct
   const oneRm=Number(maxes?.[lift]||0)
   if(!lift||pct==null||!oneRm)return ''
-  const base=set.weight_basis==='tm'?oneRm*.85:oneRm
+  const base=set.weight_basis==='tm'?oneRm*.85+Number(set.tm_offset||0):oneRm
   const low=Math.round((base*Number(pct)/100)/5)*5
   if(set.pct_high!=null){
     const high=Math.round((base*Number(set.pct_high)/100)/5)*5
