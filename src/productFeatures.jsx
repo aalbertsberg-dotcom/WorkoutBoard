@@ -1116,7 +1116,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
             <div className="set-progress-grid compact flexible-set-progress">
               {item.setProgress.map((set,j)=>{
                 const recordedWeight=set.weight!==undefined&&set.weight!=='' ? Number(set.weight)||0 : 0
-                const suggestedWeight=Number(String(partnerSetTarget(oneRepMaxes,set)).match(/^\\d+/)?.[0]||0)
+                const suggestedWeight=Number(String(partnerSetTarget(oneRepMaxes,set)).match(/^\d+/)?.[0]||0)
                 const tileWeight=set.done||set.weight_edited?recordedWeight:(suggestedWeight||recordedWeight)
                 return <div className={'set-progress-wrap '+(set.extra?'extra-set':'')} key={j}>
                   <button
