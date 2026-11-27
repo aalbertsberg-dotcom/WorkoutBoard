@@ -4,6 +4,7 @@ import {completedMainLiftSets,strengthTrendFromCompletedSets} from './personalRe
 import { supabase } from './supabase'
 import { DialogPortal,OverlayPortal,confirmWorkset } from './worksetDialogs'
 import { allArchivePrograms, archiveProgramById, makePlannedFromArchive } from './archivePrograms'
+import {ORIGINAL_CHALLENGE_ID,originalChallengeStartingMaxes} from './originalChallengeCycle.js'
 import ProgramCommunity from './ProgramCommunity.jsx'
 import { ProgressToolbox, WorkoutTemplates } from './trainingTools'
 import { AdvancedProgressCenter, PlannedWorkoutTools, ShareImportPanel, AdminDashboardSummary } from './advancedFeatures'
@@ -1192,7 +1193,7 @@ export function PlanPage({
       program_key:p.key,
       version_number:version,
       title:p.name,
-      snapshot:snapshotProgram(p)
+      snapshot:{...snapshotProgram(p),...(p.id===ORIGINAL_CHALLENGE_ID?{starting_one_rms:originalChallengeStartingMaxes(oneRepMaxes)}:{})}
     }).select('id').single()
     if(error)return null
     return data?.id||null
@@ -1260,7 +1261,19 @@ export function PlanPage({
       setMessage(p.name+' is cataloged from your archive but still needs its source prescription transcribed before it can be tracked.')
       return
     }
+    if(p.id===ORIGINAL_CHALLENGE_ID){
+      const saved=originalChallengeStartingMaxes(oneRepMaxes)
+      const missing=['Squat','Bench','Deadlift','Press'].filter(lift=>!saved[lift])
+      if(missing.length){
+        setMessage('Enter your starting 1RM for '+missing.join(', ')+' before tracking this program, so all 12 weeks use the correct baseline.')
+        return
+      }
+    }
     const versionId=await createProgramVersion(p)
+    if(p.id===ORIGINAL_CHALLENGE_ID&&!versionId){
+      setMessage('Could not save the starting 1RMs for this program run. Tracking was not started.')
+      return
+    }
     const {data,error}=await supabase.rpc('start_program_tracking',{
       target_program_key:p.key,
       target_program_name:p.name,
@@ -1397,9 +1410,24 @@ export function PlanPage({
 
     let payload
     if(preview.kind==='archive'){
-      payload=makePlannedFromArchive(preview,previewWeek,previewDay,scheduleDate,oneRepMaxes||{})
       const activeTrack=tracking.find(track=>track.program_key===preview.key&&track.status==='tracking')
-      payload.workout={...payload.workout,tracking_program_key:preview.key,tracking_started_at:activeTrack?.started_at||null}
+      if(preview.id===ORIGINAL_CHALLENGE_ID&&previewWeek>=7&&!activeTrack){
+        setMessage('Track 531 Original Challenge first. Week 7 onward requires Week 6 test results from that program run.')
+        return
+      }
+      let initialMaxes=oneRepMaxes||{}
+      if(preview.id===ORIGINAL_CHALLENGE_ID&&activeTrack?.program_version_id){
+        const {data:version,error:versionError}=await supabase.from('program_versions')
+          .select('snapshot').eq('user_id',session.user.id)
+          .eq('id',activeTrack.program_version_id).maybeSingle()
+        if(versionError){setMessage('Could not load this program’s original 1RM baseline: '+versionError.message);return}
+        const stored=version?.snapshot?.starting_one_rms
+        if(stored&&Object.keys(stored).length)initialMaxes=stored
+      }
+      payload=makePlannedFromArchive(preview,previewWeek,previewDay,scheduleDate,initialMaxes)
+      payload.workout={...payload.workout,tracking_program_key:preview.key,
+        ...(preview.id===ORIGINAL_CHALLENGE_ID?{challenge_starting_one_rms:originalChallengeStartingMaxes(initialMaxes)}:{}),
+        tracking_started_at:activeTrack?.started_at||null}
     } else {
       payload={
         scheduled_date:scheduleDate,

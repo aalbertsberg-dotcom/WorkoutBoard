@@ -6,6 +6,19 @@ export const ORIGINAL_CHALLENGE_KEY='archive:531-original-challenge'
 export const ORIGINAL_CHALLENGE_ID='531-original-challenge'
 export const ORIGINAL_CHALLENGE_LIFTS=['Squat','Bench','Deadlift','Press']
 
+
+export function originalChallengeStartingMaxes(maxes={}){
+  return Object.fromEntries(ORIGINAL_CHALLENGE_LIFTS
+    .filter(lift=>Number.isFinite(Number(maxes?.[lift]))&&Number(maxes[lift])>0)
+    .map(lift=>[lift,Number(maxes[lift])]))
+}
+
+export function originalChallengeProgramMaxes(week,startingMaxes={},testMaxes={}){
+  return Number(week)>=7
+    ? originalChallengeStartingMaxes(testMaxes)
+    : originalChallengeStartingMaxes(startingMaxes)
+}
+
 export function isOriginalChallengeMaxTest(planned){
   return planned?.workout?.archive_program_id===ORIGINAL_CHALLENGE_ID &&
     [6,12].includes(Number(planned?.source_week))
@@ -27,11 +40,12 @@ export function originalChallengeCompletedTest(workout){
     const reps=Number(set.actual_reps)
     const weight=Number(set.weight)
     if(!Number.isInteger(reps)||reps<1||reps>30||!Number.isFinite(weight)||weight<=0)continue
-    const estimate=reps===1?weight:weight*(1+reps/30)
+    // Match the workbook exactly: =weight * reps * 0.0333 + weight.
+    const estimate=weight*(1+reps*0.0333)
     result.push({
       lift:set.weight_lift,
       reps,weight,
-      estimated_1rm:Math.round((estimate+Number.EPSILON)*100)/100
+      estimated_1rm:estimate
     })
   }
   return result
