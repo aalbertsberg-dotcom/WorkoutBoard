@@ -6,6 +6,22 @@ export const ORIGINAL_CHALLENGE_KEY='archive:531-original-challenge'
 export const ORIGINAL_CHALLENGE_ID='531-original-challenge'
 export const ORIGINAL_CHALLENGE_LIFTS=['Squat','Bench','Deadlift','Press']
 
+/** 5/3/1 progression: add 5/10 lb to TRAINING MAX, never to 1RM. */
+export function originalChallengeTrainingMaxOffset(week,lift){
+  const cycleUpgrade=[4,5,6,10,11,12].includes(Number(week))
+  if(!cycleUpgrade)return 0
+  if(lift==='Squat'||lift==='Deadlift')return 10
+  if(lift==='Bench'||lift==='Press')return 5
+  return 0
+}
+
+export function originalChallengeTrainingMax(estimatedOneRm,week,lift){
+  const oneRm=Number(estimatedOneRm)
+  if(!Number.isFinite(oneRm)||oneRm<=0||!ORIGINAL_CHALLENGE_LIFTS.includes(lift))return 0
+  return oneRm*.85+originalChallengeTrainingMaxOffset(week,lift)
+}
+
+
 
 export function originalChallengeStartingMaxes(maxes={}){
   return Object.fromEntries(ORIGINAL_CHALLENGE_LIFTS
