@@ -79,7 +79,6 @@ export default function ProgramGroups({session,profile,programOptions=[]}){
       if(actionError){setError(actionError.message);return}
       await loadGroups(preferId||(typeof data==='string'?data:''))
       setMessage(success)
-      if(selectedId||preferId||typeof data==='string')await loadRecaps()
       return data
     }catch(e){setError(e?.message||'Could not complete this action.')}
     finally{setBusy(false)}
