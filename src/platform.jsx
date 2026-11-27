@@ -1261,7 +1261,19 @@ export function PlanPage({
       setMessage(p.name+' is cataloged from your archive but still needs its source prescription transcribed before it can be tracked.')
       return
     }
+    if(p.id===ORIGINAL_CHALLENGE_ID){
+      const saved=originalChallengeStartingMaxes(oneRepMaxes)
+      const missing=['Squat','Bench','Deadlift','Press'].filter(lift=>!saved[lift])
+      if(missing.length){
+        setMessage('Enter your starting 1RM for '+missing.join(', ')+' before tracking this program, so all 12 weeks use the correct baseline.')
+        return
+      }
+    }
     const versionId=await createProgramVersion(p)
+    if(p.id===ORIGINAL_CHALLENGE_ID&&!versionId){
+      setMessage('Could not save the starting 1RMs for this program run. Tracking was not started.')
+      return
+    }
     const {data,error}=await supabase.rpc('start_program_tracking',{
       target_program_key:p.key,
       target_program_name:p.name,
@@ -1399,6 +1411,10 @@ export function PlanPage({
     let payload
     if(preview.kind==='archive'){
       const activeTrack=tracking.find(track=>track.program_key===preview.key&&track.status==='tracking')
+      if(preview.id===ORIGINAL_CHALLENGE_ID&&previewWeek>=7&&!activeTrack){
+        setMessage('Track 531 Original Challenge first. Week 7 onward requires Week 6 test results from that program run.')
+        return
+      }
       let initialMaxes=oneRepMaxes||{}
       if(preview.id===ORIGINAL_CHALLENGE_ID&&activeTrack?.program_version_id){
         const {data:version,error:versionError}=await supabase.from('program_versions')
