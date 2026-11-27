@@ -73,5 +73,6 @@ test('source program is wired into Programs and calculated loads survive re-targ
   assert.match(archive,/getTrainingMaxOffset/);
   assert.match(archive,/archiveSetProgressWithLoads\(program,item,oneRms,week\)/);
   assert.match(app,/set\.tm_offset/);
-  assert.match(runner,/set\.tm_offset/);
+  assert.match(get('src/programSetTargets.js'),/set\.tm_offset/)
+  assert.match(runner,/partnerSetTarget/);
 });

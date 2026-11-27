@@ -10,21 +10,8 @@ import {describeOutdoorGps} from './gpsStatus.js'
 import GpsStatusBadge from './GpsStatusBadge.jsx'
 import BeatTimer from './BeatTimer.jsx'
 import { effectiveSteps } from './stepTracking'
+import {partnerSetTarget,missingWorkoutOneRms} from './programSetTargets.js'
 import { validWeightDraft,validRepsDraft,displayedSetWeight,recordedWeightValue,canFinishQuickCardio,withoutUnreliableRoute,outdoorDistancePresentation,workoutDistancePresentation,effectiveCardioDurationSeconds,autosaveDelayMs } from './trackingRules'
-
-function partnerSetTarget(maxes,set) {
-  const lift=set?.weight_lift
-  const pct=set?.pct
-  const oneRm=Number(maxes?.[lift]||0)
-  if(!lift||pct==null||!oneRm)return ''
-  const base=set.weight_basis==='tm'?oneRm*.85+Number(set.tm_offset||0):oneRm
-  const low=Math.round((base*Number(pct)/100)/5)*5
-  if(set.pct_high!=null){
-    const high=Math.round((base*Number(set.pct_high)/100)/5)*5
-    if(high&&high!==low)return low+'-'+high+' lb'
-  }
-  return low?low+' lb':''
-}
 
 function parseVolume(value) {
   if (!value) return 0
@@ -153,7 +140,7 @@ function PlannedAlternatives({name}) {
   </span>
 }
 
-export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,sharedSessionId=null,partnerOneRms={},oneRepMaxes={},cancelRequestToken=0}) {
+export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,sharedSessionId=null,partnerOneRms={},oneRepMaxes={},onSaveOneRm=null,cancelRequestToken=0}) {
   const [workout,setWorkout]=useState(()=>{
     let cached=null
     try {
@@ -188,6 +175,32 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
   const revisionRef=useRef(0)
   const unsavedSinceRef=useRef(0)
   const [draftReady,setDraftReady]=useState(false)
+  const [oneRmDraft,setOneRmDraft]=useState({})
+  const [oneRmSaving,setOneRmSaving]=useState(false)
+  const [oneRmSaveMessage,setOneRmSaveMessage]=useState('')
+  const missingOneRms=missingWorkoutOneRms(workout,oneRepMaxes)
+  const readyOneRmDrafts=missingOneRms.filter(lift=>Number(oneRmDraft[lift])>0)
+  const saveWorkoutOneRms=async event=>{
+    event.preventDefault()
+    if(!onSaveOneRm||!readyOneRmDrafts.length||oneRmSaving)return
+    setOneRmSaving(true)
+    setOneRmSaveMessage('')
+    const saved=[]
+    try{
+      for(const lift of readyOneRmDrafts){
+        const result=await onSaveOneRm(lift,Number(oneRmDraft[lift]))
+        if(result?.error)throw new Error(result.error.message||'1RM save failed.')
+        saved.push(lift)
+      }
+      setOneRmSaveMessage('1RMs saved. Working weights are now calculated from your training max.')
+    }catch(error){
+      setOneRmSaveMessage('Could not save 1RM: '+(error?.message||'Please retry.'))
+    }finally{
+      if(saved.length)setOneRmDraft(previous=>Object.fromEntries(
+        Object.entries(previous).filter(([lift])=>!saved.includes(lift))))
+      setOneRmSaving(false)
+    }
+  }
 
   const lastCancelRequestRef=useRef(cancelRequestToken)
   useEffect(()=>{
@@ -934,6 +947,17 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       </div>
     </div>
 
+    {missingOneRms.length>0&&onSaveOneRm&&<form className="simple-card workout-missing-one-rm" onSubmit={saveWorkoutOneRms}>
+      <div className="section-heading"><div><span className="card-label">WORKOUT WEIGHT TARGETS</span><h3>Enter your 1RMs to calculate weights</h3></div></div>
+      <p className="helper-text">Missing {missingOneRms.join(' and ')} 1RM{missingOneRms.length>1?'s':''}. Enter your one-rep maximum in pounds. WorkSet uses 85% as the training max, then applies this program's set percentages.</p>
+      <div className="builder-two">
+        {missingOneRms.map(lift=><label className="conditioning-field" key={lift}><span>{lift} 1RM (lb)</span><input type="text" inputMode="decimal" autoComplete="off" placeholder="e.g. 200" value={oneRmDraft[lift]??''}
+          onChange={event=>{const value=event.target.value;if(!validWeightDraft(value))return;setOneRmDraft(previous=>({...previous,[lift]:value}));setOneRmSaveMessage('')}}/></label>)}
+      </div>
+      <button className="primary-action" type="submit" disabled={oneRmSaving||readyOneRmDrafts.length===0}>{oneRmSaving?'Saving 1RMs…':'Save 1RM & calculate weights'}</button>
+      {oneRmSaveMessage&&<p className="helper-text" role="status">{oneRmSaveMessage}</p>}
+    </form>}
+
     {exerciseAdderOpen&&<section className="simple-card add-exercise-card add-exercise-card-top">
       <div className="section-heading">
         <div><span className="card-label">ADD EXERCISE</span><h3>Add to this workout</h3></div>
@@ -1010,7 +1034,9 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
           const previousWeight=activeIndex>0 ? Number(item.setProgress[activeIndex-1]?.weight||0) : 0
           const lastTimeWeight=activeIndex>=0 ? Number(hist?.lastWeights?.[Math.min(activeIndex,(hist?.lastWeights?.length||1)-1)]||0) : 0
           const legacyWeight=item.load!==undefined&&item.load!=='' ? Number(item.load)||0 : 0
-          const shownWeight=displayedSetWeight(activeSet,[programmedTarget,previousWeight,lastTimeWeight,legacyWeight])
+          const shownWeight=programmedTarget>0&&activeSet?.weight_lift&&!activeSet?.weight_edited
+            ? String(programmedTarget)
+            : displayedSetWeight(activeSet,[programmedTarget,previousWeight,lastTimeWeight,legacyWeight])
           return <>
             {activeSet&&i===focusedExerciseIndex&&<section className="current-set-panel">
               <div className="current-set-panel-head">
@@ -1074,6 +1100,8 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
             <div className="set-progress-grid compact flexible-set-progress">
               {item.setProgress.map((set,j)=>{
                 const recordedWeight=set.weight!==undefined&&set.weight!=='' ? Number(set.weight)||0 : 0
+                const suggestedWeight=Number(String(partnerSetTarget(oneRepMaxes,set)).match(/^\d+/)?.[0]||0)
+                const tileWeight=set.done||set.weight_edited?recordedWeight:(suggestedWeight||recordedWeight)
                 return <div className={'set-progress-wrap '+(set.extra?'extra-set':'')} key={j}>
                   <button
                     type="button"
@@ -1085,7 +1113,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
                       activateExercise(i,j,{scroll:false})
                     }}>
                     <strong>{set.extra?'Extra set':'Set '+(j+1)}</strong>
-                    <span>{set.done&&repsForSet(item,set) ? repsForSet(item,set)+' reps' : (set.label || (set.reps?set.reps+' reps':'Done'))}{recordedWeight?' · '+recordedWeight+' lb':''}</span>
+                    <span>{set.done&&repsForSet(item,set) ? repsForSet(item,set)+' reps' : (set.label || (set.reps?set.reps+' reps':'Done'))}{tileWeight?' · '+tileWeight+' lb':''}</span>
                     <b>{set.done?'✓':'○'}</b>
                   </button>
                   {set.extra&&<button type="button" className="remove-extra-set" onClick={()=>removeExtraSet(i,j)} aria-label={'Remove extra set '+(j+1)}>×</button>}

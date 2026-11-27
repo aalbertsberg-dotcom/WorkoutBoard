@@ -3613,6 +3613,7 @@ function App() {
             <PlannedWorkoutRunner
               planned={plannedToday}
               oneRepMaxes={oneRepMaxes}
+              onSaveOneRm={(name,value)=>setOneRm(name,value)}
               sharedSessionId={sharedWorkoutActive&&activeSession ? activeSession.id : null}
               partnerOneRms={sharedWorkoutActive ? {...sessionOneRms,...sharedManagedPartnerOneRms} : {}}
               cancelRequestToken={plannedBackCancelRequest}
