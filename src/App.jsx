@@ -2,6 +2,7 @@ import { DialogPortal,OverlayPortal,confirmWorkset } from './worksetDialogs'
 import MePage from './MePage'
 import NutritionPage from './NutritionPage'
 import ProgramGroups from './ProgramGroups.jsx'
+import LiveSessionRecaps from './LiveSessionRecaps.jsx'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase'
 import { PlatformProgress, PlanPage, AdminPanel, FeedbackPanel } from './platform'
@@ -4222,6 +4223,7 @@ function App() {
             {togetherView==='community' ? (
               <>
               <ProgramGroups session={session} profile={profile} programOptions={togetherProgramOptions}/>
+              <LiveSessionRecaps session={session}/>
               <PlatformProgress
                 view="community"
                 session={session}
