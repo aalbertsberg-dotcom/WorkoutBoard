@@ -1,8 +1,10 @@
 // Faithful transcription of "531 Original Challenge.xlsx" (8 cycle tabs, 12 weeks).
 // Every percentage is of the training max, not the full estimated 1RM.
-// The user's latest tracked 1RM supplies the formula input; the two second
-// cycles add +10 lb to squat/deadlift and +5 lb to bench/press.
+// The program run's saved baseline 1RM supplies Weeks 1–6. The Week 6 test
+// supplies a new program-only estimated 1RM for Weeks 7–12. Cycle increases
+// modify TM (85% of 1RM), NEVER the 1RM itself.
 import {ex,day} from './helpers.js';
+import {originalChallengeTrainingMaxOffset} from '../originalChallengeCycle.js';
 
 const SCHEMES={
   five: {percent:[35,45,55,65,75,85],reps:[5,5,5,5,5,'5+']},
@@ -72,9 +74,7 @@ export const originalChallengeProgram={
   transcriptionStatus:'full',
   structuredPercentSets:true,
   trainingMaxFactor:0.85,
-  getTrainingMaxOffset:(week,lift)=>
-    [4,5,6,10,11,12].includes(Number(week))
-      ?(['Squat','Deadlift'].includes(lift)?10:5):0,
+  getTrainingMaxOffset:originalChallengeTrainingMaxOffset,
   getWeek:week=>{
     const w=Math.max(1,Math.min(12,Math.floor(Number(week)||1)));
     return [3,6,9,12].includes(w)?testDays(w):mainDays(w);

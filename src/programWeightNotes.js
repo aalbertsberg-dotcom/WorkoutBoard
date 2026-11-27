@@ -42,8 +42,8 @@ export function programWeightNotes(preview){
   }
   if(preview?.id==='531-original-challenge')return {
     heading:'531 Original Challenge · weight calculations',
-    summary:'Training max = 85% of 1RM. Programmed +5/+10 lb increases are applied automatically.',
-    detail:'Weeks 4–6 and 10–12: +5 lb to Bench/Press TM and +10 lb to Squat/Deadlift TM. Week 6 test results update the program-specific estimated 1RM used for Weeks 7–12. Each set uses its own prescribed percentage and is rounded to the nearest 5 lb. No need to tap an increase button for these required adjustments.'
+    summary:'Training max = 85% of 1RM. Programmed +5/+10 lb increases go to the TRAINING MAX, never to the 1RM.',
+    detail:'Weeks 4–6 and 10–12: +5 lb to the Bench/Press training max and +10 lb to the Squat/Deadlift training max. The saved 1RM is NOT increased. Week 6 actual test reps establish a new estimated 1RM for this program only; Weeks 7–9 use 85% of that new estimate, then Weeks 10–12 add +5/+10 lb to the NEW training max. Every set uses its prescribed percentage of the resulting TM, rounded to the nearest 5 lb. These required increases are already applied; do not tap +5/+10 again unless adding extra weight to that individual set.'
   }
   if(preview?.kind==='classic'&&preview?.weightBasis==='tm')return {
     heading:'How this program calculates weights',
