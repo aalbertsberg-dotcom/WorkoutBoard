@@ -9003,3 +9003,34 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
 }
 .program-weight-preview-note strong {font-size:13px;color:#e0f8af;}
 .program-weight-preview-note p {margin:0;color:#c1cede;font-size:12px;line-height:1.45;}
+
+
+/* Reviewed spreadsheet program importer */
+.program-importer {display:grid;gap:12px;margin-block:12px;}
+.program-import-tabs {margin:12px 0 6px;}
+.program-upload-file {display:grid;gap:7px;font-size:12px;color:#dae3f0;}
+.program-upload-file input {max-width:100%;min-width:0;padding:12px;border:1px dashed #6f8e57;border-radius:9px;background:#111e2d;color:#e2e9f3;}
+.program-upload-fields label,.program-import-exercise label {display:grid;gap:5px;color:#b4c2d2;font-size:11px;}
+.program-upload-fields input,.program-upload-fields select,.program-import-exercise input,.program-import-exercise select {
+  width:100%;min-width:0;min-height:36px;padding:7px 8px;border:1px solid #45546b;border-radius:7px;background:#0d1727;color:#f1f5fa;
+}
+.program-import-summary {display:flex;flex-wrap:wrap;gap:7px;}
+.program-import-summary strong {padding:6px 9px;background:#1c2b26;border:1px solid #4d7141;border-radius:8px;font-size:12px;}
+.program-import-issues {display:grid;gap:4px;padding:10px;border:1px solid #637386;border-radius:9px;max-height:200px;overflow:auto;}
+.program-import-issues p {margin:0;font-size:11px;color:#dce4f0;}
+.program-import-issues .program-import-error {color:#ffacaf;}
+.program-import-review {display:grid;gap:7px;max-height:520px;overflow:auto;overscroll-behavior:contain;}
+.program-import-review h4 {margin:0;font-size:13px;}
+.program-import-review > details {border:1px solid #4a586b;border-radius:9px;padding:8px 9px;}
+.program-import-review > details > summary {cursor:pointer;font-weight:700;font-size:12px;}
+.program-import-day {display:grid;gap:8px;margin:10px 0;padding:8px;border-left:2px solid #698b46;}
+.program-import-day > strong {font-size:12px;}
+.program-import-exercise {display:grid;gap:8px;padding:9px;border:1px solid #34485c;border-radius:8px;}
+.program-import-exercise-fields {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;}
+.program-import-confirm {display:flex;align-items:flex-start;gap:8px;font-size:12px;line-height:1.5;color:#dce9d4;}
+.program-import-confirm input {width:18px;height:18px;flex:0 0 auto;}
+.program-import-blocked {font-size:12px;color:#ffbaba;}
+@media (max-width:560px){
+  .program-import-exercise-fields {grid-template-columns:repeat(2,minmax(0,1fr));}
+  .program-import-review {max-height:450px;}
+}
