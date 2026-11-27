@@ -3,6 +3,13 @@ import {supabase} from './supabase'
 import {inspectProgramFile,validateReviewedProgram,normalizeReviewedProgram} from './importedPrograms.js'
 
 const SHOW_FIRST=40
+const templateText=[
+  'Week,Day,Exercise,Sets,Reps,Percent,Basis,Weight,Notes',
+  '1,Day 1,Squat,3,5,65,TM,,Warm up first',
+  '1,Day 1,Bench Press,3,5,65,TM,,',
+  '1,Day 2,Deadlift,3,5,70,TM,,',
+  '2,Day 1,Squat,3,5,70,TM,,'
+].join('\r\n')
 export default function ProgramUpload({session,onSaved,onClose}){
   const [file,setFile]=useState(null)
   const [title,setTitle]=useState('')
@@ -80,6 +87,7 @@ export default function ProgramUpload({session,onSaved,onClose}){
   return <section className="simple-card program-importer" aria-label="Upload a workout program">
     <div className="section-heading"><div><span className="card-label">IMPORT PROGRAM</span><h3>Excel / CSV → Trackable program</h3></div><button type="button" className="secondary-action" onClick={onClose}>Close</button></div>
     <p className="helper-text">Upload an .xlsx or .csv with Week, Day, Exercise, Sets, Reps and optional Percent, Basis (TM/1RM), Weight, and Notes columns. Your original file stays on your device; WorkSet saves only the reviewed workout plan.</p>
+    <a className="program-import-template" href={'data:text/csv;charset=utf-8,'+encodeURIComponent(templateText)} download="WorkSet-Program-Template.csv">Get sample CSV template</a>
     <label className="program-upload-file">
       <span>Choose spreadsheet (.xlsx or .csv, 8 MB max)</span>
       <input type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
@@ -129,6 +137,10 @@ export default function ProgramUpload({session,onSaved,onClose}){
                 <label>Basis<select value={exercise.imported?.basis||''} onChange={e=>renameExercise(wi,di,ei,'basis',e.target.value)}>
                   <option value="">None</option><option value="tm">TM (85%)</option><option value="e1rm">1RM</option>
                 </select></label>
+                {exercise.imported?.pct!=null&&<label>Saved 1RM used<select value={exercise.imported?.maxLift||''} onChange={e=>renameExercise(wi,di,ei,'maxLift',e.target.value)}>
+                  <option value="">Choose reference lift</option>
+                  {['Squat','Bench','Deadlift','Press'].map(lift=><option key={lift} value={lift}>{lift}</option>)}
+                </select></label>}
                 <label>Fixed lb<input type="number" min="0" max="2000" step="any" value={exercise.imported?.weight??''} onChange={e=>renameExercise(wi,di,ei,'weight',e.target.value)}/></label>
                 <label>TM +lb<input type="number" min="-250" max="250" value={exercise.imported?.tm_offset??0} onChange={e=>renameExercise(wi,di,ei,'tm_offset',e.target.value)}/></label>
               </div>
@@ -137,6 +149,9 @@ export default function ProgramUpload({session,onSaved,onClose}){
           </section>)}
         </details>)}
       </div>
+      {!canSave&&parsed.canSave&&<div className="program-import-issues" role="status">
+        {validateReviewedProgram({...parsed,name:title}).slice(0,8).map((item,i)=><p className="program-import-error" key={i}>{item}</p>)}
+      </div>}
       {canSave?<label className="program-import-confirm"><input type="checkbox" checked={reviewed} onChange={e=>setReviewed(e.target.checked)}/>
         <span>I reviewed the exercises, training weeks and weight formulas. Save this program privately.</span></label>:
         <p className="program-import-blocked">This import needs corrections before it can become a trackable program.</p>}
