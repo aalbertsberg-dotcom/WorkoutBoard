@@ -10,21 +10,8 @@ import {describeOutdoorGps} from './gpsStatus.js'
 import GpsStatusBadge from './GpsStatusBadge.jsx'
 import BeatTimer from './BeatTimer.jsx'
 import { effectiveSteps } from './stepTracking'
+import {partnerSetTarget,missingWorkoutOneRms} from './programSetTargets.js'
 import { validWeightDraft,validRepsDraft,displayedSetWeight,recordedWeightValue,canFinishQuickCardio,withoutUnreliableRoute,outdoorDistancePresentation,workoutDistancePresentation,effectiveCardioDurationSeconds,autosaveDelayMs } from './trackingRules'
-
-function partnerSetTarget(maxes,set) {
-  const lift=set?.weight_lift
-  const pct=set?.pct
-  const oneRm=Number(maxes?.[lift]||0)
-  if(!lift||pct==null||!oneRm)return ''
-  const base=set.weight_basis==='tm'?oneRm*.85+Number(set.tm_offset||0):oneRm
-  const low=Math.round((base*Number(pct)/100)/5)*5
-  if(set.pct_high!=null){
-    const high=Math.round((base*Number(set.pct_high)/100)/5)*5
-    if(high&&high!==low)return low+'-'+high+' lb'
-  }
-  return low?low+' lb':''
-}
 
 function parseVolume(value) {
   if (!value) return 0
@@ -191,10 +178,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
   const [oneRmDraft,setOneRmDraft]=useState({})
   const [oneRmSaving,setOneRmSaving]=useState(false)
   const [oneRmSaveMessage,setOneRmSaveMessage]=useState('')
-  const requiredOneRms=Array.from(new Set((workout.exercises||[])
-    .flatMap(item=>(item.setProgress||[]).filter(set=>
-      set?.weight_lift&&set?.pct!=null&&set?.weight_basis).map(set=>set.weight_lift))))
-  const missingOneRms=requiredOneRms.filter(lift=>!(Number(oneRepMaxes?.[lift])>0))
+  const missingOneRms=missingWorkoutOneRms(workout,oneRepMaxes)
   const readyOneRmDrafts=missingOneRms.filter(lift=>Number(oneRmDraft[lift])>0)
   const saveWorkoutOneRms=async event=>{
     event.preventDefault()
