@@ -3028,6 +3028,9 @@ function App() {
         summary:{
           lift,
           program:workoutProgram.name,
+          program_key:'classic:'+workoutProgramId,
+          week,
+          completed_at:now,
           volume:Math.round(workoutMetrics.volume),
           estimated_1rm:workoutMetrics.estimated1rm || null,
           bodyweight:profile?.community_share_bodyweight ? (Number(payload.bodyweight || 0) || null) : null
