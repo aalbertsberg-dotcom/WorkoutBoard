@@ -11,6 +11,7 @@ import GpsStatusBadge from './GpsStatusBadge.jsx'
 import BeatTimer from './BeatTimer.jsx'
 import { effectiveSteps } from './stepTracking'
 import {partnerSetTarget,missingWorkoutOneRms} from './programSetTargets.js'
+import {explainProgramSetWeight,adjustedManualSetWeight} from './programWeightNotes.js'
 import {ORIGINAL_CHALLENGE_KEY,ORIGINAL_CHALLENGE_NAME,ORIGINAL_CHALLENGE_ID,ORIGINAL_CHALLENGE_LIFTS,isOriginalChallengeMaxTest,isOriginalChallengeTestSet,originalChallengeCompletedTest,originalChallengeWeek6Estimates,originalChallengeProgramMaxes} from './originalChallengeCycle.js'
 import { validWeightDraft,validRepsDraft,displayedSetWeight,recordedWeightValue,canFinishQuickCardio,withoutUnreliableRoute,outdoorDistancePresentation,workoutDistancePresentation,effectiveCardioDurationSeconds,autosaveDelayMs } from './trackingRules'
 
@@ -1114,6 +1115,10 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
           <div>
             <div className="exercise-name-line"><strong>{item.name}</strong>{isPR&&<b className="pr-mini">PR</b>}<PlannedAlternatives name={item.name}/></div>
             <span className="exercise-plan-line">{humanPrescription(item.prescription)}{rest?' · '+(rest<120?rest+' sec':rest/60+' min')+' rest':''}</span>
+            {item.setProgress?.some(set=>Number(set.tm_offset)>0)&&
+              <small className="program-increment-indicator">
+                +{Number(item.setProgress.find(set=>Number(set.tm_offset)>0)?.tm_offset)} lb added to training max — already included in set weights
+              </small>}
             {partnerTargets.length>0&&<small className="partner-targets"><strong>Targets:</strong> {partnerTargets.map(x=>x.name+' '+x.target).join(' · ')}</small>}
             {item.note&&<details className="exercise-cue"><summary>Cue</summary><small>{item.note}</small></details>}
             {hist?.last&&<small className="flex-history"><strong>Last time:</strong> {hist.last}</small>}
@@ -1131,6 +1136,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
           const activeIndex=selectedSet>=0 ? selectedSet : item.setProgress.findIndex(set=>!set.done)
           const activeSet=activeIndex>=0?item.setProgress[activeIndex]:null
           const programmedTargetText=activeSet&&!cyclePending ? partnerSetTarget(workoutOneRms,activeSet) : ''
+          const weightNote=explainProgramSetWeight(workoutOneRms,activeSet,{programId:workout.archive_program_id,week:planned?.source_week})
           const programmedTarget=Number(String(programmedTargetText||'').match(/^\d+/)?.[0]||0)
           const previousWeight=activeIndex>0 ? Number(item.setProgress[activeIndex-1]?.weight||0) : 0
           const lastTimeWeight=activeIndex>=0 ? Number(hist?.lastWeights?.[Math.min(activeIndex,(hist?.lastWeights?.length||1)-1)]||0) : 0
@@ -1185,6 +1191,38 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
                 </label>}
               </div>
               {activeSet&&!isDistanceExercise(item.name)&&<small className="rep-default-hint">{isOriginalChallengeMaxTest(planned)&&isOriginalChallengeTestSet(activeSet)?'Test set: enter your ACTUAL completed reps. This calculates the next cycle.':'Leave blank = programmed reps. Enter only if different.'}</small>}
+
+              {weightNote&&<div className="program-weight-note">
+                <div className="program-weight-note-top">
+                  <strong>{weightNote.basisLabel}</strong>
+                  {weightNote.isProgramIncrease&&<span className="program-weight-included">{weightNote.offsetLabel}</span>}
+                </div>
+                <details>
+                  <summary>How was this set's weight calculated?</summary>
+                  <p>{weightNote.formula||'Enter the required 1RM or Week 6 test result to calculate this set.'}</p>
+                  <small>Weights are rounded to the nearest 5 lb. This program's increase is already included in the target.</small>
+                </details>
+              </div>}
+              {weightNote&&loadField&&<div className="program-weight-manual">
+                <span>Optional: adjust this set only (does not change the program's training max)</span>
+                <div className="program-weight-manual-actions">
+                  {[5,10].map(increment=><button type="button" key={increment} disabled={cyclePending||!adjustedManualSetWeight(shownWeight,increment)}
+                    onClick={()=>{
+                      const value=adjustedManualSetWeight(shownWeight,increment)
+                      if(value===null)return
+                      changeExercise(i,{
+                        load:value,result:'',
+                        setProgress:item.setProgress.map((sp,k)=>k===activeIndex?{...sp,weight:value,weight_edited:true}:sp)
+                      })
+                    }}>+{increment} lb to this set</button>)}
+                  {activeSet.weight_edited&&programmedTarget>0&&<button type="button" onClick={()=>
+                    changeExercise(i,{
+                      load:String(programmedTarget),result:'',
+                      setProgress:item.setProgress.map((sp,k)=>k===activeIndex?{...sp,weight:String(programmedTarget),weight_edited:false}:sp)
+                    })}>Use programmed weight</button>}
+                </div>
+              </div>}
+
               <div className="current-set-actions">
               <button type="button" className="primary-action complete-current-set" onClick={()=>{
                 if(lacksTestResult&&!activeSet.weight_edited){
