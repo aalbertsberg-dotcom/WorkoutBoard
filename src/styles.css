@@ -8942,3 +8942,64 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
     z-index:4999;
   }
 }
+
+
+/* Program-aware percentage and cycle-increase explanations. */
+.program-increment-indicator {
+  display:block;
+  margin-top:5px;
+  color:#d9f99d;
+  font-size:11px;
+  line-height:1.4;
+  font-weight:700;
+}
+.program-weight-note {
+  padding:9px 10px;
+  border:1px solid #587236;
+  border-radius:9px;
+  background:#0b1b13;
+  line-height:1.4;
+  font-size:12px;
+}
+.program-weight-note-top {
+  display:flex;
+  flex-wrap:wrap;
+  gap:5px 10px;
+  align-items:baseline;
+  justify-content:space-between;
+}
+.program-weight-note-top strong {color:#d9f99d;font-size:12px;}
+.program-weight-included {color:#d9f99d;font-size:11px;font-weight:750;}
+.program-weight-note details {margin-top:6px;}
+.program-weight-note summary,
+.program-weight-preview-note summary {cursor:pointer;color:#b4c6e0;font-size:11px;}
+.program-weight-note details p,
+.program-weight-preview-note details p {margin:7px 0 0;overflow-wrap:anywhere;}
+.program-weight-note details small {display:block;margin-top:4px;color:#aebbc8;}
+.program-weight-manual {display:grid;gap:6px;}
+.program-weight-manual > span {color:#bdc7d7;font-size:11px;}
+.program-weight-manual-actions {display:flex;flex-wrap:wrap;gap:6px;}
+.program-weight-manual-actions button {
+  border:1px solid #496079;
+  border-radius:8px;
+  background:#132036;
+  color:#e5efff;
+  font-size:12px;
+  font-weight:700;
+  padding:7px 11px;
+  min-height:36px;
+  cursor:pointer;
+}
+.program-weight-manual-actions button:disabled {opacity:.45;cursor:default;}
+.program-weight-manual-actions button:focus-visible {outline:2px solid #d9f99d;outline-offset:2px;}
+.program-weight-preview-note {
+  display:grid;
+  gap:5px;
+  margin:10px 0;
+  padding:11px 13px;
+  border:1px solid #455b6b;
+  border-radius:10px;
+  background:#111b2a;
+}
+.program-weight-preview-note strong {font-size:13px;color:#e0f8af;}
+.program-weight-preview-note p {margin:0;color:#c1cede;font-size:12px;line-height:1.45;}

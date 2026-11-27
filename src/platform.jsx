@@ -5,6 +5,7 @@ import { supabase } from './supabase'
 import { DialogPortal,OverlayPortal,confirmWorkset } from './worksetDialogs'
 import { allArchivePrograms, archiveProgramById, makePlannedFromArchive } from './archivePrograms'
 import {ORIGINAL_CHALLENGE_ID,originalChallengeStartingMaxes} from './originalChallengeCycle.js'
+import {programWeightNotes} from './programWeightNotes.js'
 import ProgramCommunity from './ProgramCommunity.jsx'
 import { ProgressToolbox, WorkoutTemplates } from './trainingTools'
 import { AdvancedProgressCenter, PlannedWorkoutTools, ShareImportPanel, AdminDashboardSummary } from './advancedFeatures'
@@ -908,6 +909,7 @@ export function PlanPage({
       difficulty:meta.difficulty,
       weeksCount:p.weeksCount,
       daysPerWeek:lifts.length,
+      weightBasis:p.basis,
       source:id==='andy-531-original-6' ? 'Andy_531 Spreadsheet.xlsx'
         : id==='new-531-leader-anchor-11' ? 'NEW 531 PROGRAM.docx'
         : id==='andy-bbb-jokers-11' ? 'ANDY 531-Boring But Big-Jokers.xlsx'
@@ -1603,6 +1605,11 @@ export function PlanPage({
           <div><span>Frequency</span><strong>{preview.frequencyLabel||preview.daysPerWeek+' days/week'}</strong></div>
         </div>
         <div className="source-pill">Source: {preview.source}</div>
+        {programWeightNotes(preview)&&<section className="program-weight-preview-note">
+          <strong>{programWeightNotes(preview).heading}</strong>
+          <p>{programWeightNotes(preview).summary}</p>
+          <details><summary>Calculation details</summary><p>{programWeightNotes(preview).detail}</p></details>
+        </section>}
         <div className="builder-two preview-controls">
           <label>Week<select value={previewWeek} onChange={e=>{setPreviewWeek(Number(e.target.value));setPreviewDay(0)}}>{Array.from({length:preview.weeksCount},(_,i)=>i+1).map(n=><option key={n} value={n}>Week {n}</option>)}</select></label>
           <label>Workout<select value={previewDay} onChange={e=>setPreviewDay(Number(e.target.value))}>{previewDays.map((d,i)=><option key={i} value={i}>{d.title}</option>)}</select></label>
