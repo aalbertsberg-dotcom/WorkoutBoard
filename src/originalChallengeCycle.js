@@ -45,7 +45,7 @@ export function originalChallengeCompletedTest(workout){
     result.push({
       lift:set.weight_lift,
       reps,weight,
-      estimated_1rm:Math.round((estimate+Number.EPSILON)*100)/100
+      estimated_1rm:estimate
     })
   }
   return result
