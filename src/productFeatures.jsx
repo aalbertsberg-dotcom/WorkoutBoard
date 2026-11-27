@@ -775,6 +775,9 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
             title:planned.title,
             summary:{
               program:planned.source_program_name||'Custom workout',
+              program_key:planned.workout?.tracking_program_key||null,
+              week:planned.source_week||null,
+              completed_at:now,
               lift:planned.source_day||null,
               volume:Math.round(totalVolume),
               estimated_1rm:bestEstimated1rm||null,
