@@ -65,6 +65,7 @@ export const originalChallengeProgram={
   difficulty:'Intermediate',
   weeksCount:12,
   daysPerWeek:4,
+  frequencyLabel:'3–4 days/week',
   durationLabel:'12 weeks · 3–4 days/week',
   source:'531 Original Challenge.xlsx',
   description:'Original 12-week leader/anchor progression. Weeks 1–2, 4–5, 7–8 and 10–11 pair two lifts on three days; protocol deloads in Weeks 3/9 and 1RM tests in Weeks 6/12 are four-day weeks. Preserves source percentages, AMRAPs, warmups, assistance options and training-max increases.',
