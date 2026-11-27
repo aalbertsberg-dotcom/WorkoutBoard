@@ -30,6 +30,17 @@ const normHeaders=Object.fromEntries(Object.entries(HEADERS).map(([k,names])=>
 export const isSpreadsheetImportFile=file=>/\.(xlsx|csv)$/i.test(file?.name||'')
 export const importedProgramKey=id=>'custom:'+id
 
+// Only infer an existing saved max when the lift name is unambiguous.
+export function importedReferenceLift(name){
+  const n=clean(name).toLowerCase().replace(/\s+/g,' ')
+  if(['squat','back squat','barbell back squat'].includes(n))return 'Squat'
+  if(['bench','bench press','barbell bench press','flat bench press'].includes(n))return 'Bench'
+  if(['deadlift','conventional deadlift','sumo deadlift','barbell deadlift'].includes(n))return 'Deadlift'
+  if(['press','overhead press','strict press','military press','barbell overhead press'].includes(n))return 'Press'
+  return ''
+}
+
+
 export function parseCSV(text){
   const result=[]
   let field='',row=[],inQuotes=false
@@ -176,7 +187,7 @@ export const importedProgramFromRow=row=>({
   name:row.name,prescription:row.prescription,note:row.note||'',
   ...(row.sets?{imported:{
     sets:row.sets,reps:row.reps,pct:row.pct,basis:row.basis,
-    weight:row.weight,tm_offset:row.tm_offset,
+    weight:row.weight,tm_offset:row.tm_offset,maxLift:row.maxLift||'',
   }}:{})
 })
 const prescriptionPattern=/^(\d+)\s*[x×]\s*(\d+\+?)\s*(?:@\s*(\d+(?:\.\d+)?)\s*%\s*(TM|1RM|e1RM))?$/i
@@ -207,7 +218,10 @@ export function convertSpreadsheetSheets(sheets,{name='Imported program',default
       const weekField=clean(get('week').value),dayField=clean(get('day').value)
       if(weekField){
         const value=parseNumber(weekField.replace(/^week\s*/i,''))
-        if(Number.isInteger(value)&&value>=1&&value<=MAX_WEEKS)lastWeek=value
+        if(Number.isInteger(value)&&value>=1&&value<=MAX_WEEKS){
+          if(lastWeek!==value)lastDay=tabDay?('Day '+tabDay):'Day 1'
+          lastWeek=value
+        }
         else {issues.push({level:'error',text:sheet.name+' row '+(r+1)+': Invalid week.'});continue}
       }
       if(dayField)lastDay=dayField
@@ -254,7 +268,7 @@ export function convertSpreadsheetSheets(sheets,{name='Imported program',default
         name:exercise.slice(0,120),
         prescription:rx||sets+'x'+reps+(pct!=null?' @ '+pct+'% '+(basis==='tm'?'TM':'1RM'):weight!==null?' @ '+weight+' lb':''),
         note:clean(get('notes').value).slice(0,500),
-        sets,reps,pct,basis,weight,tm_offset,
+        sets,reps,pct,basis,weight,tm_offset,maxLift:pct!==null?importedReferenceLift(exercise):'',
       }))
       parsedCount++
       if(parsedCount>3500)issues.push({level:'error',text:'Too many exercises (3,500 maximum).'})
@@ -325,7 +339,8 @@ export function validateReviewedProgram(draft){
           issues.push('Week '+w.week+' / '+d.title+': invalid exercise, sets or reps.')
         if(percent!==null&&percent!==undefined&&(
           !Number.isFinite(Number(percent))||Number(percent)<=0||Number(percent)>150||
-          !['tm','e1rm'].includes(t.basis)))
+          !['tm','e1rm'].includes(t.basis)||
+          !['Squat','Bench','Deadlift','Press'].includes(t.maxLift)))
           issues.push('Week '+w.week+' / '+d.title+': confirm percentage basis and value.')
         if(t.weight!==null&&t.weight!==undefined&&t.weight!==''&&
           (!Number.isFinite(Number(t.weight))||Number(t.weight)<0||Number(t.weight)>2000))
@@ -359,7 +374,8 @@ export function normalizeReviewedProgram(draft){
           prescription:sets+'x'+reps+(pct!==null?' @ '+pct+'% '+(basis==='tm'?'TM':'1RM'):
             weight!==null?' @ '+weight+' lb':''),
           note:clean(e.note).slice(0,500),
-          imported:{sets,reps,pct,weight,tm_offset,basis}}
+          imported:{sets,reps,pct,weight,tm_offset,basis,
+            maxLift:pct!==null?a.maxLift||'':''}}
       })
     }))
   }))
@@ -394,7 +410,7 @@ export function makePlannedFromImported(program,week,dayIndex,date,maxes={}){
   const exercises=(selected.exercises||[]).map((item,i)=>{
     const info=item.imported
     if(!info?.sets||!info.reps)return {...item,id:'e'+(i+1),done:false,result:'',load:''}
-    const lift=['Squat','Bench','Deadlift','Press'].find(l=>l.toLowerCase()===String(item.name).toLowerCase())||null
+    const lift=['Squat','Bench','Deadlift','Press'].includes(info.maxLift)?info.maxLift:null
     const base=info.basis==='tm'?Number(maxes[lift]||0)*.85+Number(info.tm_offset||0):
       Number(maxes[lift]||0)
     const weight=info.pct!=null&&lift&&base>0
