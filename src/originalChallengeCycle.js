@@ -27,7 +27,8 @@ export function originalChallengeCompletedTest(workout){
     const reps=Number(set.actual_reps)
     const weight=Number(set.weight)
     if(!Number.isInteger(reps)||reps<1||reps>30||!Number.isFinite(weight)||weight<=0)continue
-    const estimate=reps===1?weight:weight*(1+reps/30)
+    // Match the workbook exactly: =weight * reps * 0.0333 + weight.
+    const estimate=weight*(1+reps*0.0333)
     result.push({
       lift:set.weight_lift,
       reps,weight,
