@@ -6,7 +6,7 @@ import { DialogPortal,OverlayPortal,confirmWorkset } from './worksetDialogs'
 import { allArchivePrograms, archiveProgramById, makePlannedFromArchive } from './archivePrograms'
 import {ORIGINAL_CHALLENGE_ID,originalChallengeStartingMaxes} from './originalChallengeCycle.js'
 import ProgramUpload from './ProgramUpload.jsx'
-import {importedProgramFromLibrary,importedProgramKey,makePlannedFromImported} from './importedPrograms.js'
+import {importedProgramFromLibrary,importedProgramKey,makePlannedFromImported,validateReviewedProgram,normalizeReviewedProgram} from './importedPrograms.js'
 import {programWeightNotes} from './programWeightNotes.js'
 import ProgramCommunity from './ProgramCommunity.jsx'
 import { ProgressToolbox, WorkoutTemplates } from './trainingTools'
@@ -1030,6 +1030,8 @@ export function PlanPage({
         difficulty:snap.difficulty||'',
         weeksCount:Number(snap.weeksCount||snap.weeks?.length||1),
         daysPerWeek:Number(snap.daysPerWeek||snap.weeks?.[0]?.days?.length||0),
+        reviewed:Boolean(snap.kind==='custom'&&snap.reviewed===true),
+        sourceWeeks:snap.weeks||[],
         durationLabel:snap.durationLabel||null,
         getWeek:(targetWeek)=>snap.weeks?.find(w=>Number(w.week)===Number(targetWeek))?.days||[],
       }
@@ -1186,6 +1188,7 @@ export function PlanPage({
     difficulty:p.difficulty,
     weeksCount:p.weeksCount,
     daysPerWeek:p.daysPerWeek,
+    reviewed:Boolean(p.kind==='custom'&&p.reviewed===true),
     weeks:Array.from({length:Number(p.weeksCount||0)},(_,i)=>{
       const n=i+1
       return {week:n,days:p.getWeek?p.getWeek(n):[]}
@@ -1253,6 +1256,34 @@ export function PlanPage({
     }catch{
       setMessage('Copy was blocked by the browser. Select the link and copy it manually.')
     }
+  }
+
+  const saveSharedImportedProgram=async()=>{
+    if(!session?.user?.id||!sharedPreview?.reviewed||!sharedPreview.sourceWeeks?.length)return
+    const candidate={name:sharedPreview.name,weeks:sharedPreview.sourceWeeks}
+    const problems=validateReviewedProgram(candidate)
+    if(problems.length){
+      setMessage('Shared program needs corrections before saving: '+problems[0])
+      return
+    }
+    const normalized=normalizeReviewedProgram(candidate)
+    const {data,error}=await supabase.from('program_library').insert({
+      owner_user_id:session.user.id,name:sharedPreview.name,
+      description:'Reviewed copy of shared '+sharedPreview.name,
+      source_type:'manual',visibility:'private',status:'active',
+      weeks_count:normalized.weekCount,
+      plan:{schema_version:1,reviewed:true,import_source:'shared',
+        source_file:sharedPreview.source||'Shared WorkSet program',
+        source_format:'shared',weeks:normalized.weeks},
+    }).select('id').single()
+    if(error){setMessage('Could not save shared program: '+error.message);return}
+    await load()
+    await onTrackingChanged?.()
+    setSharedPreview(null)
+    setPreviewKey(importedProgramKey(data.id))
+    setPreviewWeek(1);setPreviewDay(0)
+    setSearch('');setCategory('All')
+    setMessage('Shared program saved privately. You can track it now.')
   }
 
   const nativeShareProgram = async () => {
@@ -1646,6 +1677,7 @@ export function PlanPage({
         <div className="sample-workout"><h3>{previewDays[previewDay]?.title}</h3>{previewDays[previewDay]?.exercises?.map((x,i)=><div className="sample-exercise" key={i}><strong>{x.name}</strong><span>{x.prescription}</span>{x.note&&<small>{x.note}</small>}</div>)}</div>
         <div className="program-preview-actions">
           <div className="schedule-row"><input type="date" value={scheduleDate} onChange={e=>setScheduleDate(e.target.value)}/><button className="primary-action" onClick={scheduleProgramWorkout}>Add workout</button></div>
+          {sharedPreview?.reviewed&&<button type="button" className="primary-action" onClick={saveSharedImportedProgram}>Save shared copy to My Programs</button>}
           <button className="wide-button" onClick={()=>shareProgram(preview)}>Share program</button>
           {shareLink&&<div className="share-link-inline">
             <span>{shareLink}</span>
