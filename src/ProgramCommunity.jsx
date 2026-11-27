@@ -58,7 +58,7 @@ export default function ProgramCommunity({programName='',session,sharingEnabled=
     onToggle={event=>setOpen(event.currentTarget.open)}>
     <summary><span><b>Program Community</b><small>See others' shared workouts for this program</small></span></summary>
     <div className="program-community-inner">
-      <p className="helper-text">This feed shows completed workouts voluntarily shared with WorkSet Community for <strong>{programName}</strong>. Private workouts and 1RMs stay private.</p>
+      <p className="helper-text">This feed shows completed workouts voluntarily shared with WorkSet Community for <strong>{programName}</strong>. Your private workout history and saved 1RM settings stay private; shared summaries may include estimated 1RM.</p>
       {!sharingEnabled&&<div className="program-community-sharing-notice">
         <p className="helper-text">Your sharing is off. You can still view shared workouts. To let others see yours, opt in under Together → Community. Sharing there is visible to WorkSet Community, not just this program.</p>
         {onOpenCommunity&&<button type="button" className="secondary-action" onClick={onOpenCommunity}>Community sharing settings</button>}
