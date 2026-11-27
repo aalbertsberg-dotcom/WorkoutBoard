@@ -1422,7 +1422,22 @@ export function PlanPage({
           .eq('id',activeTrack.program_version_id).maybeSingle()
         if(versionError){setMessage('Could not load this program’s original 1RM baseline: '+versionError.message);return}
         const stored=version?.snapshot?.starting_one_rms
-        if(stored&&Object.keys(stored).length)initialMaxes=stored
+        if(stored&&Object.keys(stored).length===4){
+          initialMaxes=stored
+        }else{
+          // A pre-upgrade tracked run has no initial baseline yet; capture
+          // current saved maxima once so later scheduled days remain stable.
+          const recovered=originalChallengeStartingMaxes(oneRepMaxes)
+          if(Object.keys(recovered).length!==4){
+            setMessage('Set all four starting 1RMs before scheduling this existing program run.')
+            return
+          }
+          const {error:saveError}=await supabase.from('program_versions')
+            .update({snapshot:{...(version?.snapshot||{}),starting_one_rms:recovered}})
+            .eq('user_id',session.user.id).eq('id',activeTrack.program_version_id)
+          if(saveError){setMessage('Could not lock the starting 1RMs: '+saveError.message);return}
+          initialMaxes=recovered
+        }
       }
       payload=makePlannedFromArchive(preview,previewWeek,previewDay,scheduleDate,initialMaxes)
       payload.workout={...payload.workout,tracking_program_key:preview.key,
