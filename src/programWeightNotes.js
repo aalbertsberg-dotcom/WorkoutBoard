@@ -33,6 +33,13 @@ export function adjustedManualSetWeight(current,increment){
 }
 
 export function programWeightNotes(preview){
+  if(preview?.kind==='custom'&&preview?.reviewed){
+    return {
+      heading:'Imported program · checked weight rules',
+      summary:'Each percentage uses the TM or 1RM basis confirmed during import. TM means 85% of your saved 1RM.',
+      detail:'Any explicit training-max adjustment from the spreadsheet is applied before calculating each set. If no saved max is available, WorkSet asks for it rather than inventing a weight. Fixed weights remain editable, and unsupported workbook formulas were not imported.'
+    }
+  }
   if(preview?.id==='531-original-challenge')return {
     heading:'531 Original Challenge · weight calculations',
     summary:'Training max = 85% of 1RM. Programmed +5/+10 lb increases are applied automatically.',
