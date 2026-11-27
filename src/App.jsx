@@ -11,6 +11,7 @@ import { WorkoutCoach, MetconTracker, AccountSecurityPanel, BackupRestorePanel, 
 import { archiveProgramById, makePlannedFromArchive } from './archivePrograms'
 import {importedProgramFromLibrary,makePlannedFromImported} from './importedPrograms.js'
 import {ORIGINAL_CHALLENGE_ID,originalChallengeStartingMaxes} from './originalChallengeCycle.js'
+import {classic531TrainingMaxOffset} from './classic531Cycles.js'
 import { saveOfflineSession, readOfflineSession, clearOfflineSession, writeOfflineState, readOfflineState, getPendingOfflineCount, syncOfflineQueue, hydrateOfflineQueue, offlineUuid, upsertOfflineFirst } from './offline'
 import { RouteMap, formatPace, formatOutdoorDuration } from './outdoorTracking'
 import WorkoutHistory from './workoutHistory'
@@ -410,9 +411,9 @@ const appUrl = () => emailRedirectUrl({
   origin:window.location.origin,
 })
 
-function targetWeight(oneRm, pct, basis) {
+function targetWeight(oneRm, pct, basis, tmOffset=0) {
   if (!oneRm || pct == null) return null
-  const base = basis === 'e1rm' ? oneRm : oneRm * 0.85
+  const base = basis === 'e1rm' ? oneRm : oneRm * 0.85 + Number(tmOffset||0)
   return round5(base * pct / 100)
 }
 
@@ -544,15 +545,17 @@ function classicSecondaryExercises(programId,week,lift,oneRms,plan) {
       /\bfsl\b|first[ -]?set|\bbbb\b|widowmaker|tm test|training max|100% tm|backoff|back-off/i.test(part)
     ) && !(parts.length>1&&/joker/i.test(part)&&!explicitPct)
     const sourceOneRm=Number(oneRms?.[textLift]||currentOneRm||0)
-    const prescribedWeight=autoWeight ? targetWeight(sourceOneRm,pct,program.basis) : ''
+    const offset=classic531TrainingMaxOffset(programId,week,textLift)
+    const prescribedWeight=autoWeight ? targetWeight(sourceOneRm,pct,program.basis,offset) : ''
     if(autoWeight)setProgress.forEach(set=>{
       set.weight=prescribedWeight||''
       set.weight_lift=textLift
       set.weight_basis=program.basis
       set.pct=pct!=null?Number(pct):null
+      if(program.basis==='tm')set.tm_offset=offset
     })
     if(explicitPct?.[2]&&sourceOneRm){
-      const upper=targetWeight(sourceOneRm,Number(explicitPct[2]),program.basis)
+      const upper=targetWeight(sourceOneRm,Number(explicitPct[2]),program.basis,offset)
       setProgress.forEach(set=>{set.target_weight_range=prescribedWeight+'-'+upper+' lb'})
     }
 
@@ -588,6 +591,7 @@ function makePlannedFromClassic(programId,week,lift,scheduledDate,oneRms,trackin
   const plan=getProgramWeek(programId,week,lift)
   const mainName=classicLiftExerciseNames[lift]||lift
   const oneRm=Number(oneRms?.[lift]||0)
+  const tmOffset=classic531TrainingMaxOffset(programId,week,lift)
   const mainSets=(plan.main||[]).map((set,index)=>{
     const repsText=String(set.reps??'')
     const reps=Math.max(1,Number.parseInt(repsText,10)||1)
@@ -597,9 +601,10 @@ function makePlannedFromClassic(programId,week,lift,scheduledDate,oneRms,trackin
       reps,
       label:pctText+' × '+repsText,
       done:false,
-      weight:set.pct!=null ? (targetWeight(oneRm,set.pct,program.basis)||'') : '',
+      weight:set.pct!=null ? (targetWeight(oneRm,set.pct,program.basis,tmOffset)||'') : '',
       weight_lift:lift,
       weight_basis:program.basis,
+      ...(program.basis==='tm'?{tm_offset:tmOffset}:{}),
       pct:set.pct!=null?Number(set.pct):null,
       editable_reps:/[+]|[-–]|rpe|amrap|max/i.test(repsText+' '+pctText),
     }
@@ -691,13 +696,13 @@ function personalizeWorkoutLoads(workout,maxes={}) {
 function makeLog(programId, week, lift, tm) {
   const program = programs[programId]
   const plan = getProgramWeek(programId,week,lift)
-  const secondaryTarget = plan.secondary?.pct != null ? targetWeight(tm,plan.secondary.pct,program.basis) : ''
+  const secondaryTarget = plan.secondary?.pct != null ? targetWeight(tm,plan.secondary.pct,program.basis,classic531TrainingMaxOffset(programId,week,lift)) : ''
 
   return {
     version:8,
     main:plan.main.map(set => ({
       ...set,
-      weight:set.pct != null ? targetWeight(tm,set.pct,program.basis) : '',
+      weight:set.pct != null ? targetWeight(tm,set.pct,program.basis,classic531TrainingMaxOffset(programId,week,lift)) : '',
       actualReps:Number.parseInt(String(set.reps),10) || '',
       done:false,
     })),
@@ -3612,7 +3617,7 @@ function App() {
   }
 
   const secondary = plan.secondary
-  const secondaryTarget = secondary?.pct != null ? targetWeight(tm,secondary.pct,workoutProgram.basis) : null
+  const secondaryTarget = secondary?.pct != null ? targetWeight(tm,secondary.pct,workoutProgram.basis,classic531TrainingMaxOffset(workoutProgramId,week,lift)) : null
   const displayName = profile?.display_name || session?.user?.email?.split('@')[0] || 'You'
   const ownSessionResult = sessionResults.find(result => result.user_id === session?.user?.id)
   const sharedHostResult = activeSession ? sessionResults.find(result => result.user_id === activeSession.host_user_id) : null
@@ -4045,7 +4050,7 @@ function App() {
             <ExerciseHistoryStrip history={history} lift={lift} formatWeight={formatWeight} />
             <details className="today-collapsible">
               <summary><span><b>Workout Coach</b><small>Last performance, suggested load, warm-ups & PRs</small></span></summary>
-              <WorkoutCoach session={session} lift={lift} log={log} history={history} tm={tm*.85} plan={plan} />
+              <WorkoutCoach session={session} lift={lift} log={log} history={history} tm={tm*.85+classic531TrainingMaxOffset(workoutProgramId,week,lift)} plan={plan} />
             </details>
 
             <section className="exercise-card">
@@ -4056,7 +4061,7 @@ function App() {
               <div className="column-head"><span>SET / TARGET</span><span>WEIGHT</span><span>REPS</span><span>DONE</span></div>
 
               {log.main.map((set,i) => {
-                const target = targetWeight(tm,set.pct,workoutProgram.basis)
+                const target = targetWeight(tm,set.pct,workoutProgram.basis,classic531TrainingMaxOffset(workoutProgramId,week,lift))
                 const prev = previousWorkout?.main?.[i]
                 return (
                   <div className={'set-row ' + (set.done ? 'completed ' : '') + (!set.done && i===nextMainIndex ? 'current-set' : '')} key={i}>
