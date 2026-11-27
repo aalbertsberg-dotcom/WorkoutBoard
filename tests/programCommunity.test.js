@@ -36,6 +36,6 @@ test('community respects global opt-in controls and displays only summary metric
   assert.match(src,/Together → Community/)
   assert.match(src,/estimate/i)
   assert.match(src,/row\.summary\?\.sets/)
-  assert.match(src,/row\.summary\?\.completed_at/)
+  assert.match(src,/row\?\.summary\?\.completed_at/)
   assert.doesNotMatch(src,/select\('\*'\)/)
 })
