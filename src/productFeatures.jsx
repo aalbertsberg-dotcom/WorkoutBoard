@@ -11,7 +11,7 @@ import GpsStatusBadge from './GpsStatusBadge.jsx'
 import BeatTimer from './BeatTimer.jsx'
 import { effectiveSteps } from './stepTracking'
 import {partnerSetTarget,missingWorkoutOneRms} from './programSetTargets.js'
-import {ORIGINAL_CHALLENGE_KEY,ORIGINAL_CHALLENGE_NAME,ORIGINAL_CHALLENGE_ID,ORIGINAL_CHALLENGE_LIFTS,isOriginalChallengeMaxTest,isOriginalChallengeTestSet,originalChallengeWeek6Estimates,originalChallengeProgramMaxes} from './originalChallengeCycle.js'
+import {ORIGINAL_CHALLENGE_KEY,ORIGINAL_CHALLENGE_NAME,ORIGINAL_CHALLENGE_ID,ORIGINAL_CHALLENGE_LIFTS,isOriginalChallengeMaxTest,isOriginalChallengeTestSet,originalChallengeCompletedTest,originalChallengeWeek6Estimates,originalChallengeProgramMaxes} from './originalChallengeCycle.js'
 import { validWeightDraft,validRepsDraft,displayedSetWeight,recordedWeightValue,canFinishQuickCardio,withoutUnreliableRoute,outdoorDistancePresentation,workoutDistancePresentation,effectiveCardioDurationSeconds,autosaveDelayMs } from './trackingRules'
 
 function parseVolume(value) {
@@ -672,8 +672,11 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       : ''
     const manualDistance=String(workout.metcon?.distance||'').trim()
     const reportedDurationSeconds=effectiveCardioDurationSeconds(workout)
+    const challengeTestResults=isOriginalChallengeMaxTest(planned)?originalChallengeCompletedTest(workout):[]
+    const challengeTestEstimate=challengeTestResults[0]?.estimated_1rm||null
     const finalWorkout={
       ...workout,
+      ...(challengeTestResults.length?{challenge_test_results:challengeTestResults}:{}),
       ...(quickCardio?{
         quick_timer_started_at:null,
         quick_timer_elapsed_seconds:quickElapsedSeconds,
@@ -734,7 +737,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       session_date:planned.scheduled_date,
       workout:finalWorkout,
       total_volume:Math.round(totalVolume),
-      estimated_1rm:bestEstimated1rm||null,
+      estimated_1rm:challengeTestEstimate||bestEstimated1rm||null,
       bodyweight:Number(workout.bodyweight||0)||null,
       shared_session_id:sharedSessionId||null,
       started_at:planned.created_at||now,
@@ -767,7 +770,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
             user_id:planned.user_id,
             workout:{...finalWorkout,shared_template:planned.workout?.shared_template||planned.workout,shared_meta:planned.workout?.shared_meta||null},
             total_volume:Math.round(totalVolume),
-            estimated_1rm:bestEstimated1rm||null,
+            estimated_1rm:challengeTestEstimate||bestEstimated1rm||null,
             completed_at:now,
             updated_at:now,
           },
@@ -791,6 +794,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
         strengthBaseline:Boolean(finalWorkout.strength_baseline),
         baselinePath:finalWorkout.baseline_path||null,
         baselineResults,
+        challengeTestResults,challengeTestWeek:Number(planned.source_week)||null,
         trainingSessionId:sessionId,
         outdoor:completionOutdoor,
         offline:true,
@@ -813,6 +817,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
         title:planned.title,program:planned.source_program_name||'Custom workout',week:planned.source_week||null,
         primary_lift:planned.source_day||null,session_date:planned.scheduled_date,workout:finalWorkout,
         total_volume:Math.round(totalVolume),bodyweight:Number(workout.bodyweight||0)||null,
+        estimated_1rm:challengeTestEstimate||bestEstimated1rm||null,
         shared_session_id:sharedSessionId||null,
         completed_at:now,updated_at:now
       }).eq('id',trainingSessionId).select('id').single()
@@ -859,7 +864,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
               completed_at:now,
               lift:planned.source_day||null,
               volume:Math.round(totalVolume),
-              estimated_1rm:bestEstimated1rm||null,
+              estimated_1rm:challengeTestEstimate||bestEstimated1rm||null,
               exercises:completedExercises,
               sets:completedSets,
               bodyweight:communityProfile.community_share_bodyweight ? (Number(workout.bodyweight||0)||null) : null
@@ -877,7 +882,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
             shared_meta:planned.workout?.shared_meta||null,
           },
           total_volume:Math.round(totalVolume),
-          estimated_1rm:bestEstimated1rm||null,
+          estimated_1rm:challengeTestEstimate||bestEstimated1rm||null,
           completed_at:now,
           updated_at:now,
         },{onConflict:'session_id,user_id'})
@@ -893,6 +898,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
         strengthBaseline:Boolean(finalWorkout.strength_baseline),
         baselinePath:finalWorkout.baseline_path||null,
         baselineResults:baselineResults,
+        challengeTestResults,challengeTestWeek:Number(planned.source_week)||null,
         trainingSessionId,
         outdoor:completionOutdoor,
       })
