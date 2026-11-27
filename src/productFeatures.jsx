@@ -13,7 +13,7 @@ import BeatTimer from './BeatTimer.jsx'
 import { effectiveSteps } from './stepTracking'
 import {partnerSetTarget,missingWorkoutOneRms} from './programSetTargets.js'
 import {explainProgramSetWeight,adjustedManualSetWeight} from './programWeightNotes.js'
-import {ORIGINAL_CHALLENGE_KEY,ORIGINAL_CHALLENGE_NAME,ORIGINAL_CHALLENGE_ID,ORIGINAL_CHALLENGE_LIFTS,isOriginalChallengeMaxTest,isOriginalChallengeTestSet,originalChallengeCompletedTest,originalChallengeWeek6Estimates,originalChallengeProgramMaxes} from './originalChallengeCycle.js'
+import {ORIGINAL_CHALLENGE_KEY,ORIGINAL_CHALLENGE_NAME,ORIGINAL_CHALLENGE_ID,ORIGINAL_CHALLENGE_LIFTS,isOriginalChallengeMaxTest,isOriginalChallengeTestSet,originalChallengeCompletedTest,originalChallengeWeek6Estimates,originalChallengeProgramMaxes,originalChallengeTrainingMaxOffset} from './originalChallengeCycle.js'
 import { validWeightDraft,validRepsDraft,displayedSetWeight,recordedWeightValue,canFinishQuickCardio,withoutUnreliableRoute,outdoorDistancePresentation,workoutDistancePresentation,effectiveCardioDurationSeconds,autosaveDelayMs } from './trackingRules'
 
 function parseVolume(value) {
@@ -1101,6 +1101,17 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
         <button type="button" className="quick-add-exercise" onClick={()=>setExerciseAdderOpen(v=>!v)}>{exerciseAdderOpen?'Close':'+ Exercise'}</button>
       </div>
     </div>
+
+    {isChallenge&&<details className="simple-card original-challenge-tm-rule">
+      <summary>
+        Week {planned.source_week} · 5/3/1 weight rule
+        {originalChallengeTrainingMaxOffset(planned.source_week,'Squat')>0
+          ?' · +10 lb lower / +5 lb upper already added to TM'
+          :' · 85% training max'}
+      </summary>
+      <p className="helper-text">Training max (TM) = 85% of 1RM. Weeks 4–6 and 10–12 add 10 lb to Squat/Deadlift TM and 5 lb to Bench/Press TM. The increase is NOT added to the 1RM. Each set percentage uses the resulting TM.</p>
+      <p className="helper-text">Week 6 actual max-test reps calculate a new program-only estimated 1RM for Weeks 7–12. Required 5/10 lb increases are automatic. The optional +5/+10 buttons change only one set.</p>
+    </details>}
 
     {needsChallengeCycle&&<section className="simple-card" aria-label="531 Original Challenge Week 6 auto-calculation">
       <div className="section-heading"><div><span className="card-label">POST-TEST TRAINING MAX</span><h3>Calculated from Week 6 results</h3></div></div>
