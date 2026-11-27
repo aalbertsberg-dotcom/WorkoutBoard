@@ -2055,7 +2055,7 @@ function App() {
     const today=localDateKey()
     const plannedPayload=makePlannedFromArchive(program,next.week,next.dayIndex,today,oneRepMaxes)
     plannedPayload.status='started'
-    plannedPayload.workout={...plannedPayload.workout,tracking_program_key:trackInfo.key,tracking_workout_key:next.trackingWorkoutKey,started_explicitly:true}
+    plannedPayload.workout={...plannedPayload.workout,tracking_program_key:trackInfo.key,tracking_workout_key:next.trackingWorkoutKey,tracking_started_at:trackInfo.startedAt||null,started_explicitly:true}
     const {data,error}=await createPlannedWorkout(plannedPayload)
     if(error){setWorkoutStartError(error.message);return}
     setTrackedTodayInfo(trackInfo)
