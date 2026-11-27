@@ -1116,6 +1116,8 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
             <div className="set-progress-grid compact flexible-set-progress">
               {item.setProgress.map((set,j)=>{
                 const recordedWeight=set.weight!==undefined&&set.weight!=='' ? Number(set.weight)||0 : 0
+                const suggestedWeight=Number(String(partnerSetTarget(oneRepMaxes,set)).match(/^\\d+/)?.[0]||0)
+                const tileWeight=set.done||set.weight_edited?recordedWeight:(suggestedWeight||recordedWeight)
                 return <div className={'set-progress-wrap '+(set.extra?'extra-set':'')} key={j}>
                   <button
                     type="button"
@@ -1127,7 +1129,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
                       activateExercise(i,j,{scroll:false})
                     }}>
                     <strong>{set.extra?'Extra set':'Set '+(j+1)}</strong>
-                    <span>{set.done&&repsForSet(item,set) ? repsForSet(item,set)+' reps' : (set.label || (set.reps?set.reps+' reps':'Done'))}{recordedWeight?' · '+recordedWeight+' lb':''}</span>
+                    <span>{set.done&&repsForSet(item,set) ? repsForSet(item,set)+' reps' : (set.label || (set.reps?set.reps+' reps':'Done'))}{tileWeight?' · '+tileWeight+' lb':''}</span>
                     <b>{set.done?'✓':'○'}</b>
                   </button>
                   {set.extra&&<button type="button" className="remove-extra-set" onClick={()=>removeExtraSet(i,j)} aria-label={'Remove extra set '+(j+1)}>×</button>}
