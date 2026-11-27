@@ -1,6 +1,7 @@
 import {OverlayPortal} from './worksetDialogs'
 import {isNativeAndroid, WorksetUpdater, checkAndroidUpdate} from './androidUpdates.js'
 import {recoverWorkoutDraft,persistWorkoutDraft,clearWorkoutDraft} from './durableStore.js'
+import {readWorkoutFocus,saveWorkoutFocus,clearWorkoutFocus,resolveWorkoutFocus} from './workoutFocusState.js'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase'
 import { MetconTracker } from './advancedFeatures'
@@ -165,8 +166,14 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
   const [conditioningOpen,setConditioningOpen]=useState(()=>Boolean(planned?.workout?.conditioning_prescribed))
   const [exerciseAdderOpen,setExerciseAdderOpen]=useState(false)
   const [newExercise,setNewExercise]=useState({name:'',sets:3,target:'10',rest:90})
-  const [activeExerciseIndex,setActiveExerciseIndex]=useState(0)
-  const [activeSetByExercise,setActiveSetByExercise]=useState({})
+  const [activeExerciseIndex,setActiveExerciseIndex]=useState(()=>
+    resolveWorkoutFocus(workout,readWorkoutFocus(planned?.user_id,planned?.id))?.index??0)
+  const [activeSetByExercise,setActiveSetByExercise]=useState(()=>{
+    const focus=resolveWorkoutFocus(workout,readWorkoutFocus(planned?.user_id,planned?.id))
+    return focus?.setIndex!=null?{[focus.key]:focus.setIndex}:{}
+  })
+  const lastRunnerWorkoutIdRef=useRef(planned?.id)
+  const restoredRunnerFocusIdRef=useRef(null)
   const [removeExercisePrompt,setRemoveExercisePrompt]=useState(null)
   const [quickClock,setQuickClock]=useState(()=>Date.now())
   const [cardioDetailsOpen,setCardioDetailsOpen]=useState(()=>Boolean(
@@ -177,6 +184,8 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
   const revisionRef=useRef(0)
   const unsavedSinceRef=useRef(0)
   const [draftReady,setDraftReady]=useState(false)
+  const [draftReadyForId,setDraftReadyForId]=useState(null)
+  const focusDraftReady=draftReady&&draftReadyForId===planned?.id
   const [oneRmDraft,setOneRmDraft]=useState({})
   const [oneRmSaving,setOneRmSaving]=useState(false)
   const [oneRmSaveMessage,setOneRmSaveMessage]=useState('')
@@ -298,38 +307,89 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
         }
       }
     } catch {}
+    // On iOS/Android wake, refreshPlannedToday updates the server timestamp.
+    // This is still the SAME workout: never reset the focused added exercise.
+    const switchedWorkout=lastRunnerWorkoutIdRef.current!==planned?.id
+    lastRunnerWorkoutIdRef.current=planned?.id
     cancelRequestedRef.current=false
-    setWorkout(withSetProgress({exercises:[],sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',circuit_rounds:'',conditioningEnabled:false,metcon:{name:'',format:'',activity:'',duration:'',workTime:'',restTime:'',interval:'',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx',intensity:'Easy'},...(planned?.workout||{}),...(cached||{})}))
+    const incoming=withSetProgress({exercises:[],sleep:'',energy:'',pain:'',rpe:'',bodyweight:'',note:'',circuit_rounds:'',conditioningEnabled:false,metcon:{name:'',format:'',activity:'',duration:'',workTime:'',restTime:'',interval:'',rounds:'',reps:'',time:'',distance:'',calories:'',scale:'Rx',intensity:'Easy'},...(planned?.workout||{}),...(cached||{})})
+    setWorkout(incoming)
+    if(switchedWorkout){
+      const focus=resolveWorkoutFocus(incoming,readWorkoutFocus(planned?.user_id,planned?.id))
+      setActiveExerciseIndex(focus?.index??0)
+      setActiveSetByExercise(focus?.setIndex!=null?{[focus.key]:focus.setIndex}:{})
+      restoredRunnerFocusIdRef.current=null
+    }
     setConditioningOpen(Boolean(planned?.workout?.conditioning_prescribed))
     setExerciseAdderOpen(false)
     setNewExercise({name:'',sets:3,target:'10',rest:90})
-    setActiveExerciseIndex(0)
-    setActiveSetByExercise({})
     setRemoveExercisePrompt(null)
-  },[planned?.id,planned?.updated_at])
+  },[planned?.id])
 
   // Recover the newest saved draft before writing any replacement.
   useEffect(()=>{
     if(!planned?.id)return
     let cancelled=false
     setDraftReady(false)
+    setDraftReadyForId(null)
     const serverTs=planned.updated_at?new Date(planned.updated_at).getTime():0
     let localTs=0
     try{localTs=Number(localStorage.getItem('wb-planned-draft-ts-'+planned.id)||0)}catch{}
     recoverWorkoutDraft(planned.user_id,planned.id,serverTs).then(saved=>{
       if(!cancelled&&saved?.value&&Number(saved.savedAt)>localTs)
         setWorkout(current=>withSetProgress({...current,...saved.value}))
-    }).finally(()=>{if(!cancelled)setDraftReady(true)})
+    }).finally(()=>{if(!cancelled){setDraftReadyForId(planned.id);setDraftReady(true)}})
     return()=>{cancelled=true}
-  },[planned?.id,planned?.updated_at])
+  },[planned?.id])
+
+  // Cold-resume after iOS Safari/Android evicts the web view. Wait for
+  // workout draft recovery before resolving by stable exercise ID: added
+  // exercises may exist only in that recovered draft.
+  useEffect(()=>{
+    if(!focusDraftReady||!planned?.id||restoredRunnerFocusIdRef.current===planned.id)return
+    const saved=readWorkoutFocus(planned.user_id,planned.id)
+    const focus=resolveWorkoutFocus(workout,saved)
+    restoredRunnerFocusIdRef.current=planned.id
+    if(!focus)return
+    setActiveExerciseIndex(focus.index)
+    setActiveSetByExercise(previous=>({
+      ...previous,
+      ...(focus.setIndex!=null?{[focus.key]:focus.setIndex}:{})
+    }))
+    // Only restore scroll on a fresh mount, not on every phone wake.
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      document.getElementById('workout-exercise-'+focus.index)
+        ?.scrollIntoView({behavior:'auto',block:'nearest'})
+    }))
+  },[focusDraftReady,planned?.id,planned?.user_id,workout])
+
+  // Save focus independently of autosaved workout progress. Sync writes
+  // on background events as an extra safeguard against OS process eviction.
+  useEffect(()=>{
+    if(!focusDraftReady||restoredRunnerFocusIdRef.current!==planned?.id)return
+    const saveFocus=()=>{
+      const item=(workout.exercises||[])[activeExerciseIndex]
+      if(!item)return
+      const key=item.id||String(activeExerciseIndex)
+      saveWorkoutFocus(planned.user_id,planned.id,item,activeSetByExercise[key])
+    }
+    saveFocus()
+    const hidden=()=>{if(document.visibilityState==='hidden')saveFocus()}
+    document.addEventListener('visibilitychange',hidden)
+    window.addEventListener('pagehide',saveFocus)
+    return()=>{
+      document.removeEventListener('visibilitychange',hidden)
+      window.removeEventListener('pagehide',saveFocus)
+    }
+  },[focusDraftReady,planned?.id,planned?.user_id,workout.exercises,activeExerciseIndex,activeSetByExercise])
 
   useEffect(()=>{
-    if(!planned?.id||!draftReady)return
+    if(!planned?.id||!focusDraftReady)return
     revisionRef.current++
     persistWorkoutDraft(planned.user_id,planned.id,workout).then(ok=>{
       if(!ok)setSaveState('Storage unavailable — keep this page open')
     })
-  },[workout,planned?.id,draftReady])
+  },[workout,planned?.id,focusDraftReady])
 
   useEffect(()=>{
     if(!planned?.user_id)return
@@ -374,7 +434,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
   },[planned?.user_id,planned?.id])
 
   useEffect(()=>{
-    if (!planned?.id || !draftReady || saveState !== 'Unsaved' || cancelRequestedRef.current) return
+    if (!planned?.id || !focusDraftReady || saveState !== 'Unsaved' || cancelRequestedRef.current) return
     if(!unsavedSinceRef.current)unsavedSinceRef.current=Date.now()
     const unsavedFor=Date.now()-unsavedSinceRef.current
     const timer=setTimeout(async()=>{
@@ -396,7 +456,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
         setSaveState(result.error?'Save failed: '+result.error.message:result.offline?'Saved offline':'Saved')
     },autosaveDelayMs(unsavedFor,Boolean(workout.quick_cardio)))
     return ()=>clearTimeout(timer)
-  },[workout,planned?.id,saveState,draftReady])
+  },[workout,planned?.id,saveState,focusDraftReady])
 
   const changeExercise=(index,patch)=>{
     setSaveState('Unsaved')
@@ -466,6 +526,8 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
     const item=(workout.exercises||[])[index]
     if(!item)return
     setActiveExerciseIndex(index)
+    const focusKey=item.id||String(index)
+    saveWorkoutFocus(planned?.user_id,planned?.id,item,setIndex!==null?setIndex:activeSetByExercise[focusKey]??null)
     if(setIndex!==null){
       const key=item.id||String(index)
       setActiveSetByExercise(v=>({...v,[key]:setIndex}))
@@ -505,6 +567,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
     setNewExercise({name:'',sets:3,target:'10',rest:90})
     setExerciseAdderOpen(false)
     setActiveExerciseIndex(newIndex)
+    saveWorkoutFocus(planned?.user_id,planned?.id,item,0)
     setActiveSetByExercise(v=>({...v,[item.id]:0}))
     requestAnimationFrame(()=>document.getElementById('workout-exercise-'+newIndex)?.scrollIntoView({behavior:'smooth',block:'start'}))
   }
@@ -608,6 +671,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       return
     }
     await clearWorkoutDraft(planned.user_id,planned.id)
+    clearWorkoutFocus(planned.user_id,planned.id)
     setSaveState(result.offline?'Saved offline':'Saved')
     setCancelConfirm(false)
     setCancelling(false)
@@ -780,6 +844,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
         })
       }
       await clearWorkoutDraft(planned.user_id,planned.id)
+      clearWorkoutFocus(planned.user_id,planned.id)
       }catch(error){
         setSaveState('Finish not saved: '+(error?.message||'Storage unavailable'))
         setFinishing(false)
@@ -889,6 +954,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
         },{onConflict:'session_id,user_id'})
       }
       await clearWorkoutDraft(planned.user_id,planned.id)
+      clearWorkoutFocus(planned.user_id,planned.id)
       setSaveState(plannedResult.offline?'Saved offline':'Saved')
       onFinished?.({
         title:planned.title,
@@ -1239,6 +1305,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
                 changeExercise(i,{load:shownWeight,setProgress:item.setProgress.map((sp,k)=>k===activeIndex?{...sp,done:true,weight:loadField?shownWeight:sp.weight}:sp)})
                 if(nextSetIndex>=0){
                   setActiveSetByExercise(v=>({...v,[exerciseKey]:nextSetIndex}))
+                  saveWorkoutFocus(planned?.user_id,planned?.id,item,nextSetIndex)
                   requestAnimationFrame(()=>document.getElementById('workout-exercise-'+i)?.scrollIntoView({behavior:'smooth',block:'nearest'}))
                 }else{
                   setActiveSetByExercise(v=>({...v,[exerciseKey]:null}))
