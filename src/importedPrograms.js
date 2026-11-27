@@ -303,6 +303,69 @@ export async function inspectProgramFile(file,options={}){
   return {sourceFile:file.name,sourceFormat:ext,...convertSpreadsheetSheets(sheets,options)}
 }
 
+
+export function validateReviewedProgram(draft){
+  const issues=[]
+  const weeks=draft?.weeks||[]
+  if(!weeks.length||weeks.length>MAX_WEEKS)issues.push('Program must have 1–52 weeks.')
+  if(!clean(draft?.name))issues.push('Enter a program name.')
+  if(weeks.some((w,i)=>Number(w.week)!==i+1))issues.push('Weeks must be numbered consecutively from 1.')
+  let total=0
+  for(const w of weeks){
+    if(!w.days?.length||w.days.length>MAX_DAYS)
+      issues.push('Week '+w.week+': must have 1–7 workouts.')
+    for(const d of w.days||[]){
+      if(!clean(d.title)||!d.exercises?.length||d.exercises.length>MAX_EXERCISES_PER_DAY)
+        issues.push('Week '+w.week+': each workout needs a title and 1–45 exercises.')
+      for(const e of d.exercises||[]){
+        total++
+        const t=e.imported||{},sets=Number(t.sets),rep=clean(t.reps),percent=t.pct
+        if(!clean(e.name)||!Number.isInteger(sets)||sets<1||sets>30||
+          !/^\d{1,3}\+?$/.test(rep)||Number.parseInt(rep,10)<1||Number.parseInt(rep,10)>100)
+          issues.push('Week '+w.week+' / '+d.title+': invalid exercise, sets or reps.')
+        if(percent!==null&&percent!==undefined&&(
+          !Number.isFinite(Number(percent))||Number(percent)<=0||Number(percent)>150||
+          !['tm','e1rm'].includes(t.basis)))
+          issues.push('Week '+w.week+' / '+d.title+': confirm percentage basis and value.')
+        if(t.weight!==null&&t.weight!==undefined&&t.weight!==''&&
+          (!Number.isFinite(Number(t.weight))||Number(t.weight)<0||Number(t.weight)>2000))
+          issues.push('Week '+w.week+' / '+d.title+': invalid fixed weight.')
+        if(percent!==null&&percent!==undefined&&t.weight!==null&&t.weight!==undefined&&t.weight!=='')
+          issues.push('Week '+w.week+' / '+d.title+': cannot specify both percentage and fixed weight.')
+        if(Number(t.tm_offset||0)!==0&&(
+          t.basis!=='tm'||!Number.isFinite(Number(t.tm_offset))||
+          Math.abs(Number(t.tm_offset))>250))
+          issues.push('Week '+w.week+' / '+d.title+': TM increase must be on a TM-based set.')
+      }
+    }
+  }
+  if(total>3500)issues.push('Program exceeds 3,500 exercises.')
+  return Array.from(new Set(issues))
+}
+
+export function normalizeReviewedProgram(draft){
+  const weeks=(draft.weeks||[]).map(w=>({
+    week:Number(w.week),
+    days:(w.days||[]).map(d=>({
+      title:clean(d.title).slice(0,120),
+      exercises:(d.exercises||[]).map(e=>{
+        const a=e.imported||{}
+        const sets=Number(a.sets),reps=clean(a.reps)
+        const pct=a.pct===null||a.pct===undefined||a.pct===''?null:Number(a.pct)
+        const weight=a.weight===null||a.weight===undefined||a.weight===''?null:Number(a.weight)
+        const tm_offset=Number(a.tm_offset||0)
+        const basis=pct!==null?a.basis:null
+        return {name:clean(e.name).slice(0,120),
+          prescription:sets+'x'+reps+(pct!==null?' @ '+pct+'% '+(basis==='tm'?'TM':'1RM'):
+            weight!==null?' @ '+weight+' lb':''),
+          note:clean(e.note).slice(0,500),
+          imported:{sets,reps,pct,weight,tm_offset,basis}}
+      })
+    }))
+  }))
+  return {weeks,weekCount:weeks.length,workoutCount:weeks.reduce((n,w)=>n+w.days.length,0)}
+}
+
 export function importedProgramFromLibrary(row){
   const plan=row?.plan
   if(!row?.id||row?.status!=='active'||plan?.schema_version!==1||
