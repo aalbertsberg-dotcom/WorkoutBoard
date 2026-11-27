@@ -201,9 +201,16 @@ export function convertSpreadsheetSheets(sheets,{name='Imported program',default
       mapping(row).exercise!==undefined&&
       ['sets','reps','percent','weight','prescription'].some(k=>mapping(row)[k]!==undefined))
     if(headerIndex<0){
-      if(rows.some(row=>row.some(c=>clean(c?.value)))){unrecognized++;issues.push({
-        level:'warning',text:sheet.name+': No supported Exercise/Sets/Reps header found; sheet was skipped.'
-      })}
+      if(rows.some(row=>row.some(c=>clean(c?.value)))){
+        unrecognized++
+        const formulas=rows.some(row=>row.some(c=>c?.formula))
+        issues.push({
+          level:formulas?'error':'warning',
+          text:sheet.name+': '+(formulas
+            ?'Formula-based sheet has no supported exercise table. It cannot be safely imported.'
+            :'No supported Exercise/Sets/Reps header found; sheet was skipped.')
+        })
+      }
       continue
     }
     const map=mapping(rows[headerIndex])
