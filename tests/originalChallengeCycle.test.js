@@ -98,7 +98,7 @@ test('current workout loads the Week 6 result by run and requires real max-test 
   assert.match(src,/partnerSetTarget\(workoutOneRms,activeSet\)/)
   assert.match(src,/partnerSetTarget\(workoutOneRms,set\)/)
   assert.match(src,/isOriginalChallengeMaxTest\(planned\)&&isOriginalChallengeTestSet\(activeSet\)/)
-  assert.match(src,/set\.actual_reps===/)
+  assert.match(src,/set\.actual_reps==null/)
   assert.match(app,/tracking_started_at:trackInfo\.startedAt\|\|null/)
   assert.match(plan,/tracking_started_at:activeTrack\?\.started_at\|\|null/)
 })
