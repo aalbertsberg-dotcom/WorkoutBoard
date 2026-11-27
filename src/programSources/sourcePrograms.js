@@ -10,6 +10,7 @@ import {RAIDER_5_12} from './raider2'
 import {VON_DATA} from './vonData'
 import {COLORADO_DATA} from './coloradoData'
 import {TRAIN12_DATA} from './training12Data'
+import {originalChallengeProgram} from './originalChallenge.js'
 
 const wrap=(meta,data)=>sourceProgram(meta,data)
 
@@ -248,6 +249,7 @@ const summer={
 }
 
 export const verifiedSourcePrograms=[
+  originalChallengeProgram,
   ...manualTranscribedPrograms,
   pump,lower,beginnerOly,zach,vaughn,ranger,raider,von,colorado,training12,
   revisedDeadlift,wendlerChallenge,heavyExplosive,hiit,osbc,ppsa21,meat,pauseCycles,massBuilder,summer
