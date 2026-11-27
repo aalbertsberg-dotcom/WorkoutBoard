@@ -882,6 +882,7 @@ export const archiveProgramById = Object.fromEntries(allArchivePrograms.map(p=>[
 const archiveRound5 = n => Math.round(Number(n||0)/5)*5
 
 function archiveLiftFromText(name,prescription='',note='') {
+  if(String(name||'').trim().toLowerCase()==='press')return 'Press'
   const text=(String(name||'')+' '+String(prescription||'')+' '+String(note||'')).toLowerCase()
   if(/bench/.test(text)) return 'Bench'
   if(/deadlift|rack pull|trap bar/.test(text)) return 'Deadlift'
@@ -905,11 +906,30 @@ function archiveTargetWeight(oneRms,lift,pct,basis) {
   return archiveRound5(base*Number(pct)/100)
 }
 
-function archiveSetProgressWithLoads(program,item,oneRms={}) {
+function archiveSetProgressWithLoads(program,item,oneRms={},week=null) {
   const prescription=String(item?.prescription||'').trim()
   const note=String(item?.note||'').trim()
   const text=(prescription+' '+note).trim()
   const lift=archiveLiftFromText(item?.name,prescription,note)
+  // Workbook-prescribed 5/3/1 sets: calculate live loads from 85% of
+  // current estimated 1RM, then add the original 5/10 lb cycle increase.
+  // Do not bake the example person's spreadsheet weights into WorkSet.
+  if(program?.structuredPercentSets){
+    const rows=[...prescription.matchAll(/(\d+)(\+?)\s*@\s*(\d+(?:\.\d+)?)\s*%\s*TM/gi)];
+    if(!lift||rows.length!==6)return null;
+    const offset=Number(program.getTrainingMaxOffset?.(week,lift)||0);
+    const oneRm=Number(oneRms?.[lift]||0);
+    const tm=oneRm>0?oneRm*Number(program.trainingMaxFactor||0.85)+offset:0;
+    return rows.map((match,i)=>{
+      const reps=Number(match[1]),pct=Number(match[3]),amrap=Boolean(match[2]);
+      return {
+        set:i+1,reps,label:match[1]+match[2]+' @ '+pct+'% TM',
+        done:false,editable_reps:amrap,weight:tm?archiveRound5(tm*pct/100):'',
+        weight_lift:lift,weight_basis:'tm',tm_offset:offset,pct,pct_high:null,
+        target_weight_range:'',
+      };
+    });
+  }
   const allowAuto=Boolean(lift)&&(
     /e1rm|1rm|training max|\btm\b/i.test(text) ||
     ['andy-hybrid-rebuild','squatober','beach531'].includes(String(program?.id||''))
@@ -1006,7 +1026,7 @@ export function makePlannedFromArchive(program, week, dayIndex, scheduledDate, o
       source:program.source,
       notes:chosen.note || '',
       exercises:(chosen.exercises || []).map((item,i)=>{
-        const setProgress=archiveSetProgressWithLoads(program,item,oneRms)
+        const setProgress=archiveSetProgressWithLoads(program,item,oneRms,week)
         return {
           ...item,
           id:`e${i+1}`,

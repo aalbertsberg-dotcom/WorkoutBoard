@@ -665,9 +665,16 @@ function personalizeWorkoutLoads(workout,maxes={}) {
         const targetLift=set.weight_lift
         const pct=set.pct
         if(!targetLift||pct==null)return {...set}
-        const low=targetWeight(Number(maxes?.[targetLift]||0),Number(pct),set.weight_basis||'e1rm')
+        // Imported source programs may advance their training max per cycle.
+        // A 5/10 lb TM offset must survive later 1RM recalculation.
+        const targetOneRm=Number(maxes?.[targetLift]||0)
+        const tmOffset=Number(set.tm_offset||0)
+        const base=targetOneRm&&set.weight_basis==='tm'
+          ? targetOneRm*.85+tmOffset : targetOneRm
+        const basis=set.weight_basis==='tm'?'e1rm':(set.weight_basis||'e1rm')
+        const low=targetWeight(base,Number(pct),basis)
         const high=set.pct_high!=null
-          ? targetWeight(Number(maxes?.[targetLift]||0),Number(set.pct_high),set.weight_basis||'e1rm')
+          ? targetWeight(base,Number(set.pct_high),basis)
           : null
         return {
           ...set,
