@@ -1,6 +1,7 @@
 import { DialogPortal,OverlayPortal,confirmWorkset } from './worksetDialogs'
 import MePage from './MePage'
 import NutritionPage from './NutritionPage'
+import ProgramGroups from './ProgramGroups.jsx'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase'
 import { PlatformProgress, PlanPage, AdminPanel, FeedbackPanel } from './platform'
@@ -4219,6 +4220,8 @@ function App() {
               <button className={togetherView==='community'?'active':''} onClick={()=>setTogetherView('community')}>Community</button>
             </div>
             {togetherView==='community' ? (
+              <>
+              <ProgramGroups session={session} profile={profile} programOptions={togetherProgramOptions}/>
               <PlatformProgress
                 view="community"
                 session={session}
@@ -4230,6 +4233,7 @@ function App() {
                 programs={programs}
                 dbNameToProgram={dbNameToProgram}
               />
+              </>
             ) : <>
             {togetherReady === false ? (
               <div className="setup-needed">
