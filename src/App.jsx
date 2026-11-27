@@ -9,6 +9,7 @@ import { WhiteboardPage } from './whiteboard'
 import { TrainingTimer } from './trainingTools'
 import { WorkoutCoach, MetconTracker, AccountSecurityPanel, BackupRestorePanel, WorkoutSettingsPanel } from './advancedFeatures'
 import { archiveProgramById, makePlannedFromArchive } from './archivePrograms'
+import {importedProgramFromLibrary,makePlannedFromImported} from './importedPrograms.js'
 import {ORIGINAL_CHALLENGE_ID,originalChallengeStartingMaxes} from './originalChallengeCycle.js'
 import { saveOfflineSession, readOfflineSession, clearOfflineSession, writeOfflineState, readOfflineState, getPendingOfflineCount, syncOfflineQueue, hydrateOfflineQueue, offlineUuid, upsertOfflineFirst } from './offline'
 import { RouteMap, formatPace, formatOutdoorDuration } from './outdoorTracking'
@@ -1228,6 +1229,14 @@ function App() {
   const [sharedWorkoutActive,setSharedWorkoutActive] = useState(false)
   const [isAdmin,setIsAdmin] = useState(false)
   const [plannedToday,setPlannedToday] = useState(null)
+  const importedProgramsRef=useRef({})
+  const [importedProgramRows,setImportedProgramRows]=useState([])
+  const updateImportedPrograms=rows=>{
+    const mine=(rows||[]).filter(row=>row.status==='active')
+    importedProgramsRef.current=Object.fromEntries(mine.map(importedProgramFromLibrary)
+      .filter(Boolean).map(p=>[p.key,p]))
+    setImportedProgramRows(mine)
+  }
   const [resumeStandalonePlan,setResumeStandalonePlan] = useState(null)
   const [showRegularToday,setShowRegularToday] = useState(false)
   const [togetherTracking,setTogetherTracking] = useState([])
@@ -1496,8 +1505,8 @@ function App() {
     )
     const trackRows=afterStart.filter(row=>{
       if(row.workout?.tracking_program_key===key)return true
-      if(key.startsWith('archive:')){
-        const program=archiveProgramById[key.slice(8)]
+      if(key.startsWith('archive:')||key.startsWith('custom:')){
+        const program=key.startsWith('custom:')?importedProgramsRef.current[key]:archiveProgramById[key.slice(8)]
         return Boolean(program&&row.program===program.name)
       }
       if(key.startsWith('classic:')){
@@ -1515,9 +1524,10 @@ function App() {
       return rowDay===String(slot.matchDay||slot.title||'').trim().toLowerCase()
     }
 
-    if(key.startsWith('archive:')){
-      const archiveId=key.slice(8)
-      const program=archiveProgramById[archiveId]
+    if(key.startsWith('archive:')||key.startsWith('custom:')){
+      const imported=key.startsWith('custom:')
+      const archiveId=imported?key.slice(7):key.slice(8)
+      const program=imported?importedProgramsRef.current[key]:archiveProgramById[archiveId]
       if(!program?.getWeek||!program.weeksCount||!program.daysPerWeek)return null
       const slots=[]
       for(let programWeek=1;programWeek<=Number(program.weeksCount);programWeek++){
@@ -1541,7 +1551,7 @@ function App() {
       const weekChoices=slots.filter(slot=>slot.week===currentWeek)
       const upcoming=incomplete.slice(0,3)
       return {
-        kind:'archive',key,trackingId:track.id,startedAt:track.started_at,archiveId,name:program.name,
+        kind:imported?'imported':'archive',key,trackingId:track.id,startedAt:track.started_at,archiveId,name:program.name,
         category:program.category||'Program',durationLabel:program.durationLabel||'',
         completed:completedCount,total:slots.length,
         completedToday:workoutsToday>0,workoutsToday,
@@ -1739,6 +1749,7 @@ function App() {
         setTodayCompletedWorkouts(cached.todayCompletedWorkouts||[])
         setCompletedTrainingSessions(cached.completedTrainingSessions||[])
         setTogetherTracking(cached.togetherTracking||[])
+        updateImportedPrograms(cached.importedProgramRows||[])
         latestOneRmsRef.current=cached.oneRepMaxes||defaultOneRms
         oneRmSaveCoordinatorsRef.current.get(userId)?.rebase(latestOneRmsRef.current)
         setOneRepMaxes(latestOneRmsRef.current)
@@ -1752,7 +1763,7 @@ function App() {
         setDataLoading(false)
         return
       }
-      const [{data:profileData},{data:oneRmData},{data:tmData},{data:logsData},{data:todayPlans},{data:overnightPlans},{data:trackingData},{data:flexCompleted}] = await Promise.all([
+      const [{data:profileData},{data:oneRmData},{data:tmData},{data:logsData},{data:todayPlans},{data:overnightPlans},{data:trackingData},{data:flexCompleted},{data:libraryRows}] = await Promise.all([
         supabase.from('profiles').select('*').eq('id',userId).single(),
         supabase.from('one_rep_maxes').select('*').eq('user_id',userId).maybeSingle(),
         supabase.from('training_maxes').select('*').eq('user_id',userId).single(),
@@ -1761,6 +1772,7 @@ function App() {
         supabase.from('planned_workouts').select('*').eq('user_id',userId).eq('scheduled_date',previousDay).eq('status','started').limit(20),
         supabase.from('user_program_tracking').select('*').eq('user_id',userId).eq('status','tracking').order('updated_at',{ascending:false}),
         supabase.from('training_sessions').select('id,title,program,week,primary_lift,workout,session_date,completed_at').eq('user_id',userId).not('completed_at','is',null).order('completed_at',{ascending:false}).limit(1000),
+        supabase.from('program_library').select('id,owner_user_id,name,description,status,weeks_count,plan').eq('owner_user_id',userId).eq('status','active'),
       ])
 
       const savedMetaOneRms=session.user.user_metadata?.one_rep_maxes
@@ -1782,6 +1794,7 @@ function App() {
       } : defaultOneRms
 
       if (cancelled) return
+      updateImportedPrograms(libraryRows||[])
 
       const rows = logsData || []
       const profileProgram = profileData?.active_program
@@ -1797,9 +1810,9 @@ function App() {
       setHistory(rows)
 
       const activeSupportedTracks=(trackingData||[])
-        .filter(row=>/^(archive|classic):/.test(String(row.program_key||'')))
+        .filter(row=>/^(archive|classic|custom):/.test(String(row.program_key||'')))
         .sort((a,b)=>new Date(a.started_at)-new Date(b.started_at))
-      const activeArchiveTracks=activeSupportedTracks.filter(row=>String(row.program_key||'').startsWith('archive:'))
+      const activeArchiveTracks=activeSupportedTracks.filter(row=>/^(archive|custom):/.test(String(row.program_key||'')))
       const multipleTrackedPrograms=activeSupportedTracks.length>1
       const workoutsToday=(flexCompleted||[]).filter(row=>(row.session_date||localDateKey(row.completed_at))===today).length
       const activeTrackKeys=new Set(activeArchiveTracks.map(row=>row.program_key))
@@ -1901,10 +1914,11 @@ function App() {
       todayCompletedWorkouts:(todayCompletedWorkouts||[]).slice(0,25),
       completedTrainingSessions:(completedTrainingSessions||[]).slice(0,250),
       togetherTracking,
+      importedProgramRows,
       oneRepMaxes,
       isAdmin,
     })
-  },[session?.user?.id,dataLoading,profile,activeProgram,week,lift,history,plannedToday,resumeStandalonePlan,trackedProgramsInfo,trackedTodayInfo,todayCompletedWorkouts,completedTrainingSessions,togetherTracking,oneRepMaxes,isAdmin])
+  },[session?.user?.id,dataLoading,profile,activeProgram,week,lift,history,plannedToday,resumeStandalonePlan,trackedProgramsInfo,trackedTodayInfo,todayCompletedWorkouts,completedTrainingSessions,togetherTracking,importedProgramRows,oneRepMaxes,isAdmin])
 
   const plannedWorkoutHasProgress = row => {
     const workout=row?.workout||{}
@@ -1966,14 +1980,17 @@ function App() {
     if(!session?.user)return []
     if(navigator.onLine===false)return trackedProgramsInfo
     const today=localDateKey()
-    const [{data:trackingRows},{data:completedRows}]=await Promise.all([
+    const [{data:trackingRows},{data:completedRows},{data:libraryRows,error:libraryError}]=await Promise.all([
       supabase.from('user_program_tracking').select('*')
         .eq('user_id',session.user.id).eq('status','tracking').order('started_at'),
       supabase.from('training_sessions').select('id,title,program,week,primary_lift,workout,session_date,completed_at')
         .eq('user_id',session.user.id).not('completed_at','is',null)
-        .order('completed_at',{ascending:false}).limit(1000)
+        .order('completed_at',{ascending:false}).limit(1000),
+      supabase.from('program_library').select('id,owner_user_id,name,description,status,weeks_count,plan')
+        .eq('owner_user_id',session.user.id).eq('status','active')
     ])
-    const activeSupportedTracks=(trackingRows||[]).filter(row=>/^(archive|classic):/.test(String(row.program_key||'')))
+    if(!libraryError)updateImportedPrograms(libraryRows||[])
+    const activeSupportedTracks=(trackingRows||[]).filter(row=>/^(archive|classic|custom):/.test(String(row.program_key||'')))
     const infos=activeSupportedTracks.map(track=>buildTrackedProgramInfo(track,completedRows||[],today)).filter(Boolean)
     setTrackedProgramsInfo(infos)
     setTrackedTodayInfo(infos[0]||null)
@@ -2050,7 +2067,9 @@ function App() {
       activatePlannedWorkout(data)
       return
     }
-    const program=archiveProgramById[trackInfo.archiveId]
+    const program=trackInfo.kind==='imported'
+      ?importedProgramsRef.current[trackInfo.key]
+      :archiveProgramById[trackInfo.archiveId]
     const next=chosenWorkout
     if(!program?.getWeek || !next)return
     const today=localDateKey()
@@ -2084,7 +2103,12 @@ function App() {
         }
       }
     }
-    const plannedPayload=makePlannedFromArchive(program,next.week,next.dayIndex,today,baselineOneRms)
+    let plannedPayload
+    try {
+      plannedPayload=trackInfo.kind==='imported'
+        ?makePlannedFromImported(program,next.week,next.dayIndex,today,baselineOneRms)
+        :makePlannedFromArchive(program,next.week,next.dayIndex,today,baselineOneRms)
+    }catch(error){setWorkoutStartError(error?.message||'Could not build imported workout.');return}
     plannedPayload.status='started'
     plannedPayload.workout={...plannedPayload.workout,tracking_program_key:trackInfo.key,
       tracking_workout_key:next.trackingWorkoutKey,
