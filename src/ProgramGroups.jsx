@@ -135,6 +135,7 @@ export default function ProgramGroups({session,profile,programOptions=[]}){
       <div><span className="card-label">TRAIN THE SAME PROGRAM</span><h3>Program groups</h3></div>
     </div>
     <p className="helper-text">Join a private 12-week challenge or create your own. Everyone can train on their own schedule. A workout recap appears after the first finisher and updates as others finish.</p>
+    <p className="helper-text">Group sharing is visible only to group members. Your separate Together → Community sharing setting still controls posts to the wider WorkSet Community.</p>
     <div className="program-group-actions">
       <button type="button" className="secondary-action" onClick={()=>{setForm(form==='create'?'':'create');setError('')}}>+ Create group</button>
       <button type="button" className="secondary-action" onClick={()=>{setForm(form==='join'?'':'join');setError('')}}>Join by code</button>
