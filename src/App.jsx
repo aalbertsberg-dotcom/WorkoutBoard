@@ -9,6 +9,7 @@ import { WhiteboardPage } from './whiteboard'
 import { TrainingTimer } from './trainingTools'
 import { WorkoutCoach, MetconTracker, AccountSecurityPanel, BackupRestorePanel, WorkoutSettingsPanel } from './advancedFeatures'
 import { archiveProgramById, makePlannedFromArchive } from './archivePrograms'
+import {ORIGINAL_CHALLENGE_ID,originalChallengeStartingMaxes} from './originalChallengeCycle.js'
 import { saveOfflineSession, readOfflineSession, clearOfflineSession, writeOfflineState, readOfflineState, getPendingOfflineCount, syncOfflineQueue, hydrateOfflineQueue, offlineUuid, upsertOfflineFirst } from './offline'
 import { RouteMap, formatPace, formatOutdoorDuration } from './outdoorTracking'
 import WorkoutHistory from './workoutHistory'
@@ -2053,9 +2054,28 @@ function App() {
     const next=chosenWorkout
     if(!program?.getWeek || !next)return
     const today=localDateKey()
-    const plannedPayload=makePlannedFromArchive(program,next.week,next.dayIndex,today,oneRepMaxes)
+    let baselineOneRms=oneRepMaxes
+    if(program.id===ORIGINAL_CHALLENGE_ID){
+      const {data:track,error:trackError}=await supabase.from('user_program_tracking')
+        .select('program_version_id').eq('id',trackInfo.trackingId)
+        .eq('user_id',session.user.id).maybeSingle()
+      if(trackError){setWorkoutStartError('Could not verify program baseline: '+trackError.message);return}
+      if(track?.program_version_id){
+        const {data:version,error:versionError}=await supabase.from('program_versions')
+          .select('snapshot').eq('id',track.program_version_id)
+          .eq('user_id',session.user.id).maybeSingle()
+        if(versionError){setWorkoutStartError('Could not load original program maxes: '+versionError.message);return}
+        const stored=version?.snapshot?.starting_one_rms
+        if(stored&&Object.keys(stored).length)baselineOneRms=stored
+      }
+    }
+    const plannedPayload=makePlannedFromArchive(program,next.week,next.dayIndex,today,baselineOneRms)
     plannedPayload.status='started'
-    plannedPayload.workout={...plannedPayload.workout,tracking_program_key:trackInfo.key,tracking_workout_key:next.trackingWorkoutKey,tracking_started_at:trackInfo.startedAt||null,started_explicitly:true}
+    plannedPayload.workout={...plannedPayload.workout,tracking_program_key:trackInfo.key,
+      tracking_workout_key:next.trackingWorkoutKey,
+      ...(program.id===ORIGINAL_CHALLENGE_ID?{
+        challenge_starting_one_rms:originalChallengeStartingMaxes(baselineOneRms)}:{}),
+      tracking_started_at:trackInfo.startedAt||null,started_explicitly:true}
     const {data,error}=await createPlannedWorkout(plannedPayload)
     if(error){setWorkoutStartError(error.message);return}
     setTrackedTodayInfo(trackInfo)
