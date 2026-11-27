@@ -882,6 +882,7 @@ export const archiveProgramById = Object.fromEntries(allArchivePrograms.map(p=>[
 const archiveRound5 = n => Math.round(Number(n||0)/5)*5
 
 function archiveLiftFromText(name,prescription='',note='') {
+  if(String(name||'').trim().toLowerCase()==='press')return 'Press'
   const text=(String(name||'')+' '+String(prescription||'')+' '+String(note||'')).toLowerCase()
   if(/bench/.test(text)) return 'Bench'
   if(/deadlift|rack pull|trap bar/.test(text)) return 'Deadlift'
