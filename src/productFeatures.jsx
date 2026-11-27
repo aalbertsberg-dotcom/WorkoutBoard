@@ -640,6 +640,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
 
   const finish=async()=>{
     if (!planned?.id || finishing || (quickCardio&&!canFinishCardio)) return
+    if(cyclePending){setSaveState('Waiting for Week 6 test results before finishing.');return}
     if(isOriginalChallengeMaxTest(planned)){
       const testSets=(workout.exercises||[]).flatMap(item=>
         (item.setProgress||[]).filter(isOriginalChallengeTestSet))
@@ -1188,7 +1189,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
                   requestAnimationFrame(()=>goToNextExercise(i))
                 }
                 window.dispatchEvent(new CustomEvent('workoutboard:rest-timer',{detail:{seconds:rest}}))
-              } } disabled={cyclePending}>Complete Set {activeIndex+1}</button>
+              }} disabled={cyclePending}>Complete Set {activeIndex+1}</button>
               <button type="button" className="secondary-action next-exercise-button" onClick={()=>goToNextExercise(i)}>Next</button>
               </div>
             </section>}
