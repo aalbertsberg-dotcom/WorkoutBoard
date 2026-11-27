@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
 import {originalChallengeProgram} from '../src/programSources/originalChallenge.js'
+import {originalChallengeProgramMaxes,originalChallengeStartingMaxes} from '../src/originalChallengeCycle.js'
 import {partnerSetTarget} from '../src/programSetTargets.js'
 import {ORIGINAL_CHALLENGE_NAME,ORIGINAL_CHALLENGE_KEY,
   isOriginalChallengeMaxTest,isOriginalChallengeTestSet,
@@ -26,7 +27,7 @@ const row=(lift,weight,reps,completed_at='2026-12-22T15:00:00Z',other={})=>({
 
 test('Week 6 records actual reps at 100% TM, never the template 3+',()=>{
   const result=originalChallengeCompletedTest({exercises:[top('Squat',265,7)]})
-  assert.deepEqual(result,[{lift:'Squat',weight:265,reps:7,estimated_1rm:326.83}])
+  assert.deepEqual(result,[{lift:'Squat',weight:265,reps:7,estimated_1rm:326.7715}])
   assert.deepEqual(originalChallengeCompletedTest({exercises:[top('Squat',265,'')]}),[])
   assert.deepEqual(originalChallengeCompletedTest({exercises:[top('Squat',265,null)]}),[])
   assert.deepEqual(originalChallengeCompletedTest({exercises:[top('Squat',265,3,{done:false})]}),[])
@@ -38,10 +39,10 @@ test('Week 6 records actual reps at 100% TM, never the template 3+',()=>{
 test('Week 7-9 loads reset estimated 1RM; Week 10-12 adds 10/5 lb to NEW 85% TM',()=>{
   const rows=[row('Squat',265,7),row('Bench',185,5),row('Deadlift',285,4),row('Press',125,8)]
   const {maxes,results}=originalChallengeWeek6Estimates(rows,'2026-11-28T00:00:00Z')
-  assert.equal(maxes.Squat,326.83)
-  assert.equal(maxes.Bench,215.83)
-  assert.equal(maxes.Deadlift,323)
-  assert.equal(maxes.Press,158.33)
+  assert.ok(Math.abs(maxes.Squat-326.7715)<1e-8)
+  assert.ok(Math.abs(maxes.Bench-215.8025)<1e-8)
+  assert.ok(Math.abs(maxes.Deadlift-322.962)<1e-8)
+  assert.ok(Math.abs(maxes.Press-158.3)<1e-8)
   assert.equal(results.Squat.reps,7)
   const set=(lift,week,pct)=>({weight_lift:lift,weight_basis:'tm',pct,
     tm_offset:originalChallengeProgram.getTrainingMaxOffset(week,lift)})
@@ -65,7 +66,7 @@ test('only this completed program run can reset its training max',()=>{
   const selected=originalChallengeWeek6Estimates([old,newer,wrongProgram,wrongWeek,wrongKey,laterRetest],
     '2026-11-28T00:00:00Z')
   assert.deepEqual(Object.keys(selected.maxes),['Squat'])
-  assert.equal(selected.maxes.Squat,330)
+  assert.ok(Math.abs(selected.maxes.Squat-329.945)<1e-8)
   assert.equal(selected.results.Squat.reps,6)
 })
 
@@ -94,11 +95,45 @@ test('current workout loads the Week 6 result by run and requires real max-test 
   const plan=readFileSync(new URL('../src/platform.jsx',import.meta.url),'utf8')
   assert.match(src,/originalChallengeWeek6Estimates\(rows\|\|\[\],runStartedAt\)/)
   assert.match(src,/\.gte\('completed_at',runStartedAt\)/)
-  assert.match(src,/const workoutOneRms=\{\.\.\.oneRepMaxes,\.\.\.cycleMaxes\}/)
+  assert.match(src,/originalChallengeProgramMaxes\(planned\?\.source_week,initialMaxes,cycleMaxes\)/)
   assert.match(src,/partnerSetTarget\(workoutOneRms,activeSet\)/)
   assert.match(src,/partnerSetTarget\(workoutOneRms,set\)/)
   assert.match(src,/isOriginalChallengeMaxTest\(planned\)&&isOriginalChallengeTestSet\(activeSet\)/)
   assert.match(src,/set\.actual_reps==null/)
   assert.match(app,/tracking_started_at:trackInfo\.startedAt\|\|null/)
   assert.match(plan,/tracking_started_at:activeTrack\?\.started_at\|\|null/)
+})
+
+
+test('Excel formula uses exactly 0.0333 reps factor, not /30, with full precision',()=>{
+  const result=originalChallengeCompletedTest({exercises:[top('Squat',265,7)]})[0]
+  assert.ok(Math.abs(result.estimated_1rm-(265*7*0.0333+265))<1e-8)
+  assert.notEqual(result.estimated_1rm,265*(1+7/30))
+})
+
+test('Week 7+ rejects old 1RM fallback when no 6th-week max is recorded',()=>{
+  const original={Squat:300,Bench:185,Deadlift:315,Press:145}
+  const newMax={Squat:325}
+  assert.deepEqual(originalChallengeProgramMaxes(1,original,{}),original)
+  assert.deepEqual(originalChallengeProgramMaxes(6,original,newMax),original)
+  assert.deepEqual(originalChallengeProgramMaxes(7,original,newMax),newMax)
+  assert.deepEqual(originalChallengeProgramMaxes(10,original,newMax),newMax)
+  assert.deepEqual(originalChallengeProgramMaxes(7,original,{}),{})
+})
+
+test('program baseline is a separate snapshot and cannot be mutated by later global 1RM edits',()=>{
+  const values={Squat:300,Bench:185,Deadlift:315,Press:145}
+  const saved=originalChallengeStartingMaxes(values)
+  values.Squat=350
+  assert.equal(saved.Squat,300)
+  assert.equal(originalChallengeProgramMaxes(4,saved,{Squat:390}).Squat,300)
+  const runner=readFileSync(new URL('../src/productFeatures.jsx',import.meta.url),'utf8')
+  const app=readFileSync(new URL('../src/App.jsx',import.meta.url),'utf8')
+  const platform=readFileSync(new URL('../src/platform.jsx',import.meta.url),'utf8')
+  assert.match(runner,/challenge_starting_one_rms/)
+  assert.match(runner,/const missingOneRms=needsChallengeCycle\?\[\]:missingWorkoutOneRms/)
+  assert.match(runner,/const lacksTestResult=needsChallengeCycle/)
+  assert.match(runner,/const lacksTest=needsChallengeCycle/)
+  assert.match(app,/challenge_starting_one_rms:originalChallengeStartingMaxes\(baselineOneRms\)/)
+  assert.match(platform,/starting_one_rms:originalChallengeStartingMaxes\(oneRepMaxes\)/)
 })
