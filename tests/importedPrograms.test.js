@@ -10,7 +10,7 @@ import {
 } from '../src/importedPrograms.js'
 
 const row=(...values)=>values.map(value=>({value:String(value??''),formula:false}))
-const sheet=(...lines)=>[{name:'Sheet1',rows:lines.map(row)}]
+const sheet=(...lines)=>[{name:'Sheet1',rows:lines.map(values=>row(...values))}]
 const headers=row('Week','Day','Exercise','Sets','Reps','Percent','Basis','Weight','Notes')
 const simple=()=>convertSpreadsheetSheets([{
   name:'Sheet1',rows:[
