@@ -35,8 +35,7 @@ export function originalChallengePrescription(schemeName){
   if(!s)throw Error('Unknown Original Challenge scheme');
   return s.percent.map((pct,i)=>String(s.reps[i])+' @ '+pct+'% TM').join('; ');
 }
-const lift=(name,scheme)=>ex(name,originalChallengePrescription(scheme),
-  'Each set percentage is calculated from the 85% training max, not directly from 1RM.');
+const lift=(name,scheme)=>ex(name,originalChallengePrescription(scheme));
 const doubleDay=(week,index,first,firstScheme,second,secondScheme)=>day(
   'Day '+index+' - '+first+' / '+second,
   [...warmup,lift(first,firstScheme),lift(second,secondScheme),...optionalAssistance],
