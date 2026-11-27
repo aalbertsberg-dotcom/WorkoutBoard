@@ -84,9 +84,9 @@ test('Week 6 test determines NEW 1RM without adding 10 lb to the 1RM result',()=
   assert.equal(originalChallengeTrainingMax(expected,10,'Squat'),expected*.85+10)
 })
 
-test('active 531 workout prominently explains that the increase goes to TM, not 1RM',()=>{
+test('active 531 workout shows prescribed increases without a redundant 1RM disclaimer',()=>{
   const runner=readFileSync(new URL('../src/productFeatures.jsx',import.meta.url),'utf8')
-  assert.match(runner,/Week \{planned.source_week\} · 5\/3\/1 weight rule/)
-  assert.match(runner,/The increase is NOT added to the 1RM/)
-  assert.match(runner,/originalChallengeTrainingMaxOffset\(planned.source_week,'Squat'\)/)
+  assert.doesNotMatch(runner,/original-challenge-tm-rule/)
+  assert.doesNotMatch(runner,/The increase is NOT added to the 1RM/)
+  assert.match(runner,/program-increment-indicator/)
 })

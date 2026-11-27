@@ -42,8 +42,13 @@ export function programWeightNotes(preview){
   }
   if(preview?.id==='531-original-challenge')return {
     heading:'531 Original Challenge · weight calculations',
-    summary:'Training max = 85% of 1RM. Programmed +5/+10 lb increases go to the TRAINING MAX, never to the 1RM.',
-    detail:'Weeks 4–6 and 10–12: +5 lb to the Bench/Press training max and +10 lb to the Squat/Deadlift training max. The saved 1RM is NOT increased. Week 6 actual test reps establish a new estimated 1RM for this program only; Weeks 7–9 use 85% of that new estimate, then Weeks 10–12 add +5/+10 lb to the NEW training max. Every set uses its prescribed percentage of the resulting TM, rounded to the nearest 5 lb. These required increases are already applied; do not tap +5/+10 again unless adding extra weight to that individual set.'
+    summary:'85% training max. Programmed +5/+10 lb increases are calculated automatically.',
+    detail:'Weeks 4–6 and 10–12: +5 lb to Bench/Press TM and +10 lb to Squat/Deadlift TM. Week 6 actual test reps establish new estimated maxes used for Weeks 7–12. Set weights use the program percentages and round to the nearest 5 lb. Automatic increases are already included; optional +5/+10 buttons only adjust an individual set.'
+  }
+  if(preview?.kind==='classic'&&['andy-531-original-6','new-531-leader-anchor-11','andy-bbb-jokers-11','andy-hybrid-12'].includes(preview.id))return {
+    heading:'5/3/1 weight progression',
+    summary:'Sets use the 85% training max. +5 lb upper / +10 lb lower increases are applied automatically at new cycles.',
+    detail:'Your current week determines the planned training max. Adjusting a workout set manually changes that set only.'
   }
   if(preview?.kind==='classic'&&preview?.weightBasis==='tm')return {
     heading:'How this program calculates weights',
