@@ -3750,6 +3750,16 @@ function App() {
                   <div><span>Sets</span><strong>{completionSummary.sets||0}</strong></div>
                   <div><span>Volume</span><strong>{Number(completionSummary.volume||0).toLocaleString()} lb</strong></div>
                 </div>}
+                {completionSummary.challengeTestResults?.length>0&&<section className="simple-card challenge-test-summary">
+                  <div className="section-heading"><div><span className="card-label">531 ORIGINAL CHALLENGE · WEEK {completionSummary.challengeTestWeek} TEST</span><h3>Estimated 1RM test results</h3></div></div>
+                  <p className="helper-text">From your actual completed 100% training-max set. Excel formula: weight × (1 + reps × 0.0333). Week 6 results automatically power Weeks 7–12; Week 12 results are saved with your workout. Your other programs' saved 1RMs are unchanged.</p>
+                  <div className="baseline-result-list">
+                    {completionSummary.challengeTestResults.map(result=><article key={result.lift}>
+                      <div className="baseline-result-head"><strong>{result.lift}</strong><span>{result.weight} lb × {result.reps} reps</span></div>
+                      <div className="baseline-result-values"><strong>{Number(result.estimated_1rm).toFixed(2)} lb estimated 1RM</strong></div>
+                    </article>)}
+                  </div>
+                </section>}
                 {baselineFinishReview?.results?.length>0&&<section className="baseline-finish-review">
                   <div className="section-heading"><div><span className="card-label">STRENGTH BASELINE</span><h3>Review your calculated 1RMs</h3></div></div>
                   <p className="helper-text">Calculated from the best completed set for each tested lift using your actual reps. Nothing changes until you choose Use.</p>
