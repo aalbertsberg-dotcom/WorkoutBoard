@@ -31,7 +31,7 @@ test('each completed workout produces a single updating group post',()=>{
   assert.match(migration,/on conflict\(post_id,user_id\) do update/)
   assert.match(migration,/after insert or update of completed_at/)
   assert.match(migration,/on public\.training_sessions/)
-  assert.match(groups,/sharing members finished/)
+  assert.match(groups,/sharing members shared/)
 })
 test('community includes both joinable groups and live participant recaps',()=>{
   assert.match(app,/import ProgramGroups from '.\/ProgramGroups\.jsx'/)
