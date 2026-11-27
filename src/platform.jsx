@@ -138,6 +138,8 @@ export function PlatformProgress({
   const [community,setCommunity] = useState([])
   const [flexSessions,setFlexSessions] = useState([])
   const [measurements,setMeasurements] = useState([])
+  const [oneRmHistory,setOneRmHistory] = useState([])
+  const [oneRmHistoryError,setOneRmHistoryError] = useState('')
   const [ready,setReady] = useState(null)
   const [message,setMessage] = useState('')
   const [progressSection,setProgressSection] = useState(initialSection)
@@ -160,19 +162,25 @@ export function PlatformProgress({
         setCommunity(cached?.community||[])
         setFlexSessions(cached?.flexSessions||[])
         setMeasurements(toolsCached?.measurements||cached?.measurements||[])
+        setOneRmHistory(cached?.oneRmHistory||[])
       }
       return
     }
-    const [{data:communityRows,error:communityError},{data:sessionRows},{data:measurementRows}] = await Promise.all([
+    const [{data:communityRows,error:communityError},{data:sessionRows},{data:measurementRows},{data:oneRmHistoryRows,error:oneRmHistoryLoadError}] = await Promise.all([
       supabase.from('community_activity').select('*').order('created_at',{ascending:false}).limit(50),
       supabase.from('training_sessions').select('*').eq('user_id',session.user.id).is('legacy_log_id',null).not('completed_at','is',null).order('completed_at',{ascending:false}).limit(250),
       supabase.from('body_measurements').select('*').eq('user_id',session.user.id).order('measured_on',{ascending:true}).limit(500),
+      supabase.from('one_rep_max_history').select('id,lift,old_value,new_value,changed_by,change_source,recorded_at')
+        .eq('user_id',session.user.id).order('recorded_at',{ascending:false}).limit(400),
     ])
     if (communityError) { setReady(false); return }
     setReady(true)
     const nextCommunity=communityRows||[]
     const nextSessions=sessionRows||[]
     const nextMeasurements=measurementRows||[]
+    const nextOneRmHistory=oneRmHistoryLoadError?[]:(oneRmHistoryRows||[])
+    setOneRmHistoryError(oneRmHistoryLoadError?.message||'')
+    setOneRmHistory(nextOneRmHistory)
     setCommunity(nextCommunity)
     setFlexSessions(nextSessions)
     setMeasurements(nextMeasurements)
@@ -180,6 +188,7 @@ export function PlatformProgress({
       community:nextCommunity,
       flexSessions:nextSessions,
       measurements:nextMeasurements,
+      oneRmHistory:nextOneRmHistory,
     })
   }
 
@@ -672,6 +681,21 @@ export function PlatformProgress({
           <p className="helper-text">These values are used to calculate program weights. They are different from estimated 1RMs derived from finished workout sets below.</p>
           <div className="progress-saved-max-grid">{lifts.map(name=><div key={name}><span>{name}</span><strong>{Number(oneRepMaxes?.[name])>0?Number(oneRepMaxes[name]).toFixed(2)+' lb':'Not set'}</strong></div>)}</div>
           {onTrackStrength&&<button type="button" className="wide-button" onClick={onTrackStrength}>Track / update saved 1RMs ›</button>}
+          <details className="progress-saved-max-history">
+            <summary>Saved 1RM change history ({oneRmHistory.filter(row=>row.change_source!=='baseline').length})</summary>
+            <p className="helper-text">A history of saved max changes by the user or admin, separate from estimated strength from completed workouts. Tracking begins November 27, 2026.</p>
+            {oneRmHistoryError?<p className="helper-text" role="status">History unavailable: {oneRmHistoryError}</p>:
+              oneRmHistory.length?<div className="recent-pr-list">
+                {oneRmHistory.slice(0,40).map(row=><div key={row.id}>
+                  <div>
+                    <strong>{row.lift} · {row.new_value==null?'Cleared':Number(row.new_value).toFixed(2)+' lb'}</strong>
+                    <span>{new Date(row.recorded_at).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})}
+                      {' · '}{row.change_source==='baseline'?'Starting snapshot':row.change_source==='admin'?'Admin':row.change_source==='user'?'You':'Server-side change'}</span>
+                  </div>
+                  <b>{row.change_source==='baseline'?'—':(row.old_value==null?'Not set':Number(row.old_value).toFixed(2))+' → '+(row.new_value==null?'—':Number(row.new_value).toFixed(2))}</b>
+                </div>)}
+              </div>:<p className="helper-text">No saved 1RM changes recorded yet.</p>}
+          </details>
         </section>
         <section className="simple-card analytics-chart-card">
           <div className="section-heading"><div><span className="card-label">STRENGTH TREND</span><h3>Estimated 1RM over time</h3></div></div>
