@@ -4,6 +4,7 @@ import {completedMainLiftSets,strengthTrendFromCompletedSets} from './personalRe
 import { supabase } from './supabase'
 import { DialogPortal,OverlayPortal,confirmWorkset } from './worksetDialogs'
 import { allArchivePrograms, archiveProgramById, makePlannedFromArchive } from './archivePrograms'
+import ProgramCommunity from './ProgramCommunity.jsx'
 import { ProgressToolbox, WorkoutTemplates } from './trainingTools'
 import { AdvancedProgressCenter, PlannedWorkoutTools, ShareImportPanel, AdminDashboardSummary } from './advancedFeatures'
 import { readOfflineState, writeOfflineState, upsertOfflineFirst } from './offline'
@@ -844,6 +845,7 @@ export function PlanPage({
   onStartStrengthBaseline,
   onScheduleClassicWorkout,
   oneRepMaxes,
+  onOpenCommunity=null,
 }) {
   const [ready,setReady] = useState(null)
   const [trackingReady,setTrackingReady] = useState(true)
@@ -1573,6 +1575,7 @@ export function PlanPage({
           {trackingReady&&!trackedKeys.has(preview.key)&&!pausedKeys.has(preview.key)&&preview.kind!=='shared'&&<button className="wide-button" onClick={()=>startTracking(preview)}>{tracked.length>=activeProgramLimit?'3 active · choose one to pause':completedKeys.has(preview.key)?'Track this program again':'Track this program'}</button>}
           {message&&<div className="status-message preview-action-status">{message}</div>}
         </div>
+        <ProgramCommunity key={preview.key} programName={preview.name} session={session} sharingEnabled={Boolean(profile?.community_opt_in)} onOpenCommunity={onOpenCommunity}/>
       </section>}
 
       {limitPrompt&&<OverlayPortal onDismiss={()=>setLimitPrompt(null)}><div className="program-choice-backdrop" onClick={()=>setLimitPrompt(null)}>
