@@ -85,7 +85,7 @@ function MeOneRmField({name,value,onSave}){
       const result=await onSave(name,draft.trim())
       if(result?.error){setMessage(result.error.message||'Save failed.');return}
       setDirty(false)
-      setMessage(result?.offline?'Saved offline — will sync.':'Saved.')
+      setMessage(result?.offline?'✓ '+name+' saved offline — will sync.':'✓ '+name+' '+(draft.trim()===''?'cleared':Number(draft).toFixed(2)+' lb')+' saved.')
     }catch(error){setMessage(error?.message||'Save failed.')}
     finally{setSaving(false)}
   }
@@ -101,7 +101,7 @@ function MeOneRmField({name,value,onSave}){
       <button type="button" className="me-max-save" disabled={!dirty||saving}
         onClick={commit}>{saving?'Saving…':'Save'}</button>
     </div>
-    {message&&<small role="status" className="me-inline-status">{message}</small>}
+    {message&&<div role={message.startsWith('✓')?'status':'alert'} className={'me-rm-save-feedback '+(message.startsWith('✓')?'success':'error')}>{message}</div>}
   </div>
 }
 
