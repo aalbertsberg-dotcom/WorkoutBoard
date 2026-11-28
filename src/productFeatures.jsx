@@ -691,6 +691,8 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
   const finishExerciseNow=index=>{
     const item=workout.exercises?.[index]
     if(!item||!unfinishedWorkoutSets(item).length)return
+    if(!(item.setProgress||[]).some(set=>set.done)&&
+      !window.confirm('Skip this exercise? No completed sets will be recorded.'))return
     setSaveState('Unsaved')
     setWorkout(v=>({...v,exercises:(v.exercises||[]).map((exercise,i)=>
       i===index?completeExerciseEarly(exercise):exercise)}))
@@ -1431,13 +1433,15 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
                   requestAnimationFrame(()=>goToNextExercise(i))
                 }
                 window.dispatchEvent(new CustomEvent('workoutboard:rest-timer',{detail:{seconds:rest}}))
-              }} disabled={cyclePending}>Complete Set {activeIndex+1}</button>
+              }} disabled={cyclePending}>{activeSet.drop_set?'Complete Drop '+activeSet.drop_stage:'Complete Set '+(activeIndex+1)}</button>
               <button type="button" className="secondary-action next-exercise-button" onClick={()=>goToNextExercise(i)}>Next</button>
               </div>
             </section>}
             {unfinishedWorkoutSets(item).length>0&&<div className="exercise-finish-row">
               <button type="button" className="finish-exercise-early" onClick={()=>finishExerciseNow(i)}>
-                {(item.setProgress||[]).some(set=>set.done)?'✓ Finish exercise':'Skip exercise'}
+                {(item.setProgress||[]).some(set=>set.done)
+                  ?'✓ Finish exercise ('+item.setProgress.filter(set=>set.done).length+' of '+item.setProgress.length+' sets)'
+                  :'Skip exercise'}
               </button>
               <small>Unfinished sets are marked skipped, not completed. You can reopen them.</small>
             </div>}
