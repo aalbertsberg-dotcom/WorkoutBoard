@@ -9467,3 +9467,23 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
 .preview-day-toggle>b{font-size:18px;color:#c7e997;flex:0 0 auto}
 .preview-day-toggle:focus-visible{outline:2px solid #a7f3d0;outline-offset:-3px}
 #preview-day-exercises:not([hidden]){display:grid;gap:4px;padding:10px 12px}
+
+/* Focused release journal. */
+.whats-new-link,.whats-new-entry{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;text-align:left;min-width:0;border:1px solid #354d6b;border-radius:12px;background:#142238;color:#e5edf9;padding:12px;min-height:56px}
+.whats-new-link span,.whats-new-entry span{display:grid;gap:4px;min-width:0;overflow-wrap:anywhere}
+.whats-new-link small,.whats-new-entry small,.whats-new-meta{font-size:12px;color:#a9bacf}
+.whats-new-link b{font-size:22px;color:#c7e997}
+.whats-new-page{display:grid;gap:12px;min-width:0}
+.whats-new-page .simple-card{margin:0;min-width:0;display:grid;gap:10px}
+.whats-new-page h3{margin:0;font-size:17px}
+.whats-new-page p{margin:0;line-height:1.5}
+.whats-new-notes{display:grid;gap:8px;margin:0;padding:0;list-style:none}
+.whats-new-notes li{display:grid;gap:4px;line-height:1.45;font-size:14px}
+.whats-new-kind{color:#c7e997;font-size:11px;font-weight:750;text-transform:uppercase}
+.whats-new-page a{color:#c7e997;overflow-wrap:anywhere}
+.whats-new-page details>summary{cursor:pointer;font-weight:750;min-height:44px}
+.whats-new-search{display:grid;gap:6px;color:#b8c8de;font-size:12px}
+.whats-new-search input{min-width:0;width:100%;min-height:44px;background:#0d1626;color:#fff;border:1px solid #354d6b;border-radius:9px;padding:9px 12px;font-size:16px}
+.whats-new-log{display:grid;gap:7px;margin-top:10px}
+.whats-new-entry{display:grid;grid-template-columns:minmax(0,1fr) auto;min-height:48px;font-size:13px;text-decoration:none}
+.whats-new-entry code{font-size:11px;color:#c7e997}

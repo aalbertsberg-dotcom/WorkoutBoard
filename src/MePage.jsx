@@ -7,6 +7,7 @@ import {useEffect,useState} from 'react'
 import {isNativeAndroid} from './androidUpdates.js'
 import WorksetInbox from './WorksetInbox.jsx'
 import ExerciseHistoryManager from './ExerciseHistoryManager.jsx'
+import WhatsNewPage from './WhatsNewPage.jsx'
 
 /** The Me landing page is navigation-first, with secondary tools closed by default.
  * Existing tools are mounted only when explicitly expanded. */
@@ -31,13 +32,18 @@ export default function MePage({
     const state=savedNav()
     if(state){
       const previous=state.meView||'home'
+      if(previous==='updates'&&state.meUpdatesParent&&!replace&&(view==='settings'||view==='home')){
+        window.history.go(view==='home'&&state.meParent?-2:-1)
+        return
+      }
       if(view==='home'&&previous!=='home'&&state.meParent&&!replace){
         window.history.back()
         return
       }
       if(view!==previous||track!==state.meTrack){
-        const push=!replace&&previous==='home'&&view!=='home'
-        const next={...state,meView:view,meTrack:track,meParent:push||(!replace&&state.meParent),meFromProgress:!replace&&state.meFromProgress,
+        const nestedUpdates=!replace&&previous==='settings'&&view==='updates'
+        const push=!replace&&((previous==='home'&&view!=='home')||nestedUpdates)
+        const next={...state,meView:view,meTrack:track,meParent:(!nestedUpdates&&push)||(!replace&&state.meParent),meUpdatesParent:nestedUpdates,meFromProgress:!replace&&state.meFromProgress,
           worksetDepth:Math.max(0,Number(state.worksetDepth)||0)+(push?1:0)}
         if(push)window.history.pushState(next,'',window.location.href)
         else window.history.replaceState(next,'',window.location.href)
@@ -62,7 +68,7 @@ export default function MePage({
     const nativeBack=event=>{
       if(meView==='home')return
       event.preventDefault()
-      openMeView('home')
+      openMeView(meView==='updates'?'settings':'home')
     }
     window.addEventListener('workset-native-back',nativeBack)
     return()=>window.removeEventListener('workset-native-back',nativeBack)
@@ -266,7 +272,7 @@ export default function MePage({
     </div>
 
 
-    </>:<>
+    </>:meView==='updates'?<WhatsNewPage onBack={()=>openMeView('settings')}/>:<>
     <div className="me-subpage-header">
       <button type="button" className="me-subpage-back" onClick={()=>openMeView('home')} aria-label="Back to Me">
         <span aria-hidden="true">←</span> Me
@@ -275,6 +281,9 @@ export default function MePage({
       <p>Manage WorkSet preferences and your account</p>
     </div>
     <AppUpdateControls onRefresh={onRefreshWorkset} refreshBlocked={refreshBlocked}/>
+    <button type="button" className="whats-new-link" onClick={()=>openMeView('updates')}>
+      <span><strong>What's New</strong><small>Update history · features, fixes and improvements</small></span><b aria-hidden="true">›</b>
+    </button>
     <div className="me-section-group">
       <MeSection id="preferences" title="Workout Preferences"
         description="Timers, sound, vibration and equipment" icon="⚙">

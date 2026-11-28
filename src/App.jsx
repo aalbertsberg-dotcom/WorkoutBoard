@@ -3721,10 +3721,10 @@ function App() {
         </header>
 
         <nav className="primary-nav">
-          <button className={activeTab === 'today' ? 'active' : ''} onClick={openToday}><b>●</b><span>Today</span></button>
-          <button className={activeTab === 'together' ? 'active' : ''} onClick={() => navigateTo('together')}><b>⇄</b><span>Together</span>{(incomingTogetherInvites.length+incomingFriendRequests.length)>0&&<i className="nav-invite-badge">{incomingTogetherInvites.length+incomingFriendRequests.length}</i>}</button>
-          <button className={activeTab === 'program' ? 'active' : ''} onClick={() => navigateTo('program')}><b>▦</b><span>Plan</span></button>
-          <button className={activeTab === 'whiteboard' ? 'active' : ''} onClick={() => navigateTo('whiteboard')}><b>□</b><span>Board</span></button>
+          <button className={activeTab === 'today' ? 'active' : ''} aria-label="Today" aria-current={activeTab==='today'?'page':undefined} onClick={openToday}><b>●</b><span>Today</span></button>
+          <button className={activeTab === 'together' ? 'active' : ''} aria-label="Together" aria-current={activeTab==='together'?'page':undefined} onClick={() => navigateTo('together')}><b>⇄</b><span>Together</span>{(incomingTogetherInvites.length+incomingFriendRequests.length)>0&&<i className="nav-invite-badge">{incomingTogetherInvites.length+incomingFriendRequests.length}</i>}</button>
+          <button className={activeTab === 'program' ? 'active' : ''} aria-label="Plan" aria-current={activeTab==='program'?'page':undefined} onClick={() => navigateTo('program')}><b>▦</b><span>Plan</span></button>
+          <button className={activeTab === 'whiteboard' ? 'active' : ''} aria-label="Board" aria-current={activeTab==='whiteboard'?'page':undefined} onClick={() => navigateTo('whiteboard')}><b>□</b><span>Board</span></button>
           <button type="button" className={meNavActive?'active':''} aria-current={meNavActive?'page':undefined} onClick={openMe}><svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="7.5" r="3.5"/><path d="M5 20v-2a7 7 0 0 1 14 0v2"/></svg><span>Me</span></button>
         </nav>
 
@@ -4670,10 +4670,10 @@ function App() {
       </main>
 
       <nav className="mobile-bottom-nav app-level-mobile-nav" aria-label="Workset mobile navigation">
-        <button className={activeTab==='today'?'active':''} onClick={openToday}><b>●</b><span>Today</span></button>
-        <button className={activeTab==='together'?'active':''} onClick={()=>navigateTo('together')}><b>⇄</b><span>Together</span>{(incomingTogetherInvites.length+incomingFriendRequests.length)>0&&<i className="nav-invite-badge">{incomingTogetherInvites.length+incomingFriendRequests.length}</i>}</button>
-        <button className={activeTab==='program'?'active':''} onClick={()=>navigateTo('program')}><b>▦</b><span>Plan</span></button>
-        <button className={activeTab==='whiteboard'?'active':''} onClick={()=>navigateTo('whiteboard')}><b>□</b><span>Board</span></button>
+        <button className={activeTab==='today'?'active':''} aria-label="Today" aria-current={activeTab==='today'?'page':undefined} onClick={openToday}><b>●</b><span>Today</span></button>
+        <button className={activeTab==='together'?'active':''} aria-label="Together" aria-current={activeTab==='together'?'page':undefined} onClick={()=>navigateTo('together')}><b>⇄</b><span>Together</span>{(incomingTogetherInvites.length+incomingFriendRequests.length)>0&&<i className="nav-invite-badge">{incomingTogetherInvites.length+incomingFriendRequests.length}</i>}</button>
+        <button className={activeTab==='program'?'active':''} aria-label="Plan" aria-current={activeTab==='program'?'page':undefined} onClick={()=>navigateTo('program')}><b>▦</b><span>Plan</span></button>
+        <button className={activeTab==='whiteboard'?'active':''} aria-label="Board" aria-current={activeTab==='whiteboard'?'page':undefined} onClick={()=>navigateTo('whiteboard')}><b>□</b><span>Board</span></button>
         <button type="button" className={meNavActive?'active':''} aria-current={meNavActive?'page':undefined} onClick={openMe}><svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="7.5" r="3.5"/><path d="M5 20v-2a7 7 0 0 1 14 0v2"/></svg><span>Me</span></button>
       </nav>
 
