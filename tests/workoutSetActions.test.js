@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {completeExerciseEarly,completeExerciseSet,reopenExerciseSet,deleteWorkoutSet,
   addDropSet,addDropStage,validateDropStage,pendingWorkoutSet} from '../src/workoutSetActions.js'
 import {exerciseHistoryKey,resolveExerciseHistoryKey,exerciseAliasLookup,
-  exerciseHistoryNames,aggregateExerciseHistory} from '../src/exerciseIdentity.js'
+  exerciseHistoryNames,rankExerciseHistoryCandidates,aggregateExerciseHistory} from '../src/exerciseIdentity.js'
 
 const exercise=()=>({name:'Strict press',done:false,setProgress:[
   {set:1,reps:4,done:true,weight:'90'},
@@ -86,4 +86,13 @@ test('linked history combines confirmed sets, excludes skipped and drop sets fro
   assert.ok(index['iso lateral raise'].bestE>100)
   assert.equal(index['iso lateral raise'].sourceName,'Hammer ISO lateral')
   assert.deepEqual(exerciseHistoryNames(sessions),['Hammer ISO lateral','ISO lateral raises'])
+})
+
+test('similar names are suggested first but only linked by explicit user action',()=>{
+  const names=['Bench Press','Hammer ISO lateral','Seated Cable Row','Lateral raises']
+  const result=rankExerciseHistoryCandidates('ISO lateral raises',names)
+  assert.equal(result[0],'Lateral raises')
+  assert.ok(result.indexOf('Hammer ISO lateral')<result.indexOf('Bench Press'))
+  assert.notEqual(resolveExerciseHistoryKey('ISO lateral raises'),
+    resolveExerciseHistoryKey('Hammer ISO lateral'))
 })
