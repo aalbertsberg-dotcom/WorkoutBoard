@@ -768,7 +768,7 @@ test('Me can link and unlink names later; previous workout records remain untouc
   await expect(page.locator('.app-header h1')).toHaveText('Today',{timeout:15000})
   await page.locator('.account-chip').click()
   await expect(page.locator('.app-header h1')).toHaveText('Me')
-  await page.getByRole('button',{name:/Exercise Names & History/}).click()
+  await page.locator('.me-quick-links').getByRole('button',{name:/Exercise Names & History/}).click()
   const manager=page.getByRole('region',{name:'Manage exercise names'}).or(page.locator('.exercise-history-manager'))
   await expect(manager).toBeVisible()
   await manager.getByRole('textbox',{name:'Exercise to match'}).fill('iso lat')
