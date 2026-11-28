@@ -1,7 +1,7 @@
 const {test,expect}=require('@playwright/test')
 
 const userId='00000000-0000-4000-8000-000000000001'
-async function signedIn(page,{withStartedWalk=false,withStrengthSession=false,withOvernightWalk=false}={}){
+async function signedIn(page,{withStartedWalk=false,withStrengthSession=false,withOvernightWalk=false,withNotification=false}={}){
   await page.addInitScript(user=>{
     const expires=Math.floor(Date.now()/1000)+86400*365
     localStorage.setItem('sb-example-auth-token',JSON.stringify({
@@ -83,6 +83,16 @@ async function signedIn(page,{withStartedWalk=false,withStrengthSession=false,wi
     }
     if(url.includes('/rpc/is_workout_admin')){
       await route.fulfill({status:200,contentType:'application/json',headers,body:'false'})
+      return
+    }
+    if(withNotification && url.includes('/rest/v1/workset_notifications') && method==='GET'){
+      await route.fulfill({status:200,contentType:'application/json',headers,
+        body:JSON.stringify([{
+          id:'00000000-0000-4000-8000-000000000099',
+          kind:'friend_request',title:'Friend request',
+          body:'A friend wants to connect.',related_id:'00000000-0000-4000-8000-000000000098',
+          read_at:null,created_at:new Date().toISOString(),resolved_at:null
+        }])})
       return
     }
     if(url.includes('/rest/v1/profiles')){
@@ -530,5 +540,31 @@ test('Today keeps workouts first and offers Food & Water as the final activity c
   await page.getByRole('button',{name:'← Back'}).last().click()
   await expect(page.locator('.app-header h1')).toHaveText('Today')
   await expect(page.getByRole('heading',{name:'What are we doing today?'})).toBeVisible()
+  expect(errors).toEqual([])
+})
+
+test('Header bell previews notifications; full inbox opens inside Me, not over Today',async({page})=>{
+  const errors=[]
+  page.on('pageerror',error=>errors.push(error.message))
+  await signedIn(page,{withNotification:true})
+  await expect(page.locator('.app-header h1')).toHaveText('Today',{timeout:15000})
+  const bell=page.getByRole('button',{name:/1 unread WorkSet notifications/})
+  await expect(bell).toBeVisible({timeout:12000})
+  await bell.click()
+  const preview=page.getByRole('region',{name:'Recent notifications'})
+  await expect(preview).toBeVisible()
+  await expect(preview.getByText('Friend request',{exact:true})).toBeVisible()
+  await expect(page.locator('.ws-inbox-panel')).toHaveCount(0)
+  const box=await preview.boundingBox()
+  expect(box.x).toBeGreaterThanOrEqual(-1)
+  expect(box.x+box.width).toBeLessThanOrEqual(page.viewportSize().width+1)
+  await preview.getByRole('button',{name:'View all in Me'}).click()
+  await expect(page.locator('.app-header h1')).toHaveText('Me')
+  const section=page.locator('[data-me-section="inbox"]')
+  await expect(section.locator('.me-section-toggle')).toHaveAttribute('aria-expanded','true')
+  const full=section.locator('.ws-inbox-inline')
+  await expect(full).toBeVisible()
+  expect(await full.evaluate(el=>getComputedStyle(el).position)).toBe('relative')
+  await expect(page.locator('.ws-inbox-backdrop')).toHaveCount(0)
   expect(errors).toEqual([])
 })
