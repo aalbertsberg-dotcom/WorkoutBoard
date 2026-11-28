@@ -1,0 +1,65 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import {readFileSync} from 'node:fs'
+
+const read=path=>readFileSync(new URL('../'+path,import.meta.url),'utf8')
+const schema=read('supabase/migrations/20261128_workset_inbox_messaging.sql')
+const resolution=read('supabase/migrations/20261128_workset_notification_resolution.sql')
+const inbox=read('src/WorksetInbox.jsx')
+const groups=read('src/ProgramGroups.jsx')
+const app=read('src/App.jsx')
+const email=read('supabase/functions/workset-invite-email/index.ts')
+
+test('notification and message rows use authenticated member-only RLS',()=>{
+  for(const table of ['workset_notifications','program_group_invites','workset_chats','workset_chat_members','workset_chat_messages']){
+    assert.ok(schema.includes('alter table public.'+table+' enable row level security'))
+  }
+  assert.match(schema,/recipient_user_id=\(select auth\.uid\(\)\)/)
+  assert.match(schema,/public\.is_workset_chat_member\(chat_id\)/)
+  assert.match(schema,/revoke all on public\.workset_notifications/)
+  assert.match(schema,/grant select on public\.workset_notifications/)
+  assert.doesNotMatch(schema,/grant insert on public\.workset_chat_messages to authenticated/)
+  assert.match(schema,/revoke all on function public\.send_workset_message/)
+})
+test('new chat members must be friends or members of same program group',()=>{
+  assert.match(schema,/create or replace function public\.start_workset_direct_chat/)
+  assert.match(schema,/f\.status='accepted'/)
+  assert.match(schema,/create or replace function public\.start_workset_group_chat/)
+  assert.match(schema,/count_members<2 or count_members>20/)
+  assert.match(schema,/create or replace function public\.start_workset_program_chat/)
+  assert.match(schema,/from public\.program_group_members where group_id=target_group and user_id=caller/)
+  assert.match(schema,/workset_program_chat_sync after insert or delete/)
+})
+test('messages are bounded, notifications deduped, and invites resolve after response',()=>{
+  assert.match(schema,/length\(btrim\(body\)\) between 1 and 2000/)
+  assert.match(schema,/unique\(recipient_user_id,kind,related_id\)/)
+  assert.match(schema,/create trigger workset_friend_alert/)
+  assert.match(schema,/create trigger workset_live_invite_alert/)
+  assert.match(schema,/create trigger workset_group_invite_alert/)
+  assert.match(schema,/create trigger workset_message_alert/)
+  assert.match(resolution,/resolved_at=now\(\)/)
+  assert.match(inbox,/!row\.resolved_at/)
+})
+test('web header has unread notification bell and direct/group messaging',()=>{
+  assert.match(app,/import WorksetInbox from '.\/WorksetInbox\.jsx'/)
+  assert.match(app,/<WorksetInbox session=\{session\}/)
+  assert.match(inbox,/ws-bell-badge/)
+  assert.match(inbox,/start_workset_direct_chat/)
+  assert.match(inbox,/start_workset_group_chat/)
+  assert.match(inbox,/start_workset_program_chat/)
+  assert.match(inbox,/send_workset_message/)
+  assert.match(inbox,/Notification\.requestPermission/)
+  assert.match(groups,/workset:open-messages/)
+  assert.match(groups,/invite_workset_friend_to_group/)
+})
+test('email endpoint requires caller JWT, matching invitation and recipient opt-in',()=>{
+  assert.match(email,/publicClient\.auth\.getUser\(jwt\)/)
+  assert.match(email,/\.eq\("actor_user_id",caller\)/)
+  assert.match(email,/workset_email_invites/)
+  assert.match(email,/RESEND_API_KEY/)
+  assert.match(email,/WORKSET_EMAIL_FROM/)
+  assert.match(email,/email_claimed_at/)
+  assert.match(email,/email_sent_at/)
+  assert.match(email,/Date\.now\(\)-new Date\(notif\.created_at\)/)
+  assert.match(app,/attemptWorksetInviteEmail/)
+})
