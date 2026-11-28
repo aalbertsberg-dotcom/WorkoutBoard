@@ -37,7 +37,7 @@ export function completedStrengthSets(rows=[],aliases={}){
         for(const set of actual){
           add(ex.name||row.primary_lift||row.title,exerciseSetWeight(ex,set),exerciseSetReps(ex,set),Boolean(set.drop_set))
         }
-      }else if(progress.length===0){
+      }else if(progress.length===0&&ex.done!==false){
         const legacy=parseLegacyResult(ex.result)
         if(legacy)add(ex.name||row.primary_lift||row.title,legacy.weight,legacy.reps)
       }

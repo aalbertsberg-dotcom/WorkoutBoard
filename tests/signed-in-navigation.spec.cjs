@@ -17,6 +17,7 @@ async function signedIn(page,{withStartedWalk=false,withStartedStrength=false,wi
   },userId)
   let storedMaxes={squat:null,bench:197.33,deadlift:261.33,press:160}
   let storedAliases=[]
+  let correctedSession=null
   await page.route('https://example.supabase.co/**',async route=>{
     const req=route.request(),url=req.url(),method=req.method()
     const headers={
@@ -113,6 +114,12 @@ async function signedIn(page,{withStartedWalk=false,withStartedStrength=false,wi
       await route.fulfill({status:200,contentType:'application/json',headers,body:JSON.stringify(rows)})
       return
     }
+    if(withStrengthSession && method==='POST' && url.includes('/rpc/update_my_training_session')){
+      const d=req.postDataJSON()
+      correctedSession={title:d.new_title,workout:d.new_workout,total_volume:d.new_total_volume,estimated_1rm:d.new_estimated_1rm,bodyweight:d.new_bodyweight}
+      await route.fulfill({status:200,contentType:'application/json',headers,body:'null'})
+      return
+    }
     if(withStrengthSession && method==='GET' && url.includes('/rest/v1/training_sessions')){
       const now=new Date().toISOString()
       const row={
@@ -127,6 +134,7 @@ async function signedIn(page,{withStartedWalk=false,withStartedStrength=false,wi
           ]}
         ]}
       }
+      if(correctedSession)Object.assign(row,correctedSession)
       const projection=new URL(url).searchParams.get('select')
       const selectedRow=projection&&projection!=='*'?Object.fromEntries(projection.split(',').filter(key=>Object.hasOwn(row,key)).map(key=>[key,row[key]])):row
       await route.fulfill({status:200,contentType:'application/json',headers,body:JSON.stringify([selectedRow])})
@@ -972,4 +980,40 @@ test("What's New is a Settings subpage with build history, reload and correct Ba
   await expect(page.getByRole('button',{name:/What's New/})).toBeVisible()
   await page.getByRole('button',{name:'Back to Me'}).click()
   await expect(page.locator('.me-view-home')).toBeVisible()
+})
+
+
+test('Review latest workout corrects completed sets, previews volume and confirms read-back',async({page})=>{
+  await signedIn(page,{withStrengthSession:true})
+  await page.getByRole('button',{name:/Review latest workout/}).click()
+  const editor=page.getByRole('region',{name:'Review workout'})
+  await expect(editor).toBeVisible()
+  await editor.getByLabel('Set weight',{exact:true}).first().fill('145')
+  await editor.getByLabel('Set 2 status').selectOption('skipped')
+  await editor.getByRole('button',{name:'+ Add missed set',exact:true}).click()
+  await editor.getByLabel('Set weight',{exact:true}).last().fill('100')
+  await editor.getByLabel('Set repetitions',{exact:true}).last().fill('5')
+  await expect(editor.locator('.review-metrics')).toContainText('1,225 lb')
+  await expect(editor.getByRole('status')).toContainText('Draft saved on this device')
+  await editor.getByRole('button',{name:'Save changes'}).click()
+  await expect(page.getByText('Workout saved and synced.',{exact:true})).toBeVisible()
+  await expect(page.locator('.history-detail')).toContainText('1,225 lb')
+  await page.getByRole('button',{name:'Today',exact:true}).click()
+  await expect(page.locator('.today-completed-entry')).toContainText('1,225 lb')
+})
+test('Optional quick actions persist on this device without changing the five main Me destinations',async({page})=>{
+  await signedIn(page)
+  await page.getByRole('button',{name:'Me',exact:true}).click()
+  await page.getByRole('button',{name:/Settings & Account/}).click()
+  await page.getByText('Quick shortcuts',{exact:true}).click()
+  await page.getByRole('checkbox',{name:'Log food & water'}).check()
+  await page.getByRole('checkbox',{name:'Log bodyweight'}).check()
+  await page.getByRole('button',{name:'Back to Me'}).click()
+  const pinned=page.locator('.me-personal-shortcuts')
+  await expect(pinned.getByRole('button')).toHaveCount(2)
+  await expect(page.locator('.me-main-menu button')).toHaveCount(5)
+  await page.reload()
+  await expect(pinned.getByRole('button')).toHaveCount(2)
+  await pinned.getByRole('button',{name:/Log food & water/}).click()
+  await expect(page.locator('.nutrition-page')).toBeVisible()
 })

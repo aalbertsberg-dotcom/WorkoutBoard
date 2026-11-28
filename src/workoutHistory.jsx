@@ -7,6 +7,7 @@ import { EditableWorkout } from './advancedFeatures'
 import { DialogPortal } from './worksetDialogs'
 import {isLegacyWorkoutLink,legacyWorkoutDetail} from './historyNavigation.js'
 import { HISTORY_PAGE_SIZE,completedWorkoutKind,completedWorkoutSummary,workoutHistoryMatches,workoutHistoryDayKey } from './workoutHistoryUtils'
+import {exerciseSetWeight,exerciseSetReps} from './workoutMetrics.js'
 
 const dateKey=workoutHistoryDayKey
 const localDay=()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')}
@@ -151,6 +152,7 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
       window.history.replaceState({...saveView(null),historyScrollY:window.scrollY},'',window.location.href)
       window.history.pushState({...state,historyDetailParent:true,worksetDepth:Number(state.worksetDepth||0)+1},'',window.location.href)
     }
+    if(window.history.state?.historyReview)window.history.replaceState({...window.history.state,historyReview:false},'',window.location.href)
     setSelectedId(row.id);setEditing(false);setDeleting(false);setMessage('')
     window.scrollTo({top:0,behavior:'instant'})
   }
@@ -259,7 +261,7 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
                     const label=set.drop_set?'Drop '+(set.drop_stage||j+1):'Set '+(j+1)
                     if(set.skipped)return label+': skipped'
                     if(!set.done)return label+': not completed'
-                    return label+': '+(set.weight??'—')+' lb × '+(set.actual_reps??set.reps??'—')+' reps ✓'
+                    return label+': '+exerciseSetWeight(ex,set)+' lb × '+(exerciseSetReps(ex,set)||'—')+' reps ✓'
                   }).join(' · ')}</small>
                 : <small>{ex.result||ex.prescription||'Completed'}</small>}
             </div>)}</section>}
@@ -272,6 +274,7 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
           setRows(prev=>prev.map(x=>x.id===row.id?row:x))
           setMonthRows(prev=>prev.map(x=>x.id===row.id?row:x))
           setDetailRow(row);setEditing(false);setMessage('Workout saved and synced.')
+          if(window.history.state?.tab==='history')window.history.replaceState({...window.history.state,historyReview:false},'',window.location.href)
           await onChanged?.(row)
         }}/>} 
       {deleting&&<DialogPortal label="Delete this workout?" onDismiss={()=>{if(!busy)setDeleting(false)}}><section className="simple-card history-delete-confirm">
