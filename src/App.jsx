@@ -2469,6 +2469,12 @@ function App() {
     }
   },[session?.user?.id,activeTab])
 
+  useEffect(()=>{
+    if(activeTab!=='me')setInboxRequest(prev=>prev.id===0?prev:{
+      id:0,view:'notifications',chatId:null,groupId:null
+    })
+  },[activeTab])
+
   const openMe = async () => {
     await refreshTrackedProgramsInfo()
     setTrackFocus(null)
