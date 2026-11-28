@@ -303,22 +303,7 @@ drop trigger if exists workset_chat_member_alert on public.workset_chat_members;
 create trigger workset_chat_member_alert after insert on public.workset_chat_members
  for each row execute function app_private.workset_chat_member_notification();
 
-create or replace function app_private.workset_sync_program_chat_members()
-returns trigger language plpgsql security definer set search_path=''
-as $$
-declare target_chat uuid;
-begin
- select id into target_chat from public.workset_chats where program_group_id=coalesce(new.group_id,old.group_id);
- if target_chat is null then return null; end if;
- if tg_op='INSERT' then
-   insert into public.workset_chat_members(chat_id,user_id) values(target_chat,new.user_id) on conflict do nothing;
- elsif tg_op='DELETE' then
-   delete from public.workset_chat_members where chat_id=target_chat and user_id=old.user_id;
- end if;
- return null;
-end;
-$$;
--- a statement referencing NEW during DELETE at runtime would fail: choose TG_OP first.
+
 create or replace function app_private.workset_sync_program_chat_members()
 returns trigger language plpgsql security definer set search_path=''
 as $$
