@@ -63,9 +63,14 @@ export default function InboxBell({session,onOpenInbox}){
   const toggle=()=>{
     if(!open&&root.current){
       const bounds=root.current.getBoundingClientRect()
+      const popupWidth=Math.min(350,window.innerWidth-24)
+      const desiredRight=Math.max(12,window.innerWidth-bounds.right-6)
+      // Keep the preview beside the bell without letting its left edge
+      // cross the viewport on narrow phones or an offset header.
+      const maxRight=Math.max(12,window.innerWidth-popupWidth-14)
       setPreviewAnchor({
         top:Math.max(8,Math.min(bounds.bottom+8,window.innerHeight-160)),
-        right:Math.max(12,window.innerWidth-bounds.right-6)
+        right:Math.min(desiredRight,maxRight)
       })
     }
     setOpen(value=>!value)
