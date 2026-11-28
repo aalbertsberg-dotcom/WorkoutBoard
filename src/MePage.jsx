@@ -84,7 +84,7 @@ export default function MePage({
     <MeSection id="inbox" title="Inbox &amp; Messages"
       description="Notifications, friends and group conversations" icon="✉"
       openOnRequest={trackTarget==='inbox'?trackRequest:0}>
-      <WorksetInbox session={session} profile={profile} friends={friends}
+      <WorksetInbox session={session} profile={profile} setProfile={setProfile} friends={friends}
         initialView={inboxRequest?.view||'notifications'}
         initialChatId={inboxRequest?.chatId||null}
         initialProgramGroupId={inboxRequest?.groupId||null}
