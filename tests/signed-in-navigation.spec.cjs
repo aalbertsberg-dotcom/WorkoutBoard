@@ -531,6 +531,7 @@ test('Intervals mobile countdown and inputs never extend past the phone width',a
 })
 
 test('Weight entry stays readable with the keyboard open on narrow phones',async({page})=>{
+  await page.locator('.me-main-menu').getByRole('button',{name:/Training & Goals/}).click()
   const errors=[]
   page.on('pageerror',e=>errors.push(e.message))
   await page.setViewportSize({width:360,height:780})
@@ -566,6 +567,7 @@ test('Weight entry stays readable with the keyboard open on narrow phones',async
 })
 
 test('Editing a saved 1RM expands the focused input instead of clipping its digits',async({page})=>{
+  await page.locator('.me-main-menu').getByRole('button',{name:/Training & Goals/}).click()
   const errors=[]
   page.on('pageerror',e=>errors.push(e.message))
   await page.setViewportSize({width:320,height:780})
