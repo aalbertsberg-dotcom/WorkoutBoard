@@ -9280,3 +9280,63 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   .exercise-finish-row{align-items:stretch;flex-direction:column}
   .exercise-finish-row small{min-width:0}
 }
+
+
+/* Clear, persistent local feedback for saved 1RMs, including Coach/Admin. */
+.admin-max-save-feedback,.me-rm-save-feedback{
+  display:grid;gap:4px;margin-top:9px;padding:12px 14px;
+  border-radius:12px;border:1px solid #527f49;background:#13251b;
+  color:#d4f7db;font-size:13px;line-height:1.45;
+}
+.admin-max-save-feedback strong{font-size:14px;font-weight:850}
+.admin-max-save-feedback small{font-size:11px;color:#adcfb5}
+.admin-max-save-feedback.error,.me-rm-save-feedback.error{
+  border-color:#b45555;background:#30171a;color:#ffd0d0
+}
+.admin-max-save-feedback.saving{border-color:#5e7395;background:#142237;color:#d5e5ff}
+.me-rm-save-feedback{font-weight:750;padding:9px 10px;margin-top:3px}
+.admin-edit-max-grid input:focus-visible,.me-max-field input:focus-visible{
+  outline:2px solid #9bcc4e;outline-offset:1px;
+}
+/* Short gym-friendly name picker: never a full catalog dropdown. */
+.exercise-name-picker{position:relative;min-width:0;flex:1 1 180px;width:100%}
+.exercise-name-picker input{
+  display:block;width:100%;min-width:0;min-height:43px;
+  box-sizing:border-box;background:#101d30;color:#f0f7ff;
+  border:1px solid #435671;border-radius:9px;padding:9px 12px;
+  font-size:15px;
+}
+.exercise-name-suggestions{
+  position:absolute;left:0;right:0;top:calc(100% + 3px);
+  border-radius:11px;overflow:hidden;max-height:260px;
+  z-index:80;box-shadow:0 16px 32px rgba(0,0,0,.55);
+  border:1px solid #52718a;background:#11243a;
+}
+.exercise-name-suggestions>small{
+  display:block;padding:9px 12px 5px;
+  font-size:11px;font-weight:700;color:#a2c8db;
+}
+.exercise-name-suggestions button{
+  display:flex;width:100%;min-height:44px;gap:12px;
+  align-items:center;justify-content:space-between;
+  box-sizing:border-box;padding:9px 12px;background:transparent;
+  color:#f3f9ff;border:0;border-top:1px solid #2b425a;
+  text-align:left;font-size:13px;
+}
+.exercise-name-suggestions button:active,.exercise-name-suggestions button:focus-visible{
+  background:#244459;
+}
+.exercise-name-suggestions button span{overflow-wrap:anywhere}
+.exercise-name-suggestions button b{font-size:11px;color:#bcefb0;flex:0 0 auto}
+.exercise-history-link-row>.exercise-name-picker{flex:1 1 170px}
+.exercise-history-link-row>button{flex:0 0 auto}
+.exercise-rename-inline{
+  margin-top:11px;border-top:1px solid #3d506c;padding-top:10px;
+}
+.exercise-rename-inline>summary{font-weight:650;font-size:12px;color:#d6e6f2;cursor:pointer}
+.exercise-rename-inline .exercise-history-link-row{margin:10px 0 4px}
+.exercise-rename-inline>small{display:block;font-size:11px;line-height:1.4;color:#aebfd1}
+@media(max-width:480px){
+  .exercise-name-suggestions{max-height:248px}
+  .exercise-history-link-row>button{min-height:43px}
+}
