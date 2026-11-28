@@ -63,14 +63,15 @@ export default function InboxBell({session,onOpenInbox}){
   const toggle=()=>{
     if(!open&&root.current){
       const bounds=root.current.getBoundingClientRect()
-      const popupWidth=Math.min(350,window.innerWidth-24)
+      const popupWidth=Math.min(rows.length?310:260,window.innerWidth-24)
       const desiredRight=Math.max(12,window.innerWidth-bounds.right-6)
       // Keep the preview beside the bell without letting its left edge
       // cross the viewport on narrow phones or an offset header.
       const maxRight=Math.max(12,window.innerWidth-popupWidth-14)
       setPreviewAnchor({
         top:Math.max(8,Math.min(bounds.bottom+8,window.innerHeight-160)),
-        right:Math.min(desiredRight,maxRight)
+        right:Math.min(desiredRight,maxRight),
+        width:popupWidth
       })
     }
     setOpen(value=>!value)
@@ -91,7 +92,7 @@ export default function InboxBell({session,onOpenInbox}){
       </svg>
       {unread>0&&<span className="ws-bell-badge">{unread>99?'99+':unread}</span>}
     </button>
-    {open&&createPortal(<div ref={popoverRef} className="ws-bell-popover" style={previewAnchor} role="region" aria-label="Recent notifications">
+    {open&&createPortal(<div ref={popoverRef} className={'ws-bell-popover'+(!rows.length?' empty':'')} style={previewAnchor} role="region" aria-label="Recent notifications">
       <div className="ws-bell-popover-head">
         <strong>Notifications</strong><small>{unread?unread+' unread':'All caught up'}</small>
       </div>
@@ -104,8 +105,10 @@ export default function InboxBell({session,onOpenInbox}){
         <strong>{row.title}</strong><span>{row.body}</span>
       </button>)}
       <div className="ws-bell-preview-actions">
-        <button type="button" onClick={()=>navigate('notifications')}>View all in Me</button>
-        <button type="button" onClick={()=>navigate('messages')}>Messages</button>
+        {rows.length?<>
+          <button type="button" onClick={()=>navigate('notifications')}>View all in Me</button>
+          <button type="button" onClick={()=>navigate('messages')}>Messages</button>
+        </>:<button type="button" onClick={()=>navigate('notifications')}>Open inbox &amp; messages</button>}
       </div>
     </div>,document.body)}
   </div>
