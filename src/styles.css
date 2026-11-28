@@ -9340,3 +9340,47 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   .exercise-name-suggestions{max-height:248px}
   .exercise-history-link-row>button{min-height:43px}
 }
+
+
+/* Editable exercise identity is outside the active workout in Me. */
+.exercise-history-manager{display:grid;gap:14px;min-width:0}
+.exercise-history-help{margin:0;color:#b8c9dc;font-size:12px;line-height:1.5}
+.exercise-manager-fields{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));min-width:0}
+.exercise-manager-fields>label{display:grid;gap:6px;min-width:0}
+.exercise-manager-fields>label>span{font-weight:750;color:#dce8f5;font-size:12px}
+.exercise-manager-save{
+  display:block;width:100%;min-height:46px;padding:10px 14px;border:1px solid #5b934d;
+  border-radius:10px;background:#24592f;color:#e7ffe4;font-weight:800;
+}
+.exercise-manager-save:disabled{opacity:.55}
+.exercise-manager-hint{color:#adbacb;font-size:11px}
+.exercise-manager-status{margin:0;padding:11px;border:1px solid #527d54;border-radius:9px;
+  background:#132719;color:#e4ffe7;font-size:12px}
+.exercise-manager-status.error{border-color:#a75959;background:#2a181e;color:#f9cdcd}
+.exercise-manager-links{display:grid;gap:8px;min-width:0}
+.exercise-manager-links-header{display:flex;justify-content:space-between;gap:10px;align-items:center}
+.exercise-manager-links-header strong{font-size:14px}
+.exercise-manager-links-header small{font-size:11px;color:#9cbbca}
+.exercise-manager-links>input[type=search]{width:100%;min-height:43px;box-sizing:border-box;
+  border:1px solid #3e5870;border-radius:9px;background:#0c192b;color:#e9f5ff;padding:9px}
+.exercise-manager-links>p{color:#aabbca;font-size:12px}
+.exercise-manager-link-row{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  padding:10px 12px;border:1px solid #31455c;background:#102036;border-radius:11px;
+}
+.exercise-manager-link-row>div:first-child{display:grid;min-width:0;gap:4px}
+.exercise-manager-link-row strong{font-size:12px;overflow-wrap:anywhere}
+.exercise-manager-link-row span{font-size:11px;color:#b1c6d6;overflow-wrap:anywhere}
+.exercise-manager-link-actions{display:flex;flex-wrap:wrap;gap:6px}
+.exercise-manager-link-actions button,.exercise-manager-more{
+  min-height:39px;padding:7px 12px;border-radius:8px;background:#1c334d;
+  border:1px solid #4a617c;color:#edf4ff;font-size:12px;font-weight:700
+}
+.exercise-manager-more{width:100%;min-height:43px}
+@media(max-width:520px){
+  .exercise-manager-fields{grid-template-columns:minmax(0,1fr)}
+  .exercise-manager-link-row{align-items:stretch}
+  .exercise-manager-link-actions{justify-content:flex-end}
+}
+/* Suggestions portal is positioned from the visual viewport, clear of the IME. */
+.exercise-name-suggestions{overscroll-behavior:contain}
