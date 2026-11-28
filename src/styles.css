@@ -9077,3 +9077,83 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   .program-group-finishers>div{align-items:flex-start;flex-direction:column;gap:3px;}
   .program-group-finishers small{text-align:left;}
 }
+
+
+/* WorkSet web Inbox: compact bell, clear touch targets, responsive drawer. */
+.ws-inbox{position:relative;margin-left:auto;display:flex;align-items:center;flex-shrink:0}
+.ws-bell{position:relative;display:flex;align-items:center;justify-content:center;
+ width:42px;height:42px;border-radius:12px;cursor:pointer;
+ border:1px solid #4c607e;background:#152236;color:#eff7ff;box-shadow:none}
+.ws-bell-badge{position:absolute;top:-5px;right:-7px;min-width:20px;height:20px;
+ display:flex;align-items:center;justify-content:center;padding:0 4px;border-radius:99px;
+ background:#e76c72;color:#121923;font-size:10px;font-weight:800;border:2px solid #111b2a}
+.ws-inbox-backdrop{position:fixed;inset:0;z-index:8100;background:rgba(4,9,17,.35)}
+.ws-inbox-panel{position:fixed;right:12px;top:72px;bottom:12px;z-index:8110;
+ width:min(410px,calc(100vw - 24px));display:flex;flex-direction:column;min-height:0;
+ border-radius:16px;border:1px solid #415575;color:#edf3ff;background:#111d30;
+ box-shadow:0 20px 70px rgba(0,0,0,.55);overflow:hidden;line-height:1.35}
+.ws-inbox-panel button{cursor:pointer}
+.ws-inbox-top{display:flex;align-items:center;justify-content:space-between;gap:10px;
+ padding:15px;border-bottom:1px solid #35465d;font-size:17px}
+.ws-inbox-top button{font-size:26px;border:0;background:transparent;color:inherit;line-height:1}
+.ws-inbox-tabs{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid #34435b}
+.ws-inbox-tabs button{padding:12px 8px;color:#b9c9dd;background:none;border:0;border-bottom:3px solid transparent}
+.ws-inbox-tabs button.selected{color:#fff;border-bottom-color:#78d9ad;font-weight:750}
+.ws-inbox-scroll{flex:1;overflow-y:auto;min-height:0;overscroll-behavior:contain}
+.ws-inbox-toolbar{display:flex;justify-content:space-between;align-items:center;gap:9px;padding:10px 14px;
+ font-size:13px;color:#c7d7e9;border-bottom:1px solid #283a53}
+.ws-inbox-toolbar button,.ws-mark-read{border:0;background:none;color:#9de8ca;font-size:12px;padding:7px 0}
+.ws-inbox-error,.ws-inbox-status{margin:10px 13px;padding:8px;border-radius:8px;font-size:12px}
+.ws-inbox-error{background:#49242d;color:#ffe1e6}.ws-inbox-status{background:#1a4538;color:#dcfbed}
+.ws-inbox-empty{padding:18px;color:#bdc9d9;font-size:13px}
+.ws-notification{padding:12px 14px;border-bottom:1px solid #314159;display:grid;gap:7px}
+.ws-notification.unread{background:#192d42;border-left:3px solid #77d6b1}
+.ws-notification-content{text-align:left;display:grid;gap:5px;padding:0;background:transparent;
+ border:0;color:#f2f7ff;font-size:13px;min-width:0}
+.ws-notification-content span{color:#c2d1e0;overflow-wrap:anywhere}
+.ws-notification-content small{color:#91a8bc;font-size:11px}
+.ws-notification-actions{display:flex;gap:8px}
+.ws-notification-actions button,.ws-chat-create>button,.ws-chat-composer button{border:1px solid #548f80;
+ border-radius:9px;padding:9px 13px;color:#fff;background:#236c58;font-weight:700}
+.ws-notification-actions button+button{border-color:#485d79;background:#1c2e44}
+.ws-mark-read{justify-self:start}
+.ws-inbox-settings{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 14px;
+ border-top:1px solid #34435b;font-size:12px}
+.ws-inbox-settings>button{background:none;color:#b2e8d6;border:0;padding:6px}
+.ws-inbox-settings label{display:flex;align-items:center;gap:5px;color:#e0eafb}
+.ws-inbox-settings small{width:100%;color:#9baec1;font-size:10px}
+.ws-chat-create{display:grid;gap:9px;padding:12px;border-bottom:1px solid #45556e}
+.ws-chat-create>input{padding:11px;border-radius:8px;background:#0e1a2a;
+ color:#fff;border:1px solid #465776;min-width:0}
+.ws-chat-friend-list{display:grid;gap:7px;max-height:180px;overflow-y:auto}
+.ws-chat-friend-list>div{display:flex;gap:8px;align-items:center;justify-content:space-between}
+.ws-chat-friend-list button{flex:1;border:1px solid #435879;padding:9px;border-radius:8px;
+ background:#1c2f46;color:#edf5fd;text-align:left}
+.ws-chat-friend-list label{white-space:nowrap;font-size:11px;color:#d4dfeb}
+.ws-chat-list-row{width:100%;display:grid;grid-template-columns:1fr auto;gap:4px 10px;
+ padding:14px;border:0;border-bottom:1px solid #34445f;background:none;color:#f4f8ff;text-align:left}
+.ws-chat-list-row strong{grid-column:1;font-size:14px}
+.ws-chat-list-row span{grid-column:1;color:#bfd1e2;font-size:11px}
+.ws-chat-list-row small{grid-column:2;grid-row:1 / span 2;color:#a5bbcf;font-size:10px;align-self:center}
+.ws-chat-thread{flex:1;display:flex;flex-direction:column;min-height:0}
+.ws-chat-thread-head{display:flex;align-items:center;gap:12px;padding:12px;border-bottom:1px solid #33445b}
+.ws-chat-thread-head button{font-size:22px;background:transparent;border:0;color:#b4e6d5}
+.ws-chat-thread-head strong{overflow-wrap:anywhere}
+.ws-chat-messages{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px;min-height:0}
+.ws-chat-bubble{max-width:92%;border-radius:12px;padding:9px 11px;min-width:0;overflow-wrap:anywhere}
+.ws-chat-bubble.mine{align-self:flex-end;background:#1c5546}
+.ws-chat-bubble.theirs{align-self:flex-start;background:#263b54}
+.ws-chat-bubble small{font-size:10px;color:#b1c7d9;display:block;margin-bottom:4px}
+.ws-chat-bubble div{white-space:pre-wrap;font-size:13px}
+.ws-chat-composer{display:flex;gap:7px;padding:12px;border-top:1px solid #3e4d66}
+.ws-chat-composer textarea{flex:1;min-width:0;resize:vertical;border:1px solid #48607e;
+ background:#0c182a;color:white;border-radius:9px;padding:9px;font-size:13px}
+.program-group-invite-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.program-group-invite-row select{flex:1;min-width:140px;padding:9px;background:#111d2d;color:#fff;border-radius:8px}
+.program-group-invite-row button,.program-group-message-button{border:1px solid #406b65;
+ border-radius:8px;padding:9px;background:#1a554c;color:#fff}
+@media(max-width:640px){
+ .ws-inbox-panel{top:8px;bottom:8px;right:8px;width:calc(100vw - 16px);max-height:none}
+ .app-header .ws-inbox{margin-left:auto}
+ .ws-bell{width:39px;height:39px}
+}
