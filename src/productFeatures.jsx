@@ -1228,8 +1228,11 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
     </section>}
 
     {(workout.exercises||[]).map((item,i)=>{
-      const key=String(item.name||'').trim().toLowerCase()
+      const key=resolveExerciseHistoryKey(item.name,aliasLookup)
       const hist=historyByExercise[key]
+      const aliasRow=exerciseAliases.find(row=>row.alias_key===exerciseHistoryKey(item.name))
+      const historyCandidates=knownExerciseNames.filter(name=>
+        exerciseHistoryKey(name)!==exerciseHistoryKey(item.name))
       const currentBest=bestLoadedSet(item)
       const current=currentBest&&!isDistanceExercise(item.name)?{weight:currentBest.weight,reps:currentBest.reps,e1rm:currentBest.weight*(1+currentBest.reps/30)}:null
       const isPR=Boolean(current&&hist&&(current.weight>(hist.bestWeight||0)||current.e1rm>(hist.bestE||0)+.5))
@@ -1240,7 +1243,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       const sub=substitutions[key]?.[0]
       const firstIncompleteIndex=(workout.exercises||[]).findIndex(exerciseIncomplete)
       const focusedExerciseIndex=exerciseIncomplete((workout.exercises||[])[activeExerciseIndex]) ? activeExerciseIndex : firstIncompleteIndex
-      const targetSet=(item.setProgress||[]).find(set=>!set.done)||(item.setProgress||[])[0]
+      const targetSet=(item.setProgress||[]).find(pendingWorkoutSet)||(item.setProgress||[])[0]
       const partnerTargets=Object.entries(partnerOneRms||{}).map(([userId,maxes])=>({
         userId,
         name:maxes?.displayName||'Partner',
@@ -1272,7 +1275,26 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
               </small>}
             {partnerTargets.length>0&&<small className="partner-targets"><strong>Targets:</strong> {partnerTargets.map(x=>x.name+' '+x.target).join(' · ')}</small>}
             {item.note&&<details className="exercise-cue"><summary>Cue</summary><small>{item.note}</small></details>}
-            {hist?.last&&<small className="flex-history"><strong>Last time:</strong> {hist.last}</small>}
+            {hist?.last&&<small className="flex-history"><strong>Last time{hist.sourceName&&exerciseHistoryKey(hist.sourceName)!==exerciseHistoryKey(item.name)?' ('+hist.sourceName+')':''}:</strong> {hist.last}</small>}
+            {(aliasRow||historyCandidates.length>0)&&<details className="exercise-history-link">
+              <summary>Match exercise history</summary>
+              {aliasRow&&<p className="history-alias-connected">
+                Linked to <strong>{aliasRow.canonical_name}</strong>
+                <button type="button" disabled={linkingHistory||navigator.onLine===false} onClick={()=>unlinkExerciseHistory(item.name)}>Unlink</button>
+              </p>}
+              <p>Only link names you know are the same exercise and movement. Brand names alone are not enough.</p>
+              {historyCandidates.length>0&&<div className="exercise-history-link-row">
+                <select aria-label={'Match history for '+item.name}
+                  value={historyLinkDrafts[exerciseHistoryKey(item.name)]||''}
+                  onChange={e=>setHistoryLinkDrafts(v=>({...v,[exerciseHistoryKey(item.name)]:e.target.value}))}>
+                  <option value="">Choose a past exercise…</option>
+                  {historyCandidates.map(name=><option key={exerciseHistoryKey(name)} value={name}>{name}</option>)}
+                </select>
+                <button type="button" disabled={linkingHistory||!historyLinkDrafts[exerciseHistoryKey(item.name)]}
+                  onClick={()=>linkExerciseHistory(item.name,historyLinkDrafts[exerciseHistoryKey(item.name)])}>Link history</button>
+              </div>}
+              {historyLinkStatus&&<small role="status">{historyLinkStatus}</small>}
+            </details>}
             {sub&&<small className="sub-suggestion">Saved substitute: {sub.substitute}{sub.reason?' · '+sub.reason:''}</small>}
           </div>
           <div className="exercise-title-actions">
@@ -1283,8 +1305,8 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
         {item.setProgress?.length>0&&(()=>{
           const exerciseKey=item.id||String(i)
           const selectedSetIndex=activeSetByExercise[exerciseKey]
-          const selectedSet=Number.isInteger(selectedSetIndex)&&item.setProgress[selectedSetIndex]&&!item.setProgress[selectedSetIndex].done ? selectedSetIndex : -1
-          const activeIndex=selectedSet>=0 ? selectedSet : item.setProgress.findIndex(set=>!set.done)
+          const selectedSet=Number.isInteger(selectedSetIndex)&&pendingWorkoutSet(item.setProgress[selectedSetIndex]) ? selectedSetIndex : -1
+          const activeIndex=selectedSet>=0 ? selectedSet : item.setProgress.findIndex(pendingWorkoutSet)
           const activeSet=activeIndex>=0?item.setProgress[activeIndex]:null
           const programmedTargetText=activeSet&&!cyclePending ? partnerSetTarget(workoutOneRms,activeSet) : ''
           const weightNote=explainProgramSetWeight(workoutOneRms,activeSet,{programId:workout.archive_program_id,week:planned?.source_week})
@@ -1301,7 +1323,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
           return <>
             {activeSet&&i===focusedExerciseIndex&&<section className="current-set-panel">
               <div className="current-set-panel-head">
-                <div><span className="card-label">{activeSet.extra?'EXTRA SET':'CURRENT SET'}</span><h3>{activeSet.extra?'Extra set':'Set '+(activeIndex+1)+' of '+item.setProgress.length}</h3></div>
+                <div><span className="card-label">{activeSet.drop_set?'DROP SET · AMRAP':activeSet.extra?'EXTRA SET':'CURRENT SET'}</span><h3>{activeSet.drop_set?'Drop stage '+activeSet.drop_stage:activeSet.extra?'Extra set':'Set '+(activeIndex+1)+' of '+item.setProgress.length}</h3></div>
                 <strong>{activeSet.label || (activeSet.reps?activeSet.reps+' reps':'Complete')}{activeSet.target_weight_range?' · '+activeSet.target_weight_range:programmedTargetText?' · '+programmedTargetText:''}</strong>
               </div>
               <div className="current-set-entry-grid">
@@ -1336,12 +1358,12 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
                         changeExercise(i,{setProgress:item.setProgress.map((sp,k)=>k===activeIndex?{...sp,actual_reps:value}:sp)})
                       }}
                       onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur()}}
-                      placeholder={activeSet.reps!==undefined&&activeSet.reps!==null&&activeSet.reps!==''?String(activeSet.reps):'Reps'}/>
+                      placeholder={activeSet.drop_set?'Actual AMRAP reps':activeSet.reps!==undefined&&activeSet.reps!==null&&activeSet.reps!==''?String(activeSet.reps):'Reps'}/>
                     <b>reps</b>
                   </div>
                 </label>}
               </div>
-              {activeSet&&!isDistanceExercise(item.name)&&<small className="rep-default-hint">{isOriginalChallengeMaxTest(planned)&&isOriginalChallengeTestSet(activeSet)?'Test set: enter your ACTUAL completed reps. This calculates the next cycle.':'Leave blank = programmed reps. Enter only if different.'}</small>}
+              {activeSet&&!isDistanceExercise(item.name)&&<small className="rep-default-hint">{activeSet.drop_set?'Drop stage: enter the ACTUAL weight and reps. Reduce weight for the next stage with little or no rest.':isOriginalChallengeMaxTest(planned)&&isOriginalChallengeTestSet(activeSet)?'Test set: enter your ACTUAL completed reps. This calculates the next cycle.':'Leave blank = programmed reps. Enter only if different.'}</small>}
 
               {weightNote&&<div className="program-weight-note">
                 <div className="program-weight-note-top">
@@ -1386,8 +1408,11 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
                   setSaveState('Enter the actual weight and reps for the 100% TM max test before completing this set.')
                   return
                 }
-                const nextSetIndex=item.setProgress.findIndex((sp,k)=>k!==activeIndex&&!sp.done)
-                changeExercise(i,{load:shownWeight,setProgress:item.setProgress.map((sp,k)=>k===activeIndex?{...sp,done:true,weight:loadField?shownWeight:sp.weight}:sp)})
+                const dropIssue=validateDropStage(activeSet,shownWeight,activeSet.actual_reps)
+                if(dropIssue){setSaveState(dropIssue);return}
+                const nextItem=completeExerciseSet(item,activeIndex,loadField?shownWeight:undefined)
+                const nextSetIndex=nextItem.setProgress.findIndex((sp,k)=>k!==activeIndex&&pendingWorkoutSet(sp))
+                changeExercise(i,{...nextItem,load:shownWeight})
                 if(nextSetIndex>=0){
                   setActiveSetByExercise(v=>({...v,[exerciseKey]:nextSetIndex}))
                   saveWorkoutFocus(planned?.user_id,planned?.id,item,nextSetIndex)
@@ -1401,6 +1426,12 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
               <button type="button" className="secondary-action next-exercise-button" onClick={()=>goToNextExercise(i)}>Next</button>
               </div>
             </section>}
+            {unfinishedWorkoutSets(item).length>0&&<div className="exercise-finish-row">
+              <button type="button" className="finish-exercise-early" onClick={()=>finishExerciseNow(i)}>
+                {(item.setProgress||[]).some(set=>set.done)?'✓ Finish exercise':'Skip exercise'}
+              </button>
+              <small>Unfinished sets are marked skipped, not completed. You can reopen them.</small>
+            </div>}
             <div className="set-progress-grid compact flexible-set-progress">
               {item.setProgress.map((set,j)=>{
                 const recordedWeight=set.weight!==undefined&&set.weight!=='' ? Number(set.weight)||0 : 0
@@ -1410,22 +1441,27 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
                 return <div className={'set-progress-wrap '+(set.extra?'extra-set':'')} key={j}>
                   <button
                     type="button"
-                    className={'set-progress-button '+(set.done?'done ':'')+(i===focusedExerciseIndex&&j===activeIndex?'current-set ':'')}
+                    className={'set-progress-button '+(set.done?'done ':'')+(set.skipped?'skipped ':'')+(i===focusedExerciseIndex&&j===activeIndex?'current-set ':'')}
                     onClick={()=>{
-                      if(set.done){
-                        changeExercise(i,{setProgress:item.setProgress.map((sp,k)=>k===j?{...sp,done:false}:sp)})
+                      if(set.done||set.skipped||item.done){
+                        changeExercise(i,reopenExerciseSet(item,j))
                       }
                       activateExercise(i,j,{scroll:false})
                     }}>
-                    <strong>{set.extra?'Extra set':'Set '+(j+1)}</strong>
-                    <span>{set.done&&repsForSet(item,set) ? repsForSet(item,set)+' reps' : (set.label || (set.reps?set.reps+' reps':'Done'))}{tileWeight?' · '+tileWeight+' lb':''}</span>
-                    <b>{set.done?'✓':'○'}</b>
+                    <strong>{set.drop_set?'Drop '+set.drop_stage:set.extra?'Extra set':'Set '+(j+1)}</strong>
+                    <span>{set.skipped?'Skipped':set.done&&repsForSet(item,set) ? repsForSet(item,set)+' reps' : (set.drop_set?'AMRAP':set.label || (set.reps?set.reps+' reps':'Done'))}{!set.skipped&&tileWeight?' · '+tileWeight+' lb':''}</span>
+                    <b>{set.done?'✓':set.skipped?'–':'○'}</b>
                   </button>
-                  {set.extra&&<button type="button" className="remove-extra-set" onClick={()=>removeExtraSet(i,j)} aria-label={'Remove extra set '+(j+1)}>×</button>}
+                  {item.setProgress.length>1&&<button type="button" className="remove-extra-set" onClick={()=>removeSet(i,j)}
+                    aria-label={'Delete '+(set.drop_set?'drop stage '+set.drop_stage:'set '+(j+1))}>×</button>}
                 </div>
               })}
             </div>
-            <button type="button" className="add-extra-set-button" onClick={()=>addExtraSet(i)}>+ Add set</button>
+            <div className="exercise-set-add-actions">
+              <button type="button" className="add-extra-set-button" onClick={()=>addExtraSet(i)}>+ Add set</button>
+              {loadField&&!isDistanceExercise(item.name)&&<button type="button" className="add-extra-set-button drop-set-add" onClick={()=>addDropSetToExercise(i)}>+ Drop set</button>}
+              {item.setProgress.some(set=>set.drop_set)&&<button type="button" className="add-extra-set-button drop-stage-add" onClick={()=>addDropStageToExercise(i)}>+ Drop stage</button>}
+            </div>
           </>
         })()}
       </article>
