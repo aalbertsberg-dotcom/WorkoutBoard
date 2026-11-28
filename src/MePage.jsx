@@ -20,7 +20,7 @@ export default function MePage({
   isAdmin,feedbackUnread,onOpenAdmin,onSignOut,appUrl,onRefreshWorkset,refreshBlocked=false,
   autoOpenSection=null,
   friends=[],inboxRequest={id:0,view:'notifications',chatId:null,groupId:null},
-  onInboxOpenTogether,onInboxAcceptLive,
+  onInboxOpen,onInboxOpenTogether,onInboxAcceptLive,
 }){
   const [trackTarget,setTrackTarget]=useState(autoOpenSection)
   const [trackRequest,setTrackRequest]=useState(autoOpenSection?1:0)
@@ -48,7 +48,7 @@ export default function MePage({
     <MeDisplayNameEditor name={displayName} email={session?.user?.email} onSave={onSaveDisplayName}/>
 
     <nav className="me-quick-links" aria-label="Training shortcuts">
-      <button type="button" onClick={()=>jumpToTrack('inbox')}>
+      <button type="button" onClick={()=>onInboxOpen?onInboxOpen({view:'notifications'}):jumpToTrack('inbox')}>
         <span className="me-shortcut-icon" aria-hidden="true">✉</span>
         <span><strong>Inbox &amp; Messages</strong><small>Notifications, invitations, private and group chat</small></span>
         <b aria-hidden="true">›</b>
