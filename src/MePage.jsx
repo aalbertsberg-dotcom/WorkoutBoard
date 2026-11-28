@@ -23,15 +23,52 @@ export default function MePage({
   friends=[],inboxRequest={id:0,view:'notifications',chatId:null,groupId:null},
   onInboxOpen,onInboxOpenTogether,onInboxAcceptLive,homeRequest=0,
 }){
-  const [meView,setMeView]=useState('home')
-  const [trackTarget,setTrackTarget]=useState(autoOpenSection)
-  const [trackRequest,setTrackRequest]=useState(autoOpenSection?1:0)
-  const openMeView=view=>{
+  const savedNav=()=>window.history.state?.tab==='me'?window.history.state:null
+  const [meView,setMeView]=useState(()=>savedNav()?.meView||'home')
+  const [trackTarget,setTrackTarget]=useState(()=>autoOpenSection||savedNav()?.meTrack||null)
+  const [trackRequest,setTrackRequest]=useState(()=>autoOpenSection||savedNav()?.meTrack?1:0)
+  const openMeView=(view,{replace=false,track=null}={})=>{
+    const state=savedNav()
+    if(state){
+      const previous=state.meView||'home'
+      if(view==='home'&&previous!=='home'&&state.meParent&&!replace){
+        window.history.back()
+        return
+      }
+      if(view!==previous||track!==state.meTrack){
+        const push=!replace&&previous==='home'&&view!=='home'
+        const next={...state,meView:view,meTrack:track,meParent:push||(!replace&&state.meParent),
+          worksetDepth:Math.max(0,Number(state.worksetDepth)||0)+(push?1:0)}
+        if(push)window.history.pushState(next,'',window.location.href)
+        else window.history.replaceState(next,'',window.location.href)
+      }
+    }
     setMeView(view)
+    if(!track)setTrackTarget(null)
     window.scrollTo({top:0,behavior:'instant'})
   }
+  useEffect(()=>{
+    const restore=event=>{
+      if(event.state?.tab!=='me')return
+      setMeView(event.state.meView||'home')
+      setTrackTarget(event.state.meTrack||null)
+      if(event.state.meTrack)setTrackRequest(n=>n+1)
+      window.scrollTo({top:0,behavior:'instant'})
+    }
+    window.addEventListener('popstate',restore)
+    return()=>window.removeEventListener('popstate',restore)
+  },[])
+  useEffect(()=>{
+    const nativeBack=event=>{
+      if(meView==='home')return
+      event.preventDefault()
+      openMeView('home')
+    }
+    window.addEventListener('workset-native-back',nativeBack)
+    return()=>window.removeEventListener('workset-native-back',nativeBack)
+  },[meView])
   const jumpToTrack=section=>{
-    setMeView(['preferences','security','app-data','community'].includes(section)?'settings':'training')
+    openMeView(['preferences','security','app-data','community'].includes(section)?'settings':'training',{track:section})
     setTrackTarget(section)
     setTrackRequest(request=>request+1)
     setTimeout(()=>document.querySelector('[data-me-section="'+section+'"]')
@@ -42,7 +79,7 @@ export default function MePage({
   useEffect(()=>{
     // Progress deep links to edit a specific field take precedence over the
     // header's previous "Me home" request.
-    if(homeRequest>0&&!inboxRequest?.id&&!autoOpenSection)openMeView('home')
+    if(homeRequest>0&&!inboxRequest?.id&&!autoOpenSection)openMeView('home',{replace:true})
   },[homeRequest])
   return <section className={'page-section me-page me-view-'+meView} aria-label="Me">
     {meView==='home'?<>
@@ -72,12 +109,12 @@ export default function MePage({
       </button>
       <button type="button" onClick={()=>openMeView('training')}>
         <span className="me-shortcut-icon" aria-hidden="true">◆</span>
-        <span><strong>Training &amp; Goals</strong><small>1RMs, exercise names, weight, goals and programs</small></span>
+        <span><strong>Training &amp; Goals</strong><small>1RMs, exercise names, weight and goals</small></span>
         <b aria-hidden="true">›</b>
       </button>
       <button type="button" onClick={()=>openMeView('settings')}>
         <span className="me-shortcut-icon" aria-hidden="true">⚙</span>
-        <span><strong>Settings &amp; Account</strong><small>Preferences, security, updates and support</small></span>
+        <span><strong>Settings &amp; Account</strong><small>Preferences, security and support</small><small className="me-version-label">WorkSet v{__WORKSET_APP_VERSION__} · Version &amp; updates</small></span>
         <b aria-hidden="true">›</b>
       </button>
     </nav>
@@ -232,6 +269,7 @@ export default function MePage({
       <h2>Settings &amp; Account</h2>
       <p>Manage WorkSet preferences and your account</p>
     </div>
+    <AppUpdateControls onRefresh={onRefreshWorkset} refreshBlocked={refreshBlocked}/>
     <div className="me-section-group">
       <MeSection id="preferences" title="Workout Preferences"
         description="Timers, sound, vibration and equipment" icon="⚙">
@@ -242,14 +280,12 @@ export default function MePage({
         <AccountSecurityPanel session={session} appUrl={appUrl}/>
       </MeSection>
       <MeSection id="app-data" title="App & Data"
-        description="Install, updates, exports, backup and restore" icon="▣">
-        <AppUpdateControls onRefresh={onRefreshWorkset} refreshBlocked={refreshBlocked}/>
-
+        description="Install, exports, backup and restore" icon="▣">
         <div className="me-inner-card">
           <div className="me-inner-heading"><span className="card-label">APP</span><h4>Install WorkSet</h4></div>
           {isNativeAndroid()
-            ?<p>Installed Android app. Check and install signed APK updates at the top of Me.</p>
-            :<><p>Add WorkSet to your home screen. Web update checking and refresh are available at the top of Me.</p>
+            ?<p>Installed Android app. Check and install signed APK updates above.</p>
+            :<><p>Add WorkSet to your home screen. Check for updates or refresh WorkSet above.</p>
                 <InstallAppButton/></>}
         </div>
         <div className="me-inner-card">

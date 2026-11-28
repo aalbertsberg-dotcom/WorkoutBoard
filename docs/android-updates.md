@@ -40,7 +40,7 @@ verified GitHub Release with exactly one APK asset: `WorkSet.apk`.
 
 ## In-app Android updates
 
-Me → **Check APK updates** checks the latest published release. If its
+Me → Settings & Account → **Check APK updates** checks the latest published release. If its
 Android version code is newer, the button **Download & install** appears.
 The updater accepts only the official WorkSet GitHub APK URL, requires the
 GitHub-provided SHA-256 digest, verifies the downloaded file, and opens

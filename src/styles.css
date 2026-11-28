@@ -8884,7 +8884,7 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   overflow-wrap:anywhere;
 }
 @media(max-width:700px){
-  .me-max-field:focus-within{
+  .me-max-field:has(input:focus){
     grid-column:1 / -1;
     min-width:0;
     padding:8px;
@@ -8892,10 +8892,10 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
     border-radius:10px;
     background:#11241a;
   }
-  .me-max-field:focus-within .me-max-input-row{
+  .me-max-field:has(input:focus) .me-max-input-row{
     grid-template-columns:minmax(0,1fr) 64px;
   }
-  .me-max-field:focus-within .input-with-unit input{
+  .me-max-field:has(input:focus) .input-with-unit input{
     font-size:21px;
     color:#fff;
     caret-color:#d9f99d;
@@ -9438,3 +9438,13 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   }
   .ws-header-actions .account-chip{padding:3px 5px}
 }
+
+/* Stable save feedback: no grid reflow or displaced neighboring lift. */
+.me-max-field{align-content:start}
+.me-rm-save-feedback{position:fixed;z-index:1100;bottom:calc(88px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);width:max-content;max-width:calc(100vw - 32px);box-sizing:border-box;margin:0;box-shadow:0 5px 20px #0009;pointer-events:none;text-align:center}
+.me-version-label{color:#a9c986!important}
+.history-calendar-grid button.today:not(.selected){border-color:#91a8c2}
+.history-calendar-grid button.selected{background:#284b38;color:white}
+.history-calendar-grid button.outside{opacity:.55}
+.history-calendar-legend{display:flex;flex-wrap:wrap;gap:12px;font-size:11px;color:#a8b9d0}
+.history-calendar-legend b{color:#caff9b}

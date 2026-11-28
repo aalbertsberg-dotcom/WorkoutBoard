@@ -836,3 +836,15 @@ test('Exercise name results stay visible when keyboard shrinks phone viewport',a
   await expect(field).toHaveValue('ISO lateral raises')
   expect(errors).toEqual([])
 })
+
+
+test('Settings survives refresh; browser Back returns to Me without leaving WorkSet',async({page})=>{
+  await signedIn(page)
+  await page.locator('.account-chip').click()
+  await page.getByRole('button',{name:/Settings & Account/}).click()
+  await expect(page.getByRole('region',{name:'App updates'})).toBeVisible()
+  await page.reload()
+  await expect(page.locator('.me-view-settings')).toBeVisible()
+  await page.goBack()
+  await expect(page.locator('.me-view-home')).toBeVisible()
+})

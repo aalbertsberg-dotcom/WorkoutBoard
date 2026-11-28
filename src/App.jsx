@@ -1303,7 +1303,8 @@ function App() {
     // Section switches stay on the same page; root navigation starts a fresh
     // location. Only opening a detail screen adds a Back step.
     const state={...(window.history.state||{}),worksetApp:true,tab,progressSection:section,
-      worksetDepth:transition.depth}
+      worksetDepth:transition.depth,
+      ...(tab!==activeTab?{meView:'home',meTrack:null,meParent:false,historyView:null,historyDetailParent:false}:{} )}
     if(transition.action==='replace')window.history.replaceState(state,'',window.location.href)
     else window.history.pushState(state,'',window.location.href)
     setAppNavDepth(transition.depth)
@@ -1391,7 +1392,7 @@ function App() {
     setHistoryWorkoutId(id)
     setHistoryOpenedFromProgress(fromProgress)
     navigateTo('history')
-    window.history.replaceState({...window.history.state,workoutId:id,historyFromProgress:fromProgress},'',window.location.href)
+    window.history.replaceState({...window.history.state,historyView:null,workoutId:id,historyFromProgress:fromProgress},'',window.location.href)
   }
   const openMobility = mode => {setMobilityMode(mode);navigateTo('mobility')}
 
@@ -2476,7 +2477,7 @@ function App() {
   },[activeTab])
 
   const openMe = async () => {
-    await refreshTrackedProgramsInfo()
+    void refreshTrackedProgramsInfo().catch(()=>{})
     setTrackFocus(null)
     // Tapping Me is always a reliable way back to the simple Me menu.
     setInboxRequest(prev=>({...prev,id:0,homeToken:(prev.homeToken||0)+1}))
@@ -3686,7 +3687,7 @@ function App() {
           <div>
             <div className="brand-lockup"><img src={import.meta.env.BASE_URL+'icon.svg'} alt="" /><span>Work<b>set</b></span></div>
             <h1>{activeTab === 'today' ? 'Today' : activeTab === 'together' ? 'Together' : activeTab === 'program' ? 'Plan' : activeTab === 'whiteboard' ? 'Whiteboard' : activeTab === 'progress' ? 'Progress' : activeTab === 'history' ? 'History' : activeTab === 'nutrition' ? 'Nutrition' : activeTab === 'mobility' ? 'Warm-up & Cool-down' : activeTab === 'admin' ? 'Admin' : 'Me'}</h1>
-            {appNavDepth>0&&<button type="button" className="app-history-back" onClick={navigateBack}>← Back</button>}
+            {appNavDepth>0&&activeTab!=='history'&&activeTab!=='me'&&<button type="button" className="app-history-back" onClick={navigateBack}>← Back</button>}
           </div>
           <div className="ws-header-actions">
             <InboxBell session={session} onOpenInbox={openMeInbox}/>

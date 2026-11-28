@@ -73,6 +73,11 @@ function MeOneRmField({name,value,onSave}){
   const [saving,setSaving]=useState(false)
   const [message,setMessage]=useState('')
   useEffect(()=>{
+    if(!message.startsWith('✓'))return
+    const timer=setTimeout(()=>setMessage(''),6000)
+    return()=>clearTimeout(timer)
+  },[message])
+  useEffect(()=>{
     if(!dirty)setDraft(value===null||value===undefined?'':String(value))
   },[value,dirty])
   const commit=async()=>{
@@ -99,7 +104,7 @@ function MeOneRmField({name,value,onSave}){
         <b>lb</b>
       </div>
       <button type="button" className="me-max-save" disabled={!dirty||saving}
-        onClick={commit}>{saving?'Saving…':'Save'}</button>
+        onClick={event=>{event.currentTarget.blur();commit()}}>{saving?'Saving…':'Save'}</button>
     </div>
     {message&&<div role={message.startsWith('✓')?'status':'alert'} className={'me-rm-save-feedback '+(message.startsWith('✓')?'success':'error')}>{message}</div>}
   </div>

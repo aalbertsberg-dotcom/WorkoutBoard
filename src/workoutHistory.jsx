@@ -20,7 +20,8 @@ const summary=completedWorkoutSummary
 const monthGrid=date=>{
   const first=new Date(date.getFullYear(),date.getMonth(),1)
   const start=new Date(first);start.setDate(first.getDate()-first.getDay())
-  return Array.from({length:42},(_,i)=>{
+  const weeks=Math.ceil((first.getDay()+new Date(date.getFullYear(),date.getMonth()+1,0).getDate())/7)
+  return Array.from({length:weeks*7},(_,i)=>{
     const d=new Date(start);d.setDate(start.getDate()+i)
     return {key:`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,
       date:d.getDate(),inMonth:d.getMonth()===date.getMonth()}
@@ -35,12 +36,15 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
   const [loading,setLoading]=useState(true)
   const [loadingMonth,setLoadingMonth]=useState(true)
   const [message,setMessage]=useState('')
-  const [mode,setMode]=useState('calendar')
-  const [month,setMonth]=useState(()=>new Date())
-  const [day,setDay]=useState(localDay)
-  const [query,setQuery]=useState('')
-  const [categoryFilter,setCategoryFilter]=useState('All')
-  const [selectedId,setSelectedId]=useState(initialWorkoutId)
+  const stored=()=>window.history.state?.tab==='history'?window.history.state.historyView:null
+  const [mode,setMode]=useState(()=>stored()?.mode||'calendar')
+  const [month,setMonth]=useState(()=>stored()?.month?new Date(stored().month+'T12:00:00'):new Date())
+  const [day,setDay]=useState(()=>stored()?.day||localDay())
+  const [query,setQuery]=useState(()=>stored()?.query||'')
+  const [categoryFilter,setCategoryFilter]=useState(()=>stored()?.categoryFilter||'All')
+  const [selectedId,setSelectedId]=useState(()=>stored()?stored().selectedId:initialWorkoutId)
+  const [detailRow,setDetailRow]=useState(null)
+  const [detailLoading,setDetailLoading]=useState(false)
   const [editing,setEditing]=useState(false)
   const [deleting,setDeleting]=useState(false)
   const [busy,setBusy]=useState(false)
@@ -65,6 +69,7 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
     let cancelled=false
     const grid=monthGrid(month)
     setLoadingMonth(true)
+    setMonthRows([])
     supabase.from('training_sessions').select('*')
       .eq('user_id',session.user.id).not('completed_at','is',null)
       .gte('session_date',grid[0].key).lte('session_date',grid.at(-1).key)
@@ -77,31 +82,74 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
       })
     return()=>{cancelled=true}
   },[session?.user?.id,month])
-  useEffect(()=>{if(initialWorkoutId){setSelectedId(initialWorkoutId);setEditing(false);setDeleting(false)}},[initialWorkoutId])
+  const saveView=(id=selectedId,extra={})=>{
+    const state=window.history.state
+    if(state?.tab!=='history')return
+    return {...state,historyView:{mode,month:dateKey({session_date:[month.getFullYear(),String(month.getMonth()+1).padStart(2,'0'),'01'].join('-')}),day,query,categoryFilter,selectedId:id,...extra}}
+  }
+  useEffect(()=>{
+    const state=saveView()
+    if(state)window.history.replaceState(state,'',window.location.href)
+  },[mode,month,day,query,categoryFilter,selectedId])
+  useEffect(()=>{
+    const restore=event=>{
+      if(event.state?.tab!=='history')return
+      const view=event.state.historyView
+      setSelectedId(view?view.selectedId:event.state.workoutId||null)
+      if(view){
+        setMode(view.mode||'calendar');setMonth(new Date(view.month+'T12:00:00'))
+        setDay(view.day||localDay());setQuery(view.query||'');setCategoryFilter(view.categoryFilter||'All')
+      }
+      setEditing(false);setDeleting(false)
+      if(view?.selectedId)window.scrollTo({top:0,behavior:'instant'})
+      else requestAnimationFrame(()=>document.querySelector('.history-day-title')?.scrollIntoView({block:'nearest'}))
+    }
+    window.addEventListener('popstate',restore)
+    return()=>window.removeEventListener('popstate',restore)
+  },[])
+  useEffect(()=>{
+    if(!selectedId||isLegacyWorkoutLink(selectedId)||!session?.user?.id)return
+    if(rows.some(row=>row.id===selectedId)||monthRows.some(row=>row.id===selectedId))return
+    let cancelled=false
+    setDetailLoading(true)
+    supabase.from('training_sessions').select('*').eq('user_id',session.user.id).eq('id',selectedId)
+      .not('completed_at','is',null).limit(1).then(({data,error})=>{
+        if(cancelled)return
+        if(error)setMessage(error.message)
+        setDetailRow((data||[]).find(row=>row.id===selectedId)||null)
+        setDetailLoading(false)
+      })
+    return()=>{cancelled=true;setDetailLoading(false)}
+  },[selectedId,session?.user?.id,rows,monthRows])
   useEffect(()=>{
     const onNativeBack=event=>{
       if(deleting||editing||selectedId){
         event.preventDefault()
         if(deleting)setDeleting(false)
         else if(editing)setEditing(false)
-        else setSelectedId(null)
+        else openList()
       }
     }
     window.addEventListener('workset-native-back',onNativeBack)
     return()=>window.removeEventListener('workset-native-back',onNativeBack)
-  },[deleting,editing,selectedId])
+  },[deleting,editing,selectedId,mode,month,day,query,categoryFilter])
   const legacySelected=isLegacyWorkoutLink(selectedId)
     ?legacyWorkoutDetail(legacyHistory.find(row=>String(row.id)===String(selectedId).slice(7)))
     :null
-  const selected=rows.find(row=>row.id===selectedId)||monthRows.find(row=>row.id===selectedId)||legacySelected||null
+  const selected=rows.find(row=>row.id===selectedId)||monthRows.find(row=>row.id===selectedId)||legacySelected||(detailRow?.id===selectedId?detailRow:null)
   const dates=useMemo(()=>{
     const map={}
-    for(const row of monthRows){const key=dateKey(row);if(key)map[key]=(map[key]||0)+1}
+    for(const row of monthRows){const key=dateKey(row);if(key&&workoutHistoryMatches(row,categoryFilter))map[key]=(map[key]||0)+1}
     return map
-  },[monthRows])
+  },[monthRows,categoryFilter])
   const filtered=useMemo(()=>rows.filter(row=>workoutHistoryMatches(row,categoryFilter,query)),[rows,query,categoryFilter])
   const dayRows=monthRows.filter(row=>workoutHistoryMatches(row,categoryFilter)&&dateKey(row)===day)
-  const select=row=>{setSelectedId(row.id);setEditing(false);setDeleting(false);setMessage('')}
+  const select=row=>{
+    const state=saveView(row.id,{detailParent:true})
+    if(state)window.history.pushState({...state,historyDetailParent:true,worksetDepth:Number(state.worksetDepth||0)+1},'',window.location.href)
+    setSelectedId(row.id);setEditing(false);setDeleting(false);setMessage('')
+    window.scrollTo({top:0,behavior:'instant'})
+  }
 
   const deleteSelected=async()=>{
     if(!selected||busy||!session?.user?.id)return
@@ -114,15 +162,23 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
       .eq('id',sessionRow.planned_workout_id).eq('user_id',session.user.id)
     setRows(prev=>prev.filter(row=>row.id!==sessionRow.id))
     setMonthRows(prev=>prev.filter(row=>row.id!==sessionRow.id))
-    setSelectedId(null);setDeleting(false);setBusy(false)
+    setDetailRow(null);openList();setDeleting(false);setBusy(false)
     setMessage('Workout deleted.')
     onChanged?.()
   }
-  const openList=()=>{setSelectedId(null);setEditing(false);setDeleting(false)}
+  const openList=()=>{
+    if(window.history.state?.tab==='history'&&window.history.state?.historyDetailParent){
+      window.history.back();return
+    }
+    setSelectedId(null);setEditing(false);setDeleting(false)
+    requestAnimationFrame(()=>document.querySelector('.history-day-title')?.scrollIntoView({block:'nearest'}))
+  }
   const changeMonth=offset=>{
     const next=new Date(month.getFullYear(),month.getMonth()+offset,1)
     setMonth(next)
-    setDay([next.getFullYear(),String(next.getMonth()+1).padStart(2,'0'),'01'].join('-'))
+    const today=localDay()
+    const prefix=[next.getFullYear(),String(next.getMonth()+1).padStart(2,'0')].join('-')
+    setDay(today.startsWith(prefix)?today:prefix+'-01')
   }
   const itemButton=row=><button type="button" className="history-entry" key={row.id} onClick={()=>select(row)}>
     <span className="history-entry-main"><strong>{row.title||'Workout'}</strong>
@@ -142,15 +198,15 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
   return <section className="page-section workset-history">
     <div className="workset-history-head">
       <div><span className="card-label">WORKOUT HISTORY</span>
-        <h2>{selected?'Workout details':'Your training calendar'}</h2>
+        <h2>{selected?'Workout details':selectedId?'Workout details':mode==='calendar'?'Your training calendar':'Your workout history'}</h2>
         <p>{selected?'Everything recorded for this session':'What you did, when you did it — no charts to dig through'}</p>
       </div>
-      <button type="button" className="secondary-action" onClick={selected&&fromProgress?onBack:selected?openList:onBack}>
-        {selected&&fromProgress?'← Progress':selected?'← All workouts':'← Back'}
+      <button type="button" className="secondary-action" onClick={selectedId&&fromProgress?onBack:selectedId?openList:onBack}>
+        {selectedId&&fromProgress?'← Progress':selectedId?'← All workouts':'← Back'}
       </button>
     </div>
     {message&&<div className="status-message" role="status">{message}</div>}
-    {selected?<>
+    {selectedId&&!selected?<p className="history-note" role="status">{loading||loadingMonth||detailLoading?'Loading workout details…':'Workout details not available.'}</p>:selected?<>
       <article className="simple-card history-detail">
         <div className="history-detail-top">
           <div><span className="card-label">{category(selected).toUpperCase()}</span>
@@ -246,11 +302,13 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
           {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(x=><b key={x}>{x}</b>)}
           {monthGrid(month).map(d=><button type="button" key={d.key}
             aria-label={d.key+' '+(dates[d.key]||0)+' workouts'}
-            className={(d.inMonth?'':'outside ')+(dates[d.key]?'trained ':'')+(day===d.key?'selected':'')}
-            onClick={()=>setDay(d.key)}>
+            className={(d.inMonth?'':'outside ')+(dates[d.key]?'trained ':'')+(day===d.key?'selected ':'')+(d.key===localDay()?'today':'')}
+            aria-pressed={day===d.key}
+            onClick={()=>{setDay(d.key);if(!d.inMonth)setMonth(new Date(d.key+'T12:00:00'))}}>
             <span>{d.date}</span>{dates[d.key]>0&&<small>{dates[d.key]}</small>}
           </button>)}
         </div>
+        <div className="history-calendar-legend"><span><b>Green</b> · workout days</span><span>Number · completed workouts</span></div>
         <h3 className="history-day-title">{prettyDate(day)}</h3>
         <div className="history-entries">{dayRows.map(itemButton)}</div>
         {loadingMonth&&<p className="history-note" role="status">Loading this month's workouts…</p>}
