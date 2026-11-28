@@ -10,7 +10,7 @@ test('Me starts organized and collapsed, with profile and History/Progress short
   await expect(page.getByRole('button',{name:/Progress & Analytics/})).toBeVisible()
   await expect(page.getByRole('button',{name:/Nutrition & Water/})).toBeVisible()
   const sections=page.locator('.me-section-toggle')
-  await expect(sections).toHaveCount(10)
+  await expect(sections).toHaveCount(11)
   for(let i=0;i<await sections.count();i++)
     await expect(sections.nth(i)).toHaveAttribute('aria-expanded','false')
   await expect(page.getByText('Your current 1RMs')).toHaveCount(0)
@@ -222,4 +222,21 @@ test('Inbox stays inside Me rather than opening a full-screen overlay',async({pa
   const r=await panel.boundingBox(),viewport=page.viewportSize()
   expect(r.x).toBeGreaterThanOrEqual(-1)
   expect(r.x+r.width).toBeLessThanOrEqual(viewport.width+1)
+})
+
+test('Exercise names can be managed later from Me without opening a workout',async({page})=>{
+  await page.route('https://example.supabase.co/**',async route=>route.fulfill({
+    status:200,contentType:'application/json',
+    headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*'},body:'[]'
+  }))
+  await openMe(page)
+  const shortcut=page.getByRole('button',{name:/Exercise Names & History/})
+  await expect(shortcut).toBeVisible()
+  const section=page.locator('[data-me-section="exercise-names"]')
+  await expect(section.locator('.me-section-toggle')).toHaveAttribute('aria-expanded','false')
+  await shortcut.click()
+  await expect(section.locator('.me-section-toggle')).toHaveAttribute('aria-expanded','true')
+  await expect(section.getByRole('textbox',{name:'Exercise to match'})).toBeVisible()
+  await expect(section.getByRole('textbox',{name:'Preferred exercise name'})).toBeVisible()
+  await expect(section.getByRole('button',{name:'Link exercise history'})).toBeDisabled()
 })
