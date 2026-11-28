@@ -30,6 +30,19 @@ export function exerciseAliasLookup(rows=[]){
   ]).filter(([key,value])=>key&&value))
 }
 
+// Suggest candidates without ever merging them automatically. A brand or
+// shared word like "iso" is not proof that the machines are equivalent.
+export function rankExerciseHistoryCandidates(name,choices=[]){
+  const tokens=new Set(exerciseHistoryKey(name).split(' ').filter(Boolean))
+  const score=candidate=>{
+    const words=new Set(exerciseHistoryKey(candidate).split(' ').filter(Boolean))
+    let overlap=0
+    for(const word of words)if(tokens.has(word))overlap++
+    return overlap/(new Set([...tokens,...words]).size||1)
+  }
+  return [...choices].sort((a,b)=>score(b)-score(a)||a.localeCompare(b))
+}
+
 export function exerciseHistoryNames(sessions=[]){
   const seen=new Set(), result=[]
   for(const row of sessions||[]){
