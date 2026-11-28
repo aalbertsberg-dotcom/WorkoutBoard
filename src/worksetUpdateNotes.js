@@ -1,5 +1,8 @@
 // Human-readable highlights maintained with user-facing changes.
 export const WORKSET_UPDATE_NOTES=[
+  {id:'2026-11-28-summary-back',date:'2026-11-28',title:'Workout summary returns to the right screen',items:[
+    ['Fix','Open a completed workout from Today, Me or Progress and Back returns to the original screen, including after refresh. Workouts opened within History return to the calendar or list.']
+  ]},
   {id:'2026-11-28-summary-first',date:'2026-11-28',title:'Workout summaries first, editing only when requested',items:[
     ['Improvement','Open a completed workout to see its read-only Workout Summary at the top, with expandable exercise and set details.'],
     ['Improvement','Today and pinned shortcuts open summaries instead of editors. Edit is a separate action, and Done is the primary action after finishing.'],

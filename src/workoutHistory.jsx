@@ -30,7 +30,8 @@ const monthGrid=date=>{
   })
 }
 
-export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onChanged,legacyHistory=[],fromProgress=false,fromCompletion=false}){
+export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onChanged,legacyHistory=[],fromProgress=false,fromCompletion=false,origin=null}){
+  const returnOrigin=fromCompletion?'Workout summary':fromProgress?'Progress':origin==='today'?'Today':origin==='me'?'Me':null
   const [rows,setRows]=useState([])
   const [monthRows,setMonthRows]=useState([])
   const [visibleCount,setVisibleCount]=useState(HISTORY_PAGE_SIZE)
@@ -130,13 +131,13 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
         event.preventDefault()
         if(deleting)setDeleting(false)
         else if(editing)editMode(false)
-        else if(fromProgress||fromCompletion)onBack?.()
+        else if(returnOrigin)onBack?.()
         else openList()
       }
     }
     window.addEventListener('workset-native-back',onNativeBack)
     return()=>window.removeEventListener('workset-native-back',onNativeBack)
-  },[deleting,editing,selectedId,mode,month,day,query,categoryFilter,fromProgress,fromCompletion,onBack])
+  },[deleting,editing,selectedId,mode,month,day,query,categoryFilter,returnOrigin,onBack])
   const legacySelected=isLegacyWorkoutLink(selectedId)
     ?legacyWorkoutDetail(legacyHistory.find(row=>String(row.id)===String(selectedId).slice(7)))
     :null
@@ -209,8 +210,8 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
         <h2>{selected?'Workout details':selectedId?'Workout details':mode==='calendar'?'Your training calendar':'Your workout history'}</h2>
         <p>{selected?(editing?'Edit the saved workout':'Summary and recorded results'):'What you did, when you did it — no charts to dig through'}</p>
       </div>
-      <button type="button" className="secondary-action workset-back-control" onClick={editing?()=>editMode(false):selectedId&&(fromProgress||fromCompletion)?onBack:selectedId?openList:onBack}>
-        {editing?'← Summary':selectedId&&fromCompletion?'← Workout summary':selectedId&&fromProgress?'← Progress':selectedId?'← All workouts':'← Back'}
+      <button type="button" className="secondary-action workset-back-control" onClick={editing?()=>editMode(false):selectedId&&returnOrigin?onBack:selectedId?openList:onBack}>
+        {editing?'← Summary':selectedId&&returnOrigin?'← '+returnOrigin:selectedId?'← All workouts':'← Back'}
       </button>
     </div>
     {message&&<div className="status-message" role="status">{message}</div>}

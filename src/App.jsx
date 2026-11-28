@@ -1410,7 +1410,7 @@ function App() {
     setHistoryWorkoutId(id)
     setHistoryOpenedFromProgress(fromProgress)
     navigateTo('history')
-    window.history.replaceState({...window.history.state,historyView:null,historyDetailParent:false,workoutId:id,historyReview:review,historyFromCompletion:fromCompletion,historyFromProgress:fromProgress},'',window.location.href)
+    window.history.replaceState({...window.history.state,historyView:null,historyDetailParent:false,workoutId:id,historyReview:review,historyFromCompletion:fromCompletion,historyFromProgress:fromProgress,historyOrigin:id?activeTab:null},'',window.location.href)
   }
   const openMobility = mode => {setMobilityMode(mode);navigateTo('mobility')}
 
@@ -4617,6 +4617,7 @@ function App() {
           <WorkoutHistory session={session} initialWorkoutId={historyWorkoutId}
             legacyHistory={progress.completed}
             fromProgress={historyOpenedFromProgress}
+            origin={window.history.state?.historyOrigin||null}
             fromCompletion={Boolean(window.history.state?.historyFromCompletion&&completionSummary)}
             onBack={navigateBack} onChanged={async row=>{
               if(row?.id){

@@ -1084,3 +1084,18 @@ test('Reopening a completed workout shows read-only summary at top and separate 
  await expect(summary).toBeVisible()
  await expect(editor).toHaveCount(0)
 })
+
+
+test('Workout summary opened from Today returns directly to Today, including after refresh',async({page})=>{
+ await signedIn(page,{withStrengthSession:true})
+ await page.getByRole('button',{name:/View latest workout summary/}).click()
+ await expect(page.locator('.history-workout-summary')).toBeVisible()
+ await expect(page.getByRole('button',{name:'← Today',exact:true})).toBeVisible()
+ await page.reload()
+ await expect(page.locator('.history-workout-summary')).toBeVisible()
+ await page.getByRole('button',{name:'← Today',exact:true}).click()
+ await expect(page.getByRole('button',{name:/View latest workout summary/})).toBeVisible()
+ await page.getByRole('button',{name:/View completed Bench workout/}).click()
+ await page.getByRole('button',{name:'← Today',exact:true}).click()
+ await expect(page.getByRole('button',{name:/View latest workout summary/})).toBeVisible()
+})
