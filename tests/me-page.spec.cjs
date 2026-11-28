@@ -3,16 +3,25 @@ async function openMe(page){
   await page.goto('/tests/fixtures/me.html')
   await expect(page.locator('.me-page')).toBeVisible()
 }
+async function openTraining(page){
+  await page.locator('.me-main-menu').getByRole('button',{name:/Training & Goals/}).click()
+  await expect(page.locator('.me-view-training')).toBeVisible()
+}
+async function openSettings(page){
+  await page.locator('.me-main-menu').getByRole('button',{name:/Settings & Account/}).click()
+  await expect(page.locator('.me-view-settings')).toBeVisible()
+}
+
 test('Me starts organized and collapsed, with profile and History/Progress shortcuts',async({page})=>{
   await openMe(page)
   await expect(page.getByRole('heading',{name:'Test Athlete'})).toBeVisible()
   await expect(page.getByRole('button',{name:/Workout History/})).toBeVisible()
   await expect(page.getByRole('button',{name:/Progress & Analytics/})).toBeVisible()
-  await expect(page.getByRole('button',{name:/Nutrition & Water/})).toBeVisible()
-  const sections=page.locator('.me-section-toggle')
-  await expect(sections).toHaveCount(11)
-  for(let i=0;i<await sections.count();i++)
-    await expect(sections.nth(i)).toHaveAttribute('aria-expanded','false')
+  await expect(page.getByRole('button',{name:/Food & Water/})).toBeVisible()
+  await expect(page.locator('.me-section-toggle')).toHaveCount(0)
+  await expect(page.locator('.me-main-menu button')).toHaveCount(5)
+  await expect(page.locator('.me-view-home .ws-inbox-panel')).toHaveCount(0)
+  await expect(page.locator('.me-view-home .me-update-card')).toHaveCount(0)
   await expect(page.getByText('Your current 1RMs')).toHaveCount(0)
   await expect(page.getByRole('button',{name:'Download training backup'})).toHaveCount(0)
   await page.getByRole('button',{name:/Workout History/}).click()
@@ -22,6 +31,7 @@ test('Me starts organized and collapsed, with profile and History/Progress short
 })
 test('Sections expand with Enter, retain focus, and unmount again when closed',async({page})=>{
   await openMe(page)
+  await openTraining(page)
   const toggle=page.locator('[data-me-section="strength"] > .me-section-title > .me-section-toggle')
   await toggle.focus();await page.keyboard.press('Enter')
   await expect(toggle).toHaveAttribute('aria-expanded','true')
@@ -49,6 +59,7 @@ test('Profile Save is explicit, confirms changes and handles server rejection',a
 })
 test('1RM editing requires Save and preserves values across collapsing',async({page})=>{
   await openMe(page)
+  await openTraining(page)
   const toggle=page.locator('[data-me-section="strength"] > .me-section-title > .me-section-toggle')
   await toggle.click()
   const input=page.getByRole('spinbutton',{name:'Bench'})
@@ -64,6 +75,7 @@ test('1RM editing requires Save and preserves values across collapsing',async({p
 })
 test('Calculator, baseline, program action, and sign out remain connected',async({page})=>{
   await openMe(page)
+  await openTraining(page)
   await page.locator('[data-me-section="strength"] > .me-section-title > .me-section-toggle').click()
   await page.locator('[data-me-section="strength-calculator"] > .me-section-title > .me-section-toggle').click()
   await page.getByRole('spinbutton',{name:'Weight lifted'}).fill('185')
@@ -85,7 +97,7 @@ test('Calculator, baseline, program action, and sign out remain connected',async
 test('All collapsed navigation buttons are fully reachable on narrow and desktop screens',async({page})=>{
   await openMe(page)
   const buttons=page.locator('.me-page button:visible')
-  expect(await buttons.count()).toBeGreaterThanOrEqual(11)
+  expect(await buttons.count()).toBeGreaterThanOrEqual(7)
   for(let i=0;i<await buttons.count();i++){
     const btn=buttons.nth(i)
     await btn.scrollIntoViewIfNeeded()
@@ -101,12 +113,17 @@ test('All collapsed navigation buttons are fully reachable on narrow and desktop
 })
 
 
-test('Every collapsed disclosure refers to an existing hidden panel',async({page})=>{
+test('Every training and settings disclosure refers to a hidden panel',async({page})=>{
   await openMe(page)
-  const buttons=page.locator('.me-section-toggle')
-  for(let i=0;i<await buttons.count();i++){
-    const id=await buttons.nth(i).getAttribute('aria-controls')
-    await expect(page.locator('#'+id)).toHaveAttribute('hidden','')
+  for(const destination of ['training','settings']){
+    if(destination==='training')await openTraining(page)
+    else await openSettings(page)
+    const buttons=page.locator('.me-section-toggle')
+    for(let i=0;i<await buttons.count();i++){
+      const id=await buttons.nth(i).getAttribute('aria-controls')
+      await expect(page.locator('#'+id)).toHaveAttribute('hidden','')
+    }
+    await page.getByRole('button',{name:'Back to Me'}).click()
   }
 })
 
@@ -158,6 +175,7 @@ test('A new release is detected without clearing browser caches',async({page})=>
 })
 test('Strength tools remain compact until individually expanded',async({page})=>{
   await openMe(page)
+  await openTraining(page)
   await page.locator('[data-me-section="strength"] > .me-section-title > .me-section-toggle').click()
   await expect(page.getByText('Your current 1RMs')).toBeVisible()
   for(const id of ['strength-calculator','strength-estimates','strength-baseline'])
