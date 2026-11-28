@@ -294,4 +294,3 @@ export default function MePage({
     </>}
   </section>
 }
-}
