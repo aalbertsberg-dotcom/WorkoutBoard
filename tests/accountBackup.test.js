@@ -4,7 +4,7 @@ import {ACCOUNT_BACKUP_TABLES,buildAccountBackup,mergeAccountBackup,validateAcco
 test('Personal backup includes all essential user training, 1RMs, programs and board drawings',()=>{
   const tableNames=new Set(ACCOUNT_BACKUP_TABLES.map(x=>x.name))
   for(const table of ['one_rep_maxes','training_maxes','program_library','managed_athletes','whiteboard_drawings',
-    'workout_logs','training_sessions','planned_workouts','body_measurements','workout_templates','profiles'])
+    'workout_logs','training_sessions','planned_workouts','body_measurements','workout_templates','profiles','exercise_name_aliases'])
     assert.ok(tableNames.has(table),table)
   assert.equal(tableNames.size,ACCOUNT_BACKUP_TABLES.length)
 })
