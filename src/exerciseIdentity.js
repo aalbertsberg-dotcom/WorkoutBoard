@@ -66,6 +66,29 @@ export function findExerciseNameSuggestions(query,names=[],limit=5){
     .slice(0,Math.max(1,Math.min(limit,5))).map(item=>item.label)
 }
 
+// Suggestions reuse the preferred label only after the athlete has confirmed
+// an alias. Original completed-session names are never altered.
+export function preferredExerciseNames(names=[],links={}){
+  const seen=new Set(),result=[]
+  for(const name of names){
+    let display=String(name||'').trim()
+    let key=exerciseHistoryKey(display)
+    if(!key)continue
+    const visited=new Set()
+    for(let i=0;i<12;i++){
+      if(visited.has(key))break
+      visited.add(key)
+      const preferred=String(links[key]||'').trim()
+      if(!preferred)break
+      const nextKey=exerciseHistoryKey(preferred)
+      if(!nextKey||visited.has(nextKey))break
+      display=preferred;key=nextKey
+    }
+    if(!seen.has(key)){seen.add(key);result.push(display)}
+  }
+  return result
+}
+
 export function exerciseHistoryNames(sessions=[]){
   const seen=new Set(), result=[]
   for(const row of sessions||[]){
