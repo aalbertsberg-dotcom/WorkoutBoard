@@ -1,4 +1,5 @@
 import {useCallback,useEffect,useRef,useState} from 'react'
+import {createPortal} from 'react-dom'
 import {supabase} from './supabase'
 
 // Lightweight header preview. The complete inbox lives in Me, not in a modal.
@@ -9,6 +10,7 @@ export default function InboxBell({session,onOpenInbox}){
   const [error,setError]=useState('')
   const [previewAnchor,setPreviewAnchor]=useState({top:80,right:12})
   const root=useRef(null)
+  const popoverRef=useRef(null)
   const previouslySeen=useRef(new Set())
   const initialized=useRef(false)
   const unread=rows.filter(row=>!row.read_at).length
@@ -45,7 +47,7 @@ export default function InboxBell({session,onOpenInbox}){
 
   useEffect(()=>{
     if(!open)return
-    const outside=event=>{if(root.current&&!root.current.contains(event.target))setOpen(false)}
+    const outside=event=>{if(root.current&&!root.current.contains(event.target)&&!popoverRef.current?.contains(event.target))setOpen(false)}
     const escape=event=>{if(event.key==='Escape')setOpen(false)}
     const escapeScroll=()=>setOpen(false)
     document.addEventListener('pointerdown',outside)
@@ -84,7 +86,7 @@ export default function InboxBell({session,onOpenInbox}){
       </svg>
       {unread>0&&<span className="ws-bell-badge">{unread>99?'99+':unread}</span>}
     </button>
-    {open&&<div className="ws-bell-popover" style={previewAnchor} role="region" aria-label="Recent notifications">
+    {open&&createPortal(<div ref={popoverRef} className="ws-bell-popover" style={previewAnchor} role="region" aria-label="Recent notifications">
       <div className="ws-bell-popover-head">
         <strong>Notifications</strong><small>{unread?unread+' unread':'All caught up'}</small>
       </div>
@@ -100,6 +102,6 @@ export default function InboxBell({session,onOpenInbox}){
         <button type="button" onClick={()=>navigate('notifications')}>View all in Me</button>
         <button type="button" onClick={()=>navigate('messages')}>Messages</button>
       </div>
-    </div>}
+    </div>,document.body)}
   </div>
 }
