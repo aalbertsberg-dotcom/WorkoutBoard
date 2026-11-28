@@ -25,7 +25,9 @@ export default function WorksetInbox({session,profile,friends=[],onOpenTogether,
   const known=useRef(new Set())
   const activeChatRef=useRef('')
   const inboxRef=useRef(null)
+  const messagesEndRef=useRef(null)
   const unread=notifications.filter(n=>!n.read_at).length
+  useEffect(()=>messagesEndRef.current?.scrollIntoView({block:'end'}),[activeChat,messages.length])
   useEffect(()=>setEmailEnabled(profile?.workset_email_invites!==false),[profile?.workset_email_invites])
   const ownName=profile?.display_name||'You'
   const friendName=id=>friends.find(f=>f.user_id===id)?.display_name||'Member'
@@ -121,12 +123,15 @@ export default function WorksetInbox({session,profile,friends=[],onOpenTogether,
       supabase.rpc('mark_workset_chat_read',{target_chat:id})
     ])
     await loadNotifications()
-    const chat=chats.find(c=>c.id===id)
+    // Query the specific conversation so a newly created group chat resolves
+    // member names before the asynchronous conversation list has rendered.
+    const {data:chat}=await supabase.from('workset_chats')
+      .select('program_group_id').eq('id',id).maybeSingle()
     if(chat?.program_group_id){
       const {data}=await supabase.from('program_group_members')
         .select('user_id,display_name').eq('group_id',chat.program_group_id)
       setGroupNames(Object.fromEntries((data||[]).map(row=>[row.user_id,row.display_name])))
-    }
+    }else setGroupNames({})
   }
 
   const openFromNotification=async row=>{
@@ -301,6 +306,7 @@ export default function WorksetInbox({session,profile,friends=[],onOpenTogether,
               <small>{displaySender(m.sender_user_id)} · {formatTime(m.created_at)}</small>
               <div>{m.body}</div>
             </div>)}
+            <div ref={messagesEndRef}/>
           </div>
           <form className="ws-chat-composer" onSubmit={send}>
             <textarea value={draft} onChange={e=>setDraft(e.target.value)} maxLength={2000} rows={2} placeholder="Write a message…"/>
