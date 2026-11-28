@@ -108,6 +108,7 @@ function isDistanceExercise(name) {
 
 function bestLoadedSet(item) {
   const loaded=(item?.setProgress||[])
+    .filter(set=>set.done&&!set.skipped&&!set.drop_set)
     .map(set=>({weight:setWeight(item,set),reps:repsForSet(item,set),done:Boolean(set.done)}))
     .filter(set=>set.weight&&set.reps)
   if(!loaded.length){
@@ -570,7 +571,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
   const exerciseIncomplete=item=>Boolean(
     item && !item.done && (
       item.setProgress?.length
-        ? item.setProgress.some(set=>!set.done)
+        ? item.setProgress.some(pendingWorkoutSet)
         : !String(item.result||'').trim()
     )
   )
@@ -650,6 +651,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       return {
         ...item,
         done:false,
+        finished_early:false,
         setProgress:[
           ...sets,
           {
@@ -665,17 +667,47 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
     })}))
   }
 
-  const removeExtraSet=(exerciseIndex,setIndex)=>{
+  const removeSet=(exerciseIndex,setIndex)=>{
+    const item=workout.exercises?.[exerciseIndex]
+    const set=item?.setProgress?.[setIndex]
+    if(!set||item.setProgress.length<=1)return
+    if(set.done&&!window.confirm('Delete this completed set and its recorded weight/reps?'))return
     setSaveState('Unsaved')
-    setWorkout(v=>({...v,exercises:(v.exercises||[]).map((item,i)=>{
-      if(i!==exerciseIndex)return item
-      const target=item.setProgress?.[setIndex]
-      if(!target?.extra)return item
-      const next=(item.setProgress||[])
-        .filter((_,idx)=>idx!==setIndex)
-        .map((set,idx)=>({...set,set:idx+1}))
-      return {...item,setProgress:next}
-    })}))
+    setWorkout(v=>({...v,exercises:(v.exercises||[]).map((exercise,i)=>
+      i===exerciseIndex?deleteWorkoutSet(exercise,setIndex):exercise)}))
+    const exerciseKey=item.id||String(exerciseIndex)
+    setActiveSetByExercise(value=>({...value,[exerciseKey]:null}))
+  }
+
+  const finishExerciseNow=index=>{
+    const item=workout.exercises?.[index]
+    if(!item||!unfinishedWorkoutSets(item).length)return
+    setSaveState('Unsaved')
+    setWorkout(v=>({...v,exercises:(v.exercises||[]).map((exercise,i)=>
+      i===index?completeExerciseEarly(exercise):exercise)}))
+    const key=item.id||String(index)
+    setActiveSetByExercise(value=>({...value,[key]:null}))
+    goToNextExercise(index)
+  }
+
+  const addDropSetToExercise=index=>{
+    const item=workout.exercises?.[index]
+    if(!item||!loadFieldForExercise(item.name)||isDistanceExercise(item.name))return
+    const firstDropIndex=item.setProgress?.length||0
+    setSaveState('Unsaved')
+    setWorkout(v=>({...v,exercises:(v.exercises||[]).map((exercise,i)=>
+      i===index?addDropSet(exercise):exercise)}))
+    activateExercise(index,firstDropIndex,{scroll:false})
+  }
+
+  const addDropStageToExercise=index=>{
+    const item=workout.exercises?.[index]
+    if(!item?.setProgress?.some(set=>set.drop_set))return
+    const newIndex=item.setProgress.length
+    setSaveState('Unsaved')
+    setWorkout(v=>({...v,exercises:(v.exercises||[]).map((exercise,i)=>
+      i===index?addDropStage(exercise):exercise)}))
+    activateExercise(index,newIndex,{scroll:false})
   }
 
   const totalVolume=useMemo(()=> (workout.exercises||[]).reduce((sum,item)=>{
@@ -694,7 +726,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
     for(const item of workout.exercises||[]){
       if(isDistanceExercise(item.name))continue
       for(const set of item.setProgress||[]){
-        if(!set.done)continue
+        if(!set.done||set.skipped||set.drop_set)continue
         const weight=setWeight(item,set),reps=repsForSet(item,set)
         if(!weight||!reps)continue
         best=Math.max(best,weight*(1+reps/30))
