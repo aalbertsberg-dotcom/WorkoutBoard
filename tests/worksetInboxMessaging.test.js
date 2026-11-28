@@ -8,6 +8,9 @@ const resolution=read('supabase/migrations/20261128_workset_notification_resolut
 const inbox=read('src/WorksetInbox.jsx')
 const groups=read('src/ProgramGroups.jsx')
 const app=read('src/App.jsx')
+const me=read('src/MePage.jsx')
+const bell=read('src/InboxBell.jsx')
+const css=read('src/styles.css')
 const email=read('supabase/functions/workset-invite-email/index.ts')
 
 test('notification and message rows use authenticated member-only RLS',()=>{
@@ -40,10 +43,18 @@ test('messages are bounded, notifications deduped, and invites resolve after res
   assert.match(resolution,/resolved_at=now\(\)/)
   assert.match(inbox,/!row\.resolved_at/)
 })
-test('web header has unread notification bell and direct/group messaging',()=>{
-  assert.match(app,/import WorksetInbox from '.\/WorksetInbox\.jsx'/)
-  assert.match(app,/<WorksetInbox session=\{session\}/)
-  assert.match(inbox,/ws-bell-badge/)
+test('web header only previews notifications and full inbox lives in Me',()=>{
+  assert.match(app,/import InboxBell from '.\/InboxBell\.jsx'/)
+  assert.match(app,/<InboxBell session=\{session\}/)
+  assert.match(bell,/ws-bell-badge/)
+  assert.match(bell,/View all in Me/)
+  assert.match(me,/import WorksetInbox from '.\/WorksetInbox\.jsx'/)
+  assert.match(me,/<WorksetInbox session=\{session\}/)
+  assert.match(me,/id="inbox"/)
+  assert.match(inbox,/className="ws-inbox-panel ws-inbox-inline"/)
+  assert.match(css,/\.ws-inbox-panel\.ws-inbox-inline/)
+  assert.doesNotMatch(inbox,/ws-inbox-backdrop/)
+  assert.doesNotMatch(inbox,/className="ws-bell"/)
   assert.match(inbox,/start_workset_direct_chat/)
   assert.match(inbox,/start_workset_group_chat/)
   assert.match(inbox,/start_workset_program_chat/)
