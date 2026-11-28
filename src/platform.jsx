@@ -1856,6 +1856,8 @@ export function AdminPanel({ programs }) {
   const [selected,setSelected] = useState(null)
   const [maxes,setMaxes] = useState(null)
   const [maxDraft,setMaxDraft] = useState({squat:'',bench:'',deadlift:'',press:''})
+  const [maxSaveBusy,setMaxSaveBusy] = useState(false)
+  const [maxSaveFeedback,setMaxSaveFeedback] = useState(null)
   const [displayNameDraft,setDisplayNameDraft] = useState('')
   const [sessions,setSessions] = useState([])
   const [editSession,setEditSession] = useState(null)
@@ -1885,6 +1887,7 @@ export function AdminPanel({ programs }) {
   const closeUserDetail = () => {
     setSelected(null)
     setMaxes(null)
+    setMaxSaveFeedback(null)
     setSessions([])
     setEditSession(null)
     setMessage('')
@@ -1906,7 +1909,7 @@ export function AdminPanel({ programs }) {
         window.location.href
       )
     }
-    setSelected(user); setMessage(''); setEditSession(null);setDisplayNameDraft(user.display_name||'')
+    setSelected(user); setMessage(''); setMaxSaveFeedback(null);setEditSession(null);setDisplayNameDraft(user.display_name||'')
     const [{data:oneRm},{data:tm},{data:rows}] = await Promise.all([
       supabase.from('one_rep_maxes').select('*').eq('user_id',user.user_id).maybeSingle(),
       supabase.from('training_maxes').select('*').eq('user_id',user.user_id).maybeSingle(),
@@ -1940,15 +1943,37 @@ export function AdminPanel({ programs }) {
   }
 
   const saveMaxes = async () => {
-    if(!selected)return
-    const num=v=>v===''?null:Math.round(Math.max(0,Number(v)||0)*100)/100
-    const {error}=await supabase.rpc('admin_set_one_rep_maxes',{
-      target_user:selected.user_id,new_squat:num(maxDraft.squat),new_bench:num(maxDraft.bench),
-      new_deadlift:num(maxDraft.deadlift),new_press:num(maxDraft.press)
-    })
-    if(error){setMessage('Run the coaching/1RM migration first: '+error.message);return}
-    setMaxes({...maxDraft})
-    setMessage('1 rep maxes updated. Program percentages will use these values.')
+    if(!selected||maxSaveBusy)return
+    const num=v=>v===''||v==null?null:Math.round(Number(v)*100)/100
+    const names=['squat','bench','deadlift','press']
+    if(names.some(name=>String(maxDraft[name]??'').trim()!==''&&
+      (!Number.isFinite(Number(maxDraft[name]))||Number(maxDraft[name])<0))){
+      setMaxSaveFeedback({type:'error',text:'Enter a valid nonnegative 1RM for each lift.'})
+      return
+    }
+    const draft=Object.fromEntries(names.map(name=>[name,num(String(maxDraft[name]??'').trim())]))
+    const userId=selected.user_id
+    setMaxSaveBusy(true)
+    setMaxSaveFeedback({type:'saving',text:'Saving 1RMs…'})
+    try{
+      const {error}=await supabase.rpc('admin_set_one_rep_maxes',{
+        target_user:userId,new_squat:draft.squat,new_bench:draft.bench,
+        new_deadlift:draft.deadlift,new_press:draft.press
+      })
+      if(error)throw error
+      const {data:confirmed,error:readError}=await supabase.from('one_rep_maxes')
+        .select('squat,bench,deadlift,press').eq('user_id',userId).maybeSingle()
+      if(readError||!confirmed)throw new Error('Save submitted, but the database confirmation could not be read. Refresh and verify before retrying.')
+      if(names.some(name=>num(confirmed[name])!==draft[name]))
+        throw new Error('Save submitted, but the returned database values do not match. Refresh before retrying.')
+      if(selected?.user_id!==userId)return
+      const verified=Object.fromEntries(names.map(name=>[name,confirmed[name]??'']))
+      setMaxes({...confirmed})
+      setMaxDraft(verified)
+      setMaxSaveFeedback({type:'success',text:'✓ 1RMs saved and verified for '+(selected.display_name||'this athlete')+'. Program weights will use these values.',when:new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})})
+    }catch(error){
+      setMaxSaveFeedback({type:'error',text:'✕ '+(error?.message||'Could not save 1RMs. Please retry.')})
+    }finally{setMaxSaveBusy(false)}
   }
 
   const saveUserProfile = async () => {
@@ -2059,9 +2084,14 @@ export function AdminPanel({ programs }) {
       <div className="section-heading"><div><span className="card-label">1 REP MAXES</span><h3>Coach training numbers</h3></div></div>
       <p className="helper-text">These are the athlete's true saved 1RMs. Workset calculates each program's training max and working percentages from them.</p>
       <div className="admin-edit-max-grid">
-        {['squat','bench','deadlift','press'].map(name=><label key={name}><span>{name[0].toUpperCase()+name.slice(1)}</span><input type="number" inputMode="decimal" value={maxDraft[name]} onChange={e=>setMaxDraft(v=>({...v,[name]:e.target.value}))} placeholder="—"/></label>)}
+        {['squat','bench','deadlift','press'].map(name=><label key={name}><span>{name[0].toUpperCase()+name.slice(1)}</span><input type="number" inputMode="decimal" value={maxDraft[name]} onChange={e=>{setMaxDraft(v=>({...v,[name]:e.target.value}));setMaxSaveFeedback(null)}} placeholder="—"/></label>)}
       </div>
-      <button className="wide-button" onClick={saveMaxes}>Save 1 rep maxes</button>
+      <button type="button" className="wide-button" onClick={saveMaxes} disabled={maxSaveBusy} aria-busy={maxSaveBusy}>{maxSaveBusy?'Saving 1RMs…':'Save 1 rep maxes'}</button>
+      {maxSaveFeedback&&<div className={'admin-max-save-feedback '+maxSaveFeedback.type}
+        role={maxSaveFeedback.type==='error'?'alert':'status'} aria-live={maxSaveFeedback.type==='error'?'assertive':'polite'}>
+        <strong>{maxSaveFeedback.text}</strong>
+        {maxSaveFeedback.when&&<small>Confirmed at {maxSaveFeedback.when}</small>}
+      </div>}
     </section>
 
     <section className="simple-card">
