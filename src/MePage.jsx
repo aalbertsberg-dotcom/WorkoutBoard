@@ -12,7 +12,7 @@ import WhatsNewPage from './WhatsNewPage.jsx'
 /** The Me landing page is navigation-first, with secondary tools closed by default.
  * Existing tools are mounted only when explicitly expanded. */
 export default function MePage({
-  session,displayName,onSaveDisplayName,onOpenHistory,onOpenNutrition,onOpenProgress,
+  session,displayName,onSaveDisplayName,onOpenHistory,onReviewLatest,onOpenNutrition,onOpenProgress,
   onOpenWeight,onOpenPrograms,
   profile,setProfile,progress,lifts,formatWeight,programs,dbNameToProgram,
   oneRepMaxes,onSaveOneRm,oneRmWeight,setOneRmWeight,oneRmReps,setOneRmReps,
@@ -26,6 +26,14 @@ export default function MePage({
 }){
   const savedNav=()=>window.history.state?.tab==='me'?window.history.state:null
   const [meView,setMeView]=useState(()=>savedNav()?.meView||'home')
+  const shortcutKey='workset:me-shortcuts:'+session?.user?.id
+  const [shortcuts,setShortcuts]=useState(()=>{try{const x=JSON.parse(localStorage.getItem(shortcutKey)||'[]');return Array.isArray(x)?x:[]}catch{return []}})
+  const [shortcutNotice,setShortcutNotice]=useState('')
+  const shortcutOptions=[['review','Review latest workout',onReviewLatest],['nutrition','Log food & water',onOpenNutrition],['weight','Log bodyweight',onOpenWeight],['strength','Update 1RMs',()=>jumpToTrack('strength')],['progress','View progress',onOpenProgress]]
+  const toggleShortcut=key=>{
+    const next=shortcuts.includes(key)?shortcuts.filter(x=>x!==key):[...shortcuts,key].slice(-2)
+    try{localStorage.setItem(shortcutKey,JSON.stringify(next));setShortcuts(next);setShortcutNotice('Shortcuts saved on this device.')}catch{setShortcutNotice('Could not save shortcuts.')}
+  }
   const [trackTarget,setTrackTarget]=useState(()=>autoOpenSection||savedNav()?.meTrack||null)
   const [trackRequest,setTrackRequest]=useState(()=>autoOpenSection||savedNav()?.meTrack?1:0)
   const openMeView=(view,{replace=false,track=null}={})=>{
@@ -102,6 +110,7 @@ export default function MePage({
 
     <MeDisplayNameEditor name={displayName} email={session?.user?.email} onSave={onSaveDisplayName}/>
 
+    {shortcutOptions.some(([key,,action])=>shortcuts.includes(key)&&action)&&<div className="me-personal-shortcuts" aria-label="Pinned actions">{shortcutOptions.filter(([key,,action])=>shortcuts.includes(key)&&action).map(([key,label,action])=><button type="button" key={key} onClick={()=>action()}>{label} ›</button>)}</div>}
     <nav className="me-quick-links me-main-menu" aria-label="Me menu">
       <button type="button" onClick={onOpenHistory}>
         <span className="me-shortcut-icon" aria-hidden="true">▦</span>
@@ -285,6 +294,12 @@ export default function MePage({
       <span><strong>What's New</strong><small>Update history · features, fixes and improvements</small></span><b aria-hidden="true">›</b>
     </button>
     <div className="me-section-group">
+      <MeSection id="shortcuts" title="Quick shortcuts" description="Pin up to two actions to Me" icon="★">
+        <div className="me-inner-card"><p>Choose up to two actions. Selecting a third replaces the oldest. Saved privately on this device.</p>
+          {shortcutOptions.map(([key,label])=><label className="me-shortcut-choice" key={key}><input type="checkbox" checked={shortcuts.includes(key)} onChange={()=>toggleShortcut(key)}/>{label}</label>)}
+          {shortcutNotice&&<p role="status">{shortcutNotice}</p>}
+        </div>
+      </MeSection>
       <MeSection id="preferences" title="Workout Preferences"
         description="Timers, sound, vibration and equipment" icon="⚙">
         <WorkoutSettingsPanel session={session}/>

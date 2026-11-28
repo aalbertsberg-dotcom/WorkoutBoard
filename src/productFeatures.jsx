@@ -18,6 +18,7 @@ import { validWeightDraft,validRepsDraft,displayedSetWeight,recordedWeightValue,
 import {pendingWorkoutSet,unfinishedWorkoutSets,completeExerciseEarly,completeExerciseSet,reopenExerciseSet,deleteWorkoutSet,addDropSet,addDropStage,validateDropStage} from './workoutSetActions.js'
 import {exerciseHistoryKey,resolveExerciseHistoryKey,exerciseAliasLookup,exerciseHistoryNames,preferredExerciseNames,aggregateExerciseHistory} from './exerciseIdentity.js'
 import ExerciseNamePicker from './ExerciseNamePicker.jsx'
+import {workoutStrengthMetrics} from './workoutMetrics.js'
 
 function parseVolume(value) {
   if (!value) return 0
@@ -726,30 +727,9 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
     activateExercise(index,newIndex,{scroll:false})
   }
 
-  const totalVolume=useMemo(()=> (workout.exercises||[]).reduce((sum,item)=>{
-    if(Array.isArray(item.setProgress)&&item.setProgress.length){
-      if(isDistanceExercise(item.name))return sum
-      return sum+item.setProgress.reduce((setSum,set)=>{
-        if(!set.done)return setSum
-        const weight=setWeight(item,set),reps=repsForSet(item,set)
-        return setSum+(weight&&reps ? weight*reps : 0)
-      },0)
-    }
-    return sum+parseVolume(item.result)
-  },0),[workout.exercises])
-  const bestEstimated1rm=useMemo(()=>{
-    let best=0
-    for(const item of workout.exercises||[]){
-      if(isDistanceExercise(item.name))continue
-      for(const set of item.setProgress||[]){
-        if(!set.done||set.skipped||set.drop_set)continue
-        const weight=setWeight(item,set),reps=repsForSet(item,set)
-        if(!weight||!reps)continue
-        best=Math.max(best,weight*(1+reps/30))
-      }
-    }
-    return best
-  },[workout.exercises])
+  const strengthMetrics=useMemo(()=>workoutStrengthMetrics({exercises:workout.exercises}),[workout.exercises])
+  const totalVolume=strengthMetrics.volume
+  const bestEstimated1rm=strengthMetrics.e1rm
 
   const cancelWorkout=async()=>{
     if(!planned?.id || cancelling)return

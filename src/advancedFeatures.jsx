@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase'
 import {buildPersonalRecords,REP_PR_TARGETS} from './personalRecords'
 import {exerciseAliasLookup} from './exerciseIdentity.js'
+import {correctedWorkoutMetrics,exerciseSetWeight,exerciseSetReps,isDistanceExercise} from './workoutMetrics.js'
 
 const today=()=>new Date().toISOString().slice(0,10)
 const round5=n=>Math.round(Number(n||0)/5)*5
@@ -187,37 +188,73 @@ export function MetconTracker({value,onChange,onRemove}) {
 }
 
 export function EditableWorkout({sessionRow,onSaved,onCancel}){
-  const [title,setTitle]=useState(sessionRow.title||'Workout')
-  const [workout,setWorkout]=useState(()=>structuredClone(sessionRow.workout||{}))
-  const [bodyweight,setBodyweight]=useState(sessionRow.bodyweight??'')
-  const [busy,setBusy]=useState(false)
-  const updateSet=(i,k,key,val)=>setWorkout(v=>({...v,exercises:(v.exercises||[]).map((ex,j)=>j!==i?ex:{
-    ...ex,setProgress:(ex.setProgress||[]).map((set,l)=>l!==k?set:{...set,[key]:val,...(key==='weight'?{weight_edited:true}:{})})
-  })}))
-  const updateMain=(i,key,val)=>setWorkout(v=>({...v,main:(v.main||[]).map((s,j)=>j===i?{...s,[key]:val}:s)}))
-  const updateEx=(i,key,val)=>setWorkout(v=>({...v,exercises:(v.exercises||[]).map((s,j)=>j===i?{...s,[key]:val}:s)}))
+  const draftKey='workset:completed-edit:'+sessionRow.user_id+':'+sessionRow.id
+  const base=String(sessionRow.updated_at||sessionRow.completed_at||'')
+  const original=()=>({title:sessionRow.title||'Workout',workout:structuredClone(sessionRow.workout||{}),bodyweight:sessionRow.bodyweight??sessionRow.workout?.bodyweight??''})
+  const [draft,setDraft]=useState(()=>{try{const d=JSON.parse(localStorage.getItem(draftKey)||'null');if(d?.base===base&&d.data)return d.data}catch{}return original()})
+  const [busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[localSaved,setLocalSaved]=useState(false)
+  const lock=useRef(false)
+  const {title,workout,bodyweight}=draft
+  const dirty=JSON.stringify(draft)!==JSON.stringify(original())
+  useEffect(()=>{if(!dirty)return;try{localStorage.setItem(draftKey,JSON.stringify({base,data:draft}));setLocalSaved(true)}catch{setLocalSaved(false)}},[draft,dirty,draftKey,base])
+  const field=(key,value)=>setDraft(v=>({...v,[key]:value}))
+  const change=fn=>setDraft(v=>({...v,workout:fn(v.workout)}))
+  const exChange=(i,fn)=>change(v=>({...v,exercises:(v.exercises||[]).map((ex,j)=>j===i?fn(ex):ex)}))
+  const setChange=(i,k,patch)=>exChange(i,ex=>({...ex,setProgress:ex.setProgress.map((s,j)=>j===k?{...s,...patch}:s)}))
+  const mainChange=(i,key,value)=>change(v=>({...v,main:v.main.map((s,j)=>j===i?{...s,[key]:value}:s)}))
+  const addSet=i=>exChange(i,ex=>({...ex,setProgress:[...ex.setProgress,{set:ex.setProgress.length+1,weight:'',actual_reps:'',weight_edited:true,done:true,skipped:false,extra:true}]}))
+  const metrics=correctedWorkoutMetrics(sessionRow,workout)
+  const clear=()=>{try{localStorage.removeItem(draftKey)}catch{}}
   const save=async()=>{
-    setBusy(true);const m=metricsFromWorkout(workout)
-    const {error}=await supabase.rpc('update_my_training_session',{target_session:sessionRow.id,new_title:title,new_workout:workout,new_total_volume:m.volume,new_estimated_1rm:m.e1rm,new_bodyweight:bodyweight===''?null:Number(bodyweight)})
-    setBusy(false);if(error){await noticeWorkset(error.message);return}onSaved?.()
+    if(lock.current)return
+    if(!title.trim()||(bodyweight!==''&&(!Number.isFinite(Number(bodyweight))||Number(bodyweight)<0))){setNotice('Enter a valid title and bodyweight.');return}
+    for(const ex of workout.exercises||[]){
+      if(!String(ex.name||'').trim()){setNotice('Every exercise needs a name.');return}
+      if(isDistanceExercise(ex.name))continue
+      for(const s of ex.setProgress||[]){
+        if(!s.done||s.skipped)continue
+        if((s.extra&&!exerciseSetReps(ex,s))||Number(s.weight)<0||(s.actual_reps!=null&&s.actual_reps!==''&&(!Number.isInteger(Number(s.actual_reps))||Number(s.actual_reps)<0))){setNotice('Check completed sets: enter valid weights and whole repetitions.');return}
+      }
+    }
+    if((workout.main||[]).some(s=>Number(s.weight)<0||Number(s.actualReps)<0)){setNotice('Weights and reps cannot be negative.');return}
+    if(navigator.onLine===false){setNotice(localSaved?'Draft saved on this device. Reconnect and tap Save changes.':'Offline: keep this editor open; draft storage unavailable.');return}
+    lock.current=true;setBusy(true);setNotice('Saving and verifying…')
+    try{
+      const getRow=()=>supabase.from('training_sessions').select('*').eq('id',sessionRow.id).eq('user_id',sessionRow.user_id).maybeSingle()
+      const latest=await getRow()
+      if(latest.error||!latest.data)throw Error(latest.error?.message||'Workout not found.')
+      if(sessionRow.updated_at&&latest.data.updated_at!==sessionRow.updated_at)throw Error('Workout changed on another device. Reopen it before applying corrections.')
+      const nextWorkout={...workout,bodyweight:bodyweight===''?'':Number(bodyweight)}
+      const {error}=await supabase.rpc('update_my_training_session',{target_session:sessionRow.id,new_title:title.trim(),new_workout:nextWorkout,new_total_volume:metrics.volume,new_estimated_1rm:metrics.e1rm,new_bodyweight:bodyweight===''?null:Number(bodyweight)})
+      if(error)throw Error(error.message)
+      const check=await getRow()
+      const canonical=x=>Array.isArray(x)?x.map(canonical):x&&typeof x==='object'?Object.fromEntries(Object.keys(x).sort().map(k=>[k,canonical(x[k])])):x
+      if(check.error||!check.data||check.data.title!==title.trim()||Number(check.data.total_volume)!==metrics.volume||Number(check.data.estimated_1rm||0)!==metrics.e1rm||JSON.stringify(canonical(check.data.workout))!==JSON.stringify(canonical(nextWorkout)))throw Error('Save sent but not verified. Reopen the workout before retrying.')
+      clear();await onSaved?.(check.data)
+    }catch(error){setNotice(error.message+(localSaved?' · Draft retained on this device.':''))}
+    finally{lock.current=false;setBusy(false)}
   }
-  return <section className="edit-workout-card">
-    <div className="section-heading"><div><span className="card-label">EDIT COMPLETED WORKOUT</span><h3>{sessionRow.title}</h3></div></div>
-    <label>Title<input value={title} onChange={e=>setTitle(e.target.value)}/></label>
-    {(workout.main||[]).map((s,i)=><div className="edit-set-row" key={i}><strong>Set {i+1}</strong><input type="number" value={s.weight??''} onChange={e=>updateMain(i,'weight',e.target.value)}/><span>lb ×</span><input type="number" value={s.actualReps??''} onChange={e=>updateMain(i,'actualReps',e.target.value)}/><span>reps</span></div>)}
-    {(workout.exercises||[]).map((x,i)=><div className="edit-ex-row" key={x.id||i}>
-      <input value={x.name||''} onChange={e=>updateEx(i,'name',e.target.value)} aria-label="Exercise name"/>
-      {x.setProgress?.length
-        ? <div className="history-edit-sets">{x.setProgress.map((set,k)=><label key={k}>Set {k+1}
-            <input type="number" inputMode="decimal" value={set.weight??''} onChange={e=>updateSet(i,k,'weight',e.target.value)} aria-label="Set weight"/>
-            <input type="number" inputMode="numeric" value={set.actual_reps??set.reps??''} onChange={e=>updateSet(i,k,'actual_reps',e.target.value)} aria-label="Set repetitions"/>
-            <span>lb × reps</span>
-          </label>)}</div>
-        : <input value={x.result||''} onChange={e=>updateEx(i,'result',e.target.value)} placeholder="Result" />}
-    </div>)}
-    <label>Notes<textarea rows={2} value={workout.note||''} onChange={e=>setWorkout(v=>({...v,note:e.target.value}))}/></label>
-    <label>Bodyweight<input type="number" value={bodyweight} onChange={e=>setBodyweight(e.target.value)}/></label>
-    <div className="edit-actions"><button className="secondary-action" onClick={onCancel}>Cancel</button><button className="primary-action" disabled={busy} onClick={save}>{busy?'Saving…':'Recalculate + save'}</button></div>
+  return <section className="edit-workout-card review-workout-editor" aria-label="Review workout">
+    <div className="section-heading"><div><span className="card-label">REVIEW COMPLETED WORKOUT</span><h3>{sessionRow.title}</h3><small>Correct what actually happened. Your program and saved 1RMs are unchanged.</small></div></div>
+    <fieldset disabled={busy}>
+    <label>Title<input value={title} onChange={e=>field('title',e.target.value)}/></label>
+    {(workout.main||[]).map((s,i)=><div className="edit-set-row" key={i}><strong>Set {i+1}</strong><input type="number" min="0" inputMode="decimal" aria-label={'Main set '+(i+1)+' weight'} value={s.weight??''} onChange={e=>mainChange(i,'weight',e.target.value)}/><span>lb ×</span><input type="number" min="0" inputMode="numeric" aria-label={'Main set '+(i+1)+' reps'} value={s.actualReps??''} onChange={e=>mainChange(i,'actualReps',e.target.value)}/><span>reps</span></div>)}
+    {(workout.exercises||[]).map((x,i)=><section className="edit-ex-row review-exercise" key={x.id||i}>
+      <label>Exercise name<input value={x.name||''} onChange={e=>exChange(i,ex=>({...ex,name:e.target.value}))}/></label>
+      {x.setProgress?.length?<div className="history-edit-sets">{x.setProgress.map((s,k)=><div className="review-set" key={k}>
+        <strong>{s.drop_set?'Drop '+(s.drop_stage||k+1):'Set '+(k+1)}</strong>
+        <label>Status<select aria-label={'Set '+(k+1)+' status'} value={s.skipped?'skipped':s.done?'done':'pending'} onChange={e=>setChange(i,k,{done:e.target.value==='done',skipped:e.target.value==='skipped'})}><option value="done">Completed</option><option value="skipped">Skipped</option><option value="pending">Not completed</option></select></label>
+        <label>Weight (lb)<input type="number" min="0" step="any" inputMode="decimal" value={s.weight??(exerciseSetWeight(x,s)||'')} onChange={e=>setChange(i,k,{weight:e.target.value,weight_edited:true})} aria-label="Set weight"/></label>
+        <label>Reps<input type="number" min="0" inputMode="numeric" value={s.actual_reps??s.actualReps??s.reps??''} onChange={e=>setChange(i,k,{actual_reps:e.target.value})} aria-label="Set repetitions"/></label>
+      </div>)}</div>:<label>Result<input value={x.result||''} onChange={e=>exChange(i,ex=>({...ex,result:e.target.value}))}/></label>}
+      {x.setProgress?.length>0&&!isDistanceExercise(x.name)&&<button type="button" className="secondary-action" onClick={()=>addSet(i)}>+ Add missed set</button>}
+    </section>)}
+    <label>Notes<textarea rows={2} value={workout.note??workout.notes??''} onChange={e=>change(v=>({...v,note:e.target.value}))}/></label>
+    <label>Bodyweight<input type="number" min="0" inputMode="decimal" value={bodyweight} onChange={e=>field('bodyweight',e.target.value)}/></label>
+    </fieldset>
+    <div className="review-metrics"><div><small>Recorded volume</small><strong>{Number(sessionRow.total_volume||0).toLocaleString()} lb</strong></div><div><small>Corrected volume</small><strong>{metrics.volume.toLocaleString()} lb</strong></div></div>
+    <p role="status" className="review-save-status">{notice||(dirty?(localSaved?'Draft saved on this device · not synced yet':'Unsaved changes'):'No corrections made.')}</p>
+    <div className="edit-actions"><button type="button" className="secondary-action" disabled={busy} onClick={async()=>{if(dirty&&!await confirmWorkset('Discard these workout corrections?'))return;clear();onCancel?.()}}>Cancel</button><button type="button" className="primary-action" disabled={busy||!dirty} onClick={save}>{busy?'Verifying…':'Save changes'}</button></div>
   </section>
 }
 

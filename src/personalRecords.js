@@ -1,4 +1,5 @@
 import {resolveExerciseHistoryKey} from './exerciseIdentity.js'
+import {exerciseSetWeight,exerciseSetReps,isDistanceExercise} from './workoutMetrics.js'
 
 // Completed workout records shared by the Progress PR board and Records view.
 // A set with "done: true" is a real logged set; planned sets are NOT records.
@@ -25,16 +26,16 @@ export function completedStrengthSets(rows=[],aliases={}){
         weight:w,reps:r,e1rm:w*(1+r/30),date,isDropSet})
     }
     for(const set of row.workout?.main||[]){
-      if(set.done===false)continue
+      if(set.done===false||set.skipped)continue
       add(row.primary_lift||row.lift||row.title||'Lift',set.weight,set.actualReps??set.actual_reps)
     }
     for(const ex of row.workout?.exercises||[]){
+      if(isDistanceExercise(ex.name))continue
       const progress=Array.isArray(ex.setProgress)?ex.setProgress:[]
       const actual=progress.filter(set=>set.done===true&&!set.skipped)
       if(actual.length){
         for(const set of actual){
-          const weight=set.weight_edited?set.weight:(set.weight??ex.load)
-          add(ex.name||row.primary_lift||row.title,weight,set.actual_reps??set.actualReps??set.reps,Boolean(set.drop_set))
+          add(ex.name||row.primary_lift||row.title,exerciseSetWeight(ex,set),exerciseSetReps(ex,set),Boolean(set.drop_set))
         }
       }else if(progress.length===0){
         const legacy=parseLegacyResult(ex.result)

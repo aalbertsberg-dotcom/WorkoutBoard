@@ -1156,13 +1156,14 @@ function RecoveryScreen({onDone}) {
   )
 }
 
-function TodayCompletedWorkouts({rows=[],onOpen}){
+function TodayCompletedWorkouts({rows=[],onOpen,onReview}){
   if(!rows.length)return null
   return <section className="today-completed-workouts" aria-label="Today's completed workouts">
     <button type="button" className="today-completed-head" onClick={()=>onOpen()}>
       <span><strong>Today's workouts</strong><small>{rows.length} completed · Open history & calendar</small></span>
       <b aria-hidden="true">›</b>
     </button>
+    {onReview&&rows[0]?.id&&<button type="button" className="today-review-shortcut" onClick={()=>onReview(rows[0].id)}>Review latest workout ›</button>}
     <div className="today-completed-list">
       {rows.map(row=><button type="button" className="today-completed-entry" key={row.id}
         onClick={()=>onOpen(row.training_session_id||row.id)}
@@ -1399,12 +1400,12 @@ function App() {
       setActiveTab('me')
     }else navigateTo('me')
   }
-  const openHistory = (id=null) => {
+  const openHistory = (id=null,review=false) => {
     const fromProgress=activeTab==='progress'
     setHistoryWorkoutId(id)
     setHistoryOpenedFromProgress(fromProgress)
     navigateTo('history')
-    window.history.replaceState({...window.history.state,historyView:null,historyDetailParent:false,workoutId:id,historyFromProgress:fromProgress},'',window.location.href)
+    window.history.replaceState({...window.history.state,historyView:null,historyDetailParent:false,workoutId:id,historyReview:review,historyFromProgress:fromProgress},'',window.location.href)
   }
   const openMobility = mode => {setMobilityMode(mode);navigateTo('mobility')}
 
@@ -3028,7 +3029,7 @@ function App() {
   const refreshOneRmCandidates = async () => {
     if(!session?.user)return
     const {data}=await supabase.from('training_sessions')
-      .select('id,title,program,primary_lift,workout,completed_at')
+      .select('id,title,program,primary_lift,workout,completed_at,session_date,total_volume,estimated_1rm,legacy_log_id')
       .eq('user_id',session.user.id).not('completed_at','is',null)
       .order('completed_at',{ascending:false}).limit(1000)
     setCompletedTrainingSessions(data||[])
@@ -3823,7 +3824,7 @@ function App() {
             />
           ) : trackedProgramsInfo.length && !showRegularToday ? (
             <section className="page-section tracked-today-state">
-              <TodayCompletedWorkouts rows={todayCompletedWorkouts} onOpen={openHistory}/>
+              <TodayCompletedWorkouts rows={todayCompletedWorkouts} onOpen={openHistory} onReview={id=>openHistory(id,true)}/>
               {completionSummary&&<section className="workout-complete-summary">
                 <div className="completion-check">✓</div>
                 <div><span className="card-label">WORKOUT COMPLETE</span><h2>{completionSummary.title||'Workout complete'}</h2><p>{completionSummary.program||trackedProgramsInfo.find(x=>x.key===plannedToday?.workout?.tracking_program_key)?.name||trackedTodayInfo?.name||'Workout'}</p></div>
@@ -4018,7 +4019,7 @@ function App() {
             </section>
           ) : !trackedProgramsInfo.length && !showRegularToday && !sharedWorkoutActive ? (
             <section className="page-section no-program-today">
-              <TodayCompletedWorkouts rows={todayCompletedWorkouts} onOpen={openHistory}/>
+              <TodayCompletedWorkouts rows={todayCompletedWorkouts} onOpen={openHistory} onReview={id=>openHistory(id,true)}/>
               <section className="today-choice-screen">
                 <div className="today-choice-heading">
                   <div><span className="card-label">TODAY</span>
@@ -4590,7 +4591,14 @@ function App() {
           <WorkoutHistory session={session} initialWorkoutId={historyWorkoutId}
             legacyHistory={progress.completed}
             fromProgress={historyOpenedFromProgress}
-            onBack={navigateBack} onChanged={refreshPlannedToday}/>
+            onBack={navigateBack} onChanged={async row=>{
+              if(row?.id){
+                setTodayCompletedWorkouts(list=>list.map(x=>x.id===row.id?row:x))
+                setCompletedTrainingSessions(list=>list.map(x=>x.id===row.id?row:x))
+                if(row.legacy_log_id)setHistory(list=>list.map(x=>x.id===row.legacy_log_id?{...x,workout:row.workout,updated_at:row.updated_at}:x))
+              }
+              await Promise.all([refreshPlannedToday(),refreshOneRmCandidates()])
+            }}/>
         ) : activeTab === 'progress' ? (
           <section className="page-section progress-page">
             <div className="progress-page-top">
@@ -4629,6 +4637,7 @@ function App() {
             session={session}
             displayName={displayName} onSaveDisplayName={saveDisplayName}
             onOpenHistory={()=>openHistory()}
+            onReviewLatest={(todayCompletedWorkouts[0]?.id||completedTrainingSessions[0]?.id)?()=>openHistory(todayCompletedWorkouts[0]?.id||completedTrainingSessions[0]?.id,true):null}
             onOpenNutrition={openNutrition}
             onOpenProgress={()=>openProgress('Overview')}
             onOpenWeight={()=>openTrack('measurements')}

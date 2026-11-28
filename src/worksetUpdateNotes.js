@@ -1,5 +1,12 @@
 // Human-readable highlights maintained with user-facing changes.
 export const WORKSET_UPDATE_NOTES=[
+  {id:'2026-11-28-review',date:'2026-11-28',title:'Review workouts and keep results consistent',items:[
+    ['New','Review your latest workout directly from Today. Correct names, weights, repetitions and skipped sets; add missed sets.'],
+    ['Improvement','Preview corrected volume and use a shared completed-set calculation for workout logging and review.'],
+    ['Improvement','Keep a private local correction draft and verify the saved workout before reporting success.'],
+    ['New','Pin up to two optional quick actions on Me from Settings & Account.'],
+    ['Fix','Use actual completed sets for recent strength records, excluding drop stages and distance exercises.']
+  ]},
   {id:'2026-11-28-journal',date:'2026-11-28',title:'Update history and release visibility',items:[
     ['New',"What's New in Settings & Account: dated highlights, current build and searchable source change history."],
     ['Improvement','Clearer navigation labels and regression checks for collapsible program previews.']

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {progressWorkoutLink} from './historyNavigation.js'
-import {completedMainLiftSets,strengthTrendFromCompletedSets} from './personalRecords.js'
+import {completedMainLiftSets,strengthTrendFromCompletedSets,completedStrengthSets} from './personalRecords.js'
 import { supabase } from './supabase'
 import { DialogPortal,OverlayPortal,confirmWorkset } from './worksetDialogs'
 import { allArchivePrograms, archiveProgramById, makePlannedFromArchive } from './archivePrograms'
@@ -415,14 +415,9 @@ export function PlatformProgress({
   const recentPrs=useMemo(()=>{
     const events=[]
     const best={}
-    const rows=[
-      ...progress.completed.map(r=>({date:r.completed_at,key:r.lift,label:r.lift,e1rm:Number(r._metrics?.estimated1rm||0),set:r._metrics?.bestSet})),
-      ...flexSessions.flatMap(r=>(r.workout?.exercises||[]).map(item=>{
-        const m=String(item.result||'').replace(/[×X]/g,'x').match(/(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/i)
-        const weight=m?Number(m[1]):0,reps=m?Number(m[2]):0
-        return {date:r.completed_at||r.session_date,key:item.name||r.title,label:item.name||r.title,e1rm:weight&&reps?weight*(1+reps/30):0,set:weight&&reps?{weight,reps}:null}
-      }))
-    ].sort((a,b)=>String(a.date).localeCompare(String(b.date)))
+    const rows=completedStrengthSets([...progress.completed,...flexSessions]).filter(set=>!set.isDropSet)
+      .map(set=>({date:set.date,key:set.identity,label:set.name,e1rm:set.e1rm,set:{weight:set.weight,reps:set.reps}}))
+      .sort((a,b)=>String(a.date).localeCompare(String(b.date)))
     for(const row of rows){
       if(!row.e1rm)continue
       if(row.e1rm>(best[row.key]||0)){
@@ -1698,7 +1693,7 @@ export function PlanPage({
         </section>}
         <div className="builder-two preview-controls">
           <label>Week<select value={previewWeek} onChange={e=>{setPreviewWeek(Number(e.target.value));setPreviewDay(0)}}>{Array.from({length:preview.weeksCount},(_,i)=>i+1).map(n=><option key={n} value={n}>Week {n}</option>)}</select></label>
-          <label>Workout<select value={previewDay} onChange={e=>setPreviewDay(Number(e.target.value))}>{previewDays.map((d,i)=><option key={i} value={i}>{d.title}</option>)}</select></label>
+          <label>Workout<select aria-label="Workout" value={previewDay} onChange={e=>setPreviewDay(Number(e.target.value))}>{previewDays.map((d,i)=><option key={i} value={i}>{d.title}</option>)}</select></label>
         </div>
         {previewDays[previewDay]&&<section className="sample-workout preview-day-disclosure">
           <button type="button" className="preview-day-toggle" aria-expanded={expandedPreviewDay===previewDay}

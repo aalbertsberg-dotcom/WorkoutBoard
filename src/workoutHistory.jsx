@@ -45,7 +45,7 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
   const [selectedId,setSelectedId]=useState(()=>stored()?stored().selectedId:initialWorkoutId)
   const [detailRow,setDetailRow]=useState(null)
   const [detailLoading,setDetailLoading]=useState(false)
-  const [editing,setEditing]=useState(false)
+  const [editing,setEditing]=useState(()=>Boolean(window.history.state?.historyReview))
   const [deleting,setDeleting]=useState(false)
   const [busy,setBusy]=useState(false)
 
@@ -190,6 +190,7 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
     <span className="history-entry-meta"><b>{summary(row)}</b><span>View details ›</span></span>
   </button>
 
+  useEffect(()=>{if(editing&&selected)requestAnimationFrame(()=>document.querySelector('.review-workout-editor')?.scrollIntoView({block:'start'}))},[editing,selected?.id])
   const workout=selected?.workout||{}
   const outdoor=workout.outdoor
   const kind=outdoorActivityKind(workout.quick_cardio_kind||workout.metcon?.activity||selected?.title)
@@ -221,7 +222,7 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
           {selected.__legacy
             ?<p className="history-legacy-badge">Older program workout · read-only history</p>
             :<div className="history-detail-actions" role="group" aria-label="Workout actions">
-              <button type="button" className="secondary-action" onClick={()=>{setEditing(x=>!x);setDeleting(false)}}>{editing?'Close editor':'Edit'}</button>
+              <button type="button" className="secondary-action" onClick={()=>{setEditing(x=>!x);setDeleting(false)}}>{editing?'Close editor':'Review & edit'}</button>
               <button type="button" className="secondary-action danger-lite" onClick={()=>{setDeleting(true);setEditing(false)}}>Delete</button>
             </div>}
         </div>
@@ -267,12 +268,11 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
         {(workout.note||workout.notes)&&<div className="history-notes"><strong>Notes</strong><p>{workout.note||workout.notes}</p></div>}
       </article>
       {editing&&<EditableWorkout key={selected.id} sessionRow={selected}
-        onCancel={()=>setEditing(false)} onSaved={async()=>{
-          setEditing(false);setMessage('Workout saved.')
-          setDetailRow(null)
-          await load()
-          setMonth(date=>new Date(date))
-          onChanged?.()
+        onCancel={()=>setEditing(false)} onSaved={async row=>{
+          setRows(prev=>prev.map(x=>x.id===row.id?row:x))
+          setMonthRows(prev=>prev.map(x=>x.id===row.id?row:x))
+          setDetailRow(row);setEditing(false);setMessage('Workout saved and synced.')
+          await onChanged?.(row)
         }}/>} 
       {deleting&&<DialogPortal label="Delete this workout?" onDismiss={()=>{if(!busy)setDeleting(false)}}><section className="simple-card history-delete-confirm">
         <h3>Delete this workout?</h3>

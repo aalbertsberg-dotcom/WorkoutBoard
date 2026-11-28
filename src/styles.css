@@ -9487,3 +9487,21 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
 .whats-new-log{display:grid;gap:7px;margin-top:10px}
 .whats-new-entry{display:grid;grid-template-columns:minmax(0,1fr) auto;min-height:48px;font-size:13px;text-decoration:none}
 .whats-new-entry code{font-size:11px;color:#c7e997}
+
+.today-review-shortcut{margin:0 12px 10px;min-height:44px;border:1px solid #3b536d;border-radius:9px;background:#1a2a40;color:#d9edff;font-weight:750;text-align:left;padding:8px 12px}
+.review-workout-editor{scroll-margin-top:100px;display:grid;gap:12px;min-width:0}
+.review-workout-editor fieldset{display:grid;gap:10px;min-width:0;border:0;padding:0;margin:0}
+.review-exercise{display:grid;gap:8px;min-width:0;border:1px solid #35465e;border-radius:12px;padding:10px;background:#111d30}
+.review-set{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;min-width:0;border-top:1px solid #35465e;padding:8px 0}
+.review-set strong{align-self:center}
+.review-set label,.review-workout-editor label{display:grid;gap:4px;min-width:0;color:#b6c5da;font-size:12px}
+.review-set input,.review-set select,.review-workout-editor input{min-width:0;width:100%;min-height:44px;font-size:16px}
+.review-metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.review-metrics>div{display:grid;gap:5px;padding:10px;border:1px solid #35465e;border-radius:10px}
+.review-metrics small{color:#a9bacf;font-size:12px}.review-metrics strong{color:#d9f99d;font-size:18px}
+.review-save-status{min-height:40px;line-height:1.4;color:#c9e5ad;margin:0;font-size:13px}
+.me-personal-shortcuts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.me-personal-shortcuts button{min-height:44px;padding:8px;border:1px solid #405976;border-radius:9px;background:#17283d;color:#dbeafe;font-weight:750;font-size:12px;overflow-wrap:anywhere}
+.me-personal-shortcuts button:only-child{grid-column:1/-1}
+.me-shortcut-choice{display:flex!important;align-items:center;gap:10px;min-height:44px;color:#e2e8f0}
+.me-shortcut-choice input{width:20px;height:20px;flex:0 0 auto}
