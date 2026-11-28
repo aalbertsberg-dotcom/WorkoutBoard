@@ -2,6 +2,7 @@ import { DialogPortal,OverlayPortal,confirmWorkset } from './worksetDialogs'
 import MePage from './MePage'
 import NutritionPage from './NutritionPage'
 import ProgramGroups from './ProgramGroups.jsx'
+import WorksetInbox from './WorksetInbox.jsx'
 import LiveSessionRecaps from './LiveSessionRecaps.jsx'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase'
@@ -3659,6 +3660,14 @@ function App() {
             <h1>{activeTab === 'today' ? 'Today' : activeTab === 'together' ? 'Together' : activeTab === 'program' ? 'Plan' : activeTab === 'whiteboard' ? 'Whiteboard' : activeTab === 'progress' ? 'Progress' : activeTab === 'history' ? 'History' : activeTab === 'nutrition' ? 'Nutrition' : activeTab === 'mobility' ? 'Warm-up & Cool-down' : activeTab === 'admin' ? 'Admin' : 'Me'}</h1>
             {appNavDepth>0&&<button type="button" className="app-history-back" onClick={navigateBack}>← Back</button>}
           </div>
+          <WorksetInbox session={session} profile={profile} friends={friends}
+            onOpenTogether={view=>{setTogetherView(view);navigateTo('together')}}
+            onAcceptLive={async sessionId=>{
+              if(!sessionId){setTogetherView('live');navigateTo('together');return}
+              const {data:joined}=await supabase.from('shared_sessions').select('*').eq('id',sessionId).maybeSingle()
+              if(joined){setActiveSession(joined);await refreshTogether(joined.id)}
+              setTogetherView('live');navigateTo('together')
+            }}/>
           <button className={'account-chip ' + (isAdmin ? 'admin' : '')} onClick={openMe}>
             <span>{displayName}</span>
             {isAdmin && <b>ADMIN</b>}
@@ -4222,7 +4231,7 @@ function App() {
             </div>
             {togetherView==='community' ? (
               <>
-              <ProgramGroups session={session} profile={profile} programOptions={togetherProgramOptions}/>
+              <ProgramGroups session={session} profile={profile} friends={friends} programOptions={togetherProgramOptions}/>
               <LiveSessionRecaps session={session}/>
               <PlatformProgress
                 view="community"
