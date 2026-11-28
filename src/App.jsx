@@ -3,6 +3,7 @@ import MePage from './MePage'
 import NutritionPage from './NutritionPage'
 import ProgramGroups from './ProgramGroups.jsx'
 import WorksetInbox from './WorksetInbox.jsx'
+import {attemptWorksetInviteEmail} from './inviteDelivery.js'
 import LiveSessionRecaps from './LiveSessionRecaps.jsx'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase'
@@ -2760,7 +2761,8 @@ function App() {
       setFriendMessage((result.friend_display_name||'That user')+' is now in your friends.')
       setFriendAddOpen(false)
     }else{
-      setFriendMessage('Friend request sent to '+(result?.friend_display_name||email)+'.')
+      const emailStatus=await attemptWorksetInviteEmail('friend_request',result?.friendship_id)
+      setFriendMessage('Friend request sent to '+(result?.friend_display_name||email)+'. '+emailStatus)
     }
     await refreshFriends()
   }
@@ -2831,19 +2833,22 @@ function App() {
     if(error){setTogetherMessage(error.message);return}
     const person=data?.[0]?.recipient_display_name||email
     setInviteEmail('')
-    setTogetherMessage('Invite sent to '+person+'.')
+    const emailStatus=await attemptWorksetInviteEmail('live_invite',data?.[0]?.invite_id)
+    setTogetherMessage('Invite sent to '+person+'. '+emailStatus)
     await refreshTogetherLobby()
   }
 
   const inviteFriendToActiveSession = async friend => {
     if(!activeSession?.id||activeSession.host_user_id!==session?.user?.id||!friend?.user_id)return
     setTogetherMessage('Inviting '+friend.display_name+'…')
-    const {error}=await supabase.rpc('invite_workset_friend_to_session',{
+    const {data,error}=await supabase.rpc('invite_workset_friend_to_session',{
       target_session:activeSession.id,
       friend_user_id:friend.user_id,
     })
-    setTogetherMessage(error?error.message:'Invite sent to '+friend.display_name+'.')
-    if(!error)await refreshTogetherLobby()
+    if(error){setTogetherMessage(error.message);return}
+    const emailStatus=await attemptWorksetInviteEmail('live_invite',data)
+    setTogetherMessage('Invite sent to '+friend.display_name+'. '+emailStatus)
+    await refreshTogetherLobby()
   }
 
   const respondTogetherInvite = async (invite,response) => {
@@ -3359,7 +3364,9 @@ function App() {
           friend_user_id:friendId,
         })
       ))
-      friendInviteCount=inviteResults.filter(result=>!result.error).length
+      const successful=inviteResults.filter(result=>!result.error)
+      friendInviteCount=successful.length
+      await Promise.all(successful.map(result=>attemptWorksetInviteEmail('live_invite',result.data)))
     }
 
     setTogetherReady(true)
