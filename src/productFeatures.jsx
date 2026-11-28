@@ -16,7 +16,7 @@ import {explainProgramSetWeight,adjustedManualSetWeight} from './programWeightNo
 import {ORIGINAL_CHALLENGE_KEY,ORIGINAL_CHALLENGE_NAME,ORIGINAL_CHALLENGE_ID,ORIGINAL_CHALLENGE_LIFTS,isOriginalChallengeMaxTest,isOriginalChallengeTestSet,originalChallengeCompletedTest,originalChallengeWeek6Estimates,originalChallengeProgramMaxes} from './originalChallengeCycle.js'
 import { validWeightDraft,validRepsDraft,displayedSetWeight,recordedWeightValue,canFinishQuickCardio,withoutUnreliableRoute,outdoorDistancePresentation,workoutDistancePresentation,effectiveCardioDurationSeconds,autosaveDelayMs } from './trackingRules'
 import {pendingWorkoutSet,unfinishedWorkoutSets,completeExerciseEarly,completeExerciseSet,reopenExerciseSet,deleteWorkoutSet,addDropSet,addDropStage,validateDropStage} from './workoutSetActions.js'
-import {exerciseHistoryKey,resolveExerciseHistoryKey,exerciseAliasLookup,exerciseHistoryNames,aggregateExerciseHistory} from './exerciseIdentity.js'
+import {exerciseHistoryKey,resolveExerciseHistoryKey,exerciseAliasLookup,exerciseHistoryNames,rankExerciseHistoryCandidates,aggregateExerciseHistory} from './exerciseIdentity.js'
 
 function parseVolume(value) {
   if (!value) return 0
@@ -1242,8 +1242,8 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       const key=String(item.name||'').trim().toLowerCase()
       const hist=historyByExercise[resolveExerciseHistoryKey(item.name,aliasLookup)]
       const aliasRow=exerciseAliases.find(row=>row.alias_key===exerciseHistoryKey(item.name))
-      const historyCandidates=knownExerciseNames.filter(name=>
-        exerciseHistoryKey(name)!==exerciseHistoryKey(item.name))
+      const historyCandidates=rankExerciseHistoryCandidates(item.name,knownExerciseNames.filter(name=>
+        exerciseHistoryKey(name)!==exerciseHistoryKey(item.name)))
       const currentBest=bestLoadedSet(item)
       const current=currentBest&&!isDistanceExercise(item.name)?{weight:currentBest.weight,reps:currentBest.reps,e1rm:currentBest.weight*(1+currentBest.reps/30)}:null
       const isPR=Boolean(current&&hist&&(current.weight>(hist.bestWeight||0)||current.e1rm>(hist.bestE||0)+.5))
