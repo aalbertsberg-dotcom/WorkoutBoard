@@ -9165,7 +9165,7 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
 .ws-header-actions .account-chip{flex:0 0 auto}
 .ws-bell-wrap{position:relative;flex:0 0 auto;display:flex;align-items:center;z-index:400}
 .ws-bell-popover{
-  position:absolute;right:0;top:calc(100% + 10px);
+  position:fixed;right:12px;top:80px;
   width:min(350px,calc(100vw - 24px));max-height:min(420px,65dvh);
   overflow-y:auto;overscroll-behavior:contain;
   background:#111f32;color:#eff7ff;border:1px solid #465c7a;
@@ -9205,7 +9205,7 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   .app-header > div:first-child{min-width:0}
   .ws-header-actions{gap:8px;margin-left:0}
   .ws-bell-wrap{z-index:400}
-  .ws-bell-popover{top:calc(100% + 10px)}
+  .ws-bell-popover{position:fixed}
   .ws-inbox-panel.ws-inbox-inline{position:relative;inset:auto;width:100%;
     height:min(65dvh,640px);min-height:400px;max-height:none}
 }
