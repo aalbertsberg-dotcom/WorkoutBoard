@@ -1,7 +1,7 @@
 const {test,expect}=require('@playwright/test')
 
 const userId='00000000-0000-4000-8000-000000000001'
-async function signedIn(page,{withStartedWalk=false,withStartedStrength=false,withStrengthSession=false,withOvernightWalk=false,withNotification=false}={}){
+async function signedIn(page,{withStartedWalk=false,withStartedStrength=false,withStrengthSession=false,withOvernightWalk=false,withNotification=false,withAdmin=false}={}){
   await page.addInitScript(user=>{
     const expires=Math.floor(Date.now()/1000)+86400*365
     localStorage.setItem('sb-example-auth-token',JSON.stringify({
@@ -15,6 +15,7 @@ async function signedIn(page,{withStartedWalk=false,withStartedStrength=false,wi
         created_at:'2026-01-01T00:00:00Z',user_metadata:{},app_metadata:{}}
     }))
   },userId)
+  let storedMaxes={squat:null,bench:197.33,deadlift:261.33,press:160}
   await page.route('https://example.supabase.co/**',async route=>{
     const req=route.request(),url=req.url(),method=req.method()
     const headers={
@@ -101,8 +102,35 @@ async function signedIn(page,{withStartedWalk=false,withStartedStrength=false,wi
       await route.fulfill({status:200,contentType:'application/json',headers,body:JSON.stringify([row])})
       return
     }
+    if(withAdmin && url.includes('/rpc/admin_user_overview_v2')){
+      await route.fulfill({status:200,contentType:'application/json',headers,
+        body:JSON.stringify([{user_id:userId,display_name:'Test Athlete',email:'tester@example.test',
+          workout_count:2,total_volume:1200,last_workout:null,active_program:'andy-hybrid-12',current_week:1}])})
+      return
+    }
+    if(withAdmin && url.includes('/rpc/admin_set_one_rep_maxes')){
+      const data=req.postDataJSON()
+      if(Number(data.new_press)===9999){
+        await route.fulfill({status:400,contentType:'application/json',headers,
+          body:JSON.stringify({message:'Test database refused the 1RM update',code:'P0001'})})
+        return
+      }
+      storedMaxes={
+        squat:data.new_squat,bench:data.new_bench,
+        deadlift:data.new_deadlift,press:data.new_press
+      }
+      await route.fulfill({status:200,contentType:'application/json',headers,body:'null'})
+      return
+    }
+    if(withAdmin && url.includes('/rest/v1/one_rep_maxes')){
+      const singular=(req.headers()['accept']||'').includes('application/vnd.pgrst.object+json')
+      const row={user_id:userId,...storedMaxes}
+      await route.fulfill({status:200,contentType:'application/json',headers,
+        body:JSON.stringify(singular?row:[row])})
+      return
+    }
     if(url.includes('/rpc/is_workout_admin')){
-      await route.fulfill({status:200,contentType:'application/json',headers,body:'false'})
+      await route.fulfill({status:200,contentType:'application/json',headers,body:withAdmin?'true':'false'})
       return
     }
     if(withNotification && url.includes('/rest/v1/workset_notifications') && method==='GET'){
@@ -636,4 +664,39 @@ test('Planned strength runner finishes after two sets, deletes a set, and record
   await expect(exercise.locator('.set-progress-button.done')).toHaveCount(3)
   await expect(exercise.getByText('Drop stage 2')).toBeVisible()
   expect(errors).toEqual([])
+})
+
+test('Admin 1RM save confirms persisted weights directly under Save button',async({page})=>{
+  const errors=[]
+  page.on('pageerror',error=>errors.push(error.message))
+  await signedIn(page,{withAdmin:true})
+  await expect(page.locator('.app-header h1')).toHaveText('Today',{timeout:15000})
+  await page.locator('.account-chip').click()
+  await page.getByRole('button',{name:/Administration/}).click()
+  await expect(page.locator('.app-header h1')).toHaveText('Admin')
+  await page.locator('.admin-user-row').first().click()
+  const card=page.locator('.simple-card').filter({has:page.getByRole('heading',{name:'Coach training numbers'})})
+  await expect(card).toBeVisible()
+  await card.getByLabel('Press').fill('165.50')
+  await card.getByRole('button',{name:'Save 1 rep maxes'}).click()
+  const saved=card.locator('.admin-max-save-feedback.success')
+  await expect(saved).toBeVisible()
+  await expect(saved).toContainText('1RMs saved and verified')
+  await expect(saved).toContainText('Confirmed at')
+  await card.getByLabel('Bench').fill('202.5')
+  await expect(saved).toHaveCount(0)
+  expect(errors).toEqual([])
+})
+
+test('Admin 1RM database rejection is visibly reported beside Save',async({page})=>{
+  await signedIn(page,{withAdmin:true})
+  await expect(page.locator('.app-header h1')).toHaveText('Today',{timeout:15000})
+  await page.locator('.account-chip').click()
+  await page.getByRole('button',{name:/Administration/}).click()
+  await page.locator('.admin-user-row').first().click()
+  const card=page.locator('.simple-card').filter({has:page.getByRole('heading',{name:'Coach training numbers'})})
+  await card.getByLabel('Press').fill('9999')
+  await card.getByRole('button',{name:'Save 1 rep maxes'}).click()
+  await expect(card.getByRole('alert')).toContainText('Test database refused')
+  await expect(card.locator('.admin-max-save-feedback.success')).toHaveCount(0)
 })
