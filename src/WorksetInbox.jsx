@@ -286,7 +286,7 @@ export default function WorksetInbox({session,profile,friends=[],onOpenTogether,
             </button>
             {!row.resolved_at&&(row.kind==='friend_request'||row.kind==='live_invite'||row.kind==='program_invite')&&
               <div className="ws-notification-actions">
-                <button type="button" disabled={busy} onClick={()=>respond(row,'accepted')}>Accept</button>
+                <button type="button" disabled={busy} onClick={()=>respond(row,'accepted')}>{row.kind==='program_invite'?'Accept & share':'Accept'}</button>
                 <button type="button" disabled={busy} onClick={()=>respond(row,'declined')}>Decline</button>
               </div>}
             {!row.read_at&&<button type="button" className="ws-mark-read" onClick={()=>markRead(row.id)}>Mark read</button>}
