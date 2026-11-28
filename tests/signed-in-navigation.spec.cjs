@@ -736,6 +736,7 @@ test('Exercise entry suggests only a few past names, supports manual match and r
   const match=exercise.getByRole('group',{name:'Matching exercise names'})
   await expect(match.getByRole('button',{name:/Hammer ISO lateral/})).toBeVisible()
   await match.getByRole('button',{name:/Hammer ISO lateral/}).click()
+  page.once('dialog',dialog=>dialog.accept())
   await exercise.getByRole('button',{name:'Link history'}).click()
   await expect(exercise.getByText('Linked to')).toBeVisible()
   const rename=exercise.locator('.exercise-rename-inline')
