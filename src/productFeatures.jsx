@@ -105,7 +105,13 @@ function repsForSet(item,set) {
 }
 
 function isDistanceExercise(name) {
-  return /carry|walk|run|row|bike|sled|sprint/i.test(String(name||''))
+  const value=String(name||'').trim().toLowerCase()
+  // "Row" can mean cardio, but Cable Row / Hammer ISO-Lateral Row is
+  // resistance training and must count toward volume and drop-set eligibility.
+  if(/\brows?\b/.test(value)&&
+    /\b(cable|dumbbell|db|barbell|seated|chest.supported|machine|hammer|iso.lateral|pendlay|bent.over|t.bar|one.arm|single.arm|landmine|seal)\b/.test(value))
+    return false
+  return /\b(carr(?:y|ies)|walk|run|running|row|rowing|bike|cycling|sled|sprint)\b/.test(value)
 }
 
 function bestLoadedSet(item) {
