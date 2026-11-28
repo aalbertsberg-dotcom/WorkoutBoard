@@ -82,7 +82,7 @@ export default function MePage({
       <span>{feedbackUnread?'('+feedbackUnread+' new) ':''}›</span>
     </button>}
 
-    <button type="button" className="signout-button me-signout" onClick={onSignOut}>Sign out</button>
+
     </>:meView==='inbox'?<>
     <div className="me-subpage-header">
       <button type="button" className="me-subpage-back" onClick={()=>openMeView('home')} aria-label="Back to Me">
