@@ -1304,7 +1304,7 @@ function App() {
     // location. Only opening a detail screen adds a Back step.
     const state={...(window.history.state||{}),worksetApp:true,tab,progressSection:section,
       worksetDepth:transition.depth,
-      ...(tab!==activeTab?{meView:'home',meTrack:null,meParent:false,historyView:null,historyDetailParent:false}:{} )}
+      ...(tab!==activeTab?{meView:'home',meTrack:null,meParent:false,meFromProgress:false,meInbox:null,historyView:null,historyDetailParent:false}:{} )}
     if(transition.action==='replace')window.history.replaceState(state,'',window.location.href)
     else window.history.pushState(state,'',window.location.href)
     setAppNavDepth(transition.depth)
@@ -1386,13 +1386,23 @@ function App() {
     navigateTo('nutrition')
   }
   const openProgress = (section='Overview') => navigateTo('progress',{progressSection:section})
-  const openTrack = (section='strength') => {setTrackFocus(section);navigateTo('me')}
+  const openTrack = (section='strength') => {
+    setTrackFocus(section)
+    if(activeTab==='progress'){
+      const state=window.history.state||{}
+      const depth=Number(state.worksetDepth||0)+1
+      window.history.pushState({...state,worksetApp:true,tab:'me',meView:'training',
+        meTrack:section,meParent:true,meFromProgress:true,meInbox:null,worksetDepth:depth},'',window.location.href)
+      setAppNavDepth(depth)
+      setActiveTab('me')
+    }else navigateTo('me')
+  }
   const openHistory = (id=null) => {
     const fromProgress=activeTab==='progress'
     setHistoryWorkoutId(id)
     setHistoryOpenedFromProgress(fromProgress)
     navigateTo('history')
-    window.history.replaceState({...window.history.state,historyView:null,workoutId:id,historyFromProgress:fromProgress},'',window.location.href)
+    window.history.replaceState({...window.history.state,historyView:null,historyDetailParent:false,workoutId:id,historyFromProgress:fromProgress},'',window.location.href)
   }
   const openMobility = mode => {setMobilityMode(mode);navigateTo('mobility')}
 
@@ -1409,6 +1419,7 @@ function App() {
         setExtraWorkoutOpen(false)
       }
       setActiveTab(state.tab)
+      setTrackFocus(state.tab==='me'?state.meTrack||null:null)
       if(state.tab==='history'){
         setHistoryWorkoutId(state.workoutId||null)
         setHistoryOpenedFromProgress(Boolean(state.historyFromProgress))
@@ -1439,6 +1450,7 @@ function App() {
       }
       if(!next?.worksetApp)return
       setActiveTab(next.tab||'today')
+      setTrackFocus(next.tab==='me'?next.meTrack||null:null)
       if(next.tab==='history'){
         setHistoryWorkoutId(next.workoutId||null)
         setHistoryOpenedFromProgress(Boolean(next.historyFromProgress))

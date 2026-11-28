@@ -85,7 +85,7 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
   const saveView=(id=selectedId,extra={})=>{
     const state=window.history.state
     if(state?.tab!=='history')return
-    return {...state,historyView:{mode,month:dateKey({session_date:[month.getFullYear(),String(month.getMonth()+1).padStart(2,'0'),'01'].join('-')}),day,query,categoryFilter,selectedId:id,...extra}}
+    return {...state,historyView:{mode,month:[month.getFullYear(),String(month.getMonth()+1).padStart(2,'0'),'01'].join('-'),day,query,categoryFilter,selectedId:id,...extra}}
   }
   useEffect(()=>{
     const state=saveView()
@@ -97,12 +97,12 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
       const view=event.state.historyView
       setSelectedId(view?view.selectedId:event.state.workoutId||null)
       if(view){
-        setMode(view.mode||'calendar');setMonth(new Date(view.month+'T12:00:00'))
+        setMode(view.mode||'calendar');setMonth(prev=>prev.getFullYear()===Number(view.month.slice(0,4))&&prev.getMonth()+1===Number(view.month.slice(5,7))?prev:new Date(view.month+'T12:00:00'))
         setDay(view.day||localDay());setQuery(view.query||'');setCategoryFilter(view.categoryFilter||'All')
       }
       setEditing(false);setDeleting(false)
       if(view?.selectedId)window.scrollTo({top:0,behavior:'instant'})
-      else requestAnimationFrame(()=>document.querySelector('.history-day-title')?.scrollIntoView({block:'nearest'}))
+      else requestAnimationFrame(()=>window.scrollTo({top:event.state.historyScrollY||0,behavior:'instant'}))
     }
     window.addEventListener('popstate',restore)
     return()=>window.removeEventListener('popstate',restore)
@@ -127,12 +127,13 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
         event.preventDefault()
         if(deleting)setDeleting(false)
         else if(editing)setEditing(false)
+        else if(fromProgress)onBack?.()
         else openList()
       }
     }
     window.addEventListener('workset-native-back',onNativeBack)
     return()=>window.removeEventListener('workset-native-back',onNativeBack)
-  },[deleting,editing,selectedId,mode,month,day,query,categoryFilter])
+  },[deleting,editing,selectedId,mode,month,day,query,categoryFilter,fromProgress,onBack])
   const legacySelected=isLegacyWorkoutLink(selectedId)
     ?legacyWorkoutDetail(legacyHistory.find(row=>String(row.id)===String(selectedId).slice(7)))
     :null
@@ -145,8 +146,11 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
   const filtered=useMemo(()=>rows.filter(row=>workoutHistoryMatches(row,categoryFilter,query)),[rows,query,categoryFilter])
   const dayRows=monthRows.filter(row=>workoutHistoryMatches(row,categoryFilter)&&dateKey(row)===day)
   const select=row=>{
-    const state=saveView(row.id,{detailParent:true})
-    if(state)window.history.pushState({...state,historyDetailParent:true,worksetDepth:Number(state.worksetDepth||0)+1},'',window.location.href)
+    const state=saveView(row.id)
+    if(state){
+      window.history.replaceState({...saveView(null),historyScrollY:window.scrollY},'',window.location.href)
+      window.history.pushState({...state,historyDetailParent:true,worksetDepth:Number(state.worksetDepth||0)+1},'',window.location.href)
+    }
     setSelectedId(row.id);setEditing(false);setDeleting(false);setMessage('')
     window.scrollTo({top:0,behavior:'instant'})
   }
@@ -265,6 +269,7 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
       {editing&&<EditableWorkout key={selected.id} sessionRow={selected}
         onCancel={()=>setEditing(false)} onSaved={async()=>{
           setEditing(false);setMessage('Workout saved.')
+          setDetailRow(null)
           await load()
           setMonth(date=>new Date(date))
           onChanged?.()

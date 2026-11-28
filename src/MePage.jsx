@@ -37,7 +37,7 @@ export default function MePage({
       }
       if(view!==previous||track!==state.meTrack){
         const push=!replace&&previous==='home'&&view!=='home'
-        const next={...state,meView:view,meTrack:track,meParent:push||(!replace&&state.meParent),
+        const next={...state,meView:view,meTrack:track,meParent:push||(!replace&&state.meParent),meFromProgress:!replace&&state.meFromProgress,
           worksetDepth:Math.max(0,Number(state.worksetDepth)||0)+(push?1:0)}
         if(push)window.history.pushState(next,'',window.location.href)
         else window.history.replaceState(next,'',window.location.href)
@@ -75,11 +75,16 @@ export default function MePage({
       ?.scrollIntoView({block:'start',behavior:'smooth'}),140)
   }
   useEffect(()=>{if(autoOpenSection)jumpToTrack(autoOpenSection)},[autoOpenSection])
-  useEffect(()=>{if(inboxRequest?.id)openMeView('inbox')},[inboxRequest?.id])
+  useEffect(()=>{
+    if(!inboxRequest?.id)return
+    openMeView('inbox')
+    const state=savedNav()
+    if(state)window.history.replaceState({...state,meInbox:{view:inboxRequest.view,chatId:inboxRequest.chatId,groupId:inboxRequest.groupId}},'',window.location.href)
+  },[inboxRequest?.id])
   useEffect(()=>{
     // Progress deep links to edit a specific field take precedence over the
     // header's previous "Me home" request.
-    if(homeRequest>0&&!inboxRequest?.id&&!autoOpenSection)openMeView('home',{replace:true})
+    if(homeRequest>0&&!inboxRequest?.id&&!autoOpenSection)openMeView('home',{replace:Boolean(savedNav()?.meFromProgress)})
   },[homeRequest])
   return <section className={'page-section me-page me-view-'+meView} aria-label="Me">
     {meView==='home'?<>
@@ -133,16 +138,16 @@ export default function MePage({
       <p>Notifications, invitations and private conversations</p>
     </div>
       <WorksetInbox session={session} profile={profile} setProfile={setProfile} friends={friends}
-        initialView={inboxRequest?.view||'notifications'}
-        initialChatId={inboxRequest?.chatId||null}
-        initialProgramGroupId={inboxRequest?.groupId||null}
+        initialView={(inboxRequest?.id?inboxRequest.view:savedNav()?.meInbox?.view)||'notifications'}
+        initialChatId={(inboxRequest?.id?inboxRequest.chatId:savedNav()?.meInbox?.chatId)||null}
+        initialProgramGroupId={(inboxRequest?.id?inboxRequest.groupId:savedNav()?.meInbox?.groupId)||null}
         openRequest={inboxRequest?.id||0}
         onOpenTogether={onInboxOpenTogether} onAcceptLive={onInboxAcceptLive}/>
 
     </>:meView==='training'?<>
     <div className="me-subpage-header">
-      <button type="button" className="me-subpage-back" onClick={()=>openMeView('home')} aria-label="Back to Me">
-        <span aria-hidden="true">←</span> Me
+      <button type="button" className="me-subpage-back" onClick={()=>openMeView('home')} aria-label={savedNav()?.meFromProgress?'Back to Progress':'Back to Me'}>
+        <span aria-hidden="true">←</span> {savedNav()?.meFromProgress?'Progress':'Me'}
       </button>
       <h2>Training &amp; Goals</h2>
       <p>Edit training details whenever you need to</p>
