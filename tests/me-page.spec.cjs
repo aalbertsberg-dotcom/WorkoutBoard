@@ -91,13 +91,15 @@ test('Calculator, baseline, program action, and sign out remain connected',async
   await page.locator('[data-me-section="programs"] .me-section-toggle').click()
   await page.getByRole('button',{name:'Plan & programs'}).click()
   await expect(page.locator('#me-test-navigation')).toContainText('Plan opened')
+  await page.getByRole('button',{name:'Back to Me'}).click()
+  await openSettings(page)
   await page.getByRole('button',{name:'Sign out'}).click()
   await expect(page.locator('#me-test-navigation')).toContainText('Sign out clicked')
 })
 test('All collapsed navigation buttons are fully reachable on narrow and desktop screens',async({page})=>{
   await openMe(page)
   const buttons=page.locator('.me-page button:visible')
-  expect(await buttons.count()).toBeGreaterThanOrEqual(7)
+  expect(await buttons.count()).toBeGreaterThanOrEqual(6)
   for(let i=0;i<await buttons.count();i++){
     const btn=buttons.nth(i)
     await btn.scrollIntoViewIfNeeded()
