@@ -16,7 +16,8 @@ import {explainProgramSetWeight,adjustedManualSetWeight} from './programWeightNo
 import {ORIGINAL_CHALLENGE_KEY,ORIGINAL_CHALLENGE_NAME,ORIGINAL_CHALLENGE_ID,ORIGINAL_CHALLENGE_LIFTS,isOriginalChallengeMaxTest,isOriginalChallengeTestSet,originalChallengeCompletedTest,originalChallengeWeek6Estimates,originalChallengeProgramMaxes} from './originalChallengeCycle.js'
 import { validWeightDraft,validRepsDraft,displayedSetWeight,recordedWeightValue,canFinishQuickCardio,withoutUnreliableRoute,outdoorDistancePresentation,workoutDistancePresentation,effectiveCardioDurationSeconds,autosaveDelayMs } from './trackingRules'
 import {pendingWorkoutSet,unfinishedWorkoutSets,completeExerciseEarly,completeExerciseSet,reopenExerciseSet,deleteWorkoutSet,addDropSet,addDropStage,validateDropStage} from './workoutSetActions.js'
-import {exerciseHistoryKey,resolveExerciseHistoryKey,exerciseAliasLookup,exerciseHistoryNames,rankExerciseHistoryCandidates,aggregateExerciseHistory} from './exerciseIdentity.js'
+import {exerciseHistoryKey,resolveExerciseHistoryKey,exerciseAliasLookup,exerciseHistoryNames,aggregateExerciseHistory} from './exerciseIdentity.js'
+import ExerciseNamePicker from './ExerciseNamePicker.jsx'
 
 function parseVolume(value) {
   if (!value) return 0
@@ -175,6 +176,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
   const [historySessionRows,setHistorySessionRows]=useState([])
   const [exerciseAliases,setExerciseAliases]=useState([])
   const [historyLinkDrafts,setHistoryLinkDrafts]=useState({})
+  const [renameExerciseDrafts,setRenameExerciseDrafts]=useState({})
   const [historyLinkStatus,setHistoryLinkStatus]=useState('')
   const [linkingHistory,setLinkingHistory]=useState(false)
   const aliasLookup=useMemo(()=>exerciseAliasLookup(exerciseAliases),[exerciseAliases])
@@ -1228,7 +1230,11 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
         <button type="button" className="conditioning-remove" onClick={()=>setExerciseAdderOpen(false)}>Cancel</button>
       </div>
       <div className="quick-add-row">
-        <label className="conditioning-field"><span>Movement</span><input autoFocus enterKeyHint="done" value={newExercise.name} onChange={e=>setNewExercise(v=>({...v,name:e.target.value}))} onKeyDown={e=>{if(e.key==='Enter'&&String(newExercise.name||'').trim()){e.preventDefault();addExercise()}}} placeholder="e.g. Lat Pulldown"/></label>
+        <label className="conditioning-field"><span>Movement</span><ExerciseNamePicker
+          autoFocus value={newExercise.name} label="Exercise name to add" placeholder="Type to find an exercise…"
+          choices={[...knownExerciseNames,...(workout.exercises||[]).map(exercise=>exercise.name)]}
+          onChange={name=>setNewExercise(v=>({...v,name}))}
+          onSelect={name=>setNewExercise(v=>({...v,name}))}/></label>
         <button type="button" className="primary-action quick-add-submit" disabled={!String(newExercise.name||'').trim()} onClick={addExercise}>Add</button>
       </div>
       <div className="add-exercise-grid compact-add-details">
@@ -1242,8 +1248,8 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       const key=String(item.name||'').trim().toLowerCase()
       const hist=historyByExercise[resolveExerciseHistoryKey(item.name,aliasLookup)]
       const aliasRow=exerciseAliases.find(row=>row.alias_key===exerciseHistoryKey(item.name))
-      const historyCandidates=rankExerciseHistoryCandidates(item.name,knownExerciseNames.filter(name=>
-        exerciseHistoryKey(name)!==exerciseHistoryKey(item.name)))
+      const historyCandidates=knownExerciseNames.filter(name=>
+        exerciseHistoryKey(name)!==exerciseHistoryKey(item.name))
       const currentBest=bestLoadedSet(item)
       const current=currentBest&&!isDistanceExercise(item.name)?{weight:currentBest.weight,reps:currentBest.reps,e1rm:currentBest.weight*(1+currentBest.reps/30)}:null
       const isPR=Boolean(current&&hist&&(current.weight>(hist.bestWeight||0)||current.e1rm>(hist.bestE||0)+.5))
@@ -1295,15 +1301,43 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
               </p>}
               <p>Only link names you know are the same exercise and movement. Brand names alone are not enough.</p>
               {historyCandidates.length>0&&<div className="exercise-history-link-row">
-                <select aria-label={'Match history for '+item.name}
+                <ExerciseNamePicker
                   value={historyLinkDrafts[exerciseHistoryKey(item.name)]||''}
-                  onChange={e=>setHistoryLinkDrafts(v=>({...v,[exerciseHistoryKey(item.name)]:e.target.value}))}>
-                  <option value="">Choose a past exercise…</option>
-                  {historyCandidates.map(name=><option key={exerciseHistoryKey(name)} value={name}>{name}</option>)}
-                </select>
-                <button type="button" disabled={linkingHistory||!historyLinkDrafts[exerciseHistoryKey(item.name)]}
-                  onClick={()=>linkExerciseHistory(item.name,historyLinkDrafts[exerciseHistoryKey(item.name)])}>Link history</button>
+                  label={'Find a matching past exercise for '+item.name}
+                  placeholder="Type a past exercise name…"
+                  choices={historyCandidates}
+                  onChange={value=>setHistoryLinkDrafts(v=>({...v,[exerciseHistoryKey(item.name)]:value}))}
+                  onSelect={value=>setHistoryLinkDrafts(v=>({...v,[exerciseHistoryKey(item.name)]:value}))}
+                />
+                <button type="button" disabled={linkingHistory||!historyCandidates.some(name=>
+                    exerciseHistoryKey(name)===exerciseHistoryKey(historyLinkDrafts[exerciseHistoryKey(item.name)]))}
+                  onClick={()=>linkExerciseHistory(item.name,
+                    historyCandidates.find(name=>exerciseHistoryKey(name)===exerciseHistoryKey(historyLinkDrafts[exerciseHistoryKey(item.name)])))}>
+                  Link history
+                </button>
               </div>}
+              <details className="exercise-rename-inline">
+                <summary>Edit this workout's exercise name</summary>
+                <div className="exercise-history-link-row">
+                  <ExerciseNamePicker
+                    value={renameExerciseDrafts[item.id||String(i)]??item.name}
+                    label={'Change exercise name for '+item.name} placeholder="Exercise name…"
+                    choices={knownExerciseNames}
+                    onChange={value=>setRenameExerciseDrafts(v=>({...v,[item.id||String(i)]:value}))}
+                    onSelect={value=>setRenameExerciseDrafts(v=>({...v,[item.id||String(i)]:value}))}
+                  />
+                  <button type="button" disabled={!String(renameExerciseDrafts[item.id||String(i)]??item.name).trim()||
+                    exerciseHistoryKey(renameExerciseDrafts[item.id||String(i)]??item.name)===exerciseHistoryKey(item.name)}
+                    onClick={()=>{
+                      const updated=String(renameExerciseDrafts[item.id||String(i)]||'').trim()
+                      if(!updated)return
+                      changeExercise(i,{name:updated})
+                      setRenameExerciseDrafts(v=>({...v,[item.id||String(i)]:updated}))
+                      setHistoryLinkStatus('Name changed for this workout. Past workout names are unchanged.')
+                    }}>Use name</button>
+                </div>
+                <small>Only changes this workout. It does not rename your saved program or previous sessions.</small>
+              </details>
               {historyLinkStatus&&<small role="status">{historyLinkStatus}</small>}
             </details>}
             {sub&&<small className="sub-suggestion">Saved substitute: {sub.substitute}{sub.reason?' · '+sub.reason:''}</small>}
