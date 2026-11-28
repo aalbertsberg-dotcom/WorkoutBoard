@@ -12,10 +12,11 @@ test('skipped sets and drop stages remain logged in workouts but do not inflate 
     ]}]}
   }]
   const strength=completedStrengthSets(rows)
-  assert.deepEqual(strength.map(set=>[set.weight,set.reps]),[[90,4]])
+  assert.deepEqual(strength.map(set=>[set.weight,set.reps,set.isDropSet]),[[90,4,false],[50,30,true]])
   const prs=buildPersonalRecords(rows)
   assert.equal(prs.length,1)
   assert.equal(prs[0].weight,90)
+  assert.equal(strength.filter(set=>set.isDropSet).length,1)
 })
 
 test('only a user-confirmed alias merges two differently named exercise records',()=>{
