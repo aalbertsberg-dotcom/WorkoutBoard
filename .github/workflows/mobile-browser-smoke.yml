@@ -10,6 +10,12 @@ on:
 permissions:
   contents: read
 
+# The web-first branch changes often. Cancel superseded runs so a single
+# older failing screenshot test does not generate dozens of notifications.
+concurrency:
+  group: workset-browser-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   mobile-browser:
     runs-on: ubuntu-24.04
