@@ -6,6 +6,7 @@ import {ProgressToolbox} from './trainingTools'
 import {useEffect,useState} from 'react'
 import {isNativeAndroid} from './androidUpdates.js'
 import WorksetInbox from './WorksetInbox.jsx'
+import ExerciseHistoryManager from './ExerciseHistoryManager.jsx'
 
 /** The Me landing page is navigation-first, with secondary tools closed by default.
  * Existing tools are mounted only when explicitly expanded. */
@@ -72,6 +73,11 @@ export default function MePage({
       <button type="button" onClick={onOpenProgress}>
         <span className="me-shortcut-icon" aria-hidden="true">⌁</span>
         <span><strong>View Progress & Analytics</strong><small>Read-only charts, records and history</small></span>
+        <b aria-hidden="true">›</b>
+      </button>
+      <button type="button" onClick={()=>jumpToTrack('exercise-names')}>
+        <span className="me-shortcut-icon" aria-hidden="true">≡</span>
+        <span><strong>Exercise Names &amp; History</strong><small>Match or correct names outside a workout</small></span>
         <b aria-hidden="true">›</b>
       </button>
       <button type="button" onClick={()=>jumpToTrack('strength')}>
@@ -195,6 +201,12 @@ export default function MePage({
           </div>
           </section>
         </MeSection>
+      </MeSection>
+
+      <MeSection id="exercise-names" title="Exercise Names &amp; History"
+        description="Review and match exercise names at any time" icon="≡"
+        openOnRequest={trackTarget==='exercise-names'?trackRequest:0}>
+        <ExerciseHistoryManager session={session}/>
       </MeSection>
 
       <MeSection id="measurements" title="Track Weight &amp; Measurements"
