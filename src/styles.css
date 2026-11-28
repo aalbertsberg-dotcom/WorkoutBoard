@@ -1067,7 +1067,7 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   top:67px;
   z-index:19;
   display:grid;
-  grid-template-columns:repeat(4,minmax(84px,1fr));
+  grid-template-columns:repeat(5,minmax(84px,1fr));
   gap:5px;
   margin:0 0 12px;
   padding:6px;
@@ -3723,7 +3723,7 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
     min-height:120px !important;
     padding:7px !important;
     display:grid !important;
-    grid-template-columns:repeat(4,minmax(0,1fr)) !important;
+    grid-template-columns:repeat(5,minmax(0,1fr)) !important;
     align-items:stretch !important;
     gap:5px !important;
     z-index:5000 !important;
@@ -7767,7 +7767,7 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
 .progress-section-tabs button { min-width:0 !important; min-height:46px !important; width:100%; font-size:13px !important; white-space:normal !important; line-height:1.3; }
 .advanced-tabs { display:grid !important; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; overflow:visible !important; }
 .advanced-tabs button { min-width:0 !important; width:100%; min-height:44px; white-space:normal !important; font-size:13px; }
-.app-level-mobile-nav { grid-template-columns:repeat(4,minmax(0,1fr)) !important; }
+.app-level-mobile-nav { grid-template-columns:repeat(5,minmax(0,1fr)) !important; }
 .app-level-mobile-nav button { min-width:0; }
 .app-level-mobile-nav button span { white-space:nowrap; }
 
@@ -8883,23 +8883,19 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   font-variant-numeric:tabular-nums;
   overflow-wrap:anywhere;
 }
+/* Keep the save target and its neighbors stable while typing or saving. */
 @media(max-width:700px){
-  .me-max-field:focus-within{
-    grid-column:1 / -1;
-    min-width:0;
-    padding:8px;
-    border:1px solid #567247;
-    border-radius:10px;
-    background:#11241a;
-  }
-  .me-max-field:focus-within .me-max-input-row{
-    grid-template-columns:minmax(0,1fr) 64px;
-  }
-  .me-max-field:focus-within .input-with-unit input{
-    font-size:21px;
-    color:#fff;
-    caret-color:#d9f99d;
-  }
+  .me-max-input-row{grid-template-columns:minmax(0,1fr) 46px;gap:4px}
+  .me-max-input-row .input-with-unit{grid-template-columns:minmax(0,1fr) 18px}
+  .me-max-input-row .input-with-unit input{padding:0 4px;font-size:16px}
+  .me-max-input-row .input-with-unit input::-webkit-inner-spin-button,
+  .me-max-input-row .input-with-unit input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+  .me-max-input-row .input-with-unit input{appearance:textfield}
+}
+@media(max-width:360px){
+  .me-max-grid{grid-template-columns:1fr}
+  .me-max-input-row{grid-template-columns:minmax(0,1fr) 64px}
+  .me-max-input-row .input-with-unit input{font-size:19px;padding:0 9px}
 }
 
 /* Required attribution for free FatSecret food-data references, unobtrusive on auth. */
@@ -9448,3 +9444,13 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
 .history-calendar-grid button.outside{opacity:.55}
 .history-calendar-legend{display:flex;flex-wrap:wrap;gap:12px;font-size:11px;color:#a8b9d0}
 .history-calendar-legend b{color:#caff9b}
+
+/* Five equal destinations, unchanged bar height and native safe-area behavior. */
+.app-level-mobile-nav{grid-template-columns:repeat(5,minmax(0,1fr))!important}
+.app-level-mobile-nav button svg{flex:0 0 auto}
+.primary-nav button svg{flex:0 0 auto}
+@media(max-width:700px){.app-level-mobile-nav button{min-width:0!important;min-height:44px!important}
+.app-level-mobile-nav button span{font-size:clamp(9px,2.65vw,11px)!important}
+.app-level-mobile-nav button:focus-visible{outline:2px solid #a7f3d0;outline-offset:-2px}}
+/* Keep the analytics tabs in the page instead of covering the sticky app header. */
+.progress-section-tabs{position:relative;top:auto!important;z-index:0}

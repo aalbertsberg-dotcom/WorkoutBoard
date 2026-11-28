@@ -1382,8 +1382,10 @@ function App() {
   },[])
 
   const openNutrition=(screen='log')=>{
-    setNutritionStartView(screen==='goals'?'goals':'log')
+    const initialView=screen==='goals'?'goals':'log'
+    setNutritionStartView(initialView)
     navigateTo('nutrition')
+    window.history.replaceState({...window.history.state,nutritionFrom:activeTab,nutritionStartView:initialView},'',window.location.href)
   }
   const openProgress = (section='Overview') => navigateTo('progress',{progressSection:section})
   const openTrack = (section='strength') => {
@@ -1419,6 +1421,7 @@ function App() {
         setExtraWorkoutOpen(false)
       }
       setActiveTab(state.tab)
+      if(state.tab==='nutrition')setNutritionStartView(state.nutritionStartView||'log')
       setTrackFocus(state.tab==='me'?state.meTrack||null:null)
       if(state.tab==='history'){
         setHistoryWorkoutId(state.workoutId||null)
@@ -1450,6 +1453,7 @@ function App() {
       }
       if(!next?.worksetApp)return
       setActiveTab(next.tab||'today')
+      if(next.tab==='nutrition')setNutritionStartView(next.nutritionStartView||'log')
       setTrackFocus(next.tab==='me'?next.meTrack||null:null)
       if(next.tab==='history'){
         setHistoryWorkoutId(next.workoutId||null)
@@ -3688,6 +3692,7 @@ function App() {
   const conditioningPrescribed = Boolean(conditioningSuggested && !/^optional\b/i.test(String(plan.conditioning).trim()))
   const conditioningHasData = Boolean(log.metcon?.format || log.metcon?.name || log.metcon?.activity || log.metcon?.duration || log.metcon?.workTime || log.metcon?.restTime || log.metcon?.interval || log.metcon?.time || log.metcon?.rounds || log.metcon?.reps || log.metcon?.distance || log.metcon?.calories)
 
+  const meNavActive=['me','history','progress','admin'].includes(activeTab)||(activeTab==='nutrition'&&window.history.state?.nutritionFrom==='me')
   if (authLoading) return <div className="loading-screen">Loading Workset…</div>
   if (passwordRecovery) return <RecoveryScreen onDone={() => setPasswordRecovery(false)} />
   if (!session) return <AuthScreen />
@@ -3699,7 +3704,7 @@ function App() {
           <div>
             <div className="brand-lockup"><img src={import.meta.env.BASE_URL+'icon.svg'} alt="" /><span>Work<b>set</b></span></div>
             <h1>{activeTab === 'today' ? 'Today' : activeTab === 'together' ? 'Together' : activeTab === 'program' ? 'Plan' : activeTab === 'whiteboard' ? 'Whiteboard' : activeTab === 'progress' ? 'Progress' : activeTab === 'history' ? 'History' : activeTab === 'nutrition' ? 'Nutrition' : activeTab === 'mobility' ? 'Warm-up & Cool-down' : activeTab === 'admin' ? 'Admin' : 'Me'}</h1>
-            {appNavDepth>0&&activeTab!=='history'&&activeTab!=='me'&&<button type="button" className="app-history-back" onClick={navigateBack}>← Back</button>}
+            {appNavDepth>0&&activeTab!=='history'&&activeTab!=='me'&&activeTab!=='nutrition'&&<button type="button" className="app-history-back" onClick={navigateBack}>← Back</button>}
           </div>
           <div className="ws-header-actions">
             <InboxBell session={session} onOpenInbox={openMeInbox}/>
@@ -3712,10 +3717,6 @@ function App() {
                 <path d="M7.5 11.5h8M7.5 14.5H13"/>
               </svg>
             </button>
-            <button className={'account-chip ' + (isAdmin ? 'admin' : '')} onClick={openMe}>
-              <span>{displayName}</span>
-              {isAdmin && <b>ADMIN</b>}
-            </button>
           </div>
         </header>
 
@@ -3724,6 +3725,7 @@ function App() {
           <button className={activeTab === 'together' ? 'active' : ''} onClick={() => navigateTo('together')}><b>⇄</b><span>Together</span>{(incomingTogetherInvites.length+incomingFriendRequests.length)>0&&<i className="nav-invite-badge">{incomingTogetherInvites.length+incomingFriendRequests.length}</i>}</button>
           <button className={activeTab === 'program' ? 'active' : ''} onClick={() => navigateTo('program')}><b>▦</b><span>Plan</span></button>
           <button className={activeTab === 'whiteboard' ? 'active' : ''} onClick={() => navigateTo('whiteboard')}><b>□</b><span>Board</span></button>
+          <button type="button" className={meNavActive?'active':''} aria-current={meNavActive?'page':undefined} onClick={openMe}><svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="7.5" r="3.5"/><path d="M5 20v-2a7 7 0 0 1 14 0v2"/></svg><span>Me</span></button>
         </nav>
 
         {/* Remain mounted across tabs so active AMRAP, EMOM and Metcon timers keep running. */}
@@ -4582,7 +4584,7 @@ function App() {
             onSaved={async id=>{await refreshPlannedToday();openHistory(id)}}/>
         ) : activeTab === 'nutrition' ? (
           <NutritionPage key={(session?.user?.id||'')+':'+nutritionStartView}
-            session={session} initialView={nutritionStartView} onBack={()=>navigateTo('today')}/>
+            session={session} initialView={nutritionStartView} onBack={()=>Number(window.history.state?.worksetDepth||0)>0?navigateBack():navigateTo('today',{replace:true})}/>
         ) : activeTab === 'history' ? (
           <WorkoutHistory session={session} initialWorkoutId={historyWorkoutId}
             legacyHistory={progress.completed}
@@ -4671,6 +4673,7 @@ function App() {
         <button className={activeTab==='together'?'active':''} onClick={()=>navigateTo('together')}><b>⇄</b><span>Together</span>{(incomingTogetherInvites.length+incomingFriendRequests.length)>0&&<i className="nav-invite-badge">{incomingTogetherInvites.length+incomingFriendRequests.length}</i>}</button>
         <button className={activeTab==='program'?'active':''} onClick={()=>navigateTo('program')}><b>▦</b><span>Plan</span></button>
         <button className={activeTab==='whiteboard'?'active':''} onClick={()=>navigateTo('whiteboard')}><b>□</b><span>Board</span></button>
+        <button type="button" className={meNavActive?'active':''} aria-current={meNavActive?'page':undefined} onClick={openMe}><svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="7.5" r="3.5"/><path d="M5 20v-2a7 7 0 0 1 14 0v2"/></svg><span>Me</span></button>
       </nav>
 
       {(!offlineStatus.online||offlineStatus.pending>0||offlineStatus.syncing||offlineStatus.error)&&<div className={'offline-status-toast '+(!offlineStatus.online?'offline':offlineStatus.syncing?'syncing':'pending')} role="status">

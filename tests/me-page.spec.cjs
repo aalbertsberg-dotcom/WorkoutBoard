@@ -66,7 +66,6 @@ test('1RM editing requires Save and preserves values across collapsing',async({p
   const input=page.getByRole('spinbutton',{name:'Bench'})
   await input.fill('215.5')
   await expect(page.locator('#me-test-backend')).toContainText('Saves: 0')
-  await input.blur()
   const grid=page.locator('.me-max-grid')
   const before=await grid.boundingBox()
   await page.locator('.me-max-field').filter({has:page.getByText('Bench',{exact:true})})
