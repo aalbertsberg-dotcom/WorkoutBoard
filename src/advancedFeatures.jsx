@@ -234,8 +234,8 @@ export function EditableWorkout({sessionRow,onSaved,onCancel}){
     }catch(error){setNotice(error.message+(localSaved?' · Draft retained on this device.':''))}
     finally{lock.current=false;setBusy(false)}
   }
-  return <section className="edit-workout-card review-workout-editor" aria-label="Review workout">
-    <div className="section-heading"><div><span className="card-label">REVIEW COMPLETED WORKOUT</span><h3>{sessionRow.title}</h3><small>Correct what actually happened. Your program and saved 1RMs are unchanged.</small></div></div>
+  return <section className="edit-workout-card review-workout-editor" aria-label="Edit workout">
+    <div className="section-heading"><div><span className="card-label">EDIT COMPLETED WORKOUT</span><h3>{sessionRow.title}</h3><small>Correct what actually happened. Your program and saved 1RMs are unchanged.</small></div></div>
     <fieldset disabled={busy}>
     <label>Title<input value={title} onChange={e=>field('title',e.target.value)}/></label>
     {(workout.main||[]).map((s,i)=><div className="edit-set-row" key={i}><strong>Set {i+1}</strong><input type="number" min="0" inputMode="decimal" aria-label={'Main set '+(i+1)+' weight'} value={s.weight??''} onChange={e=>mainChange(i,'weight',e.target.value)}/><span>lb ×</span><input type="number" min="0" inputMode="numeric" aria-label={'Main set '+(i+1)+' reps'} value={s.actualReps??''} onChange={e=>mainChange(i,'actualReps',e.target.value)}/><span>reps</span></div>)}

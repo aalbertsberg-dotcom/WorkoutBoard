@@ -5,10 +5,11 @@ export function completionExerciseRows(workout={}){
   const complete=sets.filter(s=>s.done!==false&&!s.skipped)
   const completed=complete.length,skipped=sets.filter(s=>s.skipped).length
   const unfinished=sets.length-completed-skipped
-  const logged=complete.map(s=>({weight:weight(s),reps:reps(s),drop:Boolean(s.drop_set)}))
+  const allSets=sets.map((s,i)=>({weight:weight(s),reps:reps(s),drop:Boolean(s.drop_set),label:s.drop_set?'Drop '+(s.drop_stage||i+1):'Set '+(i+1),status:s.skipped?'Skipped':s.done===false?'Not completed':'Completed'}))
+  const logged=allSets.filter(s=>s.status==='Completed')
   const volume=distance?0:logged.reduce((n,s)=>n+s.weight*s.reps,0)
   const best=distance?null:logged.filter(s=>!s.drop&&s.weight>0&&s.reps>0).reduce((b,s)=>!b||s.weight>b.weight||(s.weight===b.weight&&s.reps>b.reps)?s:b,null)
-  return {name,completed,skipped,unfinished,volume,best,distance,sets:logged}
+  return {name,completed,skipped,unfinished,volume,best,distance,sets:logged,allSets}
  }
  if(workout.main?.length)rows.push(summarize(workout.lift||'Main lift',workout.main,s=>Number(s.weight)||0,s=>Number(s.actualReps??s.actual_reps)||0))
  if(workout.backoffSets?.length)rows.push(summarize('Back-off sets',workout.backoffSets,s=>Number(s.weight??workout.backoffWeight)||0,s=>Number(s.actualReps??s.reps)||0))
@@ -17,7 +18,7 @@ export function completionExerciseRows(workout={}){
   if(workout.mobility)continue
   const name=ex.name||ex.title||'Exercise'
   if(ex.setProgress?.length)rows.push(summarize(name,ex.setProgress.map(s=>({...s,done:s.done===true})),s=>exerciseSetWeight(ex,s),s=>exerciseSetReps(ex,s),isDistanceExercise(name)))
-  else rows.push({name,completed:0,skipped:0,unfinished:0,volume:0,best:null,sets:[],result:ex.result||'',logged:Boolean(ex.done||String(ex.result||'').trim())})
+  else rows.push({name,completed:0,skipped:0,unfinished:0,volume:0,best:null,sets:[],result:ex.result||ex.prescription||'',logged:Boolean(ex.done||String(ex.result||'').trim())})
  }
  return rows
 }

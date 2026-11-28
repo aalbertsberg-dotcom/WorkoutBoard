@@ -418,11 +418,19 @@ export function PlatformProgress({
     const rows=completedStrengthSets([...progress.completed,...flexSessions]).filter(set=>!set.isDropSet)
       .map(set=>({date:set.date,key:set.identity,label:set.name,e1rm:set.e1rm,set:{weight:set.weight,reps:set.reps}}))
       .sort((a,b)=>String(a.date).localeCompare(String(b.date)))
+    // One candidate per exercise per completed session; the first session
+    // establishes a baseline, not a new PR announcement.
+    const sessionBests=new Map()
     for(const row of rows){
       if(!row.e1rm)continue
-      if(row.e1rm>(best[row.key]||0)){
+      const key=JSON.stringify([row.key,row.date])
+      if(!sessionBests.has(key)||row.e1rm>sessionBests.get(key).e1rm)sessionBests.set(key,row)
+    }
+    for(const row of sessionBests.values()){
+      const previous=best[row.key]||0
+      if(row.e1rm>previous){
         best[row.key]=row.e1rm
-        events.push(row)
+        if(previous>0)events.push(row)
       }
     }
     return events.sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,3)

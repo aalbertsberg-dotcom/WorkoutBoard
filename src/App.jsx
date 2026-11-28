@@ -1165,7 +1165,7 @@ function TodayCompletedWorkouts({rows=[],onOpen,onReview}){
       <span><strong>Today's workouts</strong><small>{rows.length} completed · Open history & calendar</small></span>
       <b aria-hidden="true">›</b>
     </button>
-    {onReview&&rows[0]?.id&&<button type="button" className="today-review-shortcut" onClick={()=>onReview(rows[0].id)}>Review latest workout ›</button>}
+    {onReview&&rows[0]?.id&&<button type="button" className="today-review-shortcut" onClick={()=>onReview(rows[0].id)}>View latest workout summary ›</button>}
     <div className="today-completed-list">
       {rows.map(row=><button type="button" className="today-completed-entry" key={row.id}
         onClick={()=>onOpen(row.training_session_id||row.id)}
@@ -3748,9 +3748,9 @@ function App() {
           <div className="loading-card">Loading your workouts…</div>
         ) : activeTab === 'today' ? (
           completionSummary ? (
-            <section className="page-section completion-review-page" aria-label="Post-workout review"><section className="workout-complete-summary">
+            <section className="page-section completion-review-page" aria-label="Workout summary"><section className="workout-complete-summary">
                 <div className="completion-review-heading"><div className="completion-check">✓</div><span className="completion-save-badge" role="status">{completionSummary.offline?"Saved on device · waiting to sync":completionSummary.legacyOnly?"Saved to original workout log":"Workout saved"}</span></div>
-                <div><span className="card-label">WORKOUT COMPLETE · REVIEW</span><h2>{completionSummary.title||'Workout complete'}</h2><p>{completionSummary.program||trackedProgramsInfo.find(x=>x.key===plannedToday?.workout?.tracking_program_key)?.name||trackedTodayInfo?.name||'Workout'}</p></div>
+                <div><span className="card-label">WORKOUT COMPLETE · SUMMARY</span><h2>{completionSummary.title||'Workout complete'}</h2><p>{completionSummary.program||trackedProgramsInfo.find(x=>x.key===plannedToday?.workout?.tracking_program_key)?.name||trackedTodayInfo?.name||'Workout'}</p></div>
                 {completionSummary.outdoor?<div className="completion-outdoor-summary">
                   {completionSummary.outdoor.routeAvailable&&completionSummary.outdoor.points?.length>1&&<RouteMap points={completionSummary.outdoor.points} compact/>}
                   {completionSummary.outdoor.distanceManual
@@ -3811,9 +3811,9 @@ function App() {
                   <small className="baseline-history-note">The actual test sets stay in workout history so you can always see where each estimate came from.</small>
                 </section>}
                 <div className="completion-review-actions">
-                  {completionSummary.trainingSessionId&&!completionSummary.offline&&<button type="button" className="secondary-action" onClick={()=>openHistory(completionSummary.trainingSessionId,true,true)}>Review &amp; correct workout</button>}
-                  {completionSummary.offline&&<p className="helper-text">Corrections become available in History after this workout syncs.</p>}
                   <button type="button" className="primary-action" onClick={()=>{const together=completionSummary.returnToTogether;setCompletionSummary(null);setBaselineFinishReview(null);if(together){navigateTo('together',{replace:true})}else{window.scrollTo({top:0,behavior:'instant'})}}}>{completionSummary.returnToTogether?'Return to Together':'Done · back to Today'}</button>
+                  {completionSummary.trainingSessionId&&!completionSummary.offline&&<button type="button" className="secondary-action" onClick={()=>openHistory(completionSummary.trainingSessionId,true,true)}>Edit workout</button>}
+                  {completionSummary.offline&&<p className="helper-text">Editing becomes available in History after this workout syncs.</p>}
                 </div>
               </section></section>
           ) : plannedToday && !showRegularToday ? (
@@ -3906,7 +3906,7 @@ function App() {
             />
           ) : trackedProgramsInfo.length && !showRegularToday ? (
             <section className="page-section tracked-today-state">
-              <TodayCompletedWorkouts rows={todayCompletedWorkouts} onOpen={openHistory} onReview={id=>openHistory(id,true)}/>
+              <TodayCompletedWorkouts rows={todayCompletedWorkouts} onOpen={openHistory} onReview={id=>openHistory(id)}/>
 
 
               {!nextDayPreviewOpen&&<section className="today-choice-screen">
@@ -4040,7 +4040,7 @@ function App() {
             </section>
           ) : !trackedProgramsInfo.length && !showRegularToday && !sharedWorkoutActive ? (
             <section className="page-section no-program-today">
-              <TodayCompletedWorkouts rows={todayCompletedWorkouts} onOpen={openHistory} onReview={id=>openHistory(id,true)}/>
+              <TodayCompletedWorkouts rows={todayCompletedWorkouts} onOpen={openHistory} onReview={id=>openHistory(id)}/>
               <section className="today-choice-screen">
                 <div className="today-choice-heading">
                   <div><span className="card-label">TODAY</span>
@@ -4665,7 +4665,7 @@ function App() {
             session={session}
             displayName={displayName} onSaveDisplayName={saveDisplayName}
             onOpenHistory={()=>openHistory()}
-            onReviewLatest={(todayCompletedWorkouts[0]?.id||completedTrainingSessions[0]?.id)?()=>openHistory(todayCompletedWorkouts[0]?.id||completedTrainingSessions[0]?.id,true):null}
+            onReviewLatest={(todayCompletedWorkouts[0]?.id||completedTrainingSessions[0]?.id)?()=>openHistory(todayCompletedWorkouts[0]?.id||completedTrainingSessions[0]?.id):null}
             onOpenNutrition={openNutrition}
             onOpenProgress={()=>openProgress('Overview')}
             onOpenWeight={()=>openTrack('measurements')}

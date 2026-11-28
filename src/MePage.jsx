@@ -29,7 +29,7 @@ export default function MePage({
   const shortcutKey='workset:me-shortcuts:'+session?.user?.id
   const [shortcuts,setShortcuts]=useState(()=>{try{const x=JSON.parse(localStorage.getItem(shortcutKey)||'[]');return Array.isArray(x)?x:[]}catch{return []}})
   const [shortcutNotice,setShortcutNotice]=useState('')
-  const shortcutOptions=[['review','Review latest workout',onReviewLatest],['nutrition','Log food & water',onOpenNutrition],['weight','Log bodyweight',onOpenWeight],['strength','Update 1RMs',()=>jumpToTrack('strength')],['progress','View progress',onOpenProgress]]
+  const shortcutOptions=[['review','Latest workout summary',onReviewLatest],['nutrition','Log food & water',onOpenNutrition],['weight','Log bodyweight',onOpenWeight],['strength','Update 1RMs',()=>jumpToTrack('strength')],['progress','View progress',onOpenProgress]]
   const toggleShortcut=key=>{
     const next=shortcuts.includes(key)?shortcuts.filter(x=>x!==key):[...shortcuts,key].slice(-2)
     try{localStorage.setItem(shortcutKey,JSON.stringify(next));setShortcuts(next);setShortcutNotice('Shortcuts saved on this device.')}catch{setShortcutNotice('Could not save shortcuts.')}

@@ -7,7 +7,8 @@ import { EditableWorkout } from './advancedFeatures'
 import { DialogPortal } from './worksetDialogs'
 import {isLegacyWorkoutLink,legacyWorkoutDetail} from './historyNavigation.js'
 import { HISTORY_PAGE_SIZE,completedWorkoutKind,completedWorkoutSummary,workoutHistoryMatches,workoutHistoryDayKey } from './workoutHistoryUtils'
-import {exerciseSetWeight,exerciseSetReps} from './workoutMetrics.js'
+import {completionCounts} from './completionReview.js'
+import CompletionReviewDetails from './CompletionReviewDetails.jsx'
 
 const dateKey=workoutHistoryDayKey
 const localDay=()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')}
@@ -49,6 +50,7 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
   const [editing,setEditing]=useState(()=>Boolean(window.history.state?.historyReview))
   const [deleting,setDeleting]=useState(false)
   const [busy,setBusy]=useState(false)
+  const editMode=value=>{setEditing(value);if(window.history.state?.tab==='history')window.history.replaceState({...window.history.state,historyReview:value},'',window.location.href)}
 
   const load=async()=>{
     if(!session?.user?.id){setRows([]);setHasMore(false);setLoading(false);return}
@@ -127,7 +129,7 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
       if(deleting||editing||selectedId){
         event.preventDefault()
         if(deleting)setDeleting(false)
-        else if(editing)setEditing(false)
+        else if(editing)editMode(false)
         else if(fromProgress||fromCompletion)onBack?.()
         else openList()
       }
@@ -199,17 +201,16 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
   const distance=workoutDistancePresentation(workout)
   const loggedDurationSeconds=effectiveCardioDurationSeconds(workout)
   const metrics=selected&&kind?outdoorMetrics(outdoor||{},loggedDurationSeconds,kind):null
-  const strengthExercises=(workout.exercises||[]).filter(item=>item.name)
-  const mainSets=(workout.main||[])
+  const counts=completionCounts(workout)
 
   return <section className="page-section workset-history">
     <div className="workset-history-head">
       <div><span className="card-label">WORKOUT HISTORY</span>
         <h2>{selected?'Workout details':selectedId?'Workout details':mode==='calendar'?'Your training calendar':'Your workout history'}</h2>
-        <p>{selected?'Everything recorded for this session':'What you did, when you did it — no charts to dig through'}</p>
+        <p>{selected?(editing?'Edit the saved workout':'Summary and recorded results'):'What you did, when you did it — no charts to dig through'}</p>
       </div>
-      <button type="button" className="secondary-action workset-back-control" onClick={selectedId&&(fromProgress||fromCompletion)?onBack:selectedId?openList:onBack}>
-        {selectedId&&fromCompletion?'← Workout review':selectedId&&fromProgress?'← Progress':selectedId?'← All workouts':'← Back'}
+      <button type="button" className="secondary-action workset-back-control" onClick={editing?()=>editMode(false):selectedId&&(fromProgress||fromCompletion)?onBack:selectedId?openList:onBack}>
+        {editing?'← Summary':selectedId&&fromCompletion?'← Workout summary':selectedId&&fromProgress?'← Progress':selectedId?'← All workouts':'← Back'}
       </button>
     </div>
     {message&&<div className="status-message" role="status">{message}</div>}
@@ -224,10 +225,13 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
           {selected.__legacy
             ?<p className="history-legacy-badge">Older program workout · read-only history</p>
             :<div className="history-detail-actions" role="group" aria-label="Workout actions">
-              <button type="button" className="secondary-action" onClick={()=>{setEditing(x=>!x);setDeleting(false)}}>{editing?'Close editor':'Review & edit'}</button>
+              <button type="button" className="secondary-action" onClick={()=>{editMode(!editing);setDeleting(false)}}>{editing?'Close editor':'Edit'}</button>
               <button type="button" className="secondary-action danger-lite" onClick={()=>{setDeleting(true);setEditing(false)}}>Delete</button>
             </div>}
         </div>
+        {!editing&&<details className="history-workout-summary" key={selected.id} open>
+          <summary>Workout summary</summary>
+          <div className="history-summary-content">
         {category(selected)==='Cardio'&&<>
           {hasReliableOutdoorRoute(outdoor)
             ? <RouteMap points={outdoor.points} compact/>
@@ -248,32 +252,23 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
           </div>)}</div>
         </>}
         {category(selected)==='Strength'&&<>
-          <div className="history-detail-kpis"><div><span>Total volume</span><strong>{formatNumber(selected.total_volume)} lb</strong></div>
-            <div><span>Estimated 1RM</span><strong>{selected.estimated_1rm?formatNumber(selected.estimated_1rm)+' lb':'—'}</strong></div></div>
-          {mainSets.length>0&&<section className="history-exercises"><h4>Main sets</h4>
-            {mainSets.map((set,i)=><div key={i}><strong>Set {i+1}</strong>
-              <small>{set.weight||0} lb × {set.actualReps??set.reps??0} reps</small></div>)}</section>}
-          {strengthExercises.length>0&&<section className="history-exercises"><h4>Exercises</h4>
-            {strengthExercises.map((ex,i)=><div key={ex.id||i}>
-              <strong>{ex.name}</strong>
-              {ex.setProgress?.length>0
-                ? <small>{ex.setProgress.map((set,j)=>{
-                    const label=set.drop_set?'Drop '+(set.drop_stage||j+1):'Set '+(j+1)
-                    if(set.skipped)return label+': skipped'
-                    if(!set.done)return label+': not completed'
-                    return label+': '+exerciseSetWeight(ex,set)+' lb × '+(exerciseSetReps(ex,set)||'—')+' reps ✓'
-                  }).join(' · ')}</small>
-                : <small>{ex.result||ex.prescription||'Completed'}</small>}
-            </div>)}</section>}
-          {!mainSets.length&&!strengthExercises.length&&<p className="history-note">No individual sets were recorded for this workout.</p>}
+          <div className="history-detail-kpis">
+            <div><span>Exercises logged</span><strong>{counts.exercises}</strong></div>
+            <div><span>Completed sets</span><strong>{counts.sets}</strong></div>
+            <div><span>Total volume</span><strong>{formatNumber(selected.total_volume)} lb</strong></div>
+            <div><span>Estimated 1RM</span><strong>{selected.estimated_1rm?Number(selected.estimated_1rm).toLocaleString(undefined,{maximumFractionDigits:2})+' lb':'—'}</strong></div>
+          </div>
+          {counts.rows.length?<CompletionReviewDetails summary={{workout}} showNotes={false}/>:<p className="history-note">No individual sets were recorded for this workout.</p>}
         </>}
         {(workout.note||workout.notes)&&<div className="history-notes"><strong>Notes</strong><p>{workout.note||workout.notes}</p></div>}
+          </div>
+        </details>}
       </article>
       {editing&&<EditableWorkout key={selected.id} sessionRow={selected}
-        onCancel={()=>setEditing(false)} onSaved={async row=>{
+        onCancel={()=>{editMode(false);window.scrollTo({top:0,behavior:'instant'})}} onSaved={async row=>{
           setRows(prev=>prev.map(x=>x.id===row.id?row:x))
           setMonthRows(prev=>prev.map(x=>x.id===row.id?row:x))
-          setDetailRow(row);setEditing(false);setMessage('Workout saved and synced.')
+          setDetailRow(row);editMode(false);setMessage('Workout saved and synced.');window.scrollTo({top:0,behavior:'instant'})
           if(window.history.state?.tab==='history')window.history.replaceState({...window.history.state,historyReview:false},'',window.location.href)
           await onChanged?.(row)
         }}/>} 

@@ -1,5 +1,11 @@
 // Human-readable highlights maintained with user-facing changes.
 export const WORKSET_UPDATE_NOTES=[
+  {id:'2026-11-28-summary-first',date:'2026-11-28',title:'Workout summaries first, editing only when requested',items:[
+    ['Improvement','Open a completed workout to see its read-only Workout Summary at the top, with expandable exercise and set details.'],
+    ['Improvement','Today and pinned shortcuts open summaries instead of editors. Edit is a separate action, and Done is the primary action after finishing.'],
+    ['Fix','Give workout correction fields full-width exercise names, readable status controls, and room for weights and repetitions on phones.'],
+    ['Fix','Treat the first recorded strength session as a baseline rather than automatically announcing its sets as new personal records.']
+  ]},
   {id:'2026-11-28-finish-review',date:'2026-11-28',title:'A better finish to every workout',items:[
     ['New','A focused post-workout review appears immediately after finishing, including free workouts.'],
     ['Improvement','See completed exercises and sets, volume, per-exercise details, heaviest recorded sets, skipped sets and session notes.'],

@@ -10,3 +10,5 @@ test('distance exercise completed sets never contribute pound volume',()=>{
  const c=completionCounts({exercises:[{name:'Row',setProgress:[{done:true,weight:50,reps:5}]}]})
  assert.equal(c.sets,1);assert.equal(c.rows[0].volume,0);assert.equal(c.rows[0].best,null)
 })
+
+test('summary preserves original set positions and all completion statuses',()=>{const c=completionCounts({exercises:[{name:'Bench Press',setProgress:[{done:true,weight:100,reps:5},{done:false,skipped:true},{done:false},{done:true,drop_set:true,drop_stage:1,weight:60,actual_reps:8}]}]});assert.deepEqual(c.rows[0].allSets.map(s=>[s.label,s.status]),[['Set 1','Completed'],['Set 2','Skipped'],['Set 3','Not completed'],['Drop 1','Completed']]);assert.equal(c.sets,2)})
