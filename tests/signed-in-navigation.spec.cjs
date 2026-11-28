@@ -531,12 +531,12 @@ test('Intervals mobile countdown and inputs never extend past the phone width',a
 })
 
 test('Weight entry stays readable with the keyboard open on narrow phones',async({page})=>{
-  await page.locator('.me-main-menu').getByRole('button',{name:/Training & Goals/}).click()
   const errors=[]
   page.on('pageerror',e=>errors.push(e.message))
   await page.setViewportSize({width:360,height:780})
   await signedIn(page)
   await page.locator('.account-chip').click()
+  await page.locator('.me-main-menu').getByRole('button',{name:/Training & Goals/}).click()
   const section=page.locator('[data-me-section="measurements"]')
   await section.locator('.me-section-toggle').click()
   await expect(section.locator('.measurement-edit-card').first()).toBeVisible({timeout:15000})
@@ -567,12 +567,12 @@ test('Weight entry stays readable with the keyboard open on narrow phones',async
 })
 
 test('Editing a saved 1RM expands the focused input instead of clipping its digits',async({page})=>{
-  await page.locator('.me-main-menu').getByRole('button',{name:/Training & Goals/}).click()
   const errors=[]
   page.on('pageerror',e=>errors.push(e.message))
   await page.setViewportSize({width:320,height:780})
   await signedIn(page)
   await page.locator('.account-chip').click()
+  await page.locator('.me-main-menu').getByRole('button',{name:/Training & Goals/}).click()
   const strength=page.locator('[data-me-section="strength"]')
   await strength.locator('.me-section-toggle').click()
   const field=strength.locator('#me-max-Bench')
