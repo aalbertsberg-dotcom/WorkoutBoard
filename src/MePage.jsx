@@ -39,7 +39,11 @@ export default function MePage({
   }
   useEffect(()=>{if(autoOpenSection)jumpToTrack(autoOpenSection)},[autoOpenSection])
   useEffect(()=>{if(inboxRequest?.id)openMeView('inbox')},[inboxRequest?.id])
-  useEffect(()=>{if(homeRequest>0&&!inboxRequest?.id)openMeView('home')},[homeRequest])
+  useEffect(()=>{
+    // Progress deep links to edit a specific field take precedence over the
+    // header's previous "Me home" request.
+    if(homeRequest>0&&!inboxRequest?.id&&!autoOpenSection)openMeView('home')
+  },[homeRequest])
   return <section className={'page-section me-page me-view-'+meView} aria-label="Me">
     {meView==='home'?<>
     {displayName==='WorkoutAdmin'&&!isAdmin&&<section className="admin-setup-warning">
