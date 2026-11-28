@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {completeExerciseEarly,completeExerciseSet,reopenExerciseSet,deleteWorkoutSet,
   addDropSet,addDropStage,validateDropStage,pendingWorkoutSet} from '../src/workoutSetActions.js'
 import {exerciseHistoryKey,resolveExerciseHistoryKey,exerciseAliasLookup,
-  exerciseHistoryNames,rankExerciseHistoryCandidates,findExerciseNameSuggestions,aggregateExerciseHistory} from '../src/exerciseIdentity.js'
+  exerciseHistoryNames,rankExerciseHistoryCandidates,findExerciseNameSuggestions,preferredExerciseNames,aggregateExerciseHistory} from '../src/exerciseIdentity.js'
 
 const exercise=()=>({name:'Strict press',done:false,setProgress:[
   {set:1,reps:4,done:true,weight:'90'},
@@ -114,4 +114,13 @@ test('exercise name suggestions stay short, relevant and never merge automatical
   assert.ok(ordered.includes('Hammer ISO lateral'))
   assert.equal(exerciseHistoryKey('ISO lateral raises'),'iso lateral raise')
   assert.notEqual(exerciseHistoryKey('ISO lateral raises'),exerciseHistoryKey('Hammer ISO lateral'))
+})
+
+test('confirmed exercise names appear once under the preferred label when adding sets',()=>{
+  const names=['Hammer ISO lateral','ISO lateral raises','Bench Press']
+  const map={'hammer iso lateral':'ISO lateral raises'}
+  const choices=preferredExerciseNames(names,map)
+  assert.deepEqual(choices,['ISO lateral raises','Bench Press'])
+  assert.deepEqual(preferredExerciseNames(names,{}),names)
+  assert.ok(findExerciseNameSuggestions('lat',choices).includes('ISO lateral raises'))
 })
