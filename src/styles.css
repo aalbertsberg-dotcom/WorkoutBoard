@@ -9505,3 +9505,29 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
 .me-personal-shortcuts button:only-child{grid-column:1/-1}
 .me-shortcut-choice{display:flex!important;align-items:center;gap:10px;min-height:44px;color:#e2e8f0}
 .me-shortcut-choice input{width:20px;height:20px;flex:0 0 auto}
+
+/* Finish opens a focused review screen, not another dashboard card. */
+.completion-review-page{max-width:760px;margin-inline:auto;width:100%;min-width:0}
+.completion-review-page .workout-complete-summary{background:#111e30;border:1px solid #34465e;min-width:0;padding:16px;gap:16px}
+.completion-review-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.completion-save-badge{font-size:12px;color:#c0dfad;text-align:right;max-width:70%}
+.completion-review-page .completion-stats{grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px}
+.completion-review-page .completion-stats>div{min-width:0;background:#192a3e;border:1px solid #3a5067;border-radius:10px}
+.completion-review-page .completion-stats span{font-size:11px;color:#afc1d6}
+.completion-review-page .completion-stats strong{font-size:19px;overflow-wrap:anywhere}
+.completion-review-section{display:grid;gap:9px;min-width:0}
+.completion-review-section h3{margin:0;font-size:16px;color:#f1f5f9}
+.completion-review-list{display:grid;gap:6px;min-width:0}
+.completion-review-list>div,.completion-exercise{padding:10px;border:1px solid #394b63;border-radius:10px;background:#17263a;min-width:0}
+.completion-review-list>div{display:flex;justify-content:space-between;gap:10px}
+.completion-review-list small,.completion-exercise small{font-size:12px;color:#b0c1d5}
+.completion-exercise summary{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,auto);gap:12px;cursor:pointer;min-height:44px;align-items:center}
+.completion-exercise summary>span{display:grid;gap:4px;min-width:0;overflow-wrap:anywhere}
+.completion-exercise summary>span:last-child{text-align:right}
+.completion-exercise summary>span:first-child strong::after{content:'  ›';color:#a8ce91}
+.completion-exercise[open] summary>span:first-child strong::after{content:'  ⌄'}
+.completion-review-sets{display:grid;gap:5px;margin-top:8px;border-top:1px solid #394b63;padding-top:8px}
+.completion-review-sets>div{display:flex;justify-content:space-between;gap:8px;font-size:12px}
+.completion-review-warning{font-size:13px;color:#f8d7a0!important}
+.completion-review-note{white-space:pre-wrap;overflow-wrap:anywhere}
+.completion-review-actions{display:grid;gap:9px;border-top:1px solid #394b63;padding-top:14px}

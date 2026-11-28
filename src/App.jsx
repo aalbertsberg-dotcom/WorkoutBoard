@@ -19,6 +19,8 @@ import {classic531TrainingMaxOffset} from './classic531Cycles.js'
 import { saveOfflineSession, readOfflineSession, clearOfflineSession, writeOfflineState, readOfflineState, getPendingOfflineCount, syncOfflineQueue, hydrateOfflineQueue, offlineUuid, upsertOfflineFirst } from './offline'
 import { RouteMap, formatPace, formatOutdoorDuration } from './outdoorTracking'
 import WorkoutHistory from './workoutHistory'
+import CompletionReviewDetails from './CompletionReviewDetails.jsx'
+import {completionCounts} from './completionReview.js'
 import MobilitySession from './mobilitySession'
 import { outdoorDistancePresentation } from './trackingRules'
 import { completedWorkoutSummary } from './workoutHistoryUtils'
@@ -1259,6 +1261,7 @@ function App() {
   const [togetherView,setTogetherView] = useState('live')
   const [conditioningOpen,setConditioningOpen] = useState(false)
   const [completionSummary,setCompletionSummary] = useState(null)
+  useEffect(()=>{if(completionSummary&&activeTab==='today')window.scrollTo({top:0,behavior:'instant'})},[completionSummary,activeTab])
   const [baselineFinishReview,setBaselineFinishReview] = useState(null)
   const [extraWorkoutOpen,setExtraWorkoutOpen] = useState(false)
   const extraWorkoutOpenRef=useRef(false)
@@ -1352,7 +1355,9 @@ function App() {
         setPlannedBackCancelRequest(v=>v+1)
         break
       case 'close-completion':
+        if(completionSummary?.returnToTogether)navigateTo('together',{replace:true})
         setCompletionSummary(null)
+        setBaselineFinishReview(null)
         break
       case 'close-overlay':
         setExtraWorkoutOpen(false)
@@ -3152,7 +3157,7 @@ function App() {
     setLog(payload)
     setHistory(rows => [data,...rows.filter(row => row.id !== data.id && !(row.program === workoutProgram.dbName && row.week === week && row.lift === lift))])
     setSaveState('Saved')
-    return data
+    return {...data,durableSession}
   }
 
   useEffect(() => {
@@ -3230,11 +3235,18 @@ function App() {
   const finishWorkout = async () => {
     const saved = await saveWorkout(true)
     if (!saved) return
+    const completedWorkout=saved.workout||log
+    const counts=completionCounts(completedWorkout)
+    const result=metricsForWorkout(completedWorkout,workoutProgramId,week,lift)
+    setCompletionSummary({title:lift+' Day',program:workoutProgram.name,workout:completedWorkout,
+      trainingSessionId:saved.durableSession?.id||null,legacyOnly:!saved.durableSession?.id,
+      exercises:counts.exercises,sets:counts.sets,volume:Math.round(result.volume),
+      returnToTogether:Boolean(sharedWorkoutActive&&activeSession)})
+    setBaselineFinishReview(null)
 
     if (sharedWorkoutActive && activeSession) {
       await refreshTogether(activeSession.id)
       restorePersonalWorkout()
-      setActiveTab('together')
       return
     }
 
@@ -3735,7 +3747,76 @@ function App() {
         {dataLoading ? (
           <div className="loading-card">Loading your workouts…</div>
         ) : activeTab === 'today' ? (
-          plannedToday && !showRegularToday ? (
+          completionSummary ? (
+            <section className="page-section completion-review-page" aria-label="Post-workout review"><section className="workout-complete-summary">
+                <div className="completion-review-heading"><div className="completion-check">✓</div><span className="completion-save-badge" role="status">{completionSummary.offline?"Saved on device · waiting to sync":completionSummary.legacyOnly?"Saved to original workout log":"Workout saved"}</span></div>
+                <div><span className="card-label">WORKOUT COMPLETE · REVIEW</span><h2>{completionSummary.title||'Workout complete'}</h2><p>{completionSummary.program||trackedProgramsInfo.find(x=>x.key===plannedToday?.workout?.tracking_program_key)?.name||trackedTodayInfo?.name||'Workout'}</p></div>
+                {completionSummary.outdoor?<div className="completion-outdoor-summary">
+                  {completionSummary.outdoor.routeAvailable&&completionSummary.outdoor.points?.length>1&&<RouteMap points={completionSummary.outdoor.points} compact/>}
+                  {completionSummary.outdoor.distanceManual
+                    ?<p className="completion-gps-note">Distance entered manually; it is not a GPS measurement.</p>
+                    :completionSummary.outdoor.gpsUnavailable
+                    ?<p className="completion-gps-note" role="status">
+                      {completionSummary.outdoor.gpsFixes>0
+                        ?'GPS location was received, but no reliable movement was recorded. The workout time was saved.'
+                        :'No GPS location was recorded. The workout time was saved; check Location permissions before your next outdoor activity.'}
+                    </p>
+                    :completionSummary.outdoor.distanceEstimated&&
+                      <p className="completion-gps-note">GPS distance is approximate; no verified route or pace was recorded.</p>}
+                  <div className="completion-stats outdoor-completion-stats">
+                    <div><span>Distance{completionSummary.outdoor.distanceEstimated?' (estimate)':''}</span><strong>{completionSummary.outdoor.distanceLabel||Number(completionSummary.outdoor.miles||0).toFixed(2)+' mi'}</strong></div>
+                    <div><span>Time</span><strong>{formatOutdoorDuration(completionSummary.outdoor.elapsedSeconds)}</strong></div>
+                    <div><span>{completionSummary.outdoor.kind==='bike'?'Avg speed':'Avg pace'}</span><strong>{completionSummary.outdoor.kind==='bike'
+                      ? (completionSummary.outdoor.avgMph?Number(completionSummary.outdoor.avgMph).toFixed(1)+' mph':'—')
+                      : formatPace(completionSummary.outdoor.avgPaceSecPerMile)}</strong></div>
+                    <div><span>Elevation</span><strong>{Math.round(Number(completionSummary.outdoor.elevationFt||0))} ft</strong></div>
+                     {(completionSummary.outdoor.steps||0)>0&&<div><span>Steps</span><strong>{Number(completionSummary.outdoor.steps).toLocaleString()}</strong></div>}
+                  </div>
+                </div>:!completionSummary.workout?.quick_cardio&&!completionSummary.workout?.mobility?<div className="completion-stats">
+                  <div><span>Exercises</span><strong>{completionSummary.exercises||0}</strong></div>
+                  <div><span>Sets</span><strong>{completionSummary.sets||0}</strong></div>
+                  <div><span>Volume</span><strong>{Number(completionSummary.volume||0).toLocaleString()} lb</strong></div>
+                </div>:null}
+                <CompletionReviewDetails summary={completionSummary}/>
+                {completionSummary.challengeTestResults?.length>0&&<section className="simple-card challenge-test-summary">
+                  <div className="section-heading"><div><span className="card-label">531 ORIGINAL CHALLENGE · WEEK {completionSummary.challengeTestWeek} TEST</span><h3>Estimated 1RM test results</h3></div></div>
+                  <p className="helper-text">From your actual completed 100% training-max set. Excel formula: weight × (1 + reps × 0.0333). Week 6 results automatically power Weeks 7–12; Week 12 results are saved with your workout. Your other programs' saved 1RMs are unchanged.</p>
+                  <div className="baseline-result-list">
+                    {completionSummary.challengeTestResults.map(result=><article key={result.lift}>
+                      <div className="baseline-result-head"><strong>{result.lift}</strong><span>{result.weight} lb × {result.reps} reps</span></div>
+                      <div className="baseline-result-values"><strong>{Number(result.estimated_1rm).toFixed(2)} lb estimated 1RM</strong></div>
+                    </article>)}
+                  </div>
+                </section>}
+                {baselineFinishReview?.results?.length>0&&<section className="baseline-finish-review">
+                  <div className="section-heading"><div><span className="card-label">STRENGTH BASELINE</span><h3>Review your calculated 1RMs</h3></div></div>
+                  <p className="helper-text">Calculated from the best completed set for each tested lift using your actual reps. Nothing changes until you choose Use.</p>
+                  <div className="baseline-result-list">
+                    {baselineFinishReview.results.map(result=>{
+                      const current=Number(oneRepMaxes[result.lift]||0)
+                      const accepted=Boolean(baselineFinishReview.accepted?.[result.lift])
+                      return <article key={result.lift} className={accepted?'accepted':''}>
+                        <div className="baseline-result-head"><strong>{result.lift}</strong><span>{result.weight} × {result.reps}</span></div>
+                        <div className="baseline-result-values">
+                          <div><span>Current</span><b>{current?current.toFixed(2)+' lb':'—'}</b></div>
+                          <div><span>Calculated</span><b>{Number(result.estimated_1rm).toFixed(2)} lb</b></div>
+                        </div>
+                        <button type="button" className={accepted?'secondary-action':'primary-action'} disabled={accepted} onClick={()=>acceptBaselineResult(result)}>
+                          {accepted?'✓ Saved':`Use ${Number(result.estimated_1rm).toFixed(2)} lb`}
+                        </button>
+                      </article>
+                    })}
+                  </div>
+                  {baselineFinishReview.results.length>1&&<button type="button" className="wide-button" onClick={acceptAllBaselineResults}>Use all calculated 1RMs</button>}
+                  <small className="baseline-history-note">The actual test sets stay in workout history so you can always see where each estimate came from.</small>
+                </section>}
+                <div className="completion-review-actions">
+                  {completionSummary.trainingSessionId&&!completionSummary.offline&&<button type="button" className="secondary-action" onClick={()=>openHistory(completionSummary.trainingSessionId,true)}>Review &amp; correct workout</button>}
+                  {completionSummary.offline&&<p className="helper-text">Corrections become available in History after this workout syncs.</p>}
+                  <button type="button" className="primary-action" onClick={()=>{const together=completionSummary.returnToTogether;setCompletionSummary(null);setBaselineFinishReview(null);if(together){navigateTo('together',{replace:true})}else{window.scrollTo({top:0,behavior:'instant'})}}}>{completionSummary.returnToTogether?'Return to Together':'Done · back to Today'}</button>
+                </div>
+              </section></section>
+          ) : plannedToday && !showRegularToday ? (
             <PlannedWorkoutRunner
               planned={plannedToday}
               oneRepMaxes={oneRepMaxes}
@@ -3780,8 +3861,9 @@ function App() {
                 setPlannedToday(null)
                 setShowRegularToday(false)
                 if(sharedWorkoutActive&&activeSession){
+                  setCompletionSummary(summary?{...summary,returnToTogether:true}:null)
                   await refreshTogether(activeSession.id)
-                  setActiveTab('together')
+                  if(!summary)setActiveTab('together')
                 }else{
                   setCompletionSummary(summary||null)
                   if(summary?.strengthBaseline&&summary?.baselineResults?.length){
@@ -3825,68 +3907,7 @@ function App() {
           ) : trackedProgramsInfo.length && !showRegularToday ? (
             <section className="page-section tracked-today-state">
               <TodayCompletedWorkouts rows={todayCompletedWorkouts} onOpen={openHistory} onReview={id=>openHistory(id,true)}/>
-              {completionSummary&&<section className="workout-complete-summary">
-                <div className="completion-check">✓</div>
-                <div><span className="card-label">WORKOUT COMPLETE</span><h2>{completionSummary.title||'Workout complete'}</h2><p>{completionSummary.program||trackedProgramsInfo.find(x=>x.key===plannedToday?.workout?.tracking_program_key)?.name||trackedTodayInfo?.name||'Workout'}</p></div>
-                {completionSummary.outdoor?<div className="completion-outdoor-summary">
-                  {completionSummary.outdoor.routeAvailable&&completionSummary.outdoor.points?.length>1&&<RouteMap points={completionSummary.outdoor.points} compact/>}
-                  {completionSummary.outdoor.distanceManual
-                    ?<p className="completion-gps-note">Distance entered manually; it is not a GPS measurement.</p>
-                    :completionSummary.outdoor.gpsUnavailable
-                    ?<p className="completion-gps-note" role="status">
-                      {completionSummary.outdoor.gpsFixes>0
-                        ?'GPS location was received, but no reliable movement was recorded. The workout time was saved.'
-                        :'No GPS location was recorded. The workout time was saved; check Location permissions before your next outdoor activity.'}
-                    </p>
-                    :completionSummary.outdoor.distanceEstimated&&
-                      <p className="completion-gps-note">GPS distance is approximate; no verified route or pace was recorded.</p>}
-                  <div className="completion-stats outdoor-completion-stats">
-                    <div><span>Distance{completionSummary.outdoor.distanceEstimated?' (estimate)':''}</span><strong>{completionSummary.outdoor.distanceLabel||Number(completionSummary.outdoor.miles||0).toFixed(2)+' mi'}</strong></div>
-                    <div><span>Time</span><strong>{formatOutdoorDuration(completionSummary.outdoor.elapsedSeconds)}</strong></div>
-                    <div><span>{completionSummary.outdoor.kind==='bike'?'Avg speed':'Avg pace'}</span><strong>{completionSummary.outdoor.kind==='bike'
-                      ? (completionSummary.outdoor.avgMph?Number(completionSummary.outdoor.avgMph).toFixed(1)+' mph':'—')
-                      : formatPace(completionSummary.outdoor.avgPaceSecPerMile)}</strong></div>
-                    <div><span>Elevation</span><strong>{Math.round(Number(completionSummary.outdoor.elevationFt||0))} ft</strong></div>
-                     {(completionSummary.outdoor.steps||0)>0&&<div><span>Steps</span><strong>{Number(completionSummary.outdoor.steps).toLocaleString()}</strong></div>}
-                  </div>
-                </div>:<div className="completion-stats">
-                  <div><span>Exercises</span><strong>{completionSummary.exercises||0}</strong></div>
-                  <div><span>Sets</span><strong>{completionSummary.sets||0}</strong></div>
-                  <div><span>Volume</span><strong>{Number(completionSummary.volume||0).toLocaleString()} lb</strong></div>
-                </div>}
-                {completionSummary.challengeTestResults?.length>0&&<section className="simple-card challenge-test-summary">
-                  <div className="section-heading"><div><span className="card-label">531 ORIGINAL CHALLENGE · WEEK {completionSummary.challengeTestWeek} TEST</span><h3>Estimated 1RM test results</h3></div></div>
-                  <p className="helper-text">From your actual completed 100% training-max set. Excel formula: weight × (1 + reps × 0.0333). Week 6 results automatically power Weeks 7–12; Week 12 results are saved with your workout. Your other programs' saved 1RMs are unchanged.</p>
-                  <div className="baseline-result-list">
-                    {completionSummary.challengeTestResults.map(result=><article key={result.lift}>
-                      <div className="baseline-result-head"><strong>{result.lift}</strong><span>{result.weight} lb × {result.reps} reps</span></div>
-                      <div className="baseline-result-values"><strong>{Number(result.estimated_1rm).toFixed(2)} lb estimated 1RM</strong></div>
-                    </article>)}
-                  </div>
-                </section>}
-                {baselineFinishReview?.results?.length>0&&<section className="baseline-finish-review">
-                  <div className="section-heading"><div><span className="card-label">STRENGTH BASELINE</span><h3>Review your calculated 1RMs</h3></div></div>
-                  <p className="helper-text">Calculated from the best completed set for each tested lift using your actual reps. Nothing changes until you choose Use.</p>
-                  <div className="baseline-result-list">
-                    {baselineFinishReview.results.map(result=>{
-                      const current=Number(oneRepMaxes[result.lift]||0)
-                      const accepted=Boolean(baselineFinishReview.accepted?.[result.lift])
-                      return <article key={result.lift} className={accepted?'accepted':''}>
-                        <div className="baseline-result-head"><strong>{result.lift}</strong><span>{result.weight} × {result.reps}</span></div>
-                        <div className="baseline-result-values">
-                          <div><span>Current</span><b>{current?current.toFixed(2)+' lb':'—'}</b></div>
-                          <div><span>Calculated</span><b>{Number(result.estimated_1rm).toFixed(2)} lb</b></div>
-                        </div>
-                        <button type="button" className={accepted?'secondary-action':'primary-action'} disabled={accepted} onClick={()=>acceptBaselineResult(result)}>
-                          {accepted?'✓ Saved':`Use ${Number(result.estimated_1rm).toFixed(2)} lb`}
-                        </button>
-                      </article>
-                    })}
-                  </div>
-                  {baselineFinishReview.results.length>1&&<button type="button" className="wide-button" onClick={acceptAllBaselineResults}>Use all calculated 1RMs</button>}
-                  <small className="baseline-history-note">The actual test sets stay in workout history so you can always see where each estimate came from.</small>
-                </section>}
-              </section>}
+
 
               {!nextDayPreviewOpen&&<section className="today-choice-screen">
                 <div className="today-choice-heading">
@@ -4583,7 +4604,12 @@ function App() {
         ) : activeTab === 'mobility' ? (
           <MobilitySession session={session} initialMode={mobilityMode}
             onBack={()=>Number(window.history.state?.worksetDepth||0)>0?navigateBack():navigateTo('today',{replace:true})}
-            onSaved={async id=>{await refreshPlannedToday();openHistory(id)}}/>
+            onSaved={async row=>{
+              setCompletionSummary({title:row.title,program:row.program,workout:row.workout,trainingSessionId:row.id,volume:0})
+              setBaselineFinishReview(null)
+              navigateTo('today',{replace:true})
+              await refreshPlannedToday()
+            }}/>
         ) : activeTab === 'nutrition' ? (
           <NutritionPage key={(session?.user?.id||'')+':'+nutritionStartView}
             session={session} initialView={nutritionStartView} onBack={()=>Number(window.history.state?.worksetDepth||0)>0?navigateBack():navigateTo('today',{replace:true})}/>
@@ -4593,6 +4619,7 @@ function App() {
             fromProgress={historyOpenedFromProgress}
             onBack={navigateBack} onChanged={async row=>{
               if(row?.id){
+                setCompletionSummary(current=>current?.trainingSessionId===row.id?{...current,workout:row.workout,title:row.title,volume:row.total_volume,sets:completionCounts(row.workout).sets,exercises:completionCounts(row.workout).exercises}:current)
                 setTodayCompletedWorkouts(list=>list.map(x=>x.id===row.id?row:x))
                 setCompletedTrainingSessions(list=>list.map(x=>x.id===row.id?row:x))
                 if(row.legacy_log_id)setHistory(list=>list.map(x=>x.id===row.legacy_log_id?{...x,workout:row.workout,updated_at:row.updated_at}:x))
@@ -4723,7 +4750,7 @@ function App() {
         </section>
       </div></OverlayPortal>}
 
-      {programCompletionPrompt&&<OverlayPortal onDismiss={()=>setProgramCompletionPrompt(null)}><div className="same-day-sheet-backdrop" onClick={()=>setProgramCompletionPrompt(null)}>
+      {programCompletionPrompt&&!completionSummary&&<OverlayPortal onDismiss={()=>setProgramCompletionPrompt(null)}><div className="same-day-sheet-backdrop" onClick={()=>setProgramCompletionPrompt(null)}>
         <section className="same-day-sheet" onClick={e=>e.stopPropagation()}>
           <span className="card-label">PROGRAM COMPLETE</span>
           <h3>{programCompletionPrompt.name} complete. Update your 1 rep maxes?</h3>

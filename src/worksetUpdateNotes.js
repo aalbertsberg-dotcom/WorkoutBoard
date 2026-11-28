@@ -1,5 +1,11 @@
 // Human-readable highlights maintained with user-facing changes.
 export const WORKSET_UPDATE_NOTES=[
+  {id:'2026-11-28-finish-review',date:'2026-11-28',title:'A better finish to every workout',items:[
+    ['New','A focused post-workout review appears immediately after finishing, including free workouts.'],
+    ['Improvement','See completed exercises and sets, volume, per-exercise details, heaviest recorded sets, skipped sets and session notes.'],
+    ['Improvement','Cardio and mobility show activity-specific results rather than strength statistics.'],
+    ['Improvement','Review and correct a saved workout or return to Today without navigating through History.']
+  ]},
   {id:'2026-11-28-review',date:'2026-11-28',title:'Review workouts and keep results consistent',items:[
     ['New','Review your latest workout directly from Today. Correct names, weights, repetitions and skipped sets; add missed sets.'],
     ['Improvement','Preview corrected volume and use a shared completed-set calculation for workout logging and review.'],

@@ -19,6 +19,7 @@ import {pendingWorkoutSet,unfinishedWorkoutSets,completeExerciseEarly,completeEx
 import {exerciseHistoryKey,resolveExerciseHistoryKey,exerciseAliasLookup,exerciseHistoryNames,preferredExerciseNames,aggregateExerciseHistory} from './exerciseIdentity.js'
 import ExerciseNamePicker from './ExerciseNamePicker.jsx'
 import {workoutStrengthMetrics} from './workoutMetrics.js'
+import {completionCounts} from './completionReview.js'
 
 function parseVolume(value) {
   if (!value) return 0
@@ -870,8 +871,9 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       splits:quickOutdoorMetrics.splits,
     } : null
     const generatedSessionId=offlineUuid()
-    const completedSets=(finalWorkout.exercises||[]).reduce((sum,item)=>sum+(item.setProgress||[]).filter(set=>set.done).length,0)
-    const completedExercises=(finalWorkout.exercises||[]).filter(item=>item.done||(item.setProgress||[]).some(set=>set.done)).length
+    const reviewCounts=completionCounts(finalWorkout)
+    const completedSets=reviewCounts.sets
+    const completedExercises=reviewCounts.exercises
     const finishPayload=sessionId=>({
       id:sessionId,
       user_id:planned.user_id,
@@ -1041,7 +1043,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       onFinished?.({
         title:planned.title,
         program:planned.source_program_name||'Custom workout',
-        exercises:(finalWorkout.exercises||[]).filter(item=>item.done||(item.setProgress||[]).some(set=>set.done)).length,
+        exercises:completedExercises,
         sets:completedSets,
         volume:Math.round(totalVolume),
         strengthBaseline:Boolean(finalWorkout.strength_baseline),
@@ -1050,7 +1052,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
         challengeTestResults,challengeTestWeek:Number(planned.source_week)||null,
         trainingSessionId,
         sessionDate:planned.scheduled_date,workout:finalWorkout,
-        outdoor:completionOutdoor,
+        outdoor:completionOutdoor,offline:Boolean(plannedResult.offline),
       })
     } else {
       setSaveState('Finish failed: '+error.message)

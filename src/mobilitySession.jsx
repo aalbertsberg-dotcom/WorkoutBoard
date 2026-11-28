@@ -34,7 +34,7 @@ export default function MobilitySession({session,initialMode='warmup',onBack,onS
     setBusy(true);setMessage('')
     const now=new Date().toISOString()
     const title=mode==='warmup'?'DeFranco Agile 8':'Cool-down Routine'
-    const {data,error}=await supabase.from('training_sessions').insert({
+    const payload={
       user_id:session.user.id,
       title,program:'Mobility',
       session_date:localDay(),
@@ -49,10 +49,11 @@ export default function MobilitySession({session,initialMode='warmup',onBack,onS
         note,
         exercises:items.filter((_,i)=>checked[i]).map((x,i)=>({id:'mobility-'+i,name:x.title,done:true,note:x.target}))
       }
-    }).select('id').single()
+    }
+    const {data,error}=await supabase.from('training_sessions').insert(payload).select('id').single()
     setBusy(false)
     if(error){setMessage(error.message);return}
-    onSaved?.(data?.id||null)
+    onSaved?.({...payload,id:data?.id||null})
   }
   return <section className="page-section workset-mobility">
     <div className="mobility-heading">
