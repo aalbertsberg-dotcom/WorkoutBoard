@@ -1,4 +1,4 @@
-import {PlatformProgress,FeedbackPanel} from './platform'
+import {FeedbackPanel} from './platform'
 import {InstallAppButton,AppUpdateControls,ExportDataButton} from './productFeatures'
 import {AccountSecurityPanel,BackupRestorePanel,WorkoutSettingsPanel} from './advancedFeatures'
 import {MeSection,MeDisplayNameEditor,MeOneRmEditor} from './MeSections'
@@ -107,17 +107,6 @@ export default function MePage({
       <p>Edit training details whenever you need to</p>
     </div>
     <div className="me-section-group">
-      <MeSection id="overview" title="Training at a glance"
-        description="Workout totals, current weight and latest PR" icon="◫">
-        <PlatformProgress view="mine" compact
-          onOpenProgress={onOpenProgress}
-          onOpenHistory={onOpenHistory}
-          onOpenWeight={()=>jumpToTrack('measurements')} onOpenMeasurements={()=>jumpToTrack('measurements')}
-          session={session} profile={profile} setProfile={setProfile}
-          progress={progress} lifts={lifts} formatWeight={formatWeight}
-          programs={programs} dbNameToProgram={dbNameToProgram}/>
-      </MeSection>
-
       <MeSection id="strength" title="Track Strength &amp; 1RMs"
         description="Edit saved maxes, use the calculator or take a baseline test" icon="◆"
         openOnRequest={trackTarget==='strength'?trackRequest:0}>
@@ -227,18 +216,7 @@ export default function MePage({
           formatWeight={formatWeight} onlyTab="Goals"/>
       </MeSection>
 
-      <MeSection id="programs" title="My Programs"
-        description="Tracked programs and upcoming workouts" icon="▤">
-        <div className="me-inner-card">
-          {trackedProgramsInfo.length>0?
-            <div className="me-tracked-program-list">{trackedProgramsInfo.map(info=><div key={info.key}>
-              <div><strong>{info.name}</strong><span>{info.nextTitle?'Next: '+info.nextTitle:info.complete?'Complete':'Tracking'}</span></div>
-              <b>{info.completed}/{info.total}</b>
-            </div>)}</div>:
-            <p>Current program: {personalProgramName}. Track programs from the Plan page.</p>}
-          <button type="button" className="wide-button" onClick={onOpenPrograms}>Plan & programs</button>
-        </div>
-      </MeSection>
+
     </div>
 
 
