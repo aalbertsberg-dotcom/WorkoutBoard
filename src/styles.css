@@ -9209,3 +9209,26 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   .ws-inbox-panel.ws-inbox-inline{position:relative;inset:auto;width:100%;
     height:min(65dvh,640px);min-height:400px;max-height:none}
 }
+
+
+/* Header actions: bell and Me are a matched pair, including on phone widths. */
+.ws-header-actions{align-items:stretch;align-self:flex-end}
+.ws-header-actions .ws-bell-wrap{align-items:stretch;z-index:auto}
+.ws-header-actions .ws-bell{
+  width:44px;height:44px;min-width:44px;min-height:44px;
+  border-radius:12px;flex:0 0 44px;
+}
+.ws-header-actions .account-chip{
+  height:44px;min-height:44px;
+  display:flex;align-items:center;justify-content:center;
+  text-align:center;padding:4px 9px;border-radius:12px;
+}
+.ws-header-actions .account-chip span{line-height:1.15}
+.ws-header-actions .account-chip b{line-height:1.2}
+.ws-bell-popover{width:min(310px,calc(100vw - 24px))}
+.ws-bell-popover.empty{width:min(260px,calc(100vw - 24px))}
+.ws-bell-popover.empty .ws-bell-preview-actions{grid-template-columns:1fr}
+@media(max-width:640px){
+  .ws-header-actions .ws-bell{width:44px;height:44px;min-width:44px;min-height:44px}
+  .ws-header-actions .account-chip{height:44px;min-height:44px;padding:4px 8px}
+}
