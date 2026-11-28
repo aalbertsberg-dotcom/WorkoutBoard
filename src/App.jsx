@@ -2478,12 +2478,14 @@ function App() {
   const openMe = async () => {
     await refreshTrackedProgramsInfo()
     setTrackFocus(null)
+    // Tapping Me is always a reliable way back to the simple Me menu.
+    setInboxRequest(prev=>({...prev,id:0,homeToken:(prev.homeToken||0)+1}))
     navigateTo('me')
   }
 
   const openMeInbox = ({view='notifications',chatId=null,groupId=null}={}) => {
     setTrackFocus(null)
-    setInboxRequest(prev=>({id:prev.id+1,view,chatId,groupId}))
+    setInboxRequest(prev=>({...prev,id:prev.id+1,view,chatId,groupId}))
     navigateTo('me')
   }
 
@@ -3688,6 +3690,15 @@ function App() {
           </div>
           <div className="ws-header-actions">
             <InboxBell session={session} onOpenInbox={openMeInbox}/>
+            <button type="button" className="ws-messages-header-button" title="Messages"
+              aria-label="Open messages" onClick={()=>openMeInbox({view:'messages'})}>
+              <svg viewBox="0 0 24 24" width="21" height="21" aria-hidden="true"
+                stroke="currentColor" fill="none" strokeWidth="1.8"
+                strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H5l-2 2v-9.5a7.5 7.5 0 0 1 7.5-7.5h2A7.5 7.5 0 0 1 20 11.5Z"/>
+                <path d="M7.5 11.5h8M7.5 14.5H13"/>
+              </svg>
+            </button>
             <button className={'account-chip ' + (isAdmin ? 'admin' : '')} onClick={openMe}>
               <span>{displayName}</span>
               {isAdmin && <b>ADMIN</b>}
@@ -4628,6 +4639,7 @@ function App() {
             onRefreshWorkset={refreshWorkset}
             refreshBlocked={updateBlocked}
             friends={friends} inboxRequest={inboxRequest} onInboxOpen={openMeInbox}
+            homeRequest={inboxRequest.homeToken||0}
             onInboxOpenTogether={view=>{setTogetherView(view);navigateTo('together')}}
             onInboxAcceptLive={async sessionId=>{
               if(!sessionId){setTogetherView('live');navigateTo('together');return}
