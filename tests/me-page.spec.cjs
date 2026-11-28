@@ -10,7 +10,7 @@ test('Me starts organized and collapsed, with profile and History/Progress short
   await expect(page.getByRole('button',{name:/Progress & Analytics/})).toBeVisible()
   await expect(page.getByRole('button',{name:/Nutrition & Water/})).toBeVisible()
   const sections=page.locator('.me-section-toggle')
-  await expect(sections).toHaveCount(9)
+  await expect(sections).toHaveCount(10)
   for(let i=0;i<await sections.count();i++)
     await expect(sections.nth(i)).toHaveAttribute('aria-expanded','false')
   await expect(page.getByText('Your current 1RMs')).toHaveCount(0)
@@ -201,4 +201,23 @@ test('Account backup never reports success when a data table fails',async({page}
   await page.getByRole('button',{name:'Download training backup'}).click()
   await expect(page.getByText(/Backup NOT downloaded.*program_library/)).toBeVisible()
   await expect(page.getByText('Training backup downloaded successfully.')).toHaveCount(0)
+})
+
+test('Inbox stays inside Me rather than opening a full-screen overlay',async({page})=>{
+  await page.route('https://example.supabase.co/**',async route=>route.fulfill({
+    status:200,contentType:'application/json',
+    headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*'},body:'[]'
+  }))
+  await openMe(page)
+  const inboxSection=page.locator('[data-me-section="inbox"]')
+  await expect(inboxSection.locator('.me-section-toggle')).toHaveAttribute('aria-expanded','false')
+  await page.locator('.me-quick-links').getByRole('button',{name:/Inbox & Messages/}).click()
+  await expect(inboxSection.locator('.me-section-toggle')).toHaveAttribute('aria-expanded','true')
+  const panel=inboxSection.locator('.ws-inbox-inline')
+  await expect(panel).toBeVisible()
+  expect(await panel.evaluate(el=>getComputedStyle(el).position)).toBe('relative')
+  await expect(page.locator('.ws-inbox-backdrop')).toHaveCount(0)
+  const r=await panel.boundingBox(),viewport=page.viewportSize()
+  expect(r.x).toBeGreaterThanOrEqual(-1)
+  expect(r.x+r.width).toBeLessThanOrEqual(viewport.width+1)
 })
