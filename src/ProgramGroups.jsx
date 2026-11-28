@@ -1,9 +1,10 @@
 import {useCallback,useEffect,useMemo,useState} from 'react'
 import {supabase} from './supabase'
+import {attemptWorksetInviteEmail} from './inviteDelivery.js'
 
 // Program groups are private. Joining explicitly opts in to sharing completed
 // summaries with that group; members can switch it off and delete old summaries.
-export default function ProgramGroups({session,profile,programOptions=[]}){
+export default function ProgramGroups({session,profile,friends=[],programOptions=[]}){
   const userId=session?.user?.id
   const [groups,setGroups]=useState([])
   const [selectedId,setSelectedId]=useState('')
@@ -13,6 +14,7 @@ export default function ProgramGroups({session,profile,programOptions=[]}){
   const [name,setName]=useState('')
   const [program,setProgram]=useState('')
   const [code,setCode]=useState('')
+  const [friendToInvite,setFriendToInvite]=useState('')
   const [form,setForm]=useState('')
   const [busy,setBusy]=useState(false)
   const [loading,setLoading]=useState(false)
@@ -62,6 +64,11 @@ export default function ProgramGroups({session,profile,programOptions=[]}){
 
   useEffect(()=>{if(userId)loadGroups()},[userId,loadGroups])
   useEffect(()=>{
+    const refresh=()=>loadGroups()
+    window.addEventListener('workset:groups-updated',refresh)
+    return()=>window.removeEventListener('workset:groups-updated',refresh)
+  },[loadGroups])
+  useEffect(()=>{
     if(!userId||!selectedId){setMembers([]);setPosts([]);setResults([]);return}
     setLoading(true)
     loadRecaps().finally(()=>setLoading(false))
@@ -101,6 +108,24 @@ export default function ProgramGroups({session,profile,programOptions=[]}){
     }),'Joined. Your future completed workouts for this program will appear in the private group.')
     if(id){setCode('');setForm('')}
   }
+  const inviteFriend=async()=>{
+    if(!selected||!friendToInvite||busy)return
+    const id=await execute(()=>supabase.rpc('invite_workset_friend_to_group',{
+      target_group:selected.id,friend_user_id:friendToInvite
+    }),'In-app group invite sent.',selected.id)
+    if(id){
+      setFriendToInvite('')
+      const emailStatus=await attemptWorksetInviteEmail('program_invite',id)
+      setMessage(emailStatus)
+    }
+  }
+  const messageGroup=()=>{
+    if(!selected)return
+    window.dispatchEvent(new CustomEvent('workset:open-messages',{
+      detail:{programGroupId:selected.id}
+    }))
+  }
+
   const toggleSharing=async()=>{
     if(!selected||!me)return
     await execute(()=>supabase.rpc('set_program_group_sharing',{
@@ -165,6 +190,15 @@ export default function ProgramGroups({session,profile,programOptions=[]}){
       </label>
       {selected&&<div className="program-group-current">
         <div className="program-group-code"><span>Private invite code</span><strong>{selected.join_code}</strong><button type="button" onClick={shareCode}>Share</button></div>
+        <button type="button" className="program-group-message-button" onClick={messageGroup}>Message group</button>
+        {selected.owner_user_id===userId&&friends.length>0&&<div className="program-group-invite-row">
+          <select value={friendToInvite} onChange={e=>setFriendToInvite(e.target.value)} aria-label="Choose friend to invite">
+            <option value="">Invite a WorkSet friend</option>
+            {friends.filter(friend=>!members.some(m=>m.user_id===friend.user_id)).map(friend=>
+              <option key={friend.user_id} value={friend.user_id}>{friend.display_name}</option>)}
+          </select>
+          <button type="button" disabled={busy||!friendToInvite} onClick={inviteFriend}>Send invite</button>
+        </div>}
         <div className="program-group-members">
           <strong>Members ({members.length})</strong>
           <div>{members.map(member=><span key={member.user_id}>{member.display_name}{member.user_id===userId?' (You)':''}{!member.share_workouts?' · Private':''}</span>)}</div>
