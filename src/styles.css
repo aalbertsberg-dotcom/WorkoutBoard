@@ -9232,3 +9232,51 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   .ws-header-actions .ws-bell{width:44px;height:44px;min-width:44px;min-height:44px}
   .ws-header-actions .account-chip{height:44px;min-height:44px;padding:4px 8px}
 }
+
+
+/* Strength runner: user-controlled set count, finish early and AMRAP drop stages. */
+.exercise-finish-row{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  margin:10px 0;padding:9px 10px;
+  background:#11251b;border:1px solid #335d49;border-radius:11px;
+}
+.finish-exercise-early{
+  min-height:42px;padding:9px 14px;border-radius:9px;
+  background:#215f4e;border:1px solid #4ea88b;
+  color:#f1fff8;font-size:13px;font-weight:850;flex:0 0 auto;
+}
+.exercise-finish-row small{flex:1;min-width:145px;font-size:11px;color:#a8c5b7;line-height:1.4}
+.set-progress-wrap.removable-set>.set-progress-button{padding-right:32px}
+.set-progress-button.skipped{
+  border-style:dashed;border-color:#53617b;background:#172032;
+  color:#a3b0c5;
+}
+.set-progress-button.skipped b{color:#9caac0}
+.set-progress-button.skipped span{color:#90a0b5}
+.exercise-set-add-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:9px 0 0}
+.exercise-set-add-actions .add-extra-set-button{margin:0;min-width:0}
+.drop-set-add{border-color:#84bb5a;color:#d9f99d;background:#132313}
+.drop-stage-add{grid-column:1 / -1;border-color:#637f5a;color:#c8e4bb}
+.exercise-history-link{
+  display:block;margin:9px 0 0;border:1px solid #35465e;
+  border-radius:9px;padding:8px 10px;background:#0d1a2c;
+  max-width:100%;min-width:0;
+}
+.exercise-history-link summary{color:#b2daee;font-weight:700;font-size:12px;cursor:pointer}
+.exercise-history-link p{margin:8px 0;color:#b9c8d9;font-size:11px;line-height:1.45}
+.history-alias-connected{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.history-alias-connected button,.exercise-history-link-row button{
+  min-height:38px;padding:7px 11px;border:1px solid #4f7090;
+  color:#e7f4ff;background:#203e53;border-radius:9px;font-size:12px;font-weight:700;
+}
+.exercise-history-link-row{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap}
+.exercise-history-link-row select{
+  min-width:120px;flex:1;
+  min-height:40px;background:#132238;color:#e7f4ff;
+  border:1px solid #4a5d7c;border-radius:9px;padding:7px;font-size:13px;
+}
+.exercise-history-link small[role=status]{display:block;margin-top:8px;color:#b8e3bc}
+@media(max-width:480px){
+  .exercise-finish-row{align-items:stretch;flex-direction:column}
+  .exercise-finish-row small{min-width:0}
+}
