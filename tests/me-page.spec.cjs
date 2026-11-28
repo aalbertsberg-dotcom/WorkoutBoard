@@ -57,6 +57,8 @@ test('1RM editing requires Save and preserves values across collapsing',async({p
   await page.locator('.me-max-field').filter({has:page.getByText('Bench',{exact:true})})
     .getByRole('button',{name:'Save'}).click()
   await expect(page.locator('#me-test-backend')).toContainText('Saves: 1')
+  await expect(page.locator('.me-max-field').filter({has:page.getByText('Bench',{exact:true})})
+    .getByRole('status')).toContainText('✓ Bench 215.50 lb saved.')
   await toggle.click();await toggle.click()
   await expect(page.getByRole('spinbutton',{name:'Bench'})).toHaveValue('215.5')
 })
