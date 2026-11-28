@@ -46,7 +46,7 @@ export function resolveWorkoutFocus(workout,saved){
   // An already completed set is never reopened by restoring its old index.
   const sets=item.setProgress||[]
   const setIndex=Number.isInteger(saved.setIndex)&&
-    saved.setIndex>=0&&saved.setIndex<sets.length&&!sets[saved.setIndex].done
+    saved.setIndex>=0&&saved.setIndex<sets.length&&!sets[saved.setIndex].done&&!sets[saved.setIndex].skipped
     ? saved.setIndex:null
   return {index,key:String(item.id||index),setIndex}
 }
