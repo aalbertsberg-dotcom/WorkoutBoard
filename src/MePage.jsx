@@ -21,25 +21,27 @@ export default function MePage({
   isAdmin,feedbackUnread,onOpenAdmin,onSignOut,appUrl,onRefreshWorkset,refreshBlocked=false,
   autoOpenSection=null,
   friends=[],inboxRequest={id:0,view:'notifications',chatId:null,groupId:null},
-  onInboxOpen,onInboxOpenTogether,onInboxAcceptLive,
+  onInboxOpen,onInboxOpenTogether,onInboxAcceptLive,homeRequest=0,
 }){
+  const [meView,setMeView]=useState('home')
   const [trackTarget,setTrackTarget]=useState(autoOpenSection)
   const [trackRequest,setTrackRequest]=useState(autoOpenSection?1:0)
+  const openMeView=view=>{
+    setMeView(view)
+    window.scrollTo({top:0,behavior:'instant'})
+  }
   const jumpToTrack=section=>{
+    setMeView(['preferences','security','app-data','community'].includes(section)?'settings':'training')
     setTrackTarget(section)
     setTrackRequest(request=>request+1)
-    // Let the section open before scrolling. App-level navigation scroll reset
-    // finishes first when arriving here from Progress.
     setTimeout(()=>document.querySelector('[data-me-section="'+section+'"]')
       ?.scrollIntoView({block:'start',behavior:'smooth'}),140)
   }
-  useEffect(()=>{
-    if(autoOpenSection)jumpToTrack(autoOpenSection)
-  },[autoOpenSection])
-  useEffect(()=>{
-    if(inboxRequest?.id)jumpToTrack('inbox')
-  },[inboxRequest?.id])
-  return <section className="page-section me-page" aria-label="Me">
+  useEffect(()=>{if(autoOpenSection)jumpToTrack(autoOpenSection)},[autoOpenSection])
+  useEffect(()=>{if(inboxRequest?.id)openMeView('inbox')},[inboxRequest?.id])
+  useEffect(()=>{if(homeRequest>0)openMeView('home')},[homeRequest])
+  return <section className={'page-section me-page me-view-'+meView} aria-label="Me">
+    {meView==='home'?<>
     {displayName==='WorkoutAdmin'&&!isAdmin&&<section className="admin-setup-warning">
       <span className="card-label">ADMIN SETUP INCOMPLETE</span>
       <h3>WorkoutAdmin account exists, but the admin role has not been granted yet.</h3>
@@ -48,61 +50,63 @@ export default function MePage({
 
     <MeDisplayNameEditor name={displayName} email={session?.user?.email} onSave={onSaveDisplayName}/>
 
-    <nav className="me-quick-links" aria-label="Training shortcuts">
-      <button type="button" onClick={()=>onInboxOpen?onInboxOpen({view:'notifications'}):jumpToTrack('inbox')}>
-        <span className="me-shortcut-icon" aria-hidden="true">✉</span>
-        <span><strong>Inbox &amp; Messages</strong><small>Notifications, invitations, private and group chat</small></span>
-        <b aria-hidden="true">›</b>
-      </button>
+    <nav className="me-quick-links me-main-menu" aria-label="Me menu">
       <button type="button" onClick={onOpenHistory}>
         <span className="me-shortcut-icon" aria-hidden="true">▦</span>
-        <span><strong>Workout History</strong><small>Calendar, saved activities and routes</small></span>
-        <b aria-hidden="true">›</b>
-      </button>
-      <button type="button" onClick={onOpenNutrition}>
-        <span className="me-shortcut-icon" aria-hidden="true">◈</span>
-        <span><strong>Nutrition &amp; Water</strong><small>Food diary, macros, hydration and goals</small></span>
-        <b aria-hidden="true">›</b>
-      </button>
-      <button type="button" onClick={()=>onOpenNutrition('goals')}>
-        <span className="me-shortcut-icon" aria-hidden="true">◎</span>
-        <span><strong>Calorie &amp; Macro Setup</strong>
-          <small>Set height once, use tracked weight, edit targets</small></span>
+        <span><strong>Workout History</strong><small>Calendar and completed workouts</small></span>
         <b aria-hidden="true">›</b>
       </button>
       <button type="button" onClick={onOpenProgress}>
         <span className="me-shortcut-icon" aria-hidden="true">⌁</span>
-        <span><strong>View Progress & Analytics</strong><small>Read-only charts, records and history</small></span>
+        <span><strong>Progress &amp; Analytics</strong><small>Records, charts and training trends</small></span>
         <b aria-hidden="true">›</b>
       </button>
-      <button type="button" onClick={()=>jumpToTrack('exercise-names')}>
-        <span className="me-shortcut-icon" aria-hidden="true">≡</span>
-        <span><strong>Exercise Names &amp; History</strong><small>Match or correct names outside a workout</small></span>
+      <button type="button" onClick={onOpenNutrition}>
+        <span className="me-shortcut-icon" aria-hidden="true">◈</span>
+        <span><strong>Food &amp; Water</strong><small>Meals, hydration, calories and macro goals</small></span>
         <b aria-hidden="true">›</b>
       </button>
-      <button type="button" onClick={()=>jumpToTrack('strength')}>
-        <span className="me-shortcut-icon" aria-hidden="true">✎</span>
-        <span><strong>Track &amp; Update</strong><small>Saved 1RMs, weight, measurements and goals</small></span>
+      <button type="button" onClick={()=>openMeView('training')}>
+        <span className="me-shortcut-icon" aria-hidden="true">◆</span>
+        <span><strong>Training &amp; Goals</strong><small>1RMs, exercise names, weight, goals and programs</small></span>
+        <b aria-hidden="true">›</b>
+      </button>
+      <button type="button" onClick={()=>openMeView('settings')}>
+        <span className="me-shortcut-icon" aria-hidden="true">⚙</span>
+        <span><strong>Settings &amp; Account</strong><small>Preferences, security, updates and support</small></span>
         <b aria-hidden="true">›</b>
       </button>
     </nav>
+    {isAdmin&&<button type="button" className="me-admin-link" onClick={onOpenAdmin}>
+      <span><strong>Administration</strong><small>Manage WorkSet and feedback</small></span>
+      <span>{feedbackUnread?'('+feedbackUnread+' new) ':''}›</span>
+    </button>}
 
-    <MeSection id="inbox" title="Inbox &amp; Messages"
-      description="Notifications, friends and group conversations" icon="✉"
-      openOnRequest={trackTarget==='inbox'?trackRequest:0}>
+    <button type="button" className="signout-button me-signout" onClick={onSignOut}>Sign out</button>
+    </>:meView==='inbox'?<>
+    <div className="me-subpage-header">
+      <button type="button" className="me-subpage-back" onClick={()=>openMeView('home')} aria-label="Back to Me">
+        <span aria-hidden="true">←</span> Me
+      </button>
+      <h2>Inbox &amp; Messages</h2>
+      <p>Notifications, invitations and private conversations</p>
+    </div>
       <WorksetInbox session={session} profile={profile} setProfile={setProfile} friends={friends}
         initialView={inboxRequest?.view||'notifications'}
         initialChatId={inboxRequest?.chatId||null}
         initialProgramGroupId={inboxRequest?.groupId||null}
         openRequest={inboxRequest?.id||0}
         onOpenTogether={onInboxOpenTogether} onAcceptLive={onInboxAcceptLive}/>
-    </MeSection>
 
-    <AppUpdateControls onRefresh={onRefreshWorkset} refreshBlocked={refreshBlocked}/>
-
+    </>:meView==='training'?<>
+    <div className="me-subpage-header">
+      <button type="button" className="me-subpage-back" onClick={()=>openMeView('home')} aria-label="Back to Me">
+        <span aria-hidden="true">←</span> Me
+      </button>
+      <h2>Training &amp; Goals</h2>
+      <p>Edit training details whenever you need to</p>
+    </div>
     <div className="me-section-group">
-      <div className="me-section-group-label">YOUR TRAINING · TRACK &amp; UPDATE</div>
-
       <MeSection id="overview" title="Training at a glance"
         description="Workout totals, current weight and latest PR" icon="◫">
         <PlatformProgress view="mine" compact
@@ -237,8 +241,16 @@ export default function MePage({
       </MeSection>
     </div>
 
+
+    </>:<>
+    <div className="me-subpage-header">
+      <button type="button" className="me-subpage-back" onClick={()=>openMeView('home')} aria-label="Back to Me">
+        <span aria-hidden="true">←</span> Me
+      </button>
+      <h2>Settings &amp; Account</h2>
+      <p>Manage WorkSet preferences and your account</p>
+    </div>
     <div className="me-section-group">
-      <div className="me-section-group-label">ACCOUNT & PREFERENCES</div>
       <MeSection id="preferences" title="Workout Preferences"
         description="Timers, sound, vibration and equipment" icon="⚙">
         <WorkoutSettingsPanel session={session}/>
@@ -249,6 +261,8 @@ export default function MePage({
       </MeSection>
       <MeSection id="app-data" title="App & Data"
         description="Install, updates, exports, backup and restore" icon="▣">
+        <AppUpdateControls onRefresh={onRefreshWorkset} refreshBlocked={refreshBlocked}/>
+
         <div className="me-inner-card">
           <div className="me-inner-heading"><span className="card-label">APP</span><h4>Install WorkSet</h4></div>
           {isNativeAndroid()
@@ -275,11 +289,9 @@ export default function MePage({
       </MeSection>
     </div>
 
-    {isAdmin&&<button type="button" className="me-admin-link" onClick={onOpenAdmin}>
-      <span><strong>Administration</strong><small>Manage WorkSet and feedback</small></span>
-      <span>{feedbackUnread?'('+feedbackUnread+' new) ':''}›</span>
-    </button>}
 
     <button type="button" className="signout-button me-signout" onClick={onSignOut}>Sign out</button>
+    </>}
   </section>
+}
 }
