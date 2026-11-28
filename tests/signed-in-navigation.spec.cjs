@@ -85,6 +85,20 @@ async function signedIn(page,{withStartedWalk=false,withStartedStrength=false,wi
       await route.fulfill({status:200,contentType:'application/json',headers,body:JSON.stringify([row])})
       return
     }
+    if(withStartedStrength && method==='GET' && url.includes('/rest/v1/training_sessions')){
+      const now=new Date().toISOString()
+      const names=['Hammer ISO lateral','ISO lateral raises','Cable Lateral Raises','Bench Press']
+      const rows=names.map((name,i)=>({
+        id:'00000000-0000-4000-8000-'+String(100+i).padStart(12,'0'),
+        user_id:userId,title:name,program:'Recent gym activity',
+        completed_at:now,session_date:now.slice(0,10),
+        workout:{exercises:[{id:'hist-'+i,name,setProgress:[
+          {set:1,done:true,weight:40+i*5,actual_reps:10}
+        ]}]}
+      }))
+      await route.fulfill({status:200,contentType:'application/json',headers,body:JSON.stringify(rows)})
+      return
+    }
     if(withStrengthSession && method==='GET' && url.includes('/rest/v1/training_sessions')){
       const now=new Date().toISOString()
       const row={
@@ -699,4 +713,35 @@ test('Admin 1RM database rejection is visibly reported beside Save',async({page}
   await card.getByRole('button',{name:'Save 1 rep maxes'}).click()
   await expect(card.getByRole('alert')).toContainText('Test database refused')
   await expect(card.locator('.admin-max-save-feedback.success')).toHaveCount(0)
+})
+
+test('Exercise entry suggests only a few past names, supports manual match and rename',async({page})=>{
+  const errors=[]
+  page.on('pageerror',error=>errors.push(error.message))
+  await signedIn(page,{withStartedStrength:true})
+  await expect(page.locator('.flex-exercise').first()).toBeVisible({timeout:15000})
+  await page.locator('.quick-add-exercise').click()
+  const add=page.locator('.add-exercise-card')
+  await add.getByRole('textbox',{name:'Exercise name to add'}).fill('lat')
+  const suggestions=add.getByRole('group',{name:'Matching exercise names'})
+  await expect(suggestions).toBeVisible()
+  expect(await suggestions.getByRole('button').count()).toBeLessThanOrEqual(5)
+  await suggestions.getByRole('button',{name:/ISO lateral raises/}).click()
+  await expect(add.getByRole('textbox',{name:'Exercise name to add'})).toHaveValue('ISO lateral raises')
+  await add.getByRole('button',{name:'Add',exact:true}).click()
+  const exercise=page.locator('.flex-exercise').filter({hasText:'ISO lateral raises'})
+  await expect(exercise).toBeVisible()
+  await exercise.getByText('Match exercise history',{exact:true}).click()
+  await exercise.getByRole('textbox',{name:/Find a matching past exercise for ISO lateral raises/}).fill('hammer')
+  const match=exercise.getByRole('group',{name:'Matching exercise names'})
+  await expect(match.getByRole('button',{name:/Hammer ISO lateral/})).toBeVisible()
+  await match.getByRole('button',{name:/Hammer ISO lateral/}).click()
+  await exercise.getByRole('button',{name:'Link history'}).click()
+  await expect(exercise.getByText('Linked to')).toBeVisible()
+  const rename=exercise.locator('.exercise-rename-inline')
+  await rename.locator('summary').click()
+  await rename.getByRole('textbox',{name:/Change exercise name/}).fill('Cable Lateral Raises')
+  await rename.getByRole('button',{name:'Use name'}).click()
+  await expect(page.locator('.flex-exercise').filter({hasText:'Cable Lateral Raises'})).toBeVisible()
+  expect(errors).toEqual([])
 })
