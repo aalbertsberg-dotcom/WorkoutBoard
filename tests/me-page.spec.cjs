@@ -230,7 +230,7 @@ test('Exercise names can be managed later from Me without opening a workout',asy
     headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*'},body:'[]'
   }))
   await openMe(page)
-  const shortcut=page.getByRole('button',{name:/Exercise Names & History/})
+  const shortcut=page.locator('.me-quick-links').getByRole('button',{name:/Exercise Names & History/})
   await expect(shortcut).toBeVisible()
   const section=page.locator('[data-me-section="exercise-names"]')
   await expect(section.locator('.me-section-toggle')).toHaveAttribute('aria-expanded','false')
