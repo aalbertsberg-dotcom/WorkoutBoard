@@ -7,6 +7,7 @@ export default function InboxBell({session,onOpenInbox}){
   const [open,setOpen]=useState(false)
   const [rows,setRows]=useState([])
   const [error,setError]=useState('')
+  const [previewAnchor,setPreviewAnchor]=useState({top:80,right:12})
   const root=useRef(null)
   const previouslySeen=useRef(new Set())
   const initialized=useRef(false)
@@ -46,14 +47,28 @@ export default function InboxBell({session,onOpenInbox}){
     if(!open)return
     const outside=event=>{if(root.current&&!root.current.contains(event.target))setOpen(false)}
     const escape=event=>{if(event.key==='Escape')setOpen(false)}
+    const escapeScroll=()=>setOpen(false)
     document.addEventListener('pointerdown',outside)
     document.addEventListener('keydown',escape)
+    window.addEventListener('scroll',escapeScroll,{passive:true})
     return()=>{
       document.removeEventListener('pointerdown',outside)
       document.removeEventListener('keydown',escape)
+      window.removeEventListener('scroll',escapeScroll)
     }
   },[open])
 
+  const toggle=()=>{
+    if(!open&&root.current){
+      const bounds=root.current.getBoundingClientRect()
+      setPreviewAnchor({
+        top:Math.max(8,Math.min(bounds.bottom+8,window.innerHeight-160)),
+        right:Math.max(12,window.innerWidth-bounds.right-6)
+      })
+    }
+    setOpen(value=>!value)
+    load()
+  }
   const navigate=(view='notifications',chatId=null)=>{
     setOpen(false)
     onOpenInbox?.({view,chatId})
@@ -61,7 +76,7 @@ export default function InboxBell({session,onOpenInbox}){
   return <div className="ws-bell-wrap" ref={root}>
     <button type="button" className="ws-bell" aria-expanded={open}
       aria-haspopup="true" aria-label={unread+' unread WorkSet notifications'}
-      title="Notifications" onClick={()=>{setOpen(value=>!value);load()}}>
+      title="Notifications" onClick={toggle}>
       <svg viewBox="0 0 24 24" width="21" height="21" stroke="currentColor" fill="none"
         strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9Z"/>
@@ -69,7 +84,7 @@ export default function InboxBell({session,onOpenInbox}){
       </svg>
       {unread>0&&<span className="ws-bell-badge">{unread>99?'99+':unread}</span>}
     </button>
-    {open&&<div className="ws-bell-popover" role="region" aria-label="Recent notifications">
+    {open&&<div className="ws-bell-popover" style={previewAnchor} role="region" aria-label="Recent notifications">
       <div className="ws-bell-popover-head">
         <strong>Notifications</strong><small>{unread?unread+' unread':'All caught up'}</small>
       </div>
