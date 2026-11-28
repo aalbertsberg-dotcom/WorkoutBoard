@@ -96,6 +96,8 @@ function setWeight(item,set) {
 }
 
 function repsForSet(item,set) {
+  // Drop stages are AMRAP: never substitute the exercise prescription.
+  if(set?.drop_set)return Number(set.actual_reps)||0
   if(set?.actual_reps!==undefined && set?.actual_reps!==null && set?.actual_reps!=='') return Number(set.actual_reps)||0
   if(set?.reps!==undefined && set?.reps!==null && set?.reps!=='') return Number(set.reps)||0
   const m=String(item?.prescription||'').match(/\d+\s*[x×]\s*(\d+(?:\.\d+)?)/i)
@@ -112,6 +114,7 @@ function bestLoadedSet(item) {
     .map(set=>({weight:setWeight(item,set),reps:repsForSet(item,set),done:Boolean(set.done)}))
     .filter(set=>set.weight&&set.reps)
   if(!loaded.length){
+    if(item?.setProgress?.length)return null
     const weight=legacyLoad(item)
     const reps=repsForSet(item,null)
     return weight&&reps?{weight,reps,done:Boolean(item?.done)}:null
@@ -644,7 +647,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
     setWorkout(v=>({...v,exercises:(v.exercises||[]).map((item,i)=>{
       if(i!==index)return item
       const sets=Array.isArray(item.setProgress)?item.setProgress:[]
-      const previous=sets.at(-1)||{}
+      const previous=[...sets].reverse().find(set=>!set.drop_set)||{}
       const reps=previous.reps ?? repsForSet(item,previous) ?? null
       const label=previous.label || (reps?reps+' reps':'Done')
       const previousWeight=previous.weight!==undefined&&previous.weight!=='' ? previous.weight : (item.load??'')
@@ -1228,8 +1231,8 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
     </section>}
 
     {(workout.exercises||[]).map((item,i)=>{
-      const key=resolveExerciseHistoryKey(item.name,aliasLookup)
-      const hist=historyByExercise[key]
+      const key=String(item.name||'').trim().toLowerCase()
+      const hist=historyByExercise[resolveExerciseHistoryKey(item.name,aliasLookup)]
       const aliasRow=exerciseAliases.find(row=>row.alias_key===exerciseHistoryKey(item.name))
       const historyCandidates=knownExerciseNames.filter(name=>
         exerciseHistoryKey(name)!==exerciseHistoryKey(item.name))
@@ -1438,7 +1441,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
                 const suggestedWeight=cyclePending?0:Number(String(partnerSetTarget(workoutOneRms,set)).match(/^\d+/)?.[0]||0)
                 const lacksTest=needsChallengeCycle&&set.weight_lift&&!cycleMaxes[set.weight_lift]
                 const tileWeight=(cyclePending||lacksTest)&&!set.done&&!set.weight_edited?0:(set.done||set.weight_edited?recordedWeight:(suggestedWeight||recordedWeight))
-                return <div className={'set-progress-wrap '+(set.extra?'extra-set':'')} key={j}>
+                return <div className={'set-progress-wrap '+(set.extra?'extra-set ':'')+(item.setProgress.length>1?'removable-set':'')} key={j}>
                   <button
                     type="button"
                     className={'set-progress-button '+(set.done?'done ':'')+(set.skipped?'skipped ':'')+(i===focusedExerciseIndex&&j===activeIndex?'current-set ':'')}
