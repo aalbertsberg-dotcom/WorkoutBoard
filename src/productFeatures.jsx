@@ -16,7 +16,7 @@ import {explainProgramSetWeight,adjustedManualSetWeight} from './programWeightNo
 import {ORIGINAL_CHALLENGE_KEY,ORIGINAL_CHALLENGE_NAME,ORIGINAL_CHALLENGE_ID,ORIGINAL_CHALLENGE_LIFTS,isOriginalChallengeMaxTest,isOriginalChallengeTestSet,originalChallengeCompletedTest,originalChallengeWeek6Estimates,originalChallengeProgramMaxes} from './originalChallengeCycle.js'
 import { validWeightDraft,validRepsDraft,displayedSetWeight,recordedWeightValue,canFinishQuickCardio,withoutUnreliableRoute,outdoorDistancePresentation,workoutDistancePresentation,effectiveCardioDurationSeconds,autosaveDelayMs } from './trackingRules'
 import {pendingWorkoutSet,unfinishedWorkoutSets,completeExerciseEarly,completeExerciseSet,reopenExerciseSet,deleteWorkoutSet,addDropSet,addDropStage,validateDropStage} from './workoutSetActions.js'
-import {exerciseHistoryKey,resolveExerciseHistoryKey,exerciseAliasLookup,exerciseHistoryNames,aggregateExerciseHistory} from './exerciseIdentity.js'
+import {exerciseHistoryKey,resolveExerciseHistoryKey,exerciseAliasLookup,exerciseHistoryNames,preferredExerciseNames,aggregateExerciseHistory} from './exerciseIdentity.js'
 import ExerciseNamePicker from './ExerciseNamePicker.jsx'
 
 function parseVolume(value) {
@@ -184,6 +184,9 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
     historySessionRows,aliasLookup,setWeight,repsForSet,isDistanceExercise
   ),[historySessionRows,aliasLookup])
   const knownExerciseNames=useMemo(()=>exerciseHistoryNames(historySessionRows),[historySessionRows])
+  const preferredNameChoices=useMemo(()=>preferredExerciseNames([
+    ...knownExerciseNames,...(workout.exercises||[]).map(exercise=>exercise.name)
+  ],aliasLookup),[knownExerciseNames,workout.exercises,aliasLookup])
   const [substitutions,setSubstitutions]=useState({})
   const [timerPresets,setTimerPresets]=useState({})
   const [conditioningOpen,setConditioningOpen]=useState(()=>Boolean(planned?.workout?.conditioning_prescribed))
@@ -1232,7 +1235,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
       <div className="quick-add-row">
         <div className="conditioning-field"><span>Movement</span><ExerciseNamePicker
           autoFocus value={newExercise.name} label="Exercise name to add" placeholder="Type to find an exercise…"
-          choices={[...knownExerciseNames,...(workout.exercises||[]).map(exercise=>exercise.name)]}
+          choices={preferredNameChoices}
           onChange={name=>setNewExercise(v=>({...v,name}))}
           onSelect={name=>setNewExercise(v=>({...v,name}))}/></div>
         <button type="button" className="primary-action quick-add-submit" disabled={!String(newExercise.name||'').trim()} onClick={addExercise}>Add</button>
