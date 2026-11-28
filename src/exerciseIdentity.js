@@ -43,6 +43,29 @@ export function rankExerciseHistoryCandidates(name,choices=[]){
   return [...choices].sort((a,b)=>score(b)-score(a)||a.localeCompare(b))
 }
 
+// Phone-friendly, bounded suggestions. No automatic linking or renaming.
+// A query must have two characters; at most five familiar names are shown.
+export function findExerciseNameSuggestions(query,names=[],limit=5){
+  const search=exerciseHistoryKey(query)
+  if(search.length<2)return []
+  const terms=search.split(' ').filter(Boolean)
+  const scored=new Map()
+  for(const name of names||[]){
+    const label=String(name||'').trim()
+    const key=exerciseHistoryKey(label)
+    if(!label||!key||scored.has(key)||key===search)continue
+    const words=key.split(' ')
+    const matching=terms.every(term=>words.some(word=>word.startsWith(term))||key.includes(term))
+    if(!matching)continue
+    const score=(key.startsWith(search)?100:0)+(key.includes(search)?40:0)+
+      terms.filter(term=>words.some(word=>word.startsWith(term))).length*10-
+      Math.abs(key.length-search.length)/100
+    scored.set(key,{label,score})
+  }
+  return [...scored.values()].sort((a,b)=>b.score-a.score||a.label.localeCompare(b.label))
+    .slice(0,Math.max(1,Math.min(limit,5))).map(item=>item.label)
+}
+
 export function exerciseHistoryNames(sessions=[]){
   const seen=new Set(), result=[]
   for(const row of sessions||[]){
