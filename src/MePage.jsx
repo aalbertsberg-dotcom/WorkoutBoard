@@ -5,6 +5,7 @@ import {MeSection,MeDisplayNameEditor,MeOneRmEditor} from './MeSections'
 import {ProgressToolbox} from './trainingTools'
 import {useEffect,useState} from 'react'
 import {isNativeAndroid} from './androidUpdates.js'
+import WorksetInbox from './WorksetInbox.jsx'
 
 /** The Me landing page is navigation-first, with secondary tools closed by default.
  * Existing tools are mounted only when explicitly expanded. */
@@ -18,6 +19,8 @@ export default function MePage({
   trackedProgramsInfo,personalProgramName,shareInvite,inviteState,
   isAdmin,feedbackUnread,onOpenAdmin,onSignOut,appUrl,onRefreshWorkset,refreshBlocked=false,
   autoOpenSection=null,
+  friends=[],inboxRequest={id:0,view:'notifications',chatId:null,groupId:null},
+  onInboxOpenTogether,onInboxAcceptLive,
 }){
   const [trackTarget,setTrackTarget]=useState(autoOpenSection)
   const [trackRequest,setTrackRequest]=useState(autoOpenSection?1:0)
@@ -32,6 +35,9 @@ export default function MePage({
   useEffect(()=>{
     if(autoOpenSection)jumpToTrack(autoOpenSection)
   },[autoOpenSection])
+  useEffect(()=>{
+    if(inboxRequest?.id)jumpToTrack('inbox')
+  },[inboxRequest?.id])
   return <section className="page-section me-page" aria-label="Me">
     {displayName==='WorkoutAdmin'&&!isAdmin&&<section className="admin-setup-warning">
       <span className="card-label">ADMIN SETUP INCOMPLETE</span>
@@ -42,6 +48,11 @@ export default function MePage({
     <MeDisplayNameEditor name={displayName} email={session?.user?.email} onSave={onSaveDisplayName}/>
 
     <nav className="me-quick-links" aria-label="Training shortcuts">
+      <button type="button" onClick={()=>jumpToTrack('inbox')}>
+        <span className="me-shortcut-icon" aria-hidden="true">✉</span>
+        <span><strong>Inbox &amp; Messages</strong><small>Notifications, invitations, private and group chat</small></span>
+        <b aria-hidden="true">›</b>
+      </button>
       <button type="button" onClick={onOpenHistory}>
         <span className="me-shortcut-icon" aria-hidden="true">▦</span>
         <span><strong>Workout History</strong><small>Calendar, saved activities and routes</small></span>
@@ -69,6 +80,17 @@ export default function MePage({
         <b aria-hidden="true">›</b>
       </button>
     </nav>
+
+    <MeSection id="inbox" title="Inbox &amp; Messages"
+      description="Notifications, friends and group conversations" icon="✉"
+      openOnRequest={trackTarget==='inbox'?trackRequest:0}>
+      <WorksetInbox session={session} profile={profile} friends={friends}
+        initialView={inboxRequest?.view||'notifications'}
+        initialChatId={inboxRequest?.chatId||null}
+        initialProgramGroupId={inboxRequest?.groupId||null}
+        openRequest={inboxRequest?.id||0}
+        onOpenTogether={onInboxOpenTogether} onAcceptLive={onInboxAcceptLive}/>
+    </MeSection>
 
     <AppUpdateControls onRefresh={onRefreshWorkset} refreshBlocked={refreshBlocked}/>
 
