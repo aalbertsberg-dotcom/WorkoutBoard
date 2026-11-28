@@ -9157,3 +9157,55 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
  .app-header .ws-inbox{margin-left:auto}
  .ws-bell{width:39px;height:39px}
 }
+
+
+/* WorkSet bell preview: only notifications appear over the current page. */
+.app-header > div:first-child{min-width:0;flex:1 1 auto}
+.ws-header-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex:0 0 auto;margin-left:auto}
+.ws-header-actions .account-chip{flex:0 0 auto}
+.ws-bell-wrap{position:relative;flex:0 0 auto;display:flex;align-items:center;z-index:400}
+.ws-bell-popover{
+  position:absolute;right:0;top:calc(100% + 10px);
+  width:min(350px,calc(100vw - 24px));max-height:min(420px,65dvh);
+  overflow-y:auto;overscroll-behavior:contain;
+  background:#111f32;color:#eff7ff;border:1px solid #465c7a;
+  border-radius:13px;box-shadow:0 14px 35px rgba(0,0,0,.48);
+  z-index:500;padding:0;line-height:1.35;
+}
+.ws-bell-popover-head{display:flex;align-items:center;justify-content:space-between;
+  gap:12px;padding:12px 14px;border-bottom:1px solid #35465f}
+.ws-bell-popover-head strong{font-size:15px}
+.ws-bell-popover-head small{color:#bac9d9;font-size:11px}
+.ws-bell-empty{font-size:13px;color:#bdc9da;margin:16px 14px}
+.ws-bell-preview{display:grid;gap:4px;box-sizing:border-box;
+  width:100%;padding:11px 14px;border:0;border-bottom:1px solid #35465f;
+  text-align:left;color:#e8f3ff;background:transparent}
+.ws-bell-preview.unread{background:#1b3449;border-left:3px solid #92e4be}
+.ws-bell-preview strong{font-size:13px}
+.ws-bell-preview span{color:#bdcfe1;font-size:12px;
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;
+  overflow-wrap:anywhere}
+.ws-bell-preview-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px;padding:10px}
+.ws-bell-preview-actions button{min-height:40px;padding:9px 6px;border:1px solid #466280;
+  border-radius:9px;background:#1b3647;color:#f1fff9;font-size:12px;font-weight:700}
+
+/* Full inbox is part of Me, never a fixed full-screen dialog. */
+.ws-inbox-page{display:block;min-width:0;width:100%;overflow:hidden}
+.ws-inbox-panel.ws-inbox-inline{
+  position:relative;inset:auto;top:auto;bottom:auto;right:auto;left:auto;
+  z-index:auto;width:100%;height:clamp(380px,65dvh,640px);
+  min-height:380px;max-height:none;border-radius:12px;box-shadow:none;
+  box-sizing:border-box;margin:0;
+}
+.ws-inbox-inline .ws-chat-create{min-width:0}
+.ws-inbox-inline .ws-chat-create > input{width:100%;box-sizing:border-box}
+.ws-inbox-inline .ws-chat-composer textarea{min-width:0}
+.ws-inbox-inline .ws-inbox-top strong{font-size:15px}
+@media(max-width:640px){
+  .app-header > div:first-child{min-width:0}
+  .ws-header-actions{gap:8px;margin-left:0}
+  .ws-bell-wrap{z-index:400}
+  .ws-bell-popover{top:calc(100% + 10px)}
+  .ws-inbox-panel.ws-inbox-inline{position:relative;inset:auto;width:100%;
+    height:min(65dvh,640px);min-height:400px;max-height:none}
+}
