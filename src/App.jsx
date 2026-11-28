@@ -4621,7 +4621,7 @@ function App() {
             appUrl={appUrl()}
             onRefreshWorkset={refreshWorkset}
             refreshBlocked={updateBlocked}
-            friends={friends} inboxRequest={inboxRequest}
+            friends={friends} inboxRequest={inboxRequest} onInboxOpen={openMeInbox}
             onInboxOpenTogether={view=>{setTogetherView(view);navigateTo('together')}}
             onInboxAcceptLive={async sessionId=>{
               if(!sessionId){setTogetherView('live');navigateTo('together');return}
