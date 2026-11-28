@@ -128,16 +128,22 @@ test('Every training and settings disclosure refers to a hidden panel',async({pa
 })
 
 
-test('Secondary tools open safely, then return to their minimized state',async({page})=>{
+test('Secondary tools stay collapsed inside their focused Me pages',async({page})=>{
   const errors=[]
   page.on('pageerror',error=>errors.push(error.message))
   await page.route('https://example.supabase.co/**',async route=>{
     await route.fulfill({status:200,contentType:'application/json',
-      headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*'},
-      body:'[]'})
+      headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*'},body:'[]'})
   })
   await openMe(page)
-  for(const id of ['overview','preferences','security','app-data','community']){
+  await openTraining(page)
+  const overview=page.locator('[data-me-section="overview"] .me-section-toggle')
+  await overview.click()
+  await expect(overview).toHaveAttribute('aria-expanded','true')
+  await overview.click()
+  await page.getByRole('button',{name:'Back to Me'}).click()
+  await openSettings(page)
+  for(const id of ['preferences','security','app-data','community']){
     const toggle=page.locator('[data-me-section="'+id+'"] .me-section-toggle')
     await toggle.click()
     await expect(toggle).toHaveAttribute('aria-expanded','true')
@@ -148,18 +154,21 @@ test('Secondary tools open safely, then return to their minimized state',async({
   }
   expect(errors).toEqual([])
   await page.reload()
-  await expect(page.locator('.me-section-toggle[aria-expanded="true"]')).toHaveCount(0)
+  await expect(page.locator('.me-main-menu button')).toHaveCount(5)
+  await expect(page.locator('.me-section-toggle')).toHaveCount(0)
 })
 
 
-test('Updates are easy to find without expanding App & Data; Refresh is actionable',async({page})=>{
+test('Updates stay discoverable inside Settings & Account',async({page})=>{
   await openMe(page)
+  await expect(page.getByRole('region',{name:'App updates'})).toHaveCount(0)
+  await openSettings(page)
+  await page.locator('[data-me-section="app-data"] .me-section-toggle').click()
   const card=page.getByRole('region',{name:'App updates'})
   await expect(card).toBeVisible()
   await expect(card).toContainText('WorkSet v')
   await expect(card.getByRole('button',{name:'Check for updates'})).toBeVisible()
   await expect(card.getByRole('button',{name:'Refresh WorkSet'})).toBeEnabled()
-  await expect(page.locator('[data-me-section="app-data"] .me-section-toggle')).toHaveAttribute('aria-expanded','false')
   await card.getByRole('button',{name:'Refresh WorkSet'}).click()
   await expect(page.locator('#me-test-navigation')).toContainText('Refreshed safely')
 })
@@ -168,6 +177,8 @@ test('A new release is detected without clearing browser caches',async({page})=>
     status:200,contentType:'application/json',body:JSON.stringify({buildId:'different-new-release'})
   }))
   await openMe(page)
+  await openSettings(page)
+  await page.locator('[data-me-section="app-data"] .me-section-toggle').click()
   const card=page.getByRole('region',{name:'App updates'})
   await card.getByRole('button',{name:'Check for updates'}).click()
   await expect(card.getByText('New version available.')).toBeVisible()
@@ -217,42 +228,44 @@ test('Account backup never reports success when a data table fails',async({page}
       body:failed?JSON.stringify({message:'Simulated account backup failure'}):'[]'})
   })
   await openMe(page)
+  await openSettings(page)
   await page.locator('[data-me-section="app-data"] > .me-section-title > .me-section-toggle').click()
   await page.getByRole('button',{name:'Download training backup'}).click()
   await expect(page.getByText(/Backup NOT downloaded.*program_library/)).toBeVisible()
   await expect(page.getByText('Training backup downloaded successfully.')).toHaveCount(0)
 })
 
-test('Inbox stays inside Me rather than opening a full-screen overlay',async({page})=>{
+test('Inbox opens as an uncluttered Me page, not a duplicate card',async({page})=>{
   await page.route('https://example.supabase.co/**',async route=>route.fulfill({
     status:200,contentType:'application/json',
     headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*'},body:'[]'
   }))
   await openMe(page)
-  const inboxSection=page.locator('[data-me-section="inbox"]')
-  await expect(inboxSection.locator('.me-section-toggle')).toHaveAttribute('aria-expanded','false')
-  await page.locator('.me-quick-links').getByRole('button',{name:/Inbox & Messages/}).click()
-  await expect(inboxSection.locator('.me-section-toggle')).toHaveAttribute('aria-expanded','true')
-  const panel=inboxSection.locator('.ws-inbox-inline')
+  await expect(page.locator('.me-view-home .ws-inbox-panel')).toHaveCount(0)
+  await expect(page.locator('.me-main-menu button')).toHaveCount(5)
+  await page.locator('#me-test-open-inbox').click()
+  await expect(page.locator('.me-view-inbox')).toBeVisible()
+  const panel=page.locator('.me-view-inbox .ws-inbox-inline')
   await expect(panel).toBeVisible()
   expect(await panel.evaluate(el=>getComputedStyle(el).position)).toBe('relative')
   await expect(page.locator('.ws-inbox-backdrop')).toHaveCount(0)
   const r=await panel.boundingBox(),viewport=page.viewportSize()
   expect(r.x).toBeGreaterThanOrEqual(-1)
   expect(r.x+r.width).toBeLessThanOrEqual(viewport.width+1)
+  await page.getByRole('button',{name:'Back to Me'}).click()
+  await expect(page.locator('.me-main-menu button')).toHaveCount(5)
+  await expect(page.locator('.ws-inbox-panel')).toHaveCount(0)
 })
-
 test('Exercise names can be managed later from Me without opening a workout',async({page})=>{
   await page.route('https://example.supabase.co/**',async route=>route.fulfill({
     status:200,contentType:'application/json',
     headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*'},body:'[]'
   }))
   await openMe(page)
-  const shortcut=page.locator('.me-quick-links').getByRole('button',{name:/Exercise Names & History/})
-  await expect(shortcut).toBeVisible()
+  await openTraining(page)
   const section=page.locator('[data-me-section="exercise-names"]')
   await expect(section.locator('.me-section-toggle')).toHaveAttribute('aria-expanded','false')
-  await shortcut.click()
+  await section.locator('.me-section-toggle').click()
   await expect(section.locator('.me-section-toggle')).toHaveAttribute('aria-expanded','true')
   await expect(section.getByRole('textbox',{name:'Exercise to match'})).toBeVisible()
   await expect(section.getByRole('textbox',{name:'Preferred exercise name'})).toBeVisible()
