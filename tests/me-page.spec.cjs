@@ -199,6 +199,7 @@ test('Strength tools remain compact until individually expanded',async({page})=>
 
 test('Rejected 1RM save keeps the previous stored value when section reopens',async({page})=>{
   await openMe(page)
+  await openTraining(page)
   const strength=page.locator('[data-me-section="strength"] > .me-section-title > .me-section-toggle')
   await strength.click()
   const field=page.locator('.me-max-field').filter({has:page.getByText('Bench',{exact:true})})
