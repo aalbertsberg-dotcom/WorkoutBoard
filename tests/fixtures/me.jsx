@@ -14,6 +14,7 @@ function Fixture(){
   const [reps,setReps]=useState(5)
   const [lift,setLift]=useState('')
   const [ops,setOps]=useState(0)
+  const [inboxRequest,setInboxRequest]=useState({id:0,view:'notifications'})
   const estimated=weight?Number(weight)*(1+reps/30):0
   const rounded=Math.round(estimated*100)/100
   const saveName=async name=>{
@@ -49,7 +50,13 @@ function Fixture(){
       isAdmin={false} feedbackUnread={0} onOpenAdmin={()=>setNavigation('Admin opened')}
       onSignOut={()=>setNavigation('Sign out clicked')} appUrl="http://localhost:4173/"
       onRefreshWorkset={()=>setNavigation('Refreshed safely')} refreshBlocked={false}
+      inboxRequest={inboxRequest}
+      onInboxOpen={({view='notifications'}={})=>setInboxRequest(p=>({...p,id:p.id+1,view}))}
     />
+    <button type="button" id="me-test-open-inbox"
+      onClick={()=>setInboxRequest(p=>({...p,id:p.id+1,view:'notifications'}))}>Simulate bell inbox navigation</button>
+    <button type="button" id="me-test-open-messages"
+      onClick={()=>setInboxRequest(p=>({...p,id:p.id+1,view:'messages'}))}>Simulate header message navigation</button>
     <output id="me-test-navigation" role="status">{navigation}</output>
     <output id="me-test-backend" role="status">Saves: {ops}</output>
   </>
