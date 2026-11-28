@@ -2,7 +2,7 @@ import { DialogPortal,OverlayPortal,confirmWorkset } from './worksetDialogs'
 import MePage from './MePage'
 import NutritionPage from './NutritionPage'
 import ProgramGroups from './ProgramGroups.jsx'
-import WorksetInbox from './WorksetInbox.jsx'
+import InboxBell from './InboxBell.jsx'
 import {attemptWorksetInviteEmail} from './inviteDelivery.js'
 import LiveSessionRecaps from './LiveSessionRecaps.jsx'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -1205,6 +1205,7 @@ function App() {
   const [inviteState,setInviteState] = useState('')
   const [log,setLog] = useState(() => makeLog('andy-hybrid-12',1,'Squat',0))
 
+  const [inboxRequest,setInboxRequest] = useState({id:0,view:'notifications',chatId:null,groupId:null})
   const [togetherReady,setTogetherReady] = useState(null)
   const [activeSession,setActiveSession] = useState(null)
   const [participants,setParticipants] = useState([])
@@ -2474,6 +2475,18 @@ function App() {
     navigateTo('me')
   }
 
+  const openMeInbox = ({view='notifications',chatId=null,groupId=null}={}) => {
+    setTrackFocus(null)
+    setInboxRequest(prev=>({id:prev.id+1,view,chatId,groupId}))
+    navigateTo('me')
+  }
+
+  useEffect(()=>{
+    const handleGroupMessages=event=>openMeInbox({view:'messages',groupId:event.detail?.programGroupId||null})
+    window.addEventListener('workset:open-messages',handleGroupMessages)
+    return()=>window.removeEventListener('workset:open-messages',handleGroupMessages)
+  },[activeTab])
+
   useEffect(() => {
     // Treat each app section like a separate page. Mobile browsers can restore
     // scroll after React paints, so reset immediately and once more after layout.
@@ -3667,18 +3680,13 @@ function App() {
             <h1>{activeTab === 'today' ? 'Today' : activeTab === 'together' ? 'Together' : activeTab === 'program' ? 'Plan' : activeTab === 'whiteboard' ? 'Whiteboard' : activeTab === 'progress' ? 'Progress' : activeTab === 'history' ? 'History' : activeTab === 'nutrition' ? 'Nutrition' : activeTab === 'mobility' ? 'Warm-up & Cool-down' : activeTab === 'admin' ? 'Admin' : 'Me'}</h1>
             {appNavDepth>0&&<button type="button" className="app-history-back" onClick={navigateBack}>← Back</button>}
           </div>
-          <WorksetInbox session={session} profile={profile} friends={friends}
-            onOpenTogether={view=>{setTogetherView(view);navigateTo('together')}}
-            onAcceptLive={async sessionId=>{
-              if(!sessionId){setTogetherView('live');navigateTo('together');return}
-              const {data:joined}=await supabase.from('shared_sessions').select('*').eq('id',sessionId).maybeSingle()
-              if(joined){setActiveSession(joined);await refreshTogether(joined.id)}
-              setTogetherView('live');navigateTo('together')
-            }}/>
-          <button className={'account-chip ' + (isAdmin ? 'admin' : '')} onClick={openMe}>
-            <span>{displayName}</span>
-            {isAdmin && <b>ADMIN</b>}
-          </button>
+          <div className="ws-header-actions">
+            <InboxBell session={session} onOpenInbox={openMeInbox}/>
+            <button className={'account-chip ' + (isAdmin ? 'admin' : '')} onClick={openMe}>
+              <span>{displayName}</span>
+              {isAdmin && <b>ADMIN</b>}
+            </button>
+          </div>
         </header>
 
         <nav className="primary-nav">
@@ -4613,6 +4621,14 @@ function App() {
             appUrl={appUrl()}
             onRefreshWorkset={refreshWorkset}
             refreshBlocked={updateBlocked}
+            friends={friends} inboxRequest={inboxRequest}
+            onInboxOpenTogether={view=>{setTogetherView(view);navigateTo('together')}}
+            onInboxAcceptLive={async sessionId=>{
+              if(!sessionId){setTogetherView('live');navigateTo('together');return}
+              const {data:joined}=await supabase.from('shared_sessions').select('*').eq('id',sessionId).maybeSingle()
+              if(joined){setActiveSession(joined);await refreshTogether(joined.id)}
+              setTogetherView('live');navigateTo('together')
+            }}
           />
         )}
 
