@@ -904,6 +904,8 @@ export function PlanPage({
   const [previewKey,setPreviewKey] = useState('archive:squatober')
   const [previewWeek,setPreviewWeek] = useState(1)
   const [previewDay,setPreviewDay] = useState(0)
+  const [expandedPreviewDay,setExpandedPreviewDay]=useState(null)
+  useEffect(()=>setExpandedPreviewDay(null),[previewKey,previewWeek,previewDay])
   const [scheduleDate,setScheduleDate] = useState(isoDate(new Date()))
   const [favorites,setFavorites] = useState(() => {
     const fromProfile=profile?.favorite_programs
@@ -1698,7 +1700,16 @@ export function PlanPage({
           <label>Week<select value={previewWeek} onChange={e=>{setPreviewWeek(Number(e.target.value));setPreviewDay(0)}}>{Array.from({length:preview.weeksCount},(_,i)=>i+1).map(n=><option key={n} value={n}>Week {n}</option>)}</select></label>
           <label>Workout<select value={previewDay} onChange={e=>setPreviewDay(Number(e.target.value))}>{previewDays.map((d,i)=><option key={i} value={i}>{d.title}</option>)}</select></label>
         </div>
-        <div className="sample-workout"><h3>{previewDays[previewDay]?.title}</h3>{previewDays[previewDay]?.exercises?.map((x,i)=><div className="sample-exercise" key={i}><strong>{x.name}</strong><span>{x.prescription}</span>{x.note&&<small>{x.note}</small>}</div>)}</div>
+        {previewDays[previewDay]&&<section className="sample-workout preview-day-disclosure">
+          <button type="button" className="preview-day-toggle" aria-expanded={expandedPreviewDay===previewDay}
+            aria-controls="preview-day-exercises" onClick={()=>setExpandedPreviewDay(value=>value===previewDay?null:previewDay)}>
+            <span><strong>{previewDays[previewDay].title}</strong><small>{(previewDays[previewDay].exercises||[]).length} exercises · {expandedPreviewDay===previewDay?'Hide details':'Show details'}</small></span>
+            <b aria-hidden="true">{expandedPreviewDay===previewDay?'⌃':'⌄'}</b>
+          </button>
+          <div id="preview-day-exercises" hidden={expandedPreviewDay!==previewDay}>
+            {expandedPreviewDay===previewDay&&previewDays[previewDay]?.exercises?.map((x,i)=><div className="sample-exercise" key={i}><strong>{x.name}</strong><span>{x.prescription}</span>{x.note&&<small>{x.note}</small>}</div>)}
+          </div>
+        </section>}
         <div className="program-preview-actions">
           <div className="schedule-row"><input type="date" value={scheduleDate} onChange={e=>setScheduleDate(e.target.value)}/><button className="primary-action" onClick={scheduleProgramWorkout}>Add workout</button></div>
           {sharedPreview?.reviewed&&<button type="button" className="primary-action" onClick={saveSharedImportedProgram}>Save shared copy to My Programs</button>}

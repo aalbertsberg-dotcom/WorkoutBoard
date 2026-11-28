@@ -493,7 +493,7 @@ export default function NutritionPage({session,onBack,initialView='log'}){
 
   if(!userId)return <section className="page-section">Sign in to track nutrition.</section>;
   return <section className="page-section nutrition-page" aria-label="Nutrition and hydration">
-    <div className="nutrition-topline"><button type="button" className="secondary-action" onClick={onBack}>← Back</button>
+    <div className="nutrition-topline"><button type="button" className="secondary-action workset-back-control" onClick={onBack}>← Back</button>
       <span>{loading?'Syncing nutrition…':isOnline()?'Private to your account':'Offline logging available'}</span></div>
     {view==='search'?
       <div className="nutrition-search-intro">

@@ -205,7 +205,7 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
         <h2>{selected?'Workout details':selectedId?'Workout details':mode==='calendar'?'Your training calendar':'Your workout history'}</h2>
         <p>{selected?'Everything recorded for this session':'What you did, when you did it — no charts to dig through'}</p>
       </div>
-      <button type="button" className="secondary-action" onClick={selectedId&&fromProgress?onBack:selectedId?openList:onBack}>
+      <button type="button" className="secondary-action workset-back-control" onClick={selectedId&&fromProgress?onBack:selectedId?openList:onBack}>
         {selectedId&&fromProgress?'← Progress':selectedId?'← All workouts':'← Back'}
       </button>
     </div>

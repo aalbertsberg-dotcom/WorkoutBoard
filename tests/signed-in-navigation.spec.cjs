@@ -127,7 +127,9 @@ async function signedIn(page,{withStartedWalk=false,withStartedStrength=false,wi
           ]}
         ]}
       }
-      await route.fulfill({status:200,contentType:'application/json',headers,body:JSON.stringify([row])})
+      const projection=new URL(url).searchParams.get('select')
+      const selectedRow=projection&&projection!=='*'?Object.fromEntries(projection.split(',').filter(key=>Object.hasOwn(row,key)).map(key=>[key,row[key]])):row
+      await route.fulfill({status:200,contentType:'application/json',headers,body:JSON.stringify([selectedRow])})
       return
     }
     if(withAdmin && url.includes('/rpc/admin_user_overview_v2')){
@@ -910,4 +912,38 @@ test('Food & Water opened from Me has one Back and returns to Me even after relo
   await expect(page.locator('.nutrition-page')).toBeVisible()
   await page.getByRole('button',{name:'← Back',exact:true}).click()
   await expect(page.locator('.me-view-home')).toBeVisible()
+})
+
+
+test('Today completed strength volume survives reload and matches History',async({page})=>{
+  await signedIn(page,{withStrengthSession:true})
+  const entry=page.locator('.today-completed-entry').filter({hasText:'Bench workout'})
+  await expect(entry).toContainText('990 lb')
+  await page.reload()
+  await expect(entry).toContainText('990 lb')
+  await entry.click()
+  await expect(page.locator('.history-detail')).toContainText('990 lb')
+  const back=page.locator('.workset-history .workset-back-control')
+  await expect(back).toBeVisible()
+  const box=await back.boundingBox()
+  expect(box.height).toBeGreaterThanOrEqual(44)
+  expect(box.width).toBeLessThan(page.viewportSize().width/2)
+})
+
+test('Program exercise preview is collapsed by default, expands and collapses without changing the scheduled day',async({page})=>{
+  await signedIn(page)
+  await page.getByRole('button',{name:'Plan',exact:true}).click()
+  const preview=page.locator('#program-preview')
+  await expect(preview).toBeVisible()
+  const toggle=preview.locator('.preview-day-toggle')
+  await expect(toggle).toHaveAttribute('aria-expanded','false')
+  const day=await preview.getByLabel('Workout',{exact:true}).inputValue()
+  await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-expanded','true')
+  await expect(preview.locator('.sample-exercise').first()).toBeVisible()
+  await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-expanded','false')
+  await expect(preview.locator('.sample-exercise')).toHaveCount(0)
+  await expect(preview.getByLabel('Workout',{exact:true})).toHaveValue(day)
+  await expect(preview.getByRole('button',{name:'Add workout',exact:true})).toBeVisible()
 })

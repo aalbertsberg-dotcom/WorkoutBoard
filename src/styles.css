@@ -9454,3 +9454,16 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
 .app-level-mobile-nav button:focus-visible{outline:2px solid #a7f3d0;outline-offset:-2px}}
 /* Keep the analytics tabs in the page instead of covering the sticky app header. */
 .progress-section-tabs{position:relative;top:auto!important;z-index:0}
+
+/* One compact, consistently sized back affordance per drill-in screen. */
+.workset-back-control,.me-subpage-back{display:inline-flex;align-items:center;justify-content:center;gap:6px;width:max-content!important;max-width:100%;min-height:44px!important;padding:8px 12px!important;border:1px solid #354d6b;border-radius:10px;background:#162740;color:#d4e3f5;font-size:13px;font-weight:750;white-space:normal;flex:0 0 auto;align-self:start;justify-self:start}
+.workset-history-head,.mobility-heading{display:grid;grid-template-columns:minmax(0,1fr);gap:8px}
+.workset-history-head>.workset-back-control,.mobility-heading>.workset-back-control{grid-row:1}
+.mobility-actions{grid-template-columns:1fr}
+.preview-day-disclosure{padding:0;gap:0;border:1px solid #324963;overflow:hidden}
+.preview-day-toggle{display:flex;align-items:center;justify-content:space-between;text-align:left;gap:10px;width:100%;min-height:54px;padding:12px;border:0;background:#142238;color:#f1f5f9;cursor:pointer}
+.preview-day-toggle>span{display:grid;gap:4px;min-width:0;overflow-wrap:anywhere}
+.preview-day-toggle small{font-size:12px;color:#a9bacf;font-weight:500}
+.preview-day-toggle>b{font-size:18px;color:#c7e997;flex:0 0 auto}
+.preview-day-toggle:focus-visible{outline:2px solid #a7f3d0;outline-offset:-3px}
+#preview-day-exercises:not([hidden]){display:grid;gap:4px;padding:10px 12px}

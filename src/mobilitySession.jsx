@@ -58,7 +58,7 @@ export default function MobilitySession({session,initialMode='warmup',onBack,onS
     <div className="mobility-heading">
       <div><span className="card-label">WARM-UP & COOL-DOWN</span><h2>{mode==='warmup'?'DeFranco Agile 8':'Easy Cool-down'}</h2>
         <p>{mode==='warmup'?'Eight mobility drills · about 10 minutes':'A gentle optional post-workout recovery routine'}</p></div>
-      <button className="secondary-action" type="button" onClick={onBack}>← Today</button>
+      <button className="secondary-action workset-back-control" type="button" onClick={onBack} disabled={busy}>← Today</button>
     </div>
     <div className="workset-history-switch" role="group" aria-label="Mobility routine">
       <button type="button" className={mode==='warmup'?'active':''} onClick={()=>changeMode('warmup')}>Warm-up</button>
@@ -73,7 +73,6 @@ export default function MobilitySession({session,initialMode='warmup',onBack,onS
     <label className="mobility-note">Optional note<textarea rows={2} value={note} placeholder="How did you feel?" onChange={e=>setNote(e.target.value)}/></label>
     {message&&<div className="status-message" role="status">{message}</div>}
     <div className="mobility-actions">
-      <button type="button" className="secondary-action" onClick={onBack} disabled={busy}>Back</button>
       <button type="button" className="primary-action" onClick={save} disabled={busy||!count}>{busy?'Saving…':`Save ${count} movement${count===1?'':'s'}`}</button>
     </div>
   </section>

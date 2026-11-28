@@ -963,6 +963,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
         baselineResults,
         challengeTestResults,challengeTestWeek:Number(planned.source_week)||null,
         trainingSessionId:sessionId,
+        sessionDate:planned.scheduled_date,workout:finalWorkout,
         outdoor:completionOutdoor,
         offline:true,
       })
@@ -1068,6 +1069,7 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
         baselineResults:baselineResults,
         challengeTestResults,challengeTestWeek:Number(planned.source_week)||null,
         trainingSessionId,
+        sessionDate:planned.scheduled_date,workout:finalWorkout,
         outdoor:completionOutdoor,
       })
     } else {

@@ -1798,7 +1798,7 @@ function App() {
         supabase.from('planned_workouts').select('*').eq('user_id',userId).eq('scheduled_date',today).in('status',['planned','started']).order('created_at'),
         supabase.from('planned_workouts').select('*').eq('user_id',userId).eq('scheduled_date',previousDay).eq('status','started').limit(20),
         supabase.from('user_program_tracking').select('*').eq('user_id',userId).eq('status','tracking').order('updated_at',{ascending:false}),
-        supabase.from('training_sessions').select('id,title,program,week,primary_lift,workout,session_date,completed_at').eq('user_id',userId).not('completed_at','is',null).order('completed_at',{ascending:false}).limit(1000),
+        supabase.from('training_sessions').select('id,title,program,week,primary_lift,workout,session_date,completed_at,total_volume,estimated_1rm,legacy_log_id').eq('user_id',userId).not('completed_at','is',null).order('completed_at',{ascending:false}).limit(1000),
         supabase.from('program_library').select('id,owner_user_id,name,description,status,weeks_count,plan').eq('owner_user_id',userId).eq('status','active'),
       ])
 
@@ -2010,7 +2010,7 @@ function App() {
     const [{data:trackingRows},{data:completedRows},{data:libraryRows,error:libraryError}]=await Promise.all([
       supabase.from('user_program_tracking').select('*')
         .eq('user_id',session.user.id).eq('status','tracking').order('started_at'),
-      supabase.from('training_sessions').select('id,title,program,week,primary_lift,workout,session_date,completed_at')
+      supabase.from('training_sessions').select('id,title,program,week,primary_lift,workout,session_date,completed_at,total_volume,estimated_1rm,legacy_log_id')
         .eq('user_id',session.user.id).not('completed_at','is',null)
         .order('completed_at',{ascending:false}).limit(1000),
       supabase.from('program_library').select('id,owner_user_id,name,description,status,weeks_count,plan')
@@ -2275,7 +2275,7 @@ function App() {
     if(navigator.onLine===false)return plannedToday
     const today = localDateKey()
     const previousDay=previousLocalDateKey()
-    const [{data:activePlans},{data:overnightPlans},{data:completedRows},{data:activeTracking}]=await Promise.all([
+    const [{data:activePlans},{data:overnightPlans},{data:completedRows,error:completedError},{data:activeTracking}]=await Promise.all([
       supabase.from('planned_workouts').select('*')
         .eq('user_id',session.user.id).eq('scheduled_date',today)
         .in('status',['planned','started']).order('created_at'),
@@ -2330,7 +2330,7 @@ function App() {
       activePlan=null
     }
     setPlannedToday(activePlan)
-    setTodayCompletedWorkouts(completedRows||[])
+    if(!completedError)setTodayCompletedWorkouts(completedRows||[])
     setShowRegularToday(false)
   }
 
@@ -3704,7 +3704,7 @@ function App() {
           <div>
             <div className="brand-lockup"><img src={import.meta.env.BASE_URL+'icon.svg'} alt="" /><span>Work<b>set</b></span></div>
             <h1>{activeTab === 'today' ? 'Today' : activeTab === 'together' ? 'Together' : activeTab === 'program' ? 'Plan' : activeTab === 'whiteboard' ? 'Whiteboard' : activeTab === 'progress' ? 'Progress' : activeTab === 'history' ? 'History' : activeTab === 'nutrition' ? 'Nutrition' : activeTab === 'mobility' ? 'Warm-up & Cool-down' : activeTab === 'admin' ? 'Admin' : 'Me'}</h1>
-            {appNavDepth>0&&activeTab!=='history'&&activeTab!=='me'&&activeTab!=='nutrition'&&<button type="button" className="app-history-back" onClick={navigateBack}>← Back</button>}
+            {appNavDepth>0&&activeTab!=='history'&&activeTab!=='me'&&activeTab!=='nutrition'&&activeTab!=='mobility'&&<button type="button" className="app-history-back workset-back-control" onClick={navigateBack}>← Back</button>}
           </div>
           <div className="ws-header-actions">
             <InboxBell session={session} onOpenInbox={openMeInbox}/>
@@ -3802,8 +3802,9 @@ function App() {
                       total_volume:summary.volume||0,
                       completed_at:new Date().toISOString(),
                       outdoor_summary:summary.outdoor||null,
-                      workout:{exercises:[]},
-                    },...rows])
+                      session_date:summary.sessionDate||localDateKey(),
+                      workout:summary.workout||{exercises:[]},
+                    },...rows.filter(row=>row.id!==summary.trainingSessionId)])
                   }
                   const advanceTrackedInfo=v=>{
                     if(!v)return v
@@ -3939,7 +3940,7 @@ function App() {
               </section>}
 
               {nextDayPreviewOpen&&<div id="today-program-continue" className="tracked-programs-today-list today-program-continue-panel">
-                <button type="button" className="today-program-back" onClick={()=>window.history.back()}>← What are we doing today?</button>
+                <button type="button" className="today-program-back workset-back-control" onClick={()=>window.history.back()}>← What are we doing today?</button>
                 {trackedProgramsInfo.map(info=>{
                   const nextChoice=info.upcoming?.[0]||null
                   const weekChoices=info.weekChoices||[]
@@ -4580,7 +4581,7 @@ function App() {
           <WhiteboardPage session={session} />
         ) : activeTab === 'mobility' ? (
           <MobilitySession session={session} initialMode={mobilityMode}
-            onBack={openToday}
+            onBack={()=>Number(window.history.state?.worksetDepth||0)>0?navigateBack():navigateTo('today',{replace:true})}
             onSaved={async id=>{await refreshPlannedToday();openHistory(id)}}/>
         ) : activeTab === 'nutrition' ? (
           <NutritionPage key={(session?.user?.id||'')+':'+nutritionStartView}
