@@ -194,7 +194,12 @@ export default function WorkoutHistory({session,initialWorkoutId=null,onBack,onC
             {strengthExercises.map((ex,i)=><div key={ex.id||i}>
               <strong>{ex.name}</strong>
               {ex.setProgress?.length>0
-                ? <small>{ex.setProgress.map((set,j)=>`Set ${j+1}: ${set.weight??'—'} lb × ${set.actual_reps??set.reps??'—'} reps${set.done?' ✓':''}`).join(' · ')}</small>
+                ? <small>{ex.setProgress.map((set,j)=>{
+                    const label=set.drop_set?'Drop '+(set.drop_stage||j+1):'Set '+(j+1)
+                    if(set.skipped)return label+': skipped'
+                    if(!set.done)return label+': not completed'
+                    return label+': '+(set.weight??'—')+' lb × '+(set.actual_reps??set.reps??'—')+' reps ✓'
+                  }).join(' · ')}</small>
                 : <small>{ex.result||ex.prescription||'Completed'}</small>}
             </div>)}</section>}
           {!mainSets.length&&!strengthExercises.length&&<p className="history-note">No individual sets were recorded for this workout.</p>}
