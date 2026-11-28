@@ -1,34 +1,37 @@
 # WorkSet web notifications & private messaging
 
-## What is installed
+## Where it lives
 
-- Header bell with unread count, Accept/Decline for friend, Live workout and program-group invitations.
-- Browser alerts are optional (permission button). These only operate while a WorkSet tab is open; they are not background push.
-- Direct messages between accepted friends; ad-hoc group conversations of 2–20 friends; private program-group conversations.
-- Notifications, messages, group invitations and membership are protected by per-user/member RLS. Only stored workout summaries are shared with groups.
-- Email invitation delivery is through a server-side Supabase Edge Function; the browser never receives the provider API key.
-- The "My Team" list permits non-account athletes. Adding one of those people is not a WorkSet account invitation and does not notify anyone.
+- The **bell beside Me** shows the unread count and a **compact preview** of recent notifications.
+- Select a notification or **View all in Me** to go to **Me → Inbox & Messages**.
+- The **full inbox, Accept/Decline actions, message threads, browser-alert preference and email invitation preference** live inside the Me page, not in a pop-up over Today.
+- Messages includes direct chats with accepted friends, ad-hoc group chats of 2–20 friends, and program-group conversations.
+- **Together → Community → Message group** opens the matching thread inside Me.
+- The layout is web-first. No APK-specific user interface is being designed in this phase.
 
-## Enable actual outgoing email (required configuration)
+Notifications and messages are protected by per-user/member RLS. Private group sharing remains opt-in. Adding someone to **My Team** without a WorkSet account does not invite or notify them.
 
-The Edge Function `workset-invite-email` is deployed. To send email, configure the following **server-side Supabase Edge Function secrets** under Project → Edge Functions → Secrets:
+## Enable WorkSet email using aalbertsberg.us
 
-1. `RESEND_API_KEY`: your Resend API key.
-2. `WORKSET_EMAIL_FROM`: a verified sender such as `WorkSet <notifications@YOUR-VERIFIED-DOMAIN>`.
-3. `WORKSET_APP_URL`: the real HTTPS URL of your WorkSet web app (GitHub Pages path if applicable).
+WorkSet's `workset-invite-email` Supabase Edge Function is already deployed. It sends through **Resend**. Supabase Auth's SMTP settings are not automatically used for these invitations.
 
-Verify the sender domain in Resend before enabling this feature. Do not commit or paste API keys into frontend code or the repository.
+1. Open your existing Resend account → Domains. If `aalbertsberg.us` is not yet verified there, add it and publish the exact DKIM/SPF (and any other) DNS records Resend gives you. Preserve existing MX and unrelated DNS records.
+2. In **the WorkoutBoard Supabase project** (`lplybuzlgowxeszkvtqe`) → Edge Functions → Secrets, set:
+   - `RESEND_API_KEY` = your Resend sending API key (server-side only).
+   - `WORKSET_EMAIL_FROM` = `WorkSet <notifications@aalbertsberg.us>`
+   - `WORKSET_APP_URL` = `https://aalbertsberg-dotcom.github.io/WorkoutBoard/`
+3. Confirm the verified sender is authorized in Resend. Use a fresh friend or group invite to test end-to-end delivery.
 
-If the sender is not configured, invitations still appear inside WorkSet. The UI explicitly says email is unavailable. Recipients may disable invitation emails in the bell settings; the email function enforces this preference. Attempts require a logged-in sender, a matching invitation and a recent invite; repeat invitation emails are throttled.
+**Never paste API keys into the browser, WorkSet client code or GitHub.** These are server-side secrets. WorkSet continues to send in-app invitations even if the email provider is not configured; it reports that separately. Recipients can turn off invitation emails in Me → Inbox & Messages.
 
-## Focused two-account web test
+## Web acceptance test
 
-1. Open WorkSet in two separately signed-in browsers. On A, add B as a friend. Within 12 seconds B should see a badge on the bell. Accept there; both accounts should show the friendship.
-2. From A's bell → Messages → New, message B. Verify B sees the new message in the inbox, and cannot read another conversation.
-3. With two accepted friends selected, create a group conversation and exchange messages. Confirm both recipients see the message and unread indicator.
-4. In Together → Community create a program group; invite B from its friend dropdown. B accepts in the notification bell. Press **Message group** and send a message.
-5. Invite B to a Live session; B accepts in the bell and the correct session opens.
-6. Disable email invitations on B, then send another eligible invitation and verify no email is delivered. Enable browser alerts and repeat while WorkSet is open in an inactive tab.
-7. If mail secrets are configured, verify one invitation email per fresh request and an automatic link back to WorkSet. No mail-provider setup means the expected result is **in-app only**.
+1. Sign into two browsers with different WorkSet accounts. On A, add B as a friend. Verify B's bell unread badge and the small dropdown; choose **View all in Me**. Confirm it opens the inline Me inbox and Accept/Decline works.
+2. On a phone-sized viewport, open the bell from Today and confirm **no large overlay**, horizontal clipping or covered workout cards. Open Me and confirm the full inbox scrolls inside its section.
+3. On A, go to Me → Inbox & Messages → Messages and send B a direct message. Verify it arrives, and can only be seen by participants. Repeat for a group conversation.
+4. Create a Together program group, invite B and accept it in Me. Press **Message group**; verify it opens Me on the correct group thread.
+5. Invite B to a Live workout; accept in Me and verify the correct session opens.
+6. Enable browser notifications and test while WorkSet remains open in a background tab. This is not browser push when closed.
+7. With Resend verified and the Supabase secrets configured, verify delivery of a real invitation to an opted-in recipient, and verify an opted-out recipient receives only the in-app invitation.
 
-Do not claim complete end-to-end success without two live accounts and verified mail-provider delivery.
+The web build and browser smoke suite must pass before any end-to-end success claim. Two-account and real email-delivery checks remain separate from automated browser checks.
