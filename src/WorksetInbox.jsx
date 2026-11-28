@@ -4,7 +4,7 @@ import {supabase} from './supabase'
 // Web-first inbox. The badge polls while the tab is open; browser alerts are
 // optional and are never advertised as background push notifications.
 export default function WorksetInbox({
-  session,profile,friends=[],onOpenTogether,onAcceptLive,
+  session,profile,setProfile,friends=[],onOpenTogether,onAcceptLive,
   initialView='notifications',initialChatId=null,initialProgramGroupId=null,openRequest=0
 }){
   const userId=session?.user?.id
@@ -215,6 +215,7 @@ export default function WorksetInbox({
       .update({workset_email_invites:next}).eq('id',userId)
     if(saveError){setError(saveError.message);return}
     setEmailEnabled(next)
+    setProfile?.(current=>({...current,workset_email_invites:next}))
     setStatus(next?'Email invitations enabled, when mail delivery is configured.':'Email invitations disabled.')
   }
 
