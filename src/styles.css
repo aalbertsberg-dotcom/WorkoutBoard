@@ -9384,3 +9384,57 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
 }
 /* Suggestions portal is positioned from the visual viewport, clear of the IME. */
 .exercise-name-suggestions{overscroll-behavior:contain}
+
+
+/* Me navigation: one clear home menu, with focused drill-down pages. */
+.me-subpage-header{display:grid;gap:6px;padding:2px 2px 7px}
+.me-subpage-back{
+  display:inline-flex;align-items:center;gap:8px;justify-self:start;
+  min-height:42px;padding:7px 12px;border:1px solid #354d6b;
+  background:#162740;border-radius:10px;color:#d4e3f5;font-weight:750;
+}
+.me-subpage-back span{font-size:21px;line-height:1}
+.me-subpage-header h2{font-size:22px;line-height:1.2;margin:5px 0 0;color:#f2f8ff}
+.me-subpage-header p{font-size:12px;color:#9aafc6;margin:0;line-height:1.4}
+.me-view-home .me-main-menu{gap:9px}
+.me-view-home .me-main-menu button{min-height:65px}
+.me-view-home .me-admin-link{min-height:62px}
+.me-view-training .me-section-group,
+.me-view-settings .me-section-group{margin:0}
+.me-view-inbox{gap:3px}
+.me-view-inbox .ws-inbox-page{width:100%}
+.me-view-inbox .ws-inbox-panel.ws-inbox-inline{
+  width:100%;height:calc(100dvh - 245px);min-height:380px;max-height:none;
+  border:0;border-radius:0;background:transparent;box-shadow:none;
+}
+.me-view-inbox .ws-inbox-top{padding-left:6px;padding-right:6px}
+.me-view-settings .me-signout{margin-top:10px}
+/* Header messaging icon matches the bell and remains visible on every page. */
+.ws-header-actions .ws-messages-header-button{
+  display:flex;align-items:center;justify-content:center;
+  width:44px;height:44px;min-width:44px;min-height:44px;
+  border:1px solid #4c607e;border-radius:12px;
+  background:#152236;color:#eff7ff;cursor:pointer;
+  padding:0;flex:0 0 44px;
+}
+.ws-header-actions .ws-messages-header-button:focus-visible{
+  outline:2px solid #a7f3d0;outline-offset:2px;
+}
+@media(max-width:450px){
+  .ws-header-actions{gap:6px}
+  .ws-header-actions .ws-bell,.ws-header-actions .ws-messages-header-button{
+    width:42px;height:42px;min-width:42px;min-height:42px;
+    flex-basis:42px;
+  }
+  .ws-header-actions .account-chip{height:42px;min-height:42px;padding:4px 7px}
+  .me-view-inbox .ws-inbox-panel.ws-inbox-inline{
+    height:calc(100dvh - 225px);min-height:360px;
+  }
+}
+@media(max-width:355px){
+  .ws-header-actions{gap:4px}
+  .ws-header-actions .ws-bell,.ws-header-actions .ws-messages-header-button{
+    width:39px;height:42px;min-width:39px;flex-basis:39px
+  }
+  .ws-header-actions .account-chip{padding:3px 5px}
+}
