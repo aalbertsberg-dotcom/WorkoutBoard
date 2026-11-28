@@ -8884,7 +8884,7 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   overflow-wrap:anywhere;
 }
 @media(max-width:700px){
-  .me-max-field:has(input:focus){
+  .me-max-field:focus-within{
     grid-column:1 / -1;
     min-width:0;
     padding:8px;
@@ -8892,10 +8892,10 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
     border-radius:10px;
     background:#11241a;
   }
-  .me-max-field:has(input:focus) .me-max-input-row{
+  .me-max-field:focus-within .me-max-input-row{
     grid-template-columns:minmax(0,1fr) 64px;
   }
-  .me-max-field:has(input:focus) .input-with-unit input{
+  .me-max-field:focus-within .input-with-unit input{
     font-size:21px;
     color:#fff;
     caret-color:#d9f99d;

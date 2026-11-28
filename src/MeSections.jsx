@@ -104,7 +104,8 @@ function MeOneRmField({name,value,onSave}){
         <b>lb</b>
       </div>
       <button type="button" className="me-max-save" disabled={!dirty||saving}
-        onClick={event=>{event.currentTarget.blur();commit()}}>{saving?'Saving…':'Save'}</button>
+        onPointerDown={event=>{if(event.currentTarget.parentElement.contains(document.activeElement)&&document.activeElement?.tagName==='INPUT')event.preventDefault()}}
+        onClick={event=>{const row=event.currentTarget.parentElement;row.querySelector('input')?.blur();event.currentTarget.blur();commit()}}>{saving?'Saving…':'Save'}</button>
     </div>
     {message&&<div role={message.startsWith('✓')?'status':'alert'} className={'me-rm-save-feedback '+(message.startsWith('✓')?'success':'error')}>{message}</div>}
   </div>
