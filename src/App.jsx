@@ -1405,12 +1405,12 @@ function App() {
       setActiveTab('me')
     }else navigateTo('me')
   }
-  const openHistory = (id=null,review=false) => {
+  const openHistory = (id=null,review=false,fromCompletion=false) => {
     const fromProgress=activeTab==='progress'
     setHistoryWorkoutId(id)
     setHistoryOpenedFromProgress(fromProgress)
     navigateTo('history')
-    window.history.replaceState({...window.history.state,historyView:null,historyDetailParent:false,workoutId:id,historyReview:review,historyFromProgress:fromProgress},'',window.location.href)
+    window.history.replaceState({...window.history.state,historyView:null,historyDetailParent:false,workoutId:id,historyReview:review,historyFromCompletion:fromCompletion,historyFromProgress:fromProgress},'',window.location.href)
   }
   const openMobility = mode => {setMobilityMode(mode);navigateTo('mobility')}
 
@@ -3811,7 +3811,7 @@ function App() {
                   <small className="baseline-history-note">The actual test sets stay in workout history so you can always see where each estimate came from.</small>
                 </section>}
                 <div className="completion-review-actions">
-                  {completionSummary.trainingSessionId&&!completionSummary.offline&&<button type="button" className="secondary-action" onClick={()=>openHistory(completionSummary.trainingSessionId,true)}>Review &amp; correct workout</button>}
+                  {completionSummary.trainingSessionId&&!completionSummary.offline&&<button type="button" className="secondary-action" onClick={()=>openHistory(completionSummary.trainingSessionId,true,true)}>Review &amp; correct workout</button>}
                   {completionSummary.offline&&<p className="helper-text">Corrections become available in History after this workout syncs.</p>}
                   <button type="button" className="primary-action" onClick={()=>{const together=completionSummary.returnToTogether;setCompletionSummary(null);setBaselineFinishReview(null);if(together){navigateTo('together',{replace:true})}else{window.scrollTo({top:0,behavior:'instant'})}}}>{completionSummary.returnToTogether?'Return to Together':'Done · back to Today'}</button>
                 </div>
@@ -4617,6 +4617,7 @@ function App() {
           <WorkoutHistory session={session} initialWorkoutId={historyWorkoutId}
             legacyHistory={progress.completed}
             fromProgress={historyOpenedFromProgress}
+            fromCompletion={Boolean(window.history.state?.historyFromCompletion&&completionSummary)}
             onBack={navigateBack} onChanged={async row=>{
               if(row?.id){
                 setCompletionSummary(current=>current?.trainingSessionId===row.id?{...current,workout:row.workout,title:row.title,volume:row.total_volume,sets:completionCounts(row.workout).sets,exercises:completionCounts(row.workout).exercises}:current)

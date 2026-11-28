@@ -18,6 +18,7 @@ async function signedIn(page,{withStartedWalk=false,withStartedStrength=false,wi
   let storedMaxes={squat:null,bench:197.33,deadlift:261.33,press:160}
   let storedAliases=[]
   let correctedSession=null
+  let finishedTestSession=null
   await page.route('https://example.supabase.co/**',async route=>{
     const req=route.request(),url=req.url(),method=req.method()
     const headers={
@@ -45,7 +46,19 @@ async function signedIn(page,{withStartedWalk=false,withStartedStrength=false,wi
         body:JSON.stringify(storedAliases)})
       return
     }
+    if(withStartedStrength&&method==='POST'&&url.includes('/rest/v1/training_sessions')){
+      const payload=req.postDataJSON()
+      finishedTestSession=Array.isArray(payload)?payload[0]:payload
+      const singular=(req.headers()['accept']||'').includes('application/vnd.pgrst.object+json')
+      await route.fulfill({status:201,contentType:'application/json',headers,body:JSON.stringify(singular?{id:finishedTestSession.id}:[{id:finishedTestSession.id}])})
+      return
+    }
+    if(withStartedStrength&&method==='GET'&&url.includes('/rest/v1/training_sessions')&&url.includes('planned_workout_id=eq.')){
+      await route.fulfill({status:200,contentType:'application/json',headers,body:JSON.stringify(finishedTestSession?[{id:finishedTestSession.id}]:[])})
+      return
+    }
     if(withStartedStrength && method==='GET' && url.includes('/rest/v1/planned_workouts')){
+      if(finishedTestSession){await route.fulfill({status:200,contentType:'application/json',headers,body:'[]'});return}
       const now=new Date().toISOString()
       const row={
         id:'00000000-0000-4000-8000-000000000099',user_id:userId,
@@ -1016,4 +1029,22 @@ test('Optional quick actions persist on this device without changing the five ma
   await expect(pinned.getByRole('button')).toHaveCount(2)
   await pinned.getByRole('button',{name:/Log food & water/}).click()
   await expect(page.locator('.nutrition-page')).toBeVisible()
+})
+
+
+test('Finishing an untracked strength workout opens a focused review before returning to Today',async({page})=>{
+  await signedIn(page,{withStartedStrength:true})
+  await page.getByRole('button',{name:'FINISH WORKOUT',exact:true}).click()
+  const review=page.getByRole('region',{name:'Post-workout review'})
+  await expect(review).toBeVisible()
+  await expect(review).toContainText('Strength set test')
+  await expect(review).toContainText('780 lb')
+  await expect(review).toContainText('2 not completed')
+  await expect(review).toContainText('105 × 4')
+  await review.locator('.completion-exercise summary').first().click()
+  await expect(review).toContainText('90 lb × 4 reps')
+  await expect(review.getByRole('button',{name:'Review & correct workout'})).toBeVisible()
+  await review.getByRole('button',{name:'Done · back to Today'}).click()
+  await expect(review).toHaveCount(0)
+  await expect(page.getByText('What are we doing today?',{exact:true})).toBeVisible()
 })
