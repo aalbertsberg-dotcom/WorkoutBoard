@@ -9407,7 +9407,7 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
   width:100%;height:calc(100dvh - 245px);min-height:380px;max-height:none;
   border:0;border-radius:0;background:transparent;box-shadow:none;
 }
-.me-view-inbox .ws-inbox-top{padding-left:6px;padding-right:6px}
+.me-view-inbox .ws-inbox-top{display:none}
 .me-view-settings .me-signout{margin-top:10px}
 /* Header messaging icon matches the bell and remains visible on every page. */
 .ws-header-actions .ws-messages-header-button{
