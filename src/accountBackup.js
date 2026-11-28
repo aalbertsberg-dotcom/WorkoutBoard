@@ -12,6 +12,7 @@ export const ACCOUNT_BACKUP_TABLES=[
   {name:'workout_templates',owner:'user_id'},
   {name:'equipment_profiles',owner:'user_id'},
   {name:'exercise_substitutions',owner:'user_id'},
+  {name:'exercise_name_aliases',owner:'user_id'},
   {name:'exercise_timer_presets',owner:'user_id'},
   {name:'user_program_tracking',owner:'user_id'},
   {name:'planned_workouts',owner:'user_id'},
