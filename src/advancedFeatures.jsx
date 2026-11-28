@@ -3,6 +3,7 @@ import {buildAccountBackup,mergeAccountBackup} from './accountBackup.js'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase'
 import {buildPersonalRecords,REP_PR_TARGETS} from './personalRecords'
+import {exerciseAliasLookup} from './exerciseIdentity.js'
 
 const today=()=>new Date().toISOString().slice(0,10)
 const round5=n=>Math.round(Number(n||0)/5)*5
@@ -26,9 +27,9 @@ function metricsFromWorkout(workout){
   for(const ex of workout?.exercises||[]){
     if(ex.setProgress?.length){
       for(const set of ex.setProgress){
-        if(!set.done)continue
+        if(!set.done||set.skipped)continue
         const w=Number(set.weight||0),rep=Number(set.actual_reps??set.reps??0)
-        if(w>0&&rep>0){volume+=w*rep;best=Math.max(best,w*(1+rep/30))}
+        if(w>0&&rep>0){volume+=w*rep;if(!set.drop_set)best=Math.max(best,w*(1+rep/30))}
       }
     }else{
       const p=parseSet(ex.result)
@@ -262,6 +263,7 @@ function monthCells(month){
 export function AdvancedProgressCenter({session}) {
   const [tab,setTab]=useState('History')
   const [sessions,setSessions]=useState([])
+  const [exerciseAliases,setExerciseAliases]=useState([])
   const [planned,setPlanned]=useState([])
   const [profiles,setProfiles]=useState([])
   const [subs,setSubs]=useState([])
@@ -273,20 +275,24 @@ export function AdvancedProgressCenter({session}) {
   const [subDraft,setSubDraft]=useState({exercise:'Bench Press',substitute:'DB Bench Press',reason:''})
   const load=async()=>{
     if(!session?.user)return
-    const [s,p,e,sub,ph]=await Promise.all([
+    const [s,p,e,sub,ph,aliases]=await Promise.all([
       supabase.from('training_sessions').select('*').eq('user_id',session.user.id).not('completed_at','is',null).order('completed_at',{ascending:false}).limit(1000),
       supabase.from('planned_workouts').select('*').eq('user_id',session.user.id).order('scheduled_date',{ascending:false}).limit(1000),
       supabase.from('equipment_profiles').select('*').eq('user_id',session.user.id).order('is_active',{ascending:false}),
       supabase.from('exercise_substitutions').select('*').eq('user_id',session.user.id).order('usage_count',{ascending:false}),
       supabase.from('progress_photos').select('*').eq('user_id',session.user.id).order('taken_on',{ascending:false}),
+      supabase.from('exercise_name_aliases').select('alias_key,canonical_name')
+        .eq('user_id',session.user.id),
     ])
     setSessions(s.data||[]);setPlanned(p.data||[]);setProfiles(e.data||[]);setSubs(sub.data||[]);setPhotos(ph.data||[])
+    setExerciseAliases(aliases.data||[])
     const urls={}
     for(const x of ph.data||[]){const {data}=await supabase.storage.from('workoutboard-progress').createSignedUrl(x.storage_path,3600);if(data?.signedUrl)urls[x.id]=data.signedUrl}
     setPhotoUrls(urls)
   }
   useEffect(()=>{load()},[session?.user?.id])
-  const prs=useMemo(()=>buildPersonalRecords(sessions),[sessions])
+  const aliasLookup=useMemo(()=>exerciseAliasLookup(exerciseAliases),[exerciseAliases])
+  const prs=useMemo(()=>buildPersonalRecords(sessions,aliasLookup),[sessions,aliasLookup])
   const totalVolume=sessions.reduce((a,r)=>a+Number(r.total_volume||0),0)
   const achievements=useMemo(()=>{
     const arr=[]
