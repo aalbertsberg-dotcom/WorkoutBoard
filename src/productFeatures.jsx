@@ -1230,11 +1230,11 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
         <button type="button" className="conditioning-remove" onClick={()=>setExerciseAdderOpen(false)}>Cancel</button>
       </div>
       <div className="quick-add-row">
-        <label className="conditioning-field"><span>Movement</span><ExerciseNamePicker
+        <div className="conditioning-field"><span>Movement</span><ExerciseNamePicker
           autoFocus value={newExercise.name} label="Exercise name to add" placeholder="Type to find an exercise…"
           choices={[...knownExerciseNames,...(workout.exercises||[]).map(exercise=>exercise.name)]}
           onChange={name=>setNewExercise(v=>({...v,name}))}
-          onSelect={name=>setNewExercise(v=>({...v,name}))}/></label>
+          onSelect={name=>setNewExercise(v=>({...v,name}))}/></div>
         <button type="button" className="primary-action quick-add-submit" disabled={!String(newExercise.name||'').trim()} onClick={addExercise}>Add</button>
       </div>
       <div className="add-exercise-grid compact-add-details">
