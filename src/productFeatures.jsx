@@ -15,6 +15,8 @@ import {partnerSetTarget,missingWorkoutOneRms} from './programSetTargets.js'
 import {explainProgramSetWeight,adjustedManualSetWeight} from './programWeightNotes.js'
 import {ORIGINAL_CHALLENGE_KEY,ORIGINAL_CHALLENGE_NAME,ORIGINAL_CHALLENGE_ID,ORIGINAL_CHALLENGE_LIFTS,isOriginalChallengeMaxTest,isOriginalChallengeTestSet,originalChallengeCompletedTest,originalChallengeWeek6Estimates,originalChallengeProgramMaxes} from './originalChallengeCycle.js'
 import { validWeightDraft,validRepsDraft,displayedSetWeight,recordedWeightValue,canFinishQuickCardio,withoutUnreliableRoute,outdoorDistancePresentation,workoutDistancePresentation,effectiveCardioDurationSeconds,autosaveDelayMs } from './trackingRules'
+import {pendingWorkoutSet,unfinishedWorkoutSets,completeExerciseEarly,completeExerciseSet,reopenExerciseSet,deleteWorkoutSet,addDropSet,addDropStage,validateDropStage} from './workoutSetActions.js'
+import {exerciseHistoryKey,resolveExerciseHistoryKey,exerciseAliasLookup,exerciseHistoryNames,aggregateExerciseHistory} from './exerciseIdentity.js'
 
 function parseVolume(value) {
   if (!value) return 0
@@ -160,7 +162,16 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
   const [finishing,setFinishing]=useState(false)
   const [cancelConfirm,setCancelConfirm]=useState(false)
   const [cancelling,setCancelling]=useState(false)
-  const [historyByExercise,setHistoryByExercise]=useState({})
+  const [historySessionRows,setHistorySessionRows]=useState([])
+  const [exerciseAliases,setExerciseAliases]=useState([])
+  const [historyLinkDrafts,setHistoryLinkDrafts]=useState({})
+  const [historyLinkStatus,setHistoryLinkStatus]=useState('')
+  const [linkingHistory,setLinkingHistory]=useState(false)
+  const aliasLookup=useMemo(()=>exerciseAliasLookup(exerciseAliases),[exerciseAliases])
+  const historyByExercise=useMemo(()=>aggregateExerciseHistory(
+    historySessionRows,aliasLookup,setWeight,repsForSet,isDistanceExercise
+  ),[historySessionRows,aliasLookup])
+  const knownExerciseNames=useMemo(()=>exerciseHistoryNames(historySessionRows),[historySessionRows])
   const [substitutions,setSubstitutions]=useState({})
   const [timerPresets,setTimerPresets]=useState({})
   const [conditioningOpen,setConditioningOpen]=useState(()=>Boolean(planned?.workout?.conditioning_prescribed))
@@ -394,22 +405,10 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
   useEffect(()=>{
     if(!planned?.user_id)return
     let cancelled=false
-    const applyMeta=(sessionRows=[],subRows=[],timerRows=[])=>{
+    const applyMeta=(sessionRows=[],subRows=[],timerRows=[],aliasRows=[])=>{
       if(cancelled)return
-      const map={}
-      for(const row of sessionRows){
-        for(const item of (row.workout?.exercises||[])){
-          const key=String(item.name||'').trim().toLowerCase()
-          const loadedSets=(item.setProgress||[]).map(set=>({weight:setWeight(item,set),reps:repsForSet(item,set),done:Boolean(set.done)})).filter(set=>set.weight&&set.done)
-          const bestSet=loadedSets.reduce((best,set)=>!best||set.weight>best.weight?set:best,null)
-          const parsed=bestSet&&!isDistanceExercise(item.name)&&bestSet.reps?{weight:bestSet.weight,reps:bestSet.reps,e1rm:bestSet.weight*(1+bestSet.reps/30)}:null
-          if(!key||(!bestSet&&!item.result))continue
-          const lastText=loadedSets.length ? loadedSets.map((set,idx)=>'S'+(idx+1)+' '+set.weight+' lb').join(' · ') : String(item.result||'')
-          if(!map[key])map[key]={last:lastText,lastWeights:loadedSets.map(set=>set.weight),bestE:parsed?.e1rm||0,bestWeight:parsed?.weight||0}
-          else if(parsed){map[key].bestE=Math.max(map[key].bestE||0,parsed.e1rm);map[key].bestWeight=Math.max(map[key].bestWeight||0,parsed.weight)}
-        }
-      }
-      setHistoryByExercise(map)
+      setHistorySessionRows(sessionRows)
+      setExerciseAliases(aliasRows)
       const subMap={}
       for(const x of subRows)(subMap[String(x.exercise||'').trim().toLowerCase()]??=[]).push(x)
       setSubstitutions(subMap)
@@ -417,18 +416,24 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
     }
     if(navigator.onLine===false){
       const cached=readOfflineState(planned.user_id,'runner-meta',null)
-      if(cached)applyMeta(cached.sessions||[],cached.subs||[],cached.timers||[])
+      if(cached)applyMeta(cached.sessions||[],cached.subs||[],cached.timers||[],cached.aliases||[])
       return()=>{cancelled=true}
     }
     Promise.all([
       supabase.from('training_sessions').select('workout,completed_at').eq('user_id',planned.user_id).not('completed_at','is',null).order('completed_at',{ascending:false}).limit(150),
       supabase.from('exercise_substitutions').select('*').eq('user_id',planned.user_id),
       supabase.from('exercise_timer_presets').select('*').eq('user_id',planned.user_id),
-    ]).then(([sessions,subs,timers])=>{
+      supabase.from('exercise_name_aliases').select('user_id,alias_key,alias_name,canonical_name')
+        .eq('user_id',planned.user_id),
+    ]).then(([sessions,subs,timers,aliases])=>{
       if(cancelled)return
       const sessionRows=sessions.data||[],subRows=subs.data||[],timerRows=timers.data||[]
-      applyMeta(sessionRows,subRows,timerRows)
-      writeOfflineState(planned.user_id,'runner-meta',{sessions:sessionRows,subs:subRows,timers:timerRows})
+      const cached=readOfflineState(planned.user_id,'runner-meta',null)
+      const aliasRows=aliases.error?(cached?.aliases||[]):(aliases.data||[])
+      applyMeta(sessionRows,subRows,timerRows,aliasRows)
+      writeOfflineState(planned.user_id,'runner-meta',{
+        sessions:sessionRows,subs:subRows,timers:timerRows,aliases:aliasRows
+      })
     })
     return()=>{cancelled=true}
   },[planned?.user_id,planned?.id])
@@ -457,6 +462,54 @@ export function PlannedWorkoutRunner({planned,onFinished,onCancelled,onDismiss,s
     },autosaveDelayMs(unsavedFor,Boolean(workout.quick_cardio)))
     return ()=>clearTimeout(timer)
   },[workout,planned?.id,saveState,focusDraftReady])
+
+  // Link ONLY when the user confirms two labels mean the same movement.
+  // Preserve the original names in all recorded workouts.
+  const linkExerciseHistory=async(sourceName,targetName)=>{
+    const sourceKey=exerciseHistoryKey(sourceName)
+    const targetKey=exerciseHistoryKey(targetName)
+    if(!sourceKey||!targetKey||sourceKey===targetKey||linkingHistory)return
+    if(navigator.onLine===false){
+      setHistoryLinkStatus('Connect to save exercise history links across devices.')
+      return
+    }
+    if(!window.confirm('Combine history for "'+sourceName+'" and "'+targetName+
+      '"? Only link them if they are the same exercise and machine movement. Original workout names will remain unchanged.'))return
+    setLinkingHistory(true)
+    const row={
+      user_id:planned.user_id,alias_key:sourceKey,alias_name:sourceName,
+      canonical_name:targetName,updated_at:new Date().toISOString()
+    }
+    const {error}=await supabase.from('exercise_name_aliases')
+      .upsert(row,{onConflict:'user_id,alias_key'})
+    if(error)setHistoryLinkStatus('Could not link exercise history: '+error.message)
+    else{
+      const next=[...exerciseAliases.filter(item=>item.alias_key!==sourceKey),row]
+      setExerciseAliases(next)
+      setHistoryLinkDrafts(value=>({...value,[sourceKey]:''}))
+      setHistoryLinkStatus('Linked history. Old workout names and sets were preserved.')
+      const cached=readOfflineState(planned.user_id,'runner-meta',{})||{}
+      writeOfflineState(planned.user_id,'runner-meta',{...cached,aliases:next})
+    }
+    setLinkingHistory(false)
+  }
+
+  const unlinkExerciseHistory=async(sourceName)=>{
+    if(linkingHistory||navigator.onLine===false)return
+    const sourceKey=exerciseHistoryKey(sourceName)
+    setLinkingHistory(true)
+    const {error}=await supabase.from('exercise_name_aliases')
+      .delete().eq('user_id',planned.user_id).eq('alias_key',sourceKey)
+    if(error)setHistoryLinkStatus('Could not unlink history: '+error.message)
+    else{
+      const next=exerciseAliases.filter(row=>row.alias_key!==sourceKey)
+      setExerciseAliases(next)
+      setHistoryLinkStatus('Exercise history link removed. Original workouts were never changed.')
+      const cached=readOfflineState(planned.user_id,'runner-meta',{})||{}
+      writeOfflineState(planned.user_id,'runner-meta',{...cached,aliases:next})
+    }
+    setLinkingHistory(false)
+  }
 
   const changeExercise=(index,patch)=>{
     setSaveState('Unsaved')
