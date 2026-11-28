@@ -39,7 +39,7 @@ export default function MePage({
   }
   useEffect(()=>{if(autoOpenSection)jumpToTrack(autoOpenSection)},[autoOpenSection])
   useEffect(()=>{if(inboxRequest?.id)openMeView('inbox')},[inboxRequest?.id])
-  useEffect(()=>{if(homeRequest>0)openMeView('home')},[homeRequest])
+  useEffect(()=>{if(homeRequest>0&&!inboxRequest?.id)openMeView('home')},[homeRequest])
   return <section className={'page-section me-page me-view-'+meView} aria-label="Me">
     {meView==='home'?<>
     {displayName==='WorkoutAdmin'&&!isAdmin&&<section className="admin-setup-warning">
