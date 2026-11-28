@@ -1,3 +1,5 @@
+import {resolveExerciseHistoryKey} from './exerciseIdentity.js'
+
 // Completed workout records shared by the Progress PR board and Records view.
 // A set with "done: true" is a real logged set; planned sets are NOT records.
 const parseLegacyResult=value=>{
@@ -11,7 +13,7 @@ const validSet=(weight,reps)=>Number.isFinite(Number(weight))&&Number(weight)>0&
 export const REP_PR_TARGETS=[1,3,5,8,10]
 
 // Returns only actual completed sets, from both modern and legacy workouts.
-export function completedStrengthSets(rows=[]){
+export function completedStrengthSets(rows=[],aliases={}){
   const sets=[]
   for(const row of rows||[]){
     if(!row?.completed_at)continue
@@ -19,7 +21,8 @@ export function completedStrengthSets(rows=[]){
     const add=(name,weight,reps)=>{
       if(!String(name||'').trim()||!validSet(weight,reps))return
       const w=Number(weight),r=Number(reps)
-      sets.push({name:String(name).trim(),weight:w,reps:r,e1rm:w*(1+r/30),date})
+      sets.push({name:String(name).trim(),identity:resolveExerciseHistoryKey(name,aliases),
+        weight:w,reps:r,e1rm:w*(1+r/30),date})
     }
     for(const set of row.workout?.main||[]){
       if(set.done===false)continue
@@ -27,7 +30,7 @@ export function completedStrengthSets(rows=[]){
     }
     for(const ex of row.workout?.exercises||[]){
       const progress=Array.isArray(ex.setProgress)?ex.setProgress:[]
-      const actual=progress.filter(set=>set.done===true)
+      const actual=progress.filter(set=>set.done===true&&!set.skipped&&!set.drop_set)
       if(actual.length){
         for(const set of actual){
           const weight=set.weight_edited?set.weight:(set.weight??ex.load)
@@ -42,10 +45,10 @@ export function completedStrengthSets(rows=[]){
   return sets
 }
 
-export function buildPersonalRecords(rows=[]){
+export function buildPersonalRecords(rows=[],aliases={}){
   const map=new Map()
-  for(const set of completedStrengthSets(rows)){
-    const key=set.name.toLocaleLowerCase()
+  for(const set of completedStrengthSets(rows,aliases)){
+    const key=set.identity
     let record=map.get(key)
     if(!record){
       record={name:set.name,weight:0,reps:0,e1rm:0,date:set.date,bestByReps:{}}
