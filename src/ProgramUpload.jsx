@@ -1,6 +1,6 @@
 import {useState} from 'react'
 import {supabase} from './supabase'
-import {inspectProgramFile,validateReviewedProgram,normalizeReviewedProgram} from './importedPrograms.js'
+import {inspectProgramFile,validateReviewedProgram,normalizeReviewedProgram,normalizeProgramAuthor} from './importedPrograms.js'
 
 const SHOW_FIRST=40
 const templateText=[
@@ -10,9 +10,10 @@ const templateText=[
   '1,Day 2,Deadlift,3,5,70,TM,,',
   '2,Day 1,Squat,3,5,70,TM,,'
 ].join('\r\n')
-export default function ProgramUpload({session,onSaved,onClose}){
+export default function ProgramUpload({session,displayName,onSaved,onClose}){
   const [file,setFile]=useState(null)
   const [title,setTitle]=useState('')
+  const [author,setAuthor]=useState(()=>normalizeProgramAuthor(displayName))
   const [defaultBasis,setDefaultBasis]=useState('')
   const [parsed,setParsed]=useState(null)
   const [error,setError]=useState('')
@@ -54,6 +55,8 @@ export default function ProgramUpload({session,onSaved,onClose}){
   }
   const save=async()=>{
     if(!session?.user?.id||!parsed||busy||!reviewed)return
+    const authorName=normalizeProgramAuthor(author)
+    if(!authorName){setError('Enter a program author name, not an email address.');return}
     const invalid=validateReviewedProgram({...parsed,name:title})
     if(!parsed.canSave||invalid.length){
       setError(invalid[0]||'Resolve source formula or parsing errors before saving.')
@@ -69,7 +72,7 @@ export default function ProgramUpload({session,onSaved,onClose}){
           description:'Imported from '+parsed.sourceFile+' · reviewed in WorkSet',
           source_type:'manual',status:'active',visibility:'private',
           weeks_count:normalized.weekCount,
-          plan:{schema_version:1,reviewed:true,import_source:'spreadsheet',
+          plan:{schema_version:1,reviewed:true,import_source:'spreadsheet',author_name:authorName,
             source_format:parsed.sourceFormat,source_file:parsed.sourceFile,
             weeks:normalized.weeks,
             import_warnings:parsed.issues.filter(x=>x.level==='warning').map(x=>x.text)}
@@ -82,7 +85,7 @@ export default function ProgramUpload({session,onSaved,onClose}){
   }
   const weekList=parsed?.weeks||[]
   const problems=parsed?.issues||[]
-  const canSave=Boolean(parsed?.canSave)&&
+  const canSave=Boolean(parsed?.canSave)&&Boolean(normalizeProgramAuthor(author))&&
     validateReviewedProgram({...parsed,name:title}).length===0
   return <section className="simple-card program-importer" aria-label="Upload a workout program">
     <div className="section-heading"><div><span className="card-label">IMPORT PROGRAM</span><h3>Excel / CSV → Trackable program</h3></div><button type="button" className="secondary-action" onClick={onClose}>Close</button></div>
@@ -99,6 +102,7 @@ export default function ProgramUpload({session,onSaved,onClose}){
     </label>
     <div className="builder-two program-upload-fields">
       <label>Program name<input type="text" maxLength="140" value={title} onChange={e=>{setTitle(e.target.value);setReviewed(false)}} placeholder="Program name"/></label>
+      <label>Program author<input type="text" maxLength={100} value={author} onChange={e=>{setAuthor(e.target.value);setReviewed(false)}} placeholder="Name to show beneath the program" autoComplete="off"/><small className="helper-text">Defaults to your display name. Change it if someone else wrote the program.</small></label>
       <label>For percentages without a Basis column
         <select value={defaultBasis} onChange={e=>{setDefaultBasis(e.target.value);setParsed(null);setReviewed(false)}}>
           <option value="">Choose after checking the source</option>
@@ -149,6 +153,7 @@ export default function ProgramUpload({session,onSaved,onClose}){
           </section>)}
         </details>)}
       </div>
+      {!normalizeProgramAuthor(author)&&<p className="helper-text">Enter an author name (not an email address) before saving.</p>}
       {!canSave&&parsed.canSave&&<div className="program-import-issues" role="status">
         {validateReviewedProgram({...parsed,name:title}).slice(0,8).map((item,i)=><p className="program-import-error" key={i}>{item}</p>)}
       </div>}

@@ -9548,3 +9548,7 @@ h1 { margin:3px 0 0; font-size:27px; line-height:1.05; }
 .review-workout-editor .review-set select,.review-workout-editor .review-set input{box-sizing:border-box;min-width:0;width:100%;min-height:44px;padding:8px;border:1px solid #40536e;border-radius:8px;background:#0d1928;color:#eef5ff;font-size:16px}
 .review-workout-editor .review-set select option{background:#17263a;color:#eef5ff}
 @media(max-width:420px){.review-workout-editor .edit-set-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px}.review-workout-editor .edit-set-row>strong{grid-column:1/-1}.review-workout-editor .edit-set-row>input{min-width:0;width:100%}}
+
+/* Only explicitly attributed user programs receive an author line. */
+.program-author{display:block;color:#aabbd1;font-size:12px;font-weight:500;margin:3px 0 7px;overflow-wrap:anywhere}
+.program-upload-fields .helper-text{font-size:12px;font-weight:400;line-height:1.4}

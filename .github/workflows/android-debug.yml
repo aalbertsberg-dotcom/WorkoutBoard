@@ -3,6 +3,10 @@ name: Build WorkSet Android (testing)
 # Web-first phase: build an APK only when explicitly requested.
 on:
   workflow_dispatch:
+  # An explicit request-file change is the alternate manual build trigger.
+  push:
+    branches: [main]
+    paths: ['.github/android-build-request.txt']
 
 permissions:
   contents: read

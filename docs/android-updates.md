@@ -8,6 +8,7 @@ through Android's installer, with explicit user approval.
 
 The workflow **Build WorkSet Android (testing)** uploads an artifact named
 `WorkSet-Android-Test`. It contains exactly one file, `WorkSet.apk`.
+An explicit commit changing only the Android build request marker (`.github/android-build-request.txt`) also requests this test workflow; normal web changes do not build an APK.
 Debug-signed artifacts may have a different signing certificate on every
 GitHub runner. They cannot always replace an installed debug APK.
 

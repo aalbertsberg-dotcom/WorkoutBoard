@@ -6,7 +6,7 @@ import { DialogPortal,OverlayPortal,confirmWorkset } from './worksetDialogs'
 import { allArchivePrograms, archiveProgramById, makePlannedFromArchive } from './archivePrograms'
 import {ORIGINAL_CHALLENGE_ID,originalChallengeStartingMaxes} from './originalChallengeCycle.js'
 import ProgramUpload from './ProgramUpload.jsx'
-import {importedProgramFromLibrary,importedProgramKey,makePlannedFromImported,validateReviewedProgram,normalizeReviewedProgram} from './importedPrograms.js'
+import {importedProgramFromLibrary,importedProgramKey,makePlannedFromImported,validateReviewedProgram,normalizeReviewedProgram,normalizeProgramAuthor} from './importedPrograms.js'
 import {programWeightNotes} from './programWeightNotes.js'
 import ProgramCommunity from './ProgramCommunity.jsx'
 import { ProgressToolbox, WorkoutTemplates } from './trainingTools'
@@ -1054,6 +1054,7 @@ export function PlanPage({
         name:snap.name||data.title||'Shared program',
         shortName:snap.name||data.title||'Shared program',
         source:snap.source||'Shared Workset link',
+        author:normalizeProgramAuthor(snap.author),
         description:snap.description||'Shared Workset program.',
         category:snap.category||'Shared',
         difficulty:snap.difficulty||'',
@@ -1212,6 +1213,7 @@ export function PlanPage({
     name:p.name,
     kind:p.kind,
     source:p.source,
+    ...(p.author?{author:p.author}:{}),
     description:p.description,
     category:p.category,
     difficulty:p.difficulty,
@@ -1302,6 +1304,7 @@ export function PlanPage({
       source_type:'manual',visibility:'private',status:'active',
       weeks_count:normalized.weekCount,
       plan:{schema_version:1,reviewed:true,import_source:'shared',
+        ...(sharedPreview.author?{author_name:normalizeProgramAuthor(sharedPreview.author)}:{}),
         source_file:sharedPreview.source||'Shared WorkSet program',
         source_format:'shared',weeks:normalized.weeks},
     }).select('id').single()
@@ -1562,7 +1565,7 @@ export function PlanPage({
         <span className="program-length">{length}{frequency?' · '+frequency:''}</span>
         <button className={'favorite-button '+(favorites.includes(p.key)?'active':'')} onClick={()=>toggleFavorite(p.key)} title="Favorite">{favorites.includes(p.key)?'★':'☆'}</button>
       </div>
-      <h3>{p.name}</h3>
+      <h3>{p.name}</h3>{p.author&&<small className="program-author">By {p.author}</small>}
       <div className="program-meta"><span>{p.category}</span></div>
       <button className="wide-button" onClick={()=>openPreview(p.key)}>Preview</button>
     </article>
@@ -1607,7 +1610,7 @@ export function PlanPage({
           const expected=expectedSessions(track)
           return <article className="archive-card tracked-program-card" key={track.id}>
             <div className="archive-card-head"><span className="program-length">Run {track.run_number}</span><span className="tracking-badge">CURRENT</span></div>
-            <h3>{p.name}</h3>
+            <h3>{p.name}</h3>{p.author&&<small className="program-author">By {p.author}</small>}
             <div className="program-progress-track"><div style={{width:(expected ? Math.min(100,done/expected*100) : 0)+'%'}} /></div>
             <small>{done} of {expected||'—'} workouts</small>
             <div className="program-card-actions tracked-program-actions"><button className="wide-button" onClick={()=>openPreview(p.key)}>Preview</button><button className="secondary-action" onClick={()=>pauseTracking(track)}>Pause</button><button className="secondary-action" onClick={()=>markComplete(track)}>Complete</button></div>
@@ -1624,7 +1627,7 @@ export function PlanPage({
           const expected=expectedSessions(track)
           return <article className="archive-card paused-program-card" key={track.id}>
             <div className="archive-card-head"><span className="program-length">Run {track.run_number}</span><span className="paused-badge">PAUSED</span></div>
-            <h3>{p.name}</h3>
+            <h3>{p.name}</h3>{p.author&&<small className="program-author">By {p.author}</small>}
             <div className="program-progress-track"><div style={{width:(expected ? Math.min(100,done/expected*100) : 0)+'%'}} /></div>
             <small>{done} of {expected||'—'} workouts · progress saved</small>
             <div className="program-card-actions paused-program-actions"><button className="wide-button" onClick={()=>openPreview(p.key)}>Preview</button><button className="primary-action" disabled={tracked.length>=activeProgramLimit} onClick={()=>resumeTracking(track)}>{tracked.length>=activeProgramLimit?'3 active · pause one first':'Resume'}</button><button className="secondary-action stop-tracking-button" onClick={()=>cancelTracking(track)}>Stop tracking</button></div>
@@ -1647,6 +1650,7 @@ export function PlanPage({
         </div>
         {submitMode==='upload'?<ProgramUpload
           session={session}
+          displayName={profile?.display_name||''}
           onClose={()=>setShowSubmit(false)}
           onSaved={async row=>{
             await load()
@@ -1684,7 +1688,7 @@ export function PlanPage({
 
       {preview&&<section className="program-preview-card" id="program-preview">
         <div className="preview-head">
-          <div><span className="card-label">PROGRAM PREVIEW</span><h2>{preview.name}</h2><p>{preview.description}</p></div>
+          <div><span className="card-label">PROGRAM PREVIEW</span><h2>{preview.name}</h2>{preview.author&&<small className="program-author">By {preview.author}</small>}<p>{preview.description}</p></div>
           <button className={'favorite-button large '+(favorites.includes(preview.key)?'active':'')} onClick={()=>toggleFavorite(preview.key)}>{favorites.includes(preview.key)?'★':'☆'}</button>
         </div>
         <div className="preview-facts">
@@ -1764,12 +1768,12 @@ export function PlanPage({
 
       {cancelled.length>0&&<details className="completed-programs stopped-programs">
         <summary><span><b>Stopped programs</b><small>{cancelled.length} previous run{cancelled.length===1?'':'s'}</small></span></summary>
-        <div className="archive-grid">{cancelled.map(track=>{const p=programByKey[track.program_key];if(!p)return null;return <article className="archive-card completed-program-card" key={track.id}><h3>{p.name}</h3><p>Stopped · completed workouts remain in history</p><button className="wide-button" onClick={()=>startTracking(p)}>{tracked.length>=activeProgramLimit?'3 active · choose one to pause':'Track again from beginning'}</button></article>})}</div>
+        <div className="archive-grid">{cancelled.map(track=>{const p=programByKey[track.program_key];if(!p)return null;return <article className="archive-card completed-program-card" key={track.id}><h3>{p.name}</h3>{p.author&&<small className="program-author">By {p.author}</small>}<p>Stopped · completed workouts remain in history</p><button className="wide-button" onClick={()=>startTracking(p)}>{tracked.length>=activeProgramLimit?'3 active · choose one to pause':'Track again from beginning'}</button></article>})}</div>
       </details>}
 
       {completed.length>0&&<details className="completed-programs">
         <summary><span><b>Completed programs</b><small>{completed.length} run{completed.length===1?'':'s'}</small></span></summary>
-        <div className="archive-grid">{completed.map(track=>{const p=programByKey[track.program_key];if(!p)return null;return <article className="archive-card completed-program-card" key={track.id}><h3>{p.name}</h3><p>{track.completed_at?'Completed '+new Date(track.completed_at).toLocaleDateString():'Completed'}</p><button className="wide-button" onClick={()=>startTracking(p)}>{tracked.length>=activeProgramLimit?'3 active · choose one to pause':'Track again'}</button></article>})}</div>
+        <div className="archive-grid">{completed.map(track=>{const p=programByKey[track.program_key];if(!p)return null;return <article className="archive-card completed-program-card" key={track.id}><h3>{p.name}</h3>{p.author&&<small className="program-author">By {p.author}</small>}<p>{track.completed_at?'Completed '+new Date(track.completed_at).toLocaleDateString():'Completed'}</p><button className="wide-button" onClick={()=>startTracking(p)}>{tracked.length>=activeProgramLimit?'3 active · choose one to pause':'Track again'}</button></article>})}</div>
       </details>}
     </>:<>
       <section className="simple-card weekly-schedule-card">

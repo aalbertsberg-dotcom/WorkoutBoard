@@ -62,6 +62,7 @@ const testDays=week=>{
 export const originalChallengeProgram={
   id:'531-original-challenge',
   name:'531 Original Challenge',
+  author:'Nathan',
   category:'Strength',
   difficulty:'Intermediate',
   weeksCount:12,

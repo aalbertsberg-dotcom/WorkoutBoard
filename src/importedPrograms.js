@@ -29,6 +29,11 @@ const normHeaders=Object.fromEntries(Object.entries(HEADERS).map(([k,names])=>
   [k,new Set(names.map(headerKey))]))
 export const isSpreadsheetImportFile=file=>/\.(xlsx|csv)$/i.test(file?.name||'')
 export const importedProgramKey=id=>'custom:'+id
+// Attribution is explicit, not inferred from ownership or legacy filenames.
+export function normalizeProgramAuthor(value){
+  const name=clean(value).slice(0,100)
+  return name&&!name.includes('@')?name:''
+}
 
 // Only infer an existing saved max when the lift name is unambiguous.
 export function importedReferenceLift(name){
@@ -397,6 +402,7 @@ export function importedProgramFromLibrary(row){
   return {
     id:row.id,key:importedProgramKey(row.id),kind:'custom',
     name:row.name,shortName:row.name,source:plan.source_file||'Imported spreadsheet',
+    author:normalizeProgramAuthor(plan.author_name),
     description:row.description||'User-imported program (reviewed before saving)',
     category:'My Programs',difficulty:'Custom',
     weeksCount:Number(row.weeks_count||weeks.at(-1)?.week||1),

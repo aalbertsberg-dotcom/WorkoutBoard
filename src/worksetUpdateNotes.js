@@ -1,5 +1,9 @@
 // Human-readable highlights maintained with user-facing changes.
 export const WORKSET_UPDATE_NOTES=[
+  {id:'2026-11-28-program-author',date:'2026-11-28',title:'Credit the author of an uploaded program',items:[
+    ['New','New spreadsheet uploads include an editable program author, defaulting to your display name. Author credit stays with shared copies.'],
+    ['Improvement','531 Original Challenge is credited to Nathan. All other existing programs remain unchanged.']
+  ]},
   {id:'2026-11-28-summary-back',date:'2026-11-28',title:'Workout summary returns to the right screen',items:[
     ['Fix','Open a completed workout from Today, Me or Progress and Back returns to the original screen, including after refresh. Workouts opened within History return to the calendar or list.']
   ]},

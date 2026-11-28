@@ -1,0 +1,1 @@
+Explicit Android testing APK build requested 2026-11-28: program attribution, workout summaries, navigation and all recent fixes.
