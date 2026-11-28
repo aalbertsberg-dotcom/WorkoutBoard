@@ -1,7 +1,7 @@
 const {test,expect}=require('@playwright/test')
 
 const userId='00000000-0000-4000-8000-000000000001'
-async function signedIn(page,{withStartedWalk=false,withStrengthSession=false,withOvernightWalk=false,withNotification=false}={}){
+async function signedIn(page,{withStartedWalk=false,withStartedStrength=false,withStrengthSession=false,withOvernightWalk=false,withNotification=false}={}){
   await page.addInitScript(user=>{
     const expires=Math.floor(Date.now()/1000)+86400*365
     localStorage.setItem('sb-example-auth-token',JSON.stringify({
@@ -27,6 +27,26 @@ async function signedIn(page,{withStartedWalk=false,withStrengthSession=false,wi
     if(url.includes('/auth/v1/user')){
       await route.fulfill({status:200,contentType:'application/json',headers,
         body:JSON.stringify({id:userId,aud:'authenticated',role:'authenticated',email:'tester@example.test',user_metadata:{},app_metadata:{}})})
+      return
+    }
+    if(withStartedStrength && method==='GET' && url.includes('/rest/v1/planned_workouts')){
+      const now=new Date().toISOString()
+      const row={
+        id:'00000000-0000-4000-8000-000000000099',user_id:userId,
+        title:'Strength set test',scheduled_date:now.slice(0,10),status:'started',
+        created_at:now,updated_at:now,source_program_name:'Test Workout',
+        workout:{version:2,type:'flexible',standalone:true,started_explicitly:true,
+          exercises:[{id:'test-press',name:'Strict press',prescription:'4x4',
+            done:false,setProgress:[
+              {set:1,reps:4,done:true,weight:'90'},
+              {set:2,reps:4,done:true,weight:'105'},
+              {set:3,reps:4,done:false,weight:''},
+              {set:4,reps:4,done:false,weight:''}
+            ]}],
+          metcon:{activity:'',duration:'',distance:''}}
+      }
+      await route.fulfill({status:200,contentType:'application/json',headers,
+        body:JSON.stringify([row])})
       return
     }
     if(withOvernightWalk && method==='GET' && url.includes('/rest/v1/planned_workouts')){
@@ -590,4 +610,30 @@ test('Empty notification preview is compact and header controls align',async({pa
   expect(box.width).toBeLessThanOrEqual(265)
   expect(box.x).toBeGreaterThanOrEqual(-1)
   expect(box.x+box.width).toBeLessThanOrEqual(page.viewportSize().width+1)
+})
+
+test('Planned strength runner finishes after two sets, deletes a set, and records a drop stage',async({page})=>{
+  const errors=[]
+  page.on('pageerror',error=>errors.push(error.message))
+  await signedIn(page,{withStartedStrength:true})
+  const exercise=page.locator('.flex-exercise').filter({hasText:'Strict press'})
+  await expect(exercise).toBeVisible({timeout:15000})
+  await expect(exercise.locator('.set-progress-button')).toHaveCount(4)
+  await expect(exercise.getByRole('button',{name:/Finish exercise \(2 of 4 sets\)/})).toBeVisible()
+  await exercise.locator('.finish-exercise-early').click()
+  await expect(exercise.locator('.set-progress-button.skipped')).toHaveCount(2)
+  await expect(exercise.locator('.set-progress-button.done')).toHaveCount(2)
+  await exercise.getByRole('button',{name:'Delete set 4'}).click()
+  await expect(exercise.locator('.set-progress-button')).toHaveCount(3)
+  await expect(exercise.locator('.set-progress-button.skipped')).toHaveCount(1)
+  await exercise.getByRole('button',{name:'+ Drop set'}).click()
+  await expect(exercise.locator('.set-progress-button')).toHaveCount(6)
+  await expect(exercise.getByText('Drop stage 1')).toBeVisible()
+  await exercise.getByRole('button',{name:'Complete Drop 1'}).click()
+  await expect(page.getByText('Enter the actual reps completed for this drop stage.')).toBeVisible()
+  await exercise.locator('.current-set-reps input').fill('11')
+  await exercise.getByRole('button',{name:'Complete Drop 1'}).click()
+  await expect(exercise.locator('.set-progress-button.done')).toHaveCount(3)
+  await expect(exercise.getByText('Drop stage 2')).toBeVisible()
+  expect(errors).toEqual([])
 })
