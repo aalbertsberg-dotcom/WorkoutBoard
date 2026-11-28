@@ -18,11 +18,11 @@ export function completedStrengthSets(rows=[],aliases={}){
   for(const row of rows||[]){
     if(!row?.completed_at)continue
     const date=row.completed_at||row.session_date
-    const add=(name,weight,reps)=>{
+    const add=(name,weight,reps,isDropSet=false)=>{
       if(!String(name||'').trim()||!validSet(weight,reps))return
       const w=Number(weight),r=Number(reps)
       sets.push({name:String(name).trim(),identity:resolveExerciseHistoryKey(name,aliases),
-        weight:w,reps:r,e1rm:w*(1+r/30),date})
+        weight:w,reps:r,e1rm:w*(1+r/30),date,isDropSet})
     }
     for(const set of row.workout?.main||[]){
       if(set.done===false)continue
@@ -30,11 +30,11 @@ export function completedStrengthSets(rows=[],aliases={}){
     }
     for(const ex of row.workout?.exercises||[]){
       const progress=Array.isArray(ex.setProgress)?ex.setProgress:[]
-      const actual=progress.filter(set=>set.done===true&&!set.skipped&&!set.drop_set)
+      const actual=progress.filter(set=>set.done===true&&!set.skipped)
       if(actual.length){
         for(const set of actual){
           const weight=set.weight_edited?set.weight:(set.weight??ex.load)
-          add(ex.name||row.primary_lift||row.title,weight,set.actual_reps??set.actualReps??set.reps)
+          add(ex.name||row.primary_lift||row.title,weight,set.actual_reps??set.actualReps??set.reps,Boolean(set.drop_set))
         }
       }else if(progress.length===0){
         const legacy=parseLegacyResult(ex.result)
@@ -48,6 +48,8 @@ export function completedStrengthSets(rows=[],aliases={}){
 export function buildPersonalRecords(rows=[],aliases={}){
   const map=new Map()
   for(const set of completedStrengthSets(rows,aliases)){
+    // Burnout stages contribute volume, not a new 1RM or rep PR.
+    if(set.isDropSet)continue
     const key=set.identity
     let record=map.get(key)
     if(!record){
@@ -90,6 +92,7 @@ export function completedMainLiftSets(rows=[]){
 export function strengthTrendFromCompletedSets(rows=[]){
   const best=new Map()
   for(const set of completedMainLiftSets(rows)){
+    if(set.isDropSet)continue
     const key=set.lift+':'+String(set.date)
     if(!best.has(key)||set.e1rm>best.get(key).e1rm)best.set(key,set)
   }
