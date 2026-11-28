@@ -15,7 +15,7 @@ export function suggestionPosition(rect,viewport,results=5){
   const room=above?spaceAbove:spaceBelow
   const maxHeight=Math.max(36,Math.min(desired,room))
   const listTop=above?rect.top-maxHeight-6:rect.bottom+6
-  return {position:'fixed',left,top:Math.max(top+5,listTop),width,
+  return {position:'fixed',zIndex:3600,left,top:Math.max(top+5,listTop),width,
     maxHeight:Math.min(maxHeight,Math.max(36,bottom-top-10)),overflowY:'auto'}
 }
 
@@ -71,7 +71,7 @@ export default function ExerciseNamePicker({
     }
   },[visible,matches.length,value])
 
-  const choose=name=>{onSelect?.(name);setOpen(false)}
+  const choose=name=>{onSelect?.(name);setOpen(false);root.current?.querySelector('input')?.blur()}
   return <div className="exercise-name-picker" ref={root}>
     <input id={id||undefined} type="text" autoFocus={autoFocus} disabled={disabled}
       autoComplete="off" enterKeyHint="done" value={value} aria-label={label}
@@ -87,7 +87,6 @@ export default function ExerciseNamePicker({
         role="group" aria-label="Matching exercise names" style={placement}>
         <small>Previously used · tap to select, or keep typing</small>
         {matches.map(name=><button type="button" key={name}
-          onPointerDown={event=>event.preventDefault()}
           onClick={()=>choose(name)}>
           <span>{name}</span><b>Use</b>
         </button>)}
