@@ -16,6 +16,7 @@ async function signedIn(page,{withStartedWalk=false,withStartedStrength=false,wi
     }))
   },userId)
   let storedMaxes={squat:null,bench:197.33,deadlift:261.33,press:160}
+  let storedAliases=[]
   await page.route('https://example.supabase.co/**',async route=>{
     const req=route.request(),url=req.url(),method=req.method()
     const headers={
@@ -28,6 +29,19 @@ async function signedIn(page,{withStartedWalk=false,withStartedStrength=false,wi
     if(url.includes('/auth/v1/user')){
       await route.fulfill({status:200,contentType:'application/json',headers,
         body:JSON.stringify({id:userId,aud:'authenticated',role:'authenticated',email:'tester@example.test',user_metadata:{},app_metadata:{}})})
+      return
+    }
+    if(url.includes('/rest/v1/exercise_name_aliases')){
+      if(method==='POST'){
+        const row=Array.isArray(req.postDataJSON())?req.postDataJSON()[0]:req.postDataJSON()
+        storedAliases=[row,...storedAliases.filter(item=>item.alias_key!==row.alias_key)]
+        await route.fulfill({status:201,contentType:'application/json',headers,body:'[]'})
+      }else if(method==='DELETE'){
+        const alias=new URL(url).searchParams.get('alias_key')?.replace(/^eq\./,'')
+        storedAliases=storedAliases.filter(item=>item.alias_key!==alias)
+        await route.fulfill({status:204,headers})
+      }else await route.fulfill({status:200,contentType:'application/json',headers,
+        body:JSON.stringify(storedAliases)})
       return
     }
     if(withStartedStrength && method==='GET' && url.includes('/rest/v1/planned_workouts')){
@@ -744,5 +758,55 @@ test('Exercise entry suggests only a few past names, supports manual match and r
   await rename.getByRole('textbox',{name:/Change exercise name/}).fill('Cable Lateral Raises')
   await rename.getByRole('button',{name:'Use name'}).click()
   await expect(page.locator('.flex-exercise').filter({hasText:'Cable Lateral Raises'})).toBeVisible()
+  expect(errors).toEqual([])
+})
+
+test('Me can link and unlink names later; previous workout records remain untouched',async({page})=>{
+  const errors=[]
+  page.on('pageerror',e=>errors.push(e.message))
+  await signedIn(page,{withStartedStrength:true})
+  await expect(page.locator('.app-header h1')).toHaveText('Today',{timeout:15000})
+  await page.locator('.account-chip').click()
+  await expect(page.locator('.app-header h1')).toHaveText('Me')
+  await page.getByRole('button',{name:/Exercise Names & History/}).click()
+  const manager=page.getByRole('region',{name:'Manage exercise names'}).or(page.locator('.exercise-history-manager'))
+  await expect(manager).toBeVisible()
+  await manager.getByRole('textbox',{name:'Exercise to match'}).fill('iso lat')
+  await manager.getByRole('group',{name:'Matching exercise names'})
+    .getByRole('button',{name:/ISO lateral raises/}).click()
+  await manager.getByRole('textbox',{name:'Preferred exercise name'}).fill('hammer')
+  await manager.getByRole('group',{name:'Matching exercise names'})
+    .getByRole('button',{name:/Hammer ISO lateral/}).click()
+  page.once('dialog',dialog=>dialog.accept())
+  await manager.getByRole('button',{name:'Link exercise history'}).click()
+  await expect(manager.getByRole('status')).toContainText('Exercise history linked')
+  const row=manager.locator('.exercise-manager-link-row')
+  await expect(row).toContainText('ISO lateral raises')
+  await expect(row).toContainText('Hammer ISO lateral')
+  await row.getByRole('button',{name:'Unlink'}).click()
+  await expect(manager.getByRole('status')).toContainText('History link removed')
+  await expect(manager.locator('.exercise-manager-link-row')).toHaveCount(0)
+  expect(errors).toEqual([])
+})
+
+test('Exercise name results stay visible when keyboard shrinks phone viewport',async({page})=>{
+  const errors=[]
+  page.on('pageerror',e=>errors.push(e.message))
+  await signedIn(page,{withStartedStrength:true})
+  await expect(page.locator('.flex-exercise').first()).toBeVisible({timeout:15000})
+  await page.locator('.quick-add-exercise').click()
+  const field=page.getByRole('textbox',{name:'Exercise name to add'})
+  await field.fill('lat')
+  const dropdown=page.getByRole('group',{name:'Matching exercise names'})
+  await expect(dropdown).toBeVisible()
+  await page.setViewportSize({width:390,height:475})
+  await field.scrollIntoViewIfNeeded()
+  await expect(dropdown).toBeVisible()
+  await expect.poll(async()=>{
+    const input=await field.boundingBox(),box=await dropdown.boundingBox()
+    return Boolean(box&&input&&box.y>=-1&&box.y+box.height<=475&&box.x>=-1&&box.x+box.width<=391)
+  }).toBe(true)
+  await dropdown.getByRole('button',{name:/ISO lateral raises/}).click()
+  await expect(field).toHaveValue('ISO lateral raises')
   expect(errors).toEqual([])
 })
