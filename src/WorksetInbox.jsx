@@ -3,9 +3,11 @@ import {supabase} from './supabase'
 
 // Web-first inbox. The badge polls while the tab is open; browser alerts are
 // optional and are never advertised as background push notifications.
-export default function WorksetInbox({session,profile,friends=[],onOpenTogether,onAcceptLive}){
+export default function WorksetInbox({
+  session,profile,friends=[],onOpenTogether,onAcceptLive,
+  initialView='notifications',initialChatId=null,initialProgramGroupId=null,openRequest=0
+}){
   const userId=session?.user?.id
-  const [open,setOpen]=useState(false)
   const [view,setView]=useState('notifications')
   const [notifications,setNotifications]=useState([])
   const [chats,setChats]=useState([])
@@ -24,7 +26,6 @@ export default function WorksetInbox({session,profile,friends=[],onOpenTogether,
   const initialized=useRef(false)
   const known=useRef(new Set())
   const activeChatRef=useRef('')
-  const inboxRef=useRef(null)
   const messagesEndRef=useRef(null)
   const unread=notifications.filter(n=>!n.read_at).length
   useEffect(()=>messagesEndRef.current?.scrollIntoView({block:'end'}),[activeChat,messages.length])
@@ -88,7 +89,7 @@ export default function WorksetInbox({session,profile,friends=[],onOpenTogether,
   },[userId,loadNotifications])
 
   useEffect(()=>{
-    if(!open||!userId)return
+    if(!userId)return
     loadNotifications()
     if(view==='messages')loadChats()
     const interval=setInterval(()=>{
@@ -100,13 +101,7 @@ export default function WorksetInbox({session,profile,friends=[],onOpenTogether,
       }
     },10000)
     return()=>clearInterval(interval)
-  },[open,userId,view,loadNotifications,loadChats,loadMessages])
-
-  useEffect(()=>{
-    const onEscape=event=>{if(event.key==='Escape')setOpen(false)}
-    window.addEventListener('keydown',onEscape)
-    return()=>window.removeEventListener('keydown',onEscape)
-  },[])
+  },[userId,view,loadNotifications,loadChats,loadMessages])
 
   const markRead=async id=>{
     const {error:saveError}=await supabase.rpc('mark_workset_notifications_read',{target_ids:id?[id]:null})
@@ -137,13 +132,12 @@ export default function WorksetInbox({session,profile,friends=[],onOpenTogether,
   const openFromNotification=async row=>{
     setError('');setStatus('')
     if(row.kind==='message'||row.kind==='chat_added'){
-      setView('messages');setOpen(true)
+      setView('messages')
       await loadChats()
       await selectChat(row.related_id)
     }else{
       await markRead(row.id)
       onOpenTogether?.(row.kind==='program_invite'?'community':'live')
-      setOpen(false)
     }
   }
 
@@ -167,7 +161,6 @@ export default function WorksetInbox({session,profile,friends=[],onOpenTogether,
           onOpenTogether?.(row.kind==='program_invite'?'community':'live')
           if(row.kind==='program_invite')window.dispatchEvent(new Event('workset:groups-updated'))
         }
-        setOpen(false)
       }else setStatus('Invitation dismissed.')
     }catch(e){setError(e?.message||'Could not respond.')}
     finally{setBusy(false)}
@@ -225,22 +218,35 @@ export default function WorksetInbox({session,profile,friends=[],onOpenTogether,
     setStatus(next?'Email invitations enabled, when mail delivery is configured.':'Email invitations disabled.')
   }
 
+  // The bell and program-group buttons navigate here; this page is the only
+  // full inbox. Do not render it as a header overlay.
   useEffect(()=>{
-    const handle=async e=>{
-      if(!userId)return
-      setOpen(true);setView('messages');setError('')
-      const target=e.detail?.programGroupId
-      if(!target){await loadChats();return}
-      setBusy(true)
-      const {data,error:rpcError}=await supabase.rpc('start_workset_program_chat',{target_group:target})
-      setBusy(false)
-      if(rpcError){setError(rpcError.message);return}
-      await loadChats()
-      await selectChat(data)
+    if(!userId||!openRequest)return
+    let cancelled=false
+    setError('')
+    if(initialView!=='messages'){setView('notifications');return}
+    setView('messages')
+    const openRequested=async()=>{
+      if(initialProgramGroupId){
+        setBusy(true)
+        const {data,error:rpcError}=await supabase.rpc('start_workset_program_chat',{
+          target_group:initialProgramGroupId
+        })
+        if(cancelled)return
+        setBusy(false)
+        if(rpcError){setError(rpcError.message);return}
+        await loadChats()
+        if(!cancelled)await selectChat(data)
+      }else if(initialChatId){
+        await loadChats()
+        if(!cancelled)await selectChat(initialChatId)
+      }else await loadChats()
     }
-    window.addEventListener('workset:open-messages',handle)
-    return()=>window.removeEventListener('workset:open-messages',handle)
-  },[userId,loadChats])
+    openRequested()
+    return()=>{cancelled=true}
+  // openRequest is a monotonically increasing navigation token from App.
+  },[openRequest,userId])
+
 
   const current=chats.find(c=>c.id===activeChat)
   const chatLabel=chat=>{
@@ -255,18 +261,9 @@ export default function WorksetInbox({session,profile,friends=[],onOpenTogether,
     return Number.isNaN(date.getTime())?'':date.toLocaleString([],{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})
   }
 
-  return <div className="ws-inbox" ref={inboxRef}>
-    <button type="button" className="ws-bell" title="Notifications and messages" aria-label={'Notifications and messages, '+unread+' unread'}
-      aria-expanded={open} onClick={()=>{setOpen(v=>!v);setView('notifications');setError('');setStatus('')}}>
-      <svg viewBox="0 0 24 24" width="21" height="21" stroke="currentColor" fill="none" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9Z"/>
-        <path d="M10 21h4"/>
-      </svg>
-      {unread>0&&<span className="ws-bell-badge">{unread>99?'99+':unread}</span>}
-    </button>
-    {open&&<div className="ws-inbox-backdrop" onClick={()=>setOpen(false)}/>}
-    {open&&<aside className="ws-inbox-panel" role="dialog" aria-label="WorkSet inbox">
-      <div className="ws-inbox-top"><strong>WorkSet inbox</strong><button type="button" onClick={()=>setOpen(false)} aria-label="Close inbox">×</button></div>
+  return <section className="ws-inbox-page" aria-label="WorkSet inbox">
+    <div className="ws-inbox-panel ws-inbox-inline">
+      <div className="ws-inbox-top"><strong>Inbox &amp; messages</strong></div>
       <div className="ws-inbox-tabs">
         <button type="button" className={view==='notifications'?'selected':''} onClick={()=>setView('notifications')}>Notifications{unread>0?' ('+unread+')':''}</button>
         <button type="button" className={view==='messages'?'selected':''} onClick={()=>{setView('messages');loadChats()}}>Messages</button>
@@ -335,6 +332,6 @@ export default function WorksetInbox({session,profile,friends=[],onOpenTogether,
           </button>)}
         </div>}
       </>}
-    </aside>}
-  </div>
+    </div>
+  </section>
 }
