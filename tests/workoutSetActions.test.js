@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {completeExerciseEarly,completeExerciseSet,reopenExerciseSet,deleteWorkoutSet,
   addDropSet,addDropStage,validateDropStage,pendingWorkoutSet} from '../src/workoutSetActions.js'
 import {exerciseHistoryKey,resolveExerciseHistoryKey,exerciseAliasLookup,
-  exerciseHistoryNames,rankExerciseHistoryCandidates,aggregateExerciseHistory} from '../src/exerciseIdentity.js'
+  exerciseHistoryNames,rankExerciseHistoryCandidates,findExerciseNameSuggestions,aggregateExerciseHistory} from '../src/exerciseIdentity.js'
 
 const exercise=()=>({name:'Strict press',done:false,setProgress:[
   {set:1,reps:4,done:true,weight:'90'},
@@ -95,4 +95,23 @@ test('similar names are suggested first but only linked by explicit user action'
   assert.ok(result.indexOf('Hammer ISO lateral')<result.indexOf('Bench Press'))
   assert.notEqual(resolveExerciseHistoryKey('ISO lateral raises'),
     resolveExerciseHistoryKey('Hammer ISO lateral'))
+})
+
+test('exercise name suggestions stay short, relevant and never merge automatically',()=>{
+  const candidates=[
+    'Bench Press','ISO lateral raises','Hammer ISO lateral','Standing Lateral Raise',
+    'Cable Lateral Raises','Seated Dumbbell Lateral Raise',
+    'Single-Arm Lateral Raise','Strict Press','Row'
+  ]
+  const matches=findExerciseNameSuggestions('lat',candidates)
+  assert.ok(matches.length<=5)
+  assert.ok(matches.length>0)
+  assert.ok(matches.every(name=>/lateral/i.test(name)))
+  assert.equal(findExerciseNameSuggestions('l',candidates).length,0)
+  assert.equal(findExerciseNameSuggestions('xyz',candidates).length,0)
+  const ordered=findExerciseNameSuggestions('iso lat',candidates)
+  assert.equal(ordered[0],'ISO lateral raises')
+  assert.ok(ordered.includes('Hammer ISO lateral'))
+  assert.equal(exerciseHistoryKey('ISO lateral raises'),'iso lateral raise')
+  assert.notEqual(exerciseHistoryKey('ISO lateral raises'),exerciseHistoryKey('Hammer ISO lateral'))
 })
