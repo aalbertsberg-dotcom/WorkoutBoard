@@ -53,7 +53,9 @@ export default function ExerciseHistoryManager({session}){
   const targetKey=exerciseHistoryKey(target)
   const knownSource=allNames.find(name=>exerciseHistoryKey(name)===sourceKey)
   const knownTarget=allNames.find(name=>exerciseHistoryKey(name)===targetKey)
-  const canLink=Boolean(knownSource&&knownTarget&&sourceKey!==targetKey&&!busy)
+  const preferredName=(knownTarget||String(target||'').trim())
+  const canLink=Boolean(knownSource&&targetKey&&targetKey.length>=2&&
+    preferredName.length<=160&&sourceKey!==targetKey&&!busy)
   const matchingLinks=links.filter(link=>
     !query.trim()||[link.alias_name,link.canonical_name].some(name=>
       exerciseHistoryKey(name).includes(exerciseHistoryKey(query))))
@@ -65,7 +67,7 @@ export default function ExerciseHistoryManager({session}){
       setStatus({type:'error',message:'Connect to save exercise matches across devices.'})
       return
     }
-    const preferred=knownTarget
+    const preferred=preferredName
     if(resolveExerciseHistoryKey(preferred,lookup)===sourceKey){
       setStatus({type:'error',message:'These names would create a circular history link. Choose a different preferred exercise.'})
       return
@@ -117,13 +119,14 @@ export default function ExerciseHistoryManager({session}){
         <ExerciseNamePicker label="Preferred exercise name" value={target}
           onChange={setTarget} onSelect={setTarget}
           choices={allNames.filter(name=>exerciseHistoryKey(name)!==sourceKey)}
-          placeholder="Find the name you want to use…"/>
+          placeholder="Find or type your preferred name…"/>
       </label>
     </div>
     <button type="button" className="exercise-manager-save" disabled={!canLink}
       onClick={link}>{busy?'Saving…':'Link exercise history'}</button>
-    {Boolean((source&&!knownSource)||(target&&!knownTarget))&&
-      <small className="exercise-manager-hint">Select a name from your saved workout history to link it.</small>}
+    {source&&!knownSource&&
+      <small className="exercise-manager-hint">Choose a previously logged exercise as the source name.</small>}
+    {target&&!knownTarget&&<small className="exercise-manager-hint">New preferred name: you can standardize it manually, too.</small>}
     {status&&<p className={'exercise-manager-status '+status.type} role={status.type==='error'?'alert':'status'}>{status.message}</p>}
     <div className="exercise-manager-links">
       <div className="exercise-manager-links-header">
