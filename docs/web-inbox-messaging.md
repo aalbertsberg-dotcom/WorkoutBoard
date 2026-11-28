@@ -18,7 +18,7 @@ WorkSet's `workset-invite-email` Supabase Edge Function is already deployed. It 
 1. Open your existing Resend account → Domains. If `aalbertsberg.us` is not yet verified there, add it and publish the exact DKIM/SPF (and any other) DNS records Resend gives you. Preserve existing MX and unrelated DNS records.
 2. In **the WorkoutBoard Supabase project** (`lplybuzlgowxeszkvtqe`) → Edge Functions → Secrets, set:
    - `RESEND_API_KEY` = your Resend sending API key (server-side only).
-   - `WORKSET_EMAIL_FROM` = `WorkSet <notifications@aalbertsberg.us>`
+   - `WORKSET_EMAIL_FROM` = `WorkSet <workset@aalbertsberg.us>`
    - `WORKSET_APP_URL` = `https://aalbertsberg-dotcom.github.io/WorkoutBoard/`
 3. Confirm the verified sender is authorized in Resend. Use a fresh friend or group invite to test end-to-end delivery.
 
