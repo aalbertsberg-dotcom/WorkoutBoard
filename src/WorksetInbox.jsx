@@ -26,13 +26,14 @@ export default function WorksetInbox({session,profile,friends=[],onOpenTogether,
   const activeChatRef=useRef('')
   const inboxRef=useRef(null)
   const unread=notifications.filter(n=>!n.read_at).length
+  useEffect(()=>setEmailEnabled(profile?.workset_email_invites!==false),[profile?.workset_email_invites])
   const ownName=profile?.display_name||'You'
   const friendName=id=>friends.find(f=>f.user_id===id)?.display_name||'Member'
 
   const loadNotifications=useCallback(async()=>{
     if(!userId)return
     const {data,error:loadError}=await supabase.from('workset_notifications')
-      .select('id,actor_user_id,kind,title,body,related_id,created_at,read_at')
+      .select('id,actor_user_id,kind,title,body,related_id,created_at,read_at,resolved_at')
       .eq('recipient_user_id',userId).order('created_at',{ascending:false}).limit(100)
     if(loadError){setError('Notifications: '+loadError.message);return}
     const rows=data||[]
@@ -78,9 +79,7 @@ export default function WorksetInbox({session,profile,friends=[],onOpenTogether,
     setNotifications([]);setChats([]);setActiveChat('');setMessages([])
     if(!userId)return
     loadNotifications()
-    const interval=setInterval(()=>{
-      if(document.visibilityState!=='hidden')loadNotifications()
-    },12000)
+    const interval=setInterval(()=>loadNotifications(),12000)
     const focus=()=>loadNotifications()
     window.addEventListener('focus',focus)
     return()=>{clearInterval(interval);window.removeEventListener('focus',focus)}
@@ -280,7 +279,7 @@ export default function WorksetInbox({session,profile,friends=[],onOpenTogether,
             <button type="button" className="ws-notification-content" onClick={()=>openFromNotification(row)}>
               <strong>{row.title}</strong><span>{row.body}</span><small>{formatTime(row.created_at)}</small>
             </button>
-            {(row.kind==='friend_request'||row.kind==='live_invite'||row.kind==='program_invite')&&
+            {!row.resolved_at&&(row.kind==='friend_request'||row.kind==='live_invite'||row.kind==='program_invite')&&
               <div className="ws-notification-actions">
                 <button type="button" disabled={busy} onClick={()=>respond(row,'accepted')}>Accept</button>
                 <button type="button" disabled={busy} onClick={()=>respond(row,'declined')}>Decline</button>
